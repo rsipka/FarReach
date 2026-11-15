@@ -17,6 +17,8 @@ export interface SecretRef {
 	provider: string;
 	/** The provider's id for the entry (Passbolt: the resource UUID). */
 	entry_id: string;
+	/** Which field of the entry holds the secret; absent or null = the password. */
+	field?: string | null;
 	/** The entry's name when it was picked; for display only, never trusted. */
 	label?: string | null;
 	/** Signed approvals, one per person who allowed this entry for the session. Kept as they came: an editor must send them back. */
@@ -186,6 +188,8 @@ export interface PassphrasePrompt {
 	rememberSecs: number;
 	/** The server's host name (not secret), so questions for different accounts can be told apart. */
 	server: string | null;
+	/** What is asked for: a key's passphrase (Passbolt) or a vault's master password. Older backends leave it out. */
+	secretKind?: 'passphrase' | 'master_password';
 }
 
 /** Answer a passphrase question; null cancels. Rejected (question stays open) if the passphrase cannot be taken. */

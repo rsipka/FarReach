@@ -2,6 +2,9 @@
 
 All notable changes to Reach are documented here.
 
+## Unreleased
+- **Groundwork for more password managers** — The password manager code, so far written for Passbolt, now shares what any manager needs: finding and checking its command-line tool, the environment it runs with, and a question that can ask for a vault's master password as well as a key's passphrase. A reference to an entry can name which field holds the secret (the password when it names none, as every reference saved until now). The steps for adding a manager are listed at the top of `src-tauri/src/pwmanager/mod.rs`. Nothing changes for Passbolt users; 1Password, Bitwarden and KeePass follow.
+
 ## v0.9.1
 - **File explorer: Details view** — A new toolbar button shows each entry as a row of columns, as MobaXterm does: Name, Size, Modified, Owner, Group and Access. Click a heading to sort by it and again to reverse; folders stay on top. Right-click the headings to choose which columns show. A sidebar narrower than the columns scrolls sideways. The view, columns and sort order are remembered on each device. Servers whose `ls` cannot print exact times (BusyBox, BSD, macOS) leave Modified empty. Asked for on Discord.
 - **F5 no longer closes your sessions** — F5, Ctrl+R and Ctrl+F5 (Cmd+R on a Mac) reloaded the app's window and closed every terminal, file list and tab. The reload is stopped; the key still reaches the terminal, so F5 in Midnight Commander and Ctrl+R history search work as before. Reported on Discord.

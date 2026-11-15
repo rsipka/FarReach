@@ -58,6 +58,7 @@
 
 use std::ffi::{OsStr, OsString};
 use std::future::Future;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 #[cfg(desktop)]
 use std::time::Duration;
@@ -65,6 +66,7 @@ use std::time::Duration;
 use serde::Deserialize;
 use zeroize::Zeroizing;
 
+use super::cli::CliSpec;
 use super::config::{CredentialsMode, MfaMode, PassboltConfig, PassboltSecrets};
 use super::unlock::Passphrase;
 use super::{sanitize_display, EntrySummary, Failure, PasswordManager, ProviderId, ProviderStatus};
@@ -126,13 +128,19 @@ pub const INHERITED_ENV: &[&str] = &[
 
 /// Whether `name` is in [`INHERITED_ENV`].
 pub fn is_inherited_env(name: &OsStr) -> bool {
-    let Some(name) = name.to_str() else { return false };
-    if cfg!(windows) {
-        INHERITED_ENV.iter().any(|k| k.eq_ignore_ascii_case(name))
-    } else {
-        INHERITED_ENV.contains(&name)
-    }
+    super::cli::is_inherited_env(&SPEC, name)
 }
+
+/// The passbolt CLI, for the checks every manager's CLI goes through
+/// (`super::cli`).
+pub(crate) const SPEC: CliSpec = CliSpec {
+    name: NAME,
+    program: "passbolt",
+    file_names: CLI_FILE_NAMES,
+    install_hint: INSTALL_HINT,
+    inherited_env: INHERITED_ENV,
+    removed_env: VIPER_ENV_KEYS,
+};
 
 /// The file names the CLI binary may have, compared without regard to case.
 /// Anything else (`passbolt.cmd`, `passbolt.ps1`, another program) is
@@ -198,122 +206,31 @@ pub fn isolated_config_path() -> PathBuf {
     crate::app_data_dir().join("pwmanager").join("passbolt-isolated.toml")
 }
 
-/// A path that names a network location (`\\server\share\…`, `//server/…`,
-/// `\\?\UNC\…`). Opening one makes Windows sign in to that server with the
-/// user's NTLM credentials, so such paths are refused before anything
-/// touches them.
-pub fn is_network_path(path: &str) -> bool {
-    let p = path.trim_start();
-    let mut chars = p.chars();
-    matches!((chars.next(), chars.next()), (Some('\\' | '/'), Some('\\' | '/')))
-}
+pub use super::cli::is_network_path;
 
 /// The checks on a CLI path that need no file system: absolute, on this
 /// computer, and named `passbolt` or `passbolt.exe`.
 pub fn check_cli_path_shape(path: &Path) -> Result<(), String> {
-    if is_network_path(&path.to_string_lossy()) {
-        return Err(format!("{NAME}: the CLI must be on this computer, not on a network share"));
-    }
-    if !path.is_absolute() {
-        return Err(format!("{NAME}: the CLI path must be absolute"));
-    }
-    let name = path.file_name().and_then(OsStr::to_str).unwrap_or("");
-    if !CLI_FILE_NAMES.iter().any(|n| n.eq_ignore_ascii_case(name)) {
-        return Err(format!(
-            "{NAME}: the CLI must be the passbolt program itself (a file named passbolt or passbolt.exe), not '{}'",
-            sanitize_display(name, 80)
-        ));
-    }
-    Ok(())
+    super::cli::check_cli_path_shape(&SPEC, path)
 }
 
-/// The checks that look at the file: it exists and is a file, and neither
-/// it nor its folder can be changed by anyone but the user or the system
-/// (root on Unix; LocalSystem, Administrators or TrustedInstaller on
-/// Windows). Returns the path to run: on Unix the real file behind any
-/// symlink, so what runs is what was checked.
+/// The checks that look at the file (see [`super::cli::check_cli_file`]).
+/// Returns the path to run.
 pub fn check_cli_file(path: &Path) -> Result<PathBuf, String> {
-    check_cli_path_shape(path)?;
-    if !path.is_file() {
-        return Err(format!("{NAME}: no CLI at {}. {INSTALL_HINT}", path.display()));
-    }
-    #[cfg(unix)]
-    {
-        let real = std::fs::canonicalize(path)
-            .map_err(|e| format!("{NAME}: the CLI at {} cannot be read: {}", path.display(), e.kind()))?;
-        check_unix_owner(&real, "the CLI")?;
-        for dir in [real.parent(), path.parent()].into_iter().flatten() {
-            check_unix_owner(dir, "the CLI's folder")?;
-        }
-        Ok(real)
-    }
-    #[cfg(windows)]
-    {
-        // A link (winget's Links folder) is checked with the file it leads
-        // to; the link itself is what runs, and its folder is checked too.
-        let real = std::fs::canonicalize(path)
-            .map_err(|e| format!("{NAME}: the CLI at {} cannot be read: {}", path.display(), e.kind()))?;
-        super::winacl::check_not_replaceable(&real, "the CLI")?;
-        for dir in [real.parent(), path.parent()].into_iter().flatten() {
-            super::winacl::check_not_replaceable(dir, "the CLI's folder")?;
-        }
-        Ok(path.to_path_buf())
-    }
-    #[cfg(not(any(unix, windows)))]
-    Ok(path.to_path_buf())
-}
-
-/// Owned by the user running Reach or by root, and not writable by its group
-/// or by others: otherwise someone else could swap in their own program and
-/// be handed the private key and passphrase.
-#[cfg(unix)]
-pub(crate) fn check_unix_owner(path: &Path, what: &str) -> Result<(), String> {
-    use std::os::unix::fs::MetadataExt;
-    let meta = std::fs::metadata(path)
-        .map_err(|e| format!("{NAME}: {what} at {} cannot be read: {}", path.display(), e.kind()))?;
-    // SAFETY: geteuid has no preconditions and cannot fail.
-    let me = unsafe { libc::geteuid() };
-    if meta.uid() != me && meta.uid() != 0 {
-        return Err(format!("{NAME}: {what} at {} belongs to another user", path.display()));
-    }
-    if meta.mode() & 0o022 != 0 {
-        return Err(format!(
-            "{NAME}: {what} at {} can be changed by other users (group or world writable)",
-            path.display()
-        ));
-    }
-    Ok(())
+    super::cli::check_cli_file(&SPEC, path)
 }
 
 /// The CLI binary: the configured path, or `passbolt` found on PATH. Always
 /// an absolute path to an existing file that passed [`check_cli_file`].
 pub fn resolve_binary(cli_path: Option<&str>) -> Result<PathBuf, String> {
-    match cli_path.map(str::trim).filter(|s| !s.is_empty()) {
-        Some(p) => check_cli_file(Path::new(p)),
-        None => {
-            let found = which::which("passbolt").map_err(|_| format!("{NAME}: the passbolt CLI was not found. {INSTALL_HINT}"))?;
-            let found = if found.is_absolute() { found } else { std::path::absolute(&found).unwrap_or(found) };
-            // On Windows PATHEXT also finds passbolt.cmd or passbolt.bat, and
-            // a PATH entry may be a network share: the same rules as a path
-            // set in Settings.
-            check_cli_file(&found)
-        }
-    }
+    super::cli::resolve_binary(&SPEC, cli_path)
 }
 
 /// Empty the child's environment, then copy back what [`INHERITED_ENV`]
 /// allows from `parent`. The CLI's own keys are also removed by name, in case
 /// one is ever added to the allowlist by mistake.
 pub fn set_base_env(cmd: &mut tokio::process::Command, parent: impl IntoIterator<Item = (OsString, OsString)>) {
-    cmd.env_clear();
-    for (k, v) in parent {
-        if is_inherited_env(&k) {
-            cmd.env(k, v);
-        }
-    }
-    for key in VIPER_ENV_KEYS {
-        cmd.env_remove(key);
-    }
+    super::cli::set_base_env(&SPEC, cmd, parent)
 }
 
 /// The command for one CLI call, not yet started, with Reach's own
@@ -467,40 +384,8 @@ pub fn parse_version(stdout: &[u8]) -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
-/// Drop ANSI escape sequences and every control character but newlines.
-pub fn strip_control(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '\u{1b}' {
-            // CSI: ESC [ params… final byte (0x40–0x7e). Other escapes: ESC
-            // and the next character.
-            if chars.peek() == Some(&'[') {
-                chars.next();
-                for n in chars.by_ref() {
-                    if ('\u{40}'..='\u{7e}').contains(&n) {
-                        break;
-                    }
-                }
-            } else {
-                chars.next();
-            }
-        } else if c == '\n' || !c.is_control() {
-            out.push(c);
-        }
-    }
-    out
-}
-
-fn truncate_chars(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        s.to_string()
-    } else {
-        let mut t: String = s.chars().take(max).collect();
-        t.push('…');
-        t
-    }
-}
+pub use super::cli::strip_control;
+use super::cli::truncate_chars;
 
 /// How go-passbolt-cli reports a private key its passphrase does not
 /// unlock: cobra prints `Error: ` and the error chain, which for this one is
@@ -747,6 +632,23 @@ impl PasswordManager for Passbolt {
         }
         let url = reqwest::Url::parse(self.cfg.server_address.trim()).ok()?;
         url.host_str().map(|h| sanitize_display(h, 253)).filter(|h| !h.is_empty())
+    }
+
+    fn hash_account(&self, mut h: &mut dyn Hasher) {
+        let c = &self.cfg;
+        c.cli_path.as_deref().map(str::trim).hash(&mut h);
+        c.credentials.hash(&mut h);
+        c.server_address.trim().hash(&mut h);
+        c.mfa_mode.hash(&mut h);
+        self.secrets.private_key.as_ref().map(|k| k.as_bytes()).hash(&mut h);
+    }
+
+    /// The password only: that is all `passbolt get resource` gives.
+    fn check_entry(&self, entry_id: &str, field: Option<&str>) -> Result<String, String> {
+        if let Some(f) = field {
+            return Err(super::unsupported_field(ProviderId::Passbolt, f));
+        }
+        validate_entry_id(entry_id)
     }
 
     async fn list(&self, passphrase: Option<&Passphrase>) -> Result<Vec<EntrySummary>, Failure> {

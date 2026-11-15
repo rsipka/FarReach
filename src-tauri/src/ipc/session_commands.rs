@@ -269,7 +269,12 @@ fn seal_for(
 /// The approved statement for a reference: where in the session it sits and
 /// which entry it is.
 fn ref_what(slot: &str, r: &crate::pwmanager::SecretRef) -> String {
-    format!("{slot}\t{}\t{}", r.provider, r.entry_id)
+    // The password field is left out, so approvals made before references
+    // named a field still hold.
+    match r.field() {
+        None => format!("{slot}\t{}\t{}", r.provider, r.entry_id),
+        Some(field) => format!("{slot}\t{}\t{}\t{field}", r.provider, r.entry_id),
+    }
 }
 
 fn auth_ref(m: &AuthMethod) -> Option<(&'static str, &crate::pwmanager::SecretRef)> {

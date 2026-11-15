@@ -24,8 +24,40 @@
 //! operation (a connect, a listing) that asked: see [`unlock`]. Every call
 //! that can ask runs inside an operation ([`with_prompt`]), which carries the
 //! window to ask in and what to say the passphrase is for.
+//!
+//! # Adding a manager
+//!
+//! Every manager goes through the same rules: nothing secret reaches the
+//! webview, every reference is approved by the person connecting, listings
+//! hold metadata only, and a CLI is run the way [`cli`] says. A new one is:
+//!
+//! 1. **A file** (`bitwarden.rs`, say) with a struct built from the loaded
+//!    configuration and a [`PasswordManager`] implementation: `status`,
+//!    `list`, `resolve`, `check_entry` (entry id and field), `hash_account`
+//!    (what decides whose entries are seen), and `passphrase_prompt` /
+//!    `secret_kind` if the user types something to unlock it. A tool run
+//!    as a child process describes itself in a [`cli::CliSpec`] and uses
+//!    [`cli`] for the binary and its environment, `process::run` to run it
+//!    (one slot, a deadline, capped output).
+//! 2. **An arm** in [`ProviderId`] (`ALL`, `as_str`, `display_name`,
+//!    `parse`) and in each `match` of [`Provider`].
+//! 3. **Its settings** in `config`: a section of [`PasswordManagersConfig`]
+//!    with its own `enabled` switch (synced, non-secret), its secrets as
+//!    separate `pwmanager.<id>.*` settings, and anything that names a file
+//!    on this computer (a CLI path, a database file) in
+//!    [`config::DeviceSettings`], never in the synced vault. Its view and
+//!    input go in `PasswordManagersView` / `PasswordManagersConfigInput`,
+//!    with secrets write-only.
+//! 4. **A settings card** in the frontend
+//!    (`src/lib/components/settings/`), shown by `PasswordManagersTab`, and
+//!    its strings in every locale (`npm run i18n:check`).
+//! 5. **Tests** with a fake CLI (see `passbolt_tests.rs`): the command
+//!    line holds no secret, the environment is the allowlist, output is
+//!    parsed into metadata only, errors are cleaned.
+//! 6. **User docs**: `docs/src/content/docs/vault/password-managers.md`.
 
 mod cache;
+pub(crate) mod cli;
 pub mod config;
 pub mod passbolt;
 #[cfg(desktop)]
@@ -36,6 +68,7 @@ pub mod unlock;
 mod winacl;
 
 use std::future::Future;
+use std::hash::Hash;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -62,6 +95,13 @@ pub struct SecretRef {
     pub provider: String,
     /// The manager's own id for the entry (Passbolt: the resource UUID).
     pub entry_id: String,
+    /// Which of the entry's fields holds the secret. `None` is the
+    /// password, and is what every reference saved before this existed
+    /// means. Each manager says which fields it can read
+    /// ([`PasswordManager::check_entry`]). Part of what is approved: a
+    /// reference to another field of the same entry needs approving again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub field: Option<String>,
     /// The entry's name when it was picked. For display only: never used to
     /// find the entry, and never trusted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -87,10 +127,26 @@ fn is_false(b: &bool) -> bool {
 }
 
 impl SecretRef {
-    /// The same entry of the same manager; the label and the approvals aside.
+    /// The same field of the same entry of the same manager; the label and
+    /// the approvals aside.
     pub fn same_entry(&self, other: &SecretRef) -> bool {
-        self.provider == other.provider && self.entry_id == other.entry_id
+        self.provider == other.provider && self.entry_id == other.entry_id && self.field() == other.field()
     }
+
+    /// The field, with the password (the default) as `None` however it was
+    /// written.
+    pub fn field(&self) -> Option<&str> {
+        self.field.as_deref().map(str::trim).filter(|f| !f.is_empty() && *f != FIELD_PASSWORD)
+    }
+}
+
+/// The field every manager can read, and the one a reference without a
+/// field means.
+pub const FIELD_PASSWORD: &str = "password";
+
+/// The fields a manager does not read are refused with this.
+pub(crate) fn unsupported_field(id: ProviderId, field: &str) -> String {
+    format!("{}: Reach cannot read the field '{}' of an entry", id.display_name(), sanitize_display(field, 40))
 }
 
 /// One entry as the picker lists it: metadata only, never a secret.
@@ -129,7 +185,8 @@ pub struct TestResult {
 }
 
 /// Every manager Reach knows. Adding one is a new file with a
-/// [`PasswordManager`] implementation and an arm here and in [`Provider`].
+/// [`PasswordManager`] implementation and an arm here and in [`Provider`]:
+/// see docs/password-managers.md for the whole list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ProviderId {
     Passbolt,
@@ -199,6 +256,29 @@ pub(crate) trait PasswordManager {
     /// the passphrase question so two accounts can be told apart. Not
     /// secret.
     fn server_host(&self) -> Option<String>;
+    /// What the typed secret is called in the question to the user.
+    fn secret_kind(&self) -> SecretKind {
+        SecretKind::Passphrase
+    }
+    /// Feed `h` everything that decides whose entries a call sees (the
+    /// tool, the server, the account, a key): listings and a typed
+    /// passphrase are filed under it (see [`cache::CacheKey`]), so other
+    /// settings never get them. Hashed with a per-run random key, never
+    /// stored or logged.
+    fn hash_account(&self, h: &mut dyn std::hash::Hasher);
+    /// Check a reference's entry id and field before anything is run with
+    /// them; `Ok` with the id as the manager wants it.
+    fn check_entry(&self, entry_id: &str, field: Option<&str>) -> Result<String, String>;
+}
+
+/// What the secret a manager asks for is called, for the question's text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SecretKind {
+    /// Passbolt: the passphrase of the user's private key.
+    Passphrase,
+    /// The master password of a vault (Bitwarden, KeePass).
+    MasterPassword,
 }
 
 /// A manager, configured and ready to call. Built fresh for every call from
@@ -249,9 +329,39 @@ impl Provider {
         }
     }
 
+    fn id(&self) -> ProviderId {
+        match self {
+            Provider::Passbolt(_) => ProviderId::Passbolt,
+        }
+    }
+
+    fn secret_kind(&self) -> SecretKind {
+        match self {
+            Provider::Passbolt(p) => p.secret_kind(),
+        }
+    }
+
+    pub(crate) fn hash_account(&self, mut h: &mut dyn std::hash::Hasher) {
+        self.id().as_str().hash(&mut h);
+        match self {
+            Provider::Passbolt(p) => p.hash_account(h),
+        }
+    }
+
+    fn check_entry(&self, entry_id: &str, field: Option<&str>) -> Result<String, String> {
+        match self {
+            Provider::Passbolt(p) => p.check_entry(entry_id, field),
+        }
+    }
+
     /// What a call must unlock, if the user is to be asked.
     fn unlock_policy(&self, account: cache::CacheKey) -> Option<unlock::Policy> {
-        self.passphrase_prompt().map(|remember_secs| unlock::Policy { account, remember_secs, server: self.server_host() })
+        self.passphrase_prompt().map(|remember_secs| unlock::Policy {
+            account,
+            remember_secs,
+            server: self.server_host(),
+            secret_kind: self.secret_kind(),
+        })
     }
 
     /// [`list`](Self::list), asking for the passphrase if it must be.
@@ -308,10 +418,10 @@ pub fn forget_all() {
 }
 
 /// Whether a typed passphrase is kept in memory now for the account these
-/// settings log in to.
-pub fn passphrase_cached(loaded: &config::Loaded) -> bool {
-    loaded.config.passbolt.asks_passphrase()
-        && unlock::global().cache.holds(cache::CacheKey::new(ProviderId::Passbolt, loaded))
+/// settings make `id` log in to.
+pub fn passphrase_cached(id: ProviderId, loaded: &config::Loaded) -> bool {
+    Provider::new(id, loaded.clone()).passphrase_prompt().is_some()
+        && unlock::global().cache.holds(cache::CacheKey::new(id, loaded))
 }
 
 /// The window's answer to a passphrase question (`None`: cancelled).
@@ -496,8 +606,9 @@ pub async fn resolve_own_to_string(state: &AppState, r: &SecretRef) -> Result<St
 async fn fetch(state: &AppState, r: &SecretRef) -> Result<Zeroizing<String>, String> {
     let id = ProviderId::parse(&r.provider)?;
     let (provider, key) = provider_for(state, id).await.map_err(|e| format!("{}: {e}", id.display_name()))?;
+    let entry_id = provider.check_entry(&r.entry_id, r.field())?;
     let started = Instant::now();
-    let result = provider.resolve_unlocked(key, &r.entry_id).await;
+    let result = provider.resolve_unlocked(key, &entry_id).await;
     tracing::info!(
         "pwmanager: resolve provider={} entry={} ok={} in {}ms",
         id.as_str(),

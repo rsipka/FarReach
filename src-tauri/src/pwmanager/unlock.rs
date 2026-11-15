@@ -54,7 +54,7 @@ use zeroize::Zeroizing;
 
 use super::cache::CacheKey;
 use super::config::{clamp_remember, MAX_PASSPHRASE_BYTES};
-use super::{Failure, ProviderId};
+use super::{Failure, ProviderId, SecretKind};
 use crate::vault::shield::Shielded;
 
 /// How long the question waits for an answer before the operation gives up.
@@ -183,6 +183,8 @@ pub struct PromptRequest {
     /// The server the passphrase signs in to (its host name only), so
     /// questions for different accounts can be told apart. Not secret.
     pub server: Option<String>,
+    /// What the secret is called: a passphrase, a master password.
+    pub secret_kind: SecretKind,
 }
 
 /// What the user did with the question.
@@ -510,6 +512,8 @@ pub struct Policy {
     pub account: CacheKey,
     pub remember_secs: u32,
     pub server: Option<String>,
+    /// What the secret is called in the question.
+    pub secret_kind: SecretKind,
 }
 
 // ---------------------------------------------------------------------------
@@ -586,6 +590,7 @@ impl Unlocker {
             error: rejected,
             remember_secs,
             server: policy.server.clone(),
+            secret_kind: policy.secret_kind,
         };
         let pass = self.hub.ask(policy.account, op.asker.as_ref(), request).await.map_err(|e| e.message(provider))?;
         if self.cache.generation() != generation {

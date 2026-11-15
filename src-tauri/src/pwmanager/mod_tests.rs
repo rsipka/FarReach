@@ -246,3 +246,43 @@ fn forgetting_everything_drops_listings_passphrases_and_open_questions() {
     assert_ne!(lists.generation(), list_generation);
     assert_ne!(kept.generation(), pass_generation);
 }
+
+#[test]
+fn a_reference_without_a_field_means_the_password() {
+    let plain = passbolt_ref("e1");
+    let named = SecretRef { field: Some("password".into()), ..passbolt_ref("e1") };
+    let blank = SecretRef { field: Some("  ".into()), ..passbolt_ref("e1") };
+    let other = SecretRef { field: Some("totp".into()), ..passbolt_ref("e1") };
+    assert_eq!(plain.field(), None);
+    assert_eq!(named.field(), None);
+    assert_eq!(blank.field(), None);
+    assert_eq!(other.field(), Some("totp"));
+    assert!(plain.same_entry(&named));
+    assert!(!plain.same_entry(&other));
+    // Stored as before when there is no field.
+    let json = serde_json::to_value(&plain).unwrap();
+    assert!(json.get("field").is_none());
+    let back: SecretRef = serde_json::from_value(serde_json::json!({ "provider": "passbolt", "entry_id": "e1" })).unwrap();
+    assert_eq!(back.field, None);
+}
+
+#[test]
+fn passbolt_reads_the_password_field_only() {
+    let p = Provider::new(ProviderId::Passbolt, config::Loaded::default());
+    let id = "8e3d7d0c-6b7a-4a39-9a43-5b4f2f2c1d10";
+    assert_eq!(p.check_entry(id, None).unwrap(), id);
+    let err = p.check_entry(id, Some("totp")).unwrap_err();
+    assert!(err.starts_with("Passbolt: "), "{err}");
+    assert!(p.check_entry("--debug", None).is_err());
+}
+
+#[test]
+fn the_account_key_depends_on_the_provider_settings() {
+    let mut a = config::Loaded::default();
+    a.config.passbolt.server_address = "https://a.example.com".into();
+    let mut b = a.clone();
+    b.config.passbolt.server_address = "https://b.example.com".into();
+    let key = |l: &config::Loaded| cache::CacheKey::new(ProviderId::Passbolt, l);
+    assert_eq!(key(&a), key(&a.clone()));
+    assert_ne!(key(&a), key(&b));
+}

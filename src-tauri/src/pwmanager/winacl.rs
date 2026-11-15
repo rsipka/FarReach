@@ -1,4 +1,4 @@
-//! The Windows side of [`super::passbolt::check_cli_file`]: what Unix checks
+//! The Windows side of [`super::cli::check_cli_file`]: what Unix checks
 //! with owner and mode bits, read from the file's owner and access list.
 //!
 //! The CLI is handed the private key and its passphrase, so it must be a
@@ -19,8 +19,6 @@ use windows::Win32::Security::{
     OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, TOKEN_QUERY, TOKEN_USER,
 };
 use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
-
-use super::passbolt::NAME;
 
 const LOCAL_SYSTEM: &str = "S-1-5-18";
 const ADMINISTRATORS: &str = "S-1-5-32-544";
@@ -44,16 +42,17 @@ const REPLACING_RIGHTS: u32 = 0x0002 // FILE_WRITE_DATA / FILE_ADD_FILE
     | 0x4000_0000; // GENERIC_WRITE
 
 /// Owned by the user or the system, and nobody else can replace it.
-pub fn check_not_replaceable(path: &Path, what: &str) -> Result<(), String> {
-    let me = current_user_sid().map_err(|e| format!("{NAME}: cannot read who runs Reach: {e}"))?;
+/// `name` is the manager's, at the start of every message.
+pub fn check_not_replaceable(name: &str, path: &Path, what: &str) -> Result<(), String> {
+    let me = current_user_sid().map_err(|e| format!("{name}: cannot read who runs Reach: {e}"))?;
     let (owner, writers) = read_access(path)
-        .map_err(|e| format!("{NAME}: the permissions of {what} at {} cannot be read: {e}", path.display()))?;
+        .map_err(|e| format!("{name}: the permissions of {what} at {} cannot be read: {e}", path.display()))?;
     let trusted = |sid: &str| sid == me || [LOCAL_SYSTEM, ADMINISTRATORS, TRUSTED_INSTALLER].contains(&sid);
     if !trusted(&owner) {
-        return Err(format!("{NAME}: {what} at {} belongs to another user", path.display()));
+        return Err(format!("{name}: {what} at {} belongs to another user", path.display()));
     }
     if writers.iter().any(|sid| !trusted(sid) && sid != OWNER_RIGHTS) {
-        return Err(format!("{NAME}: {what} at {} can be changed by other users", path.display()));
+        return Err(format!("{name}: {what} at {} can be changed by other users", path.display()));
     }
     Ok(())
 }

@@ -431,7 +431,7 @@ pub fn validate_private_key(key: &str) -> Result<(), String> {
 /// is read, whatever its size claims.
 pub fn read_private_key_file(path: &str) -> Result<Zeroizing<String>, String> {
     let trimmed = path.trim();
-    if super::passbolt::is_network_path(trimmed) {
+    if super::cli::is_network_path(trimmed) {
         return Err("The private key file must be on this computer, not on a network share".into());
     }
     let p = Path::new(trimmed);
@@ -494,14 +494,25 @@ fn validate_passphrase(p: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// The CLI path: empty means "find it on PATH"; otherwise an absolute path
-/// on this computer to a file named `passbolt` or `passbolt.exe`.
+/// The Passbolt CLI path: empty means "find it on PATH"; otherwise an
+/// absolute path on this computer to a file named `passbolt` or
+/// `passbolt.exe`. See [`validate_cli_path_for`].
+pub fn validate_cli_path(raw: Option<&str>, check_file: bool) -> Result<Option<String>, String> {
+    validate_cli_path_for(&super::passbolt::SPEC, raw, check_file)
+}
+
+/// A manager's CLI path: empty means "find it on PATH"; otherwise an
+/// absolute path on this computer to a file named as the tool is.
 ///
 /// `check_file` also looks at the file itself (it exists; on Unix, who owns
 /// it). Saving skips that when the feature is off or the path did not change,
 /// so a CLI that was uninstalled does not stop the user from switching the
 /// feature off; every run checks the file again anyway.
-pub fn validate_cli_path(raw: Option<&str>, check_file: bool) -> Result<Option<String>, String> {
+pub(crate) fn validate_cli_path_for(
+    spec: &super::cli::CliSpec,
+    raw: Option<&str>,
+    check_file: bool,
+) -> Result<Option<String>, String> {
     let Some(s) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
         return Ok(None);
     };
@@ -509,13 +520,14 @@ pub fn validate_cli_path(raw: Option<&str>, check_file: bool) -> Result<Option<S
         return Err("The CLI path is not valid".into());
     }
     let p = Path::new(s);
-    if !super::passbolt::is_network_path(s) && !p.is_absolute() {
-        return Err("The CLI path must be absolute (or leave it empty to find passbolt on PATH)".into());
+    if !super::cli::is_network_path(s) && !p.is_absolute() {
+        return Err(format!("The CLI path must be absolute (or leave it empty to find {} on PATH)", spec.program));
     }
-    let strip = |e: String| e.strip_prefix("Passbolt: ").map(str::to_string).unwrap_or(e);
-    super::passbolt::check_cli_path_shape(p).map_err(strip)?;
+    let prefix = format!("{}: ", spec.name);
+    let strip = |e: String| e.strip_prefix(prefix.as_str()).map(str::to_string).unwrap_or(e);
+    super::cli::check_cli_path_shape(spec, p).map_err(strip)?;
     if check_file {
-        super::passbolt::check_cli_file(p).map_err(strip)?;
+        super::cli::check_cli_file(spec, p).map_err(strip)?;
     }
     Ok(Some(s.to_string()))
 }
