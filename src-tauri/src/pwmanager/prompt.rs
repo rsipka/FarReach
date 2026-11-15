@@ -77,6 +77,8 @@ struct Payload<'a> {
     /// The server's host name, so questions for different accounts can be
     /// told apart. Not secret.
     server: Option<&'a str>,
+    /// What the secret is called: `passphrase` or `master_password`.
+    secret_kind: super::SecretKind,
 }
 
 /// Withdrawn however the question ends.
@@ -109,6 +111,7 @@ impl PassphraseAsker for tauri::AppHandle {
                 error: request.error.as_deref(),
                 remember_secs: request.remember_secs,
                 server: request.server.as_deref(),
+                secret_kind: request.secret_kind,
             };
             tracing::info!(
                 "pwmanager: asking for the {} passphrase ({}, retry={})",

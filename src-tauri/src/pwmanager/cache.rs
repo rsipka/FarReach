@@ -17,16 +17,16 @@
 //!   Save, would fill the cache with that account's entries.
 //! - **Entries are filed under the account they came from**
 //!   ([`CacheKey`]): the provider and a keyed hash of what decides whose
-//!   entries come back (CLI, credentials mode, server, MFA mode, private
-//!   key). Different settings never see each other's listing, even before a
-//!   clear.
+//!   entries come back (each provider says what that is: for Passbolt the
+//!   CLI, credentials mode, server, MFA mode and private key). Different
+//!   settings never see each other's listing, even before a clear.
 //!
 //! The cache is also cleared when the vault is locked (see
 //! `ipc::vault_commands::vault_lock`).
 
 use std::collections::HashMap;
 use std::future::Future;
-use std::hash::{BuildHasher, Hash, Hasher, RandomState};
+use std::hash::{BuildHasher, Hasher, RandomState};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -52,16 +52,7 @@ impl CacheKey {
     pub fn new(provider: ProviderId, loaded: &Loaded) -> Self {
         static KEYS: OnceLock<RandomState> = OnceLock::new();
         let mut h = KEYS.get_or_init(RandomState::new).build_hasher();
-        match provider {
-            ProviderId::Passbolt => {
-                let c = &loaded.config.passbolt;
-                c.cli_path.as_deref().map(str::trim).hash(&mut h);
-                c.credentials.hash(&mut h);
-                c.server_address.trim().hash(&mut h);
-                c.mfa_mode.hash(&mut h);
-                loaded.passbolt_secrets.private_key.as_ref().map(|k| k.as_bytes()).hash(&mut h);
-            }
-        }
+        super::Provider::new(provider, loaded.clone()).hash_account(&mut h);
         Self { provider, account: h.finish() }
     }
 

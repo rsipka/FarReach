@@ -27,6 +27,8 @@
 
 	let queue = $state<PassphrasePrompt[]>([]);
 	let current = $derived(queue[0]);
+	/** A vault's master password rather than a key's passphrase. */
+	let master = $derived(current?.secretKind === 'master_password');
 	let value = $state('');
 	let sending = $state(false);
 	let sendError = $state<string | null>(null);
@@ -107,7 +109,7 @@
 		open={true}
 		onclose={() => respond(false)}
 		zIndex={1100}
-		title={t('pwmanager.prompt_title', { name: current.providerName })}
+		title={t(master ? 'pwmanager.prompt_title_master' : 'pwmanager.prompt_title', { name: current.providerName })}
 		maxWidth="440px"
 	>
 		{#key current.promptId}
@@ -118,12 +120,12 @@
 				{/if}
 				{#if current.retry}
 					<p class="msg error" role="alert">
-						{t('pwmanager.prompt_retry')}
+						{t(master ? 'pwmanager.prompt_retry_master' : 'pwmanager.prompt_retry')}
 						{#if current.error}<span class="detail">{current.error}</span>{/if}
 					</p>
 				{/if}
 				<label class="field">
-					<span class="label">{t('pwmanager.prompt_label')}</span>
+					<span class="label">{t(master ? 'pwmanager.prompt_label_master' : 'pwmanager.prompt_label')}</span>
 					<!-- svelte-ignore a11y_autofocus -->
 					<input
 						class="input"

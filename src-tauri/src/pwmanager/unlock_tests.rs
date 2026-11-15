@@ -17,7 +17,7 @@ fn unlocker(prompt_timeout: Duration) -> &'static Unlocker {
 }
 
 fn policy(account: u64, remember_secs: u32) -> Option<Policy> {
-    Some(Policy { account: key(account), remember_secs, server: None })
+    Some(Policy { account: key(account), remember_secs, server: None, secret_kind: SecretKind::Passphrase })
 }
 
 /// What the scripted user does with each question, in turn.
@@ -425,7 +425,7 @@ async fn the_question_names_what_is_connected_to_once_known() {
 async fn the_question_names_the_server() {
     let u = unlocker(Duration::from_secs(5));
     let user = Scripted::new(&[Step::Enter("typed")]);
-    let with_server = Some(Policy { account: key(1), remember_secs: 0, server: Some("pb.example.com".into()) });
+    let with_server = Some(Policy { account: key(1), remember_secs: 0, server: Some("pb.example.com".into()), secret_kind: SecretKind::Passphrase });
     operation(asker(&user), Reason::List, u.with_passphrase(with_server, echo)).await.unwrap();
     assert_eq!(user.asked()[0].server.as_deref(), Some("pb.example.com"));
 }
