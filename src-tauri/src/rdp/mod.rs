@@ -604,7 +604,7 @@ fn build_config(p: &RdpConnectParams, app: AppHandle) -> Result<ironrdp_client::
 
     // Remote audio, played through the default output device. IronRDP owns
     // the playback backend; only the desktops build it (see Cargo.toml).
-    #[cfg(not(target_os = "android"))]
+    #[cfg(not(mobile))]
     {
         builder = builder.with_sound(true);
     }

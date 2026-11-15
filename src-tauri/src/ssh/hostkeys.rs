@@ -292,7 +292,7 @@ impl HostKeyPolicy {
 }
 
 /// Run a program with its arguments, no shell, and take its output.
-#[cfg(not(target_os = "android"))]
+#[cfg(not(mobile))]
 fn run_capture(program: &str, args: &[String]) -> Result<String, String> {
     let out = std::process::Command::new(program)
         .args(args)
@@ -305,7 +305,7 @@ fn run_capture(program: &str, args: &[String]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
-#[cfg(target_os = "android")]
+#[cfg(mobile)]
 fn run_capture(program: &str, _args: &[String]) -> Result<String, String> {
     Err(format!("A phone cannot run \"{program}\""))
 }

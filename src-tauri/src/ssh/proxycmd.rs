@@ -70,7 +70,7 @@ impl AsyncWrite for ProxyStream {
     }
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(mobile))]
 fn shell_command(command: &str) -> tokio::process::Command {
     #[cfg(windows)]
     {
@@ -92,7 +92,7 @@ fn shell_command(command: &str) -> tokio::process::Command {
 
 /// Start the proxy program; its stdio is the connection. Its stderr stays
 /// with Reach's log, where ssh leaves it on the terminal.
-#[cfg(not(target_os = "android"))]
+#[cfg(not(mobile))]
 pub fn spawn(command: &str) -> std::io::Result<ProxyStream> {
     let mut child = shell_command(command)
         .stdin(std::process::Stdio::piped())
@@ -105,7 +105,7 @@ pub fn spawn(command: &str) -> std::io::Result<ProxyStream> {
     Ok(ProxyStream { _child: child, stdout, stdin })
 }
 
-#[cfg(target_os = "android")]
+#[cfg(mobile)]
 pub fn spawn(command: &str) -> std::io::Result<ProxyStream> {
     Err(std::io::Error::other(format!("A phone cannot run ProxyCommand \"{command}\"")))
 }
@@ -113,7 +113,7 @@ pub fn spawn(command: &str) -> std::io::Result<ProxyStream> {
 /// ProxyUseFdpass: the program writes a connected socket's descriptor to
 /// its stdout, a Unix socket, with SCM_RIGHTS; that socket is the
 /// connection.
-#[cfg(all(unix, not(target_os = "android")))]
+#[cfg(all(unix, not(mobile)))]
 pub async fn fdpass(command: &str) -> std::io::Result<tokio::net::TcpStream> {
     use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
     let (ours, theirs) = std::os::unix::net::UnixStream::pair()?;
@@ -159,7 +159,7 @@ pub async fn fdpass(command: &str) -> std::io::Result<tokio::net::TcpStream> {
     tokio::net::TcpStream::from_std(std_stream)
 }
 
-#[cfg(not(all(unix, not(target_os = "android"))))]
+#[cfg(not(all(unix, not(mobile))))]
 pub async fn fdpass(command: &str) -> std::io::Result<tokio::net::TcpStream> {
     Err(std::io::Error::other(format!("ProxyUseFdpass needs Unix descriptor passing, which this system has not (\"{command}\")")))
 }

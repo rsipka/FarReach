@@ -43,7 +43,7 @@ impl Engine {
 #[derive(Clone)]
 pub enum Shell {
     Ssh(SharedHandle),
-    #[cfg_attr(target_os = "android", allow(dead_code))]
+    #[cfg_attr(mobile, allow(dead_code))]
     Local,
 }
 
@@ -122,7 +122,7 @@ async fn run_ssh(h: &SharedHandle, cmd: &str, input: Option<&[u8]>) -> Result<Ou
     Ok(Output { code, stdout: String::from_utf8_lossy(&out).into(), stderr: String::from_utf8_lossy(&err).into() })
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(mobile))]
 async fn run_local(cmd: &str, input: Option<&[u8]>) -> Result<Output, String> {
     use tokio::io::AsyncWriteExt;
     #[cfg(windows)]
@@ -155,7 +155,7 @@ async fn run_local(cmd: &str, input: Option<&[u8]>) -> Result<Output, String> {
     })
 }
 
-#[cfg(target_os = "android")]
+#[cfg(mobile)]
 async fn run_local(_cmd: &str, _input: Option<&[u8]>) -> Result<Output, String> {
     Err("A phone has no container engine of its own; choose a server.".into())
 }
@@ -266,24 +266,24 @@ async fn podman_socket(shell: &Shell) -> Result<String, String> {
     Ok(path)
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(mobile))]
 fn local_docker() -> Result<bollard::Docker, String> {
     bollard::Docker::connect_with_local_defaults().map_err(|e| e.to_string())
 }
 
-#[cfg(target_os = "android")]
+#[cfg(mobile)]
 fn local_docker() -> Result<bollard::Docker, String> {
     Err("A phone has no container engine of its own; choose a server.".into())
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(mobile))]
 async fn local_podman(shell: &Shell) -> Result<bollard::Docker, String> {
     let path = podman_socket(shell).await?;
     let host = if path.starts_with('/') { format!("unix://{path}") } else { path };
     bollard::Docker::connect_with_host(&host).map_err(|e| e.to_string())
 }
 
-#[cfg(target_os = "android")]
+#[cfg(mobile)]
 async fn local_podman(_shell: &Shell) -> Result<bollard::Docker, String> {
     Err("A phone has no container engine of its own; choose a server.".into())
 }

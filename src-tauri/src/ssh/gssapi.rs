@@ -327,7 +327,7 @@ pub fn check_selected(oid: &[u8]) -> Result<(), String> {
 
 /// One step of the context: the token to send, and whether it is complete
 /// with integrity protection (a MIC follows) or without.
-#[cfg_attr(target_os = "android", allow(dead_code))]
+#[cfg_attr(mobile, allow(dead_code))]
 pub(crate) struct Out {
     pub token: Vec<u8>,
     pub complete: bool,
@@ -459,7 +459,7 @@ pub(crate) async fn authenticate<H: Handler>(
 
 /// The GSSAPI library (MIT Kerberos, Heimdal, or Apple's GSS framework),
 /// loaded when first needed so Reach does not depend on it to start.
-#[cfg(all(unix, not(target_os = "android")))]
+#[cfg(all(unix, not(mobile)))]
 mod sys {
     use std::ffi::c_void;
     use std::ptr::null_mut;
@@ -1052,8 +1052,8 @@ mod sys {
     }
 }
 
-/// No system Kerberos on Android.
-#[cfg(target_os = "android")]
+/// No system Kerberos on a phone (Android, iOS).
+#[cfg(mobile)]
 mod sys {
     use super::Out;
 
@@ -1061,7 +1061,7 @@ mod sys {
 
     impl Context {
         pub fn new(_host: &str, _client: Option<&str>, _delegate: bool) -> Result<Context, String> {
-            Err("GSSAPI is not available on Android".into())
+            Err("GSSAPI is not available on a phone".into())
         }
 
         pub fn step(&mut self, _input: Option<&[u8]>) -> Result<Out, String> {
@@ -1078,7 +1078,7 @@ mod sys {
     }
 
     pub fn inquire_cred() -> Result<(String, u64), String> {
-        Err("GSSAPI is not available on Android".into())
+        Err("GSSAPI is not available on a phone".into())
     }
 }
 

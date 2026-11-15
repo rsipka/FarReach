@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+		Merged into the Info.plist `tauri ios init` generates.
+
+		iOS 14 and later put every connection to the local network behind a
+		permission, asked the first time Reach reaches a server on it. The
+		prompt shows this string; without it the connection is refused.
+	-->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Reach connects to servers on your local network over SSH, RDP and VNC when you ask it to.</string>
+</dict>
+</plist>
