@@ -1,4 +1,4 @@
-package com.farreach.desktop
+package com.farreach.client
 
 import android.os.Bundle
 import android.view.View

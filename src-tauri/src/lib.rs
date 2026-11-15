@@ -100,7 +100,7 @@ pub const APP_NAME: &str = "FarReach";
 /// FarReach's own app id and desktop data folder name, so it installs and
 /// runs next to Reach (`com.reach.desktop`, data in `com.reach.app`) without
 /// sharing its data, keychain entries or single-instance lock.
-pub const APP_ID: &str = "com.farreach.desktop";
+pub const APP_ID: &str = "com.farreach.client";
 
 /// The app, for code with no handle of its own that needs a mobile plugin:
 /// the keychain functions, which on Android go through the Keystore.
@@ -1579,11 +1579,11 @@ mod metainfo_tests {
     /// version being built, so a release cannot ship with a stale history.
     #[test]
     fn metainfo_lists_this_version() {
-        let xml = include_str!("../linux/com.farreach.desktop.metainfo.xml");
+        let xml = include_str!("../linux/com.farreach.client.metainfo.xml");
         let release = format!("<release version=\"{}\"", env!("CARGO_PKG_VERSION"));
         assert!(
             xml.contains(&release),
-            "linux/com.farreach.desktop.metainfo.xml has no {release} entry: add this version to <releases>"
+            "linux/com.farreach.client.metainfo.xml has no {release} entry: add this version to <releases>"
         );
     }
 }

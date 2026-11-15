@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- AppStream metadata, read by Linux software centres and the AppImage
-     catalog. Installed as usr/share/metainfo/com.farreach.desktop.metainfo.xml
+     catalog. Installed as usr/share/metainfo/com.farreach.client.metainfo.xml
      by the AppImage, .deb and .rpm bundles (tauri.conf.json). -->
 <component type="desktop-application">
-  <id>com.farreach.desktop</id>
+  <id>com.farreach.client</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
   <name>FarReach</name>
