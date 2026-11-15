@@ -276,7 +276,9 @@
 					kind: h.kind,
 					domain: h.kind === 'rdp' ? h.domain : null,
 					detectedOs: h.kind === 'rdp' ? 'windows' : null,
-					telnet: h.kind === 'telnet' ? { ...DEFAULT_TELNET_OPTIONS, mode: h.raw ? 'raw' : 'active' } : null
+					telnet: h.kind === 'telnet' ? { ...DEFAULT_TELNET_OPTIONS, mode: h.raw ? 'raw' : 'active' } : null,
+					notes: h.notes,
+					customFields: h.fields.map((f) => (f.hidden ? f : { name: f.name, value: f.value }))
 				});
 				count++;
 			} catch (err) {

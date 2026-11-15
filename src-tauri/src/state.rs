@@ -121,6 +121,44 @@ pub struct SessionConfig {
     /// from when it was read, if one applies. Never stored.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credential: Option<CredentialUse>,
+    /// Free text about the server (RDM's Description and Notes). Part of
+    /// the session record, so it is encrypted and synced with the rest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+    /// Named values kept with the session (owner, asset tag, contract...),
+    /// in the order the user put them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_fields: Option<Vec<CustomField>>,
+}
+
+/// One named value of a session's documentation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CustomField {
+    pub name: String,
+    pub value: String,
+    /// Shown masked until revealed, like a password. Stored the same way
+    /// as every other field: the whole session is encrypted.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hidden: bool,
+}
+
+impl SessionConfig {
+    /// Notes with nothing in them and fields with neither a name nor a
+    /// value are not kept, so an untouched session stores neither.
+    pub fn tidy_documentation(&mut self) {
+        if self.notes.as_deref().is_some_and(|n| n.trim().is_empty()) {
+            self.notes = None;
+        }
+        if let Some(fields) = self.custom_fields.as_mut() {
+            for f in fields.iter_mut() {
+                f.name = f.name.trim().to_string();
+            }
+            fields.retain(|f| !f.name.is_empty() || !f.value.trim().is_empty());
+        }
+        if self.custom_fields.as_ref().is_some_and(|f| f.is_empty()) {
+            self.custom_fields = None;
+        }
+    }
 }
 
 /// A login kept once and used by any number of sessions in the same vault:

@@ -66,6 +66,18 @@ export interface SessionConfig {
   credential_id?: string | null;
   /** Read only: the saved credential the login was filled in from. */
   credential?: CredentialUse | null;
+  /** Free text about the server (RDM's Description and Notes). */
+  notes?: string | null;
+  /** Named values kept with the session, in the user's order. */
+  custom_fields?: CustomField[] | null;
+}
+
+/** One named value of a session's documentation. */
+export interface CustomField {
+  name: string;
+  value: string;
+  /** Shown masked until revealed. */
+  hidden?: boolean;
 }
 
 /** Which saved credential a session's login came from, as read. */
@@ -159,6 +171,8 @@ export async function sessionCreate(params: {
   wslDistro?: string | null;
   credentialId?: string | null;
   telnet?: TelnetOptions | null;
+  notes?: string | null;
+  customFields?: CustomField[] | null;
 }): Promise<SessionConfig> {
   return invoke<SessionConfig>('session_create', {
     name: params.name,
@@ -182,6 +196,8 @@ export async function sessionCreate(params: {
     wslDistro: params.wslDistro || null,
     credentialId: params.credentialId || null,
     telnet: params.kind === 'telnet' ? (params.telnet ?? null) : null,
+    notes: params.notes?.trim() ? params.notes : null,
+    customFields: params.customFields?.length ? params.customFields : null,
   });
 }
 

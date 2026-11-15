@@ -3,9 +3,10 @@
 	import Button from '#lib/components/shared/Button.svelte';
 	import KeyPicker from './KeyPicker.svelte';
 	import Input from '#lib/components/shared/Input.svelte';
-	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions } from '#lib/ipc/sessions.js';
+	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField } from '#lib/ipc/sessions.js';
 	import { isWindows } from '#lib/platform.js';
 	import SshOptionsSection from './SshOptionsSection.svelte';
+	import Disclosure from '#lib/components/shared/Disclosure.svelte';
 	import SecretRefField from '#lib/components/pwmanager/SecretRefField.svelte';
 	import type { EntrySummary, SecretRef } from '#lib/ipc/pwmanager.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -175,6 +176,15 @@
 	let shell = $state('');
 	let tagsStr = $state('');
 	let folderIdStr = $state('');
+	/** Documentation: free notes and named fields, like RDM's Documentation tab. */
+	let notes = $state('');
+	let customFields = $state<Array<CustomField & { shown: boolean }>>([]);
+	let docsOpen = $state(false);
+	let docsSummary = $derived.by(() => {
+		const fields = customFields.filter((f) => f.name.trim() || f.value.trim()).length;
+		const parts = [notes.trim() ? t('session.docs_has_notes') : '', fields ? t('session.docs_field_count', { count: String(fields) }) : ''].filter(Boolean);
+		return parts.length ? parts.join(' · ') : t('session.docs_empty');
+	});
 	let jumpEnabled = $state(false);
 	let jumpHops = $state<Array<{host: string; port: string; username: string; authType: 'Password' | 'Key' | 'Agent' | 'Manager'; password: string; keyPath: string; keyPassphrase: string; passwordRef: SecretRef | null; keyPassphraseRef: SecretRef | null; credentialId: string; read: JumpHostConfig | null}>>([]);
 	let proxyEnabled = $state(false);
@@ -225,6 +235,9 @@
 			sshOptions = editSession.ssh_options ?? {};
 			tagsStr = editSession.tags.join(', ');
 			folderIdStr = editSession.folder_id ?? '';
+			notes = editSession.notes ?? '';
+			customFields = (editSession.custom_fields ?? []).map((f) => ({ ...f, hidden: !!f.hidden, shown: false }));
+			docsOpen = !!notes.trim() || customFields.length > 0;
 			if (editSession.jump_chain && editSession.jump_chain.length > 0) {
 				jumpEnabled = true;
 				jumpHops = editSession.jump_chain.map(j => ({
@@ -280,6 +293,9 @@
 			sshOptions = {};
 			tagsStr = '';
 			folderIdStr = '';
+			notes = '';
+			customFields = [];
+			docsOpen = false;
 			jumpEnabled = false;
 			jumpHops = [];
 			proxyEnabled = false;
@@ -341,6 +357,10 @@
 					}
 				: { type: 'Agent' };
 		const tags = tagsStr.split(',').map(t => t.trim()).filter(Boolean);
+		const notesToSave = notes.trim() ? notes : null;
+		const fieldsToSave: CustomField[] = customFields
+			.filter((f) => f.name.trim() || f.value.trim())
+			.map((f) => (f.hidden ? { name: f.name.trim(), value: f.value, hidden: true } : { name: f.name.trim(), value: f.value }));
 
 		const jumpChain: JumpHostConfig[] | undefined = !desktop && jumpEnabled && jumpHops.length > 0
 			? jumpHops.map(h => {
@@ -414,6 +434,8 @@
 					ssh_options: sshOptionsToSave,
 					credential_id: credential,
 					credential: null,
+					notes: notesToSave,
+					custom_fields: fieldsToSave.length ? fieldsToSave : null,
 				});
 			} else {
 				await sessionCreate({
@@ -437,7 +459,9 @@
 					sshOptions: sshOptionsToSave,
 					wslDistro: kind === 'wsl' ? wslDistro.trim() : null,
 					telnet: telnet ? { ...telnetOptions } : null,
-					credentialId: credential
+					credentialId: credential,
+					notes: notesToSave,
+					customFields: fieldsToSave
 				});
 			}
 			onsave?.();
@@ -493,6 +517,14 @@
 
 	function addHop(): void {
 		jumpHops = [...jumpHops, { host: '', port: '22', username: 'root', authType: 'Password', password: '', keyPath: '', keyPassphrase: '', passwordRef: null, keyPassphraseRef: null, credentialId: '', read: null }];
+	}
+
+	function addField(): void {
+		customFields = [...customFields, { name: '', value: '', hidden: false, shown: true }];
+	}
+
+	function removeField(index: number): void {
+		customFields = customFields.filter((_, i) => i !== index);
 	}
 
 	function removeHop(index: number): void {
@@ -904,6 +936,43 @@
 			</div>
 		{/if}
 
+		<Disclosure title={t('session.docs')} summary={docsSummary} bind:open={docsOpen}>
+			<div class="docs">
+				<div class="shell-field">
+					<label class="via-label" for="session-notes">{t('session.notes')}</label>
+					<textarea id="session-notes" class="notes-input" rows="5" bind:value={notes} placeholder={t('session.notes_placeholder')} disabled={saving}></textarea>
+				</div>
+				<div class="shell-field">
+					<span class="via-label">{t('session.custom_fields')}</span>
+					{#each customFields as field, i (i)}
+						<div class="field-row">
+							<input class="field-input field-name" bind:value={field.name} placeholder={t('session.field_name')} aria-label={t('session.field_name')} disabled={saving} />
+							<input class="field-input field-value" type={field.hidden && !field.shown ? 'password' : 'text'} bind:value={field.value} placeholder={t('session.field_value')} aria-label={t('session.field_value')} disabled={saving} />
+							{#if field.hidden}
+								<button type="button" class="field-btn" onclick={() => (field.shown = !field.shown)} title={field.shown ? t('session.field_conceal') : t('session.field_reveal')} aria-label={field.shown ? t('session.field_conceal') : t('session.field_reveal')} disabled={saving}>
+									<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+										{#if field.shown}
+											<path d="M17.94 17.94A10 10 0 0 1 12 20C5 20 1 12 1 12a18 18 0 0 1 5.06-5.94M9.9 4.24A9 9 0 0 1 12 4c7 0 11 8 11 8a18 18 0 0 1-2.16 3.19M1 1l22 22"/>
+										{:else}
+											<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>
+										{/if}
+									</svg>
+								</button>
+							{/if}
+							<label class="field-hidden" title={t('session.field_hidden_hint')}>
+								<input type="checkbox" bind:checked={field.hidden} onchange={() => (field.shown = !field.hidden)} disabled={saving} />
+								{t('session.field_hidden')}
+							</label>
+							<button type="button" class="field-btn" onclick={() => removeField(i)} title={t('session.field_remove')} aria-label={t('session.field_remove')} disabled={saving}>×</button>
+						</div>
+					{/each}
+					<button type="button" class="jump-add-btn" onclick={addField} disabled={saving}>
+						+ {t('session.field_add')}
+					</button>
+				</div>
+			</div>
+		</Disclosure>
+
 		{#if error}
 			<div class="error-message">{error}</div>
 		{/if}
@@ -1010,6 +1079,81 @@
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
+	}
+
+	.docs {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.notes-input,
+	.field-input {
+		padding: 6px 10px;
+		background: var(--color-bg-primary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-btn);
+		color: var(--color-text-primary);
+		font-family: var(--font-sans);
+		font-size: 0.75rem;
+		outline: none;
+	}
+
+	.notes-input {
+		resize: vertical;
+		min-height: 80px;
+		line-height: 1.4;
+	}
+
+	.notes-input:focus,
+	.field-input:focus {
+		border-color: var(--color-accent);
+	}
+
+	.field-row {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.field-name {
+		width: 30%;
+		min-width: 0;
+	}
+
+	.field-value {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.field-hidden {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 0.6875rem;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+		cursor: pointer;
+	}
+
+	.field-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		flex-shrink: 0;
+		border: none;
+		border-radius: 4px;
+		background: transparent;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		font-size: 1rem;
+	}
+
+	.field-btn:hover:not(:disabled) {
+		background: var(--color-surface-hover);
+		color: var(--color-text-primary);
 	}
 
 	.shell-hint {

@@ -50,6 +50,17 @@ export interface RdmImportHost {
 	credential: RdmHostCredential | null;
 	/** Telnet only: plain TCP with no Telnet (a PuTTY Raw entry). */
 	raw: boolean;
+	/** The entry's Description and Notes as plain text, one after the other. */
+	notes: string | null;
+	/** The entry's custom fields (RDM's Custom Field 1 to 5), in order. */
+	fields: RdmField[];
+}
+
+export interface RdmField {
+	name: string;
+	value: string;
+	/** RDM's "Hidden" box: masked until revealed. */
+	hidden: boolean;
 }
 
 /** A login RDM keeps apart from the hosts: a credential entry, or a group's own. */
@@ -390,6 +401,80 @@ const CREDENTIAL_DOMAIN_PATHS = ['Credentials.Domain', 'Domain'];
 const GROUP_USER_PATHS = ['GroupDetails.UserName', 'GroupDetails.Username', 'ActiveDirectoryConsole.UserName', 'Credentials.UserName'];
 const GROUP_DOMAIN_PATHS = ['GroupDetails.Domain', 'ActiveDirectoryConsole.Domain', 'Credentials.Domain'];
 
+/**
+ * RDM keeps notes as plain text, HTML (newer versions' editor) or RTF
+ * (older ones); Reach keeps plain text, so the markup goes and the lines
+ * stay.
+ */
+export function plainNotes(raw: string): string {
+	let s = raw.replace(/\r\n?/g, '\n');
+	if (/^\s*\{\\rtf/.test(s)) {
+		const codePage = /\\ansicpg(\d+)/.exec(s)?.[1] ?? '1252';
+		s = s
+			// Groups that hold no text: fonts, colours, styles, pictures.
+			.replace(/\{\\\*[^{}]*(\{[^{}]*\}[^{}]*)*\}/g, '')
+			.replace(/\{\\(fonttbl|colortbl|stylesheet|info|pict)[^{}]*(\{[^{}]*\}[^{}]*)*\}/g, '')
+			.replace(/\\(par|line)\b ?/g, '\n')
+			.replace(/\\tab\b ?/g, '\t')
+			// A Unicode character, and the one-character stand-in after it for old readers.
+			.replace(/\\u(-?\d+) ?(\\'[0-9a-fA-F]{2}|[^\\{}])?/g, (_, code: string) => String.fromCharCode((Number(code) + 65536) % 65536))
+			.replace(/(\\'[0-9a-fA-F]{2})+/g, (run: string) => rtfBytes(run, codePage))
+			.replace(/\\([{}\\])/g, '$1')
+			.replace(/\\[a-zA-Z]+-?\d* ?/g, '')
+			.replace(/[{}]/g, '')
+			.replace(/\n[ \t]+/g, '\n');
+	} else if (/<\/?[a-zA-Z][^>]*>/.test(s)) {
+		s = decodeEntities(
+			s
+				.replace(/\n/g, ' ')
+				.replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '')
+				.replace(/<br\s*\/?>/gi, '\n')
+				.replace(/<li[^>]*>/gi, '\n- ')
+				.replace(/<\/(p|div|h[1-6]|li|tr|ul|ol)>/gi, '\n')
+				.replace(/<[^>]+>/g, '')
+				.replace(/&nbsp;/g, ' ')
+		)
+			.replace(/[ \t]+\n/g, '\n')
+			.replace(/\n[ \t]+/g, '\n')
+			// A list item starts its own line, not a paragraph.
+			.replace(/\n+- /g, '\n- ');
+	}
+	return s.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** RTF's \'xx escapes: bytes in the document's code page (1250 for Czech). */
+function rtfBytes(run: string, codePage: string): string {
+	const bytes = Uint8Array.from(run.split("\\'").slice(1), (h) => parseInt(h, 16));
+	try {
+		return new TextDecoder(`windows-${codePage}`).decode(bytes);
+	} catch {
+		return String.fromCharCode(...bytes);
+	}
+}
+
+const NOTES_PATHS = ['Notes', 'MetaInformation.Notes', 'Information.Notes'];
+
+/** Description, then Notes, once each. */
+function notesOf(entry: Obj): string | null {
+	const description = plainNotes(pick(entry, ['Description']));
+	const notes = plainNotes(pick(entry, NOTES_PATHS));
+	const parts = [description, notes].filter((p, i, all) => p && all.indexOf(p) === i);
+	return parts.length ? parts.join('\n\n') : null;
+}
+
+/** RDM's Custom Field 1 to 5, under MetaInformation (or the entry itself in some exports). */
+function fieldsOf(entry: Obj): RdmField[] {
+	const out: RdmField[] = [];
+	for (let n = 1; n <= 5; n++) {
+		const at = (suffix: string): string => pick(entry, [`MetaInformation.CustomField${n}${suffix}`, `CustomField${n}${suffix}`]);
+		const name = at('Title');
+		const value = at('Value');
+		if (!name && !value) continue;
+		out.push({ name: name || `Custom Field ${n}`, value, hidden: at('Hidden').toLowerCase() === 'true' });
+	}
+	return out;
+}
+
 export function parseRdmExport(raw: string): RdmParseResult {
 	const trimmed = raw.replace(/^﻿/, '').trim();
 	if (!trimmed) return { ok: false, error: 'no_hosts' };
@@ -528,7 +613,9 @@ export function parseRdmExport(raw: string): RdmParseResult {
 			folder: splitGroup(text(field(entry, 'Group'))),
 			jump,
 			credential,
-			raw: kind === 'telnet' && cls.raw === true
+			raw: kind === 'telnet' && cls.raw === true,
+			notes: notesOf(entry),
+			fields: fieldsOf(entry)
 		});
 	});
 

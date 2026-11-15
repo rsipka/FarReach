@@ -70,6 +70,14 @@
 				: 'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7'
 	);
 
+	/** The session's notes and fields, for a tooltip: hidden values stay masked. */
+	let docsTooltip = $derived.by(() => {
+		const notes = session.notes?.trim() ?? '';
+		const fields = (session.custom_fields ?? []).map((f) => `${f.name || '—'}: ${f.hidden ? '••••••' : f.value}`);
+		const text = [notes.length > 600 ? `${notes.slice(0, 600)}…` : notes, fields.join('\n')].filter(Boolean).join('\n\n');
+		return text;
+	});
+
 	let authLabel = $derived(
 		session.kind === 'wsl' ? 'WSL' :
 		session.auth_method.type === 'Password' ? t('session.auth_pw_label') :
@@ -182,6 +190,14 @@
 				</span>
 			{/if}
 		</div>
+		{#if docsTooltip}
+			<!-- Notes or fields: read them by hovering, edit them in the editor. -->
+			<span class="auth-mark docs-mark" title={docsTooltip} aria-label={t('session.docs')}>
+				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+					<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+				</svg>
+			</span>
+		{/if}
 		<!-- How it logs in, as a quiet mark rather than a label on every row. -->
 		{#if session.kind === 'wsl'}
 			<span class="auth-badge">WSL</span>

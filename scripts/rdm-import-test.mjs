@@ -8,7 +8,7 @@
  * Run: node scripts/rdm-import-test.mjs
  */
 
-import { parseRdmExport, parseXml, splitAddress, splitGroup, findExisting, findChildFolder } from '../src/lib/sessions/rdm-import.ts';
+import { parseRdmExport, parseXml, plainNotes, splitAddress, splitGroup, findExisting, findChildFolder } from '../src/lib/sessions/rdm-import.ts';
 
 let failures = 0;
 const check = (name, cond, extra = '') => {
@@ -312,6 +312,59 @@ section('a group\'s own login');
 	check('the login can sit in the Active Directory settings', byName.lab?.username === 'labber' && byName.lab.domain === 'LAB');
 	check('a group login becomes a credential named by its path', r.ok && r.credentials.some((c) => c.name === 'RDP / Corp' && c.username === 'admin'));
 	check('a host with its own login keeps it, with no credential', byName.mine?.username === 'me' && byName.mine.credential === null);
+}
+
+section('notes and custom fields');
+{
+	const xml = `<?xml version="1.0" encoding="utf-8"?>
+<ArrayOfConnection>
+  <Connection>
+    <ConnectionType>SSHShell</ConnectionType>
+    <Name>db1</Name>
+    <Description>Primary database</Description>
+    <Notes>&lt;p&gt;Ask &lt;b&gt;Jana&lt;/b&gt; before a reboot.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;rack 4&lt;/li&gt;&lt;li&gt;UPS &amp;amp; PDU&lt;/li&gt;&lt;/ul&gt;</Notes>
+    <Terminal><Host>db1.example.com</Host></Terminal>
+    <MetaInformation>
+      <CustomField1Title>Asset</CustomField1Title>
+      <CustomField1Value>A-113</CustomField1Value>
+      <CustomField3Title>iLO PIN</CustomField3Title>
+      <CustomField3Value>4321</CustomField3Value>
+      <CustomField3Hidden>true</CustomField3Hidden>
+      <CustomField4Value>untitled</CustomField4Value>
+      <Keywords>db</Keywords>
+    </MetaInformation>
+  </Connection>
+  <Connection>
+    <ConnectionType>RDPConfigured</ConnectionType>
+    <Name>plain</Name>
+    <Url>plain.local</Url>
+    <Description>Same</Description>
+    <Notes>Same</Notes>
+  </Connection>
+  <Connection>
+    <ConnectionType>RDPConfigured</ConnectionType>
+    <Name>bare</Name>
+    <Url>bare.local</Url>
+  </Connection>
+</ArrayOfConnection>`;
+	const r = parseRdmExport(xml);
+	const [db, plain, bare] = r.ok ? r.hosts : [];
+	check('Description comes first, then Notes as plain text', db?.notes === 'Primary database\n\nAsk Jana before a reboot.\n- rack 4\n- UPS & PDU', JSON.stringify(db?.notes));
+	check('custom fields keep their order and hidden flag', JSON.stringify(db?.fields) === JSON.stringify([
+		{ name: 'Asset', value: 'A-113', hidden: false },
+		{ name: 'iLO PIN', value: '4321', hidden: true },
+		{ name: 'Custom Field 4', value: 'untitled', hidden: false }
+	]), JSON.stringify(db?.fields));
+	check('the same text in Description and Notes is kept once', plain?.notes === 'Same');
+	check('an entry without either has no notes and no fields', bare?.notes === null && bare?.fields.length === 0);
+
+	const json = parseRdmExport(JSON.stringify({ Connections: [{ ConnectionType: 'SSHShell', Name: 'j', Terminal: { Host: 'j.example' }, Notes: 'line 1\r\nline 2', MetaInformation: { CustomField1Title: 'Owner', CustomField1Value: 'ops' } }] }));
+	check('JSON export: notes keep their lines', json.ok && json.hosts[0].notes === 'line 1\nline 2');
+	check('JSON export: custom fields', json.ok && json.hosts[0].fields[0]?.name === 'Owner' && json.hosts[0].fields[0]?.value === 'ops');
+
+	const rtf = String.raw`{\rtf1\ansi\ansicpg1250\deff0{\fonttbl{\f0\fnil\fcharset238 Segoe UI;}}{\colortbl ;\red0\green0\blue0;}{\*\generator Riched20 10.0.19041}\viewkind4\uc1\pard\f0\fs18 Restart p\'f8es \u268?esk\'e9 menu\par Druh\'fd \b \'f8\'e1dek\b0\par}`;
+	check('RTF notes: text and lines, Czech letters from code page 1250', plainNotes(rtf) === 'Restart přes České menu\nDruhý řádek', JSON.stringify(plainNotes(rtf)));
+	check('plain notes are left as they are', plainNotes('  a < b\n\n\n\nc ') === 'a < b\n\nc');
 }
 
 section('helpers');
