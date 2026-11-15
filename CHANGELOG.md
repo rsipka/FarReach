@@ -2,6 +2,9 @@
 
 All notable changes to Reach are documented here.
 
+## Unreleased
+- **The Sessions + menu shows in full** — In a narrow sidebar, the menu under the + button was cut off on the left, hiding the start of each item. It now opens over the window, lined up with the button and moved left only as far as it needs to fit.
+
 ## v0.9.1
 - **File explorer: Details view** — A new toolbar button shows each entry as a row of columns, as MobaXterm does: Name, Size, Modified, Owner, Group and Access. Click a heading to sort by it and again to reverse; folders stay on top. Right-click the headings to choose which columns show. A sidebar narrower than the columns scrolls sideways. The view, columns and sort order are remembered on each device. Servers whose `ls` cannot print exact times (BusyBox, BSD, macOS) leave Modified empty. Asked for on Discord.
 - **F5 no longer closes your sessions** — F5, Ctrl+R and Ctrl+F5 (Cmd+R on a Mac) reloaded the app's window and closed every terminal, file list and tab. The reload is stopped; the key still reaches the terminal, so F5 in Midnight Commander and Ctrl+R history search work as before. Reported on Discord.
