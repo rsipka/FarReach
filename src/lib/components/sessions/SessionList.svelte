@@ -193,6 +193,13 @@
 	let creatingFolderParentId = $state<string | null>(null);
 	let newFolderName = $state('');
 
+	/** What a search also finds a session by: its notes and its fields, but
+	 *  not the values of hidden ones. */
+	function docsText(s: SessionConfig): string[] {
+		const fields = (s.custom_fields ?? []).flatMap(f => (f.hidden ? [f.name] : [f.name, f.value]));
+		return s.notes ? [s.notes, ...fields] : fields;
+	}
+
 	// Filter sessions by selected vault, then by search query
 	let filteredSessions = $derived.by(() => {
 		let result = sessions.filter(s => {
@@ -204,7 +211,7 @@
 		const re = searchRegex.re;
 		if (re) {
 			result = result.filter(s => {
-				const fields = [s.name, s.host, s.username, `${s.username ? s.username + '@' : ''}${s.host}:${s.port}`, ...s.tags];
+				const fields = [s.name, s.host, s.username, `${s.username ? s.username + '@' : ''}${s.host}:${s.port}`, ...s.tags, ...docsText(s)];
 				return fields.some(f => re.test(f));
 			});
 		} else if (searchRegex.error) {
@@ -215,7 +222,8 @@
 				s.name.toLowerCase().includes(q) ||
 				s.host.toLowerCase().includes(q) ||
 				s.username.toLowerCase().includes(q) ||
-				s.tags.some(tag => tag.toLowerCase().includes(q))
+				s.tags.some(tag => tag.toLowerCase().includes(q)) ||
+				docsText(s).some(text => text.toLowerCase().includes(q))
 			);
 		}
 		return result;

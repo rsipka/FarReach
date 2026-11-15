@@ -742,6 +742,8 @@ pub async fn session_create(
     wsl_distro: Option<String>,
     credential_id: Option<String>,
     telnet: Option<crate::telnet::protocol::TelnetOptions>,
+    notes: Option<String>,
+    custom_fields: Option<Vec<crate::state::CustomField>>,
 ) -> Result<SessionConfig, String> {
     let mut manager = state.vault_manager.lock().await;
     let kind = kind.unwrap_or_default();
@@ -799,7 +801,10 @@ pub async fn session_create(
         credential_id: credential_id.filter(|c| !c.is_empty()),
         favorite: false,
         credential: None,
+        notes,
+        custom_fields,
     };
+    session.tidy_documentation();
 
     // A saved credential's login is filled in, as it is when the session is
     // read; what is stored as its own is what the editor sent, unless that
@@ -844,6 +849,7 @@ pub async fn session_update(
     if manager.is_locked() {
         return Err("Vault is locked".to_string());
     }
+    session.tidy_documentation();
 
     // Find which vault contains this session
     let loc = locate_session(&manager, &session.id).await
@@ -2243,5 +2249,63 @@ mod folder_sync_tests {
         delete_folder(&a, &web.id).await.unwrap();
         move_folders_to_their_vaults(&a).await;
         assert_eq!(names(&read_folders(&a).await.unwrap()), ["Home"]);
+    }
+}
+
+#[cfg(test)]
+mod documentation_tests {
+    use super::*;
+    use crate::state::CustomField;
+
+    fn session(extra: serde_json::Value) -> SessionConfig {
+        let mut v = serde_json::json!({
+            "id": "s1", "name": "web", "host": "web.example", "port": 22, "username": "u",
+            "auth_method": { "type": "Agent" }, "folder_id": null, "tags": [],
+        });
+        v.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        serde_json::from_value(v).unwrap()
+    }
+
+    #[test]
+    fn a_session_saved_before_notes_reads_without_them_and_stores_none() {
+        let s = session(serde_json::json!({}));
+        assert!(s.notes.is_none() && s.custom_fields.is_none());
+        let stored = serde_json::to_value(&s).unwrap();
+        assert!(stored.get("notes").is_none() && stored.get("custom_fields").is_none());
+    }
+
+    #[test]
+    fn notes_and_fields_are_kept_in_the_session_record() {
+        let s = session(serde_json::json!({
+            "notes": "Rack 4, ask Jana before rebooting",
+            "custom_fields": [{ "name": "Asset", "value": "A-113" }, { "name": "PIN", "value": "1234", "hidden": true }],
+        }));
+        let stored = serde_json::to_value(&s).unwrap();
+        assert_eq!(stored["notes"], "Rack 4, ask Jana before rebooting");
+        // A visible field stores no `hidden` at all.
+        assert_eq!(stored["custom_fields"][0], serde_json::json!({ "name": "Asset", "value": "A-113" }));
+        assert_eq!(stored["custom_fields"][1]["hidden"], true);
+        let back: SessionConfig = serde_json::from_value(stored).unwrap();
+        assert_eq!(back.custom_fields, s.custom_fields);
+    }
+
+    #[test]
+    fn empty_notes_and_blank_fields_are_dropped() {
+        let mut s = session(serde_json::json!({
+            "notes": "  \n ",
+            "custom_fields": [{ "name": " ", "value": "" }, { "name": " Owner ", "value": "ops" }, { "name": "", "value": "orphan" }],
+        }));
+        s.tidy_documentation();
+        assert!(s.notes.is_none());
+        assert_eq!(
+            s.custom_fields.unwrap(),
+            vec![
+                CustomField { name: "Owner".into(), value: "ops".into(), hidden: false },
+                CustomField { name: "".into(), value: "orphan".into(), hidden: false },
+            ]
+        );
+        let mut empty = session(serde_json::json!({ "custom_fields": [{ "name": "", "value": " " }] }));
+        empty.tidy_documentation();
+        assert!(empty.custom_fields.is_none());
     }
 }
