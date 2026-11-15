@@ -59,7 +59,7 @@ jobs:
           - platform: macos-latest
             args: '--target x86_64-apple-darwin'
           - platform: ubuntu-22.04
-            args: ''
+            args: '--bundles deb,appimage'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -250,6 +250,19 @@ jobs:
             exit 1
           fi
           echo "Bundle signature verified."
+
+      # The pinned Tauri CLI passes the app version through to RPM as-is.
+      # RPM reserves hyphens, so put the dev suffix in its Release field.
+      - name: Bundle and upload the RPM
+        if: matrix.platform == 'ubuntu-22.04'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          npx tauri bundle --ci --bundles rpm \
+            --config "{\"version\":\"${version%-dev.*}\",\"bundle\":{\"createUpdaterArtifacts\":false,\"linux\":{\"rpm\":{\"release\":\"0.dev.${version##*.}\"}}}}"
+          gh release upload "$GITHUB_REF_NAME" src-tauri/target/release/bundle/rpm/*.rpm --clobber
 
   publish-release:
     needs: [create-release, build-desktop, build-android, build-ios]
