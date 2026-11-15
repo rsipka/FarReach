@@ -16,7 +16,9 @@ before reporting.
 Please don't open a public issue for a security problem.
 
 Report it privately through GitHub instead:
-[Report a vulnerability](https://github.com/alexandrosnt/Reach/security/advisories/new).
+[Report a vulnerability in FarReach](https://github.com/rsipka/FarReach/security/advisories/new).
+If the problem is in Reach too, report it to Reach as well:
+[Report a vulnerability in Reach](https://github.com/alexandrosnt/Reach/security/advisories/new).
 Only the maintainer can see the report.
 
 Please include:
