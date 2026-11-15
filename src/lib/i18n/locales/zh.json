@@ -2641,5 +2641,19 @@
   "credential.folder_none": "无",
   "credential.own_login_hop": "此跳板机自己的登录信息",
   "session.rdm_import_credentials": "将导出中的 {{count}} 个登录信息保存为凭据，用于 {{hosts}} 个所选主机",
-  "session.rdm_import_credentials_hint": "不会导入 RDM 的密码：在“凭据”标签页中每个只需输入一次，所有使用它的会话都会获得。组传递下来的登录信息会成为该文件夹的凭据。"
+  "session.rdm_import_credentials_hint": "不会导入 RDM 的密码：在“凭据”标签页中每个只需输入一次，所有使用它的会话都会获得。组传递下来的登录信息会成为该文件夹的凭据。",
+  "broadcast.bar_one": "已选择一个终端用于广播。再添加一个即可开始：右键单击其标签页。",
+  "broadcast.bar_on": "广播中：在此输入的内容会发送到所有标记的终端（{{count}} 个）",
+  "broadcast.bar_elsewhere": "已对其他终端开启广播（{{count}} 个）。此终端不在其中，在此输入只发送到这里。",
+  "broadcast.include_this": "加入此终端",
+  "broadcast.leave_this": "排除此终端",
+  "broadcast.stop": "停止广播",
+  "broadcast.tab_toggle": "将输入广播到此标签页",
+  "broadcast.group": "广播到该组的终端",
+  "broadcast.all": "广播到所有终端",
+  "broadcast.tab_mark": "广播中：输入会发送到每个标记的标签页",
+  "broadcast.paste_note": "广播已开启：此内容也会发送到其他标记的终端（{{count}} 个）。",
+  "broadcast.palette_add": "将此标签页加入广播",
+  "broadcast.palette_remove": "将此标签页移出广播",
+  "broadcast.keywords": "broadcast 广播 multi-send 发送到所有 多个终端"
 }

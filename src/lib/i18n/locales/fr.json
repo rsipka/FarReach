@@ -2641,5 +2641,19 @@
   "credential.folder_none": "Aucun",
   "credential.own_login_hop": "Identifiants propres à ce rebond",
   "session.rdm_import_credentials": "Enregistrer les {{count}} identifiants de l'export, pour {{hosts}} hôtes sélectionnés",
-  "session.rdm_import_credentials_hint": "Les mots de passe de RDM ne sont pas importés : saisissez chacun une fois dans l'onglet Identifiants et toutes les sessions qui l'utilisent l'obtiennent. Les identifiants transmis par un groupe deviennent ceux du dossier."
+  "session.rdm_import_credentials_hint": "Les mots de passe de RDM ne sont pas importés : saisissez chacun une fois dans l'onglet Identifiants et toutes les sessions qui l'utilisent l'obtiennent. Les identifiants transmis par un groupe deviennent ceux du dossier.",
+  "broadcast.bar_one": "Un terminal est choisi pour la diffusion. Ajoutez-en un autre pour commencer : clic droit sur son onglet.",
+  "broadcast.bar_on": "Diffusion : ce que vous tapez ici va aux {{count}} terminaux marqués",
+  "broadcast.bar_elsewhere": "La diffusion est active pour {{count}} terminaux. Celui-ci n'en fait pas partie, la saisie ici ne va qu'ici.",
+  "broadcast.include_this": "Ajouter celui-ci",
+  "broadcast.leave_this": "Exclure celui-ci",
+  "broadcast.stop": "Arrêter la diffusion",
+  "broadcast.tab_toggle": "Diffuser la saisie vers cet onglet",
+  "broadcast.group": "Diffuser aux terminaux du groupe",
+  "broadcast.all": "Diffuser à tous les terminaux",
+  "broadcast.tab_mark": "Dans la diffusion : la saisie va à chaque onglet marqué",
+  "broadcast.paste_note": "La diffusion est active : ceci va aussi aux autres terminaux marqués ({{count}}).",
+  "broadcast.palette_add": "Ajouter cet onglet à la diffusion",
+  "broadcast.palette_remove": "Retirer cet onglet de la diffusion",
+  "broadcast.keywords": "broadcast diffusion multi-send envoyer à tous plusieurs terminaux"
 }

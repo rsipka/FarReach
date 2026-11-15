@@ -2641,5 +2641,19 @@
   "credential.folder_none": "None",
   "credential.own_login_hop": "This jump host's own login",
   "session.rdm_import_credentials": "Save the {{count}} logins from the export as credentials, for {{hosts}} selected hosts",
-  "session.rdm_import_credentials_hint": "RDM's passwords are not imported: type each one once in the Credentials tab and every session using it gets it. A login a group passes down becomes that folder's credential."
+  "session.rdm_import_credentials_hint": "RDM's passwords are not imported: type each one once in the Credentials tab and every session using it gets it. A login a group passes down becomes that folder's credential.",
+  "broadcast.bar_one": "One terminal is chosen for broadcast. Add another to start: right-click its tab.",
+  "broadcast.bar_on": "Broadcasting: what you type here goes to {{count}} terminals at once",
+  "broadcast.bar_elsewhere": "Broadcast is on for {{count}} terminals. This one is not in it, so typing here goes only here.",
+  "broadcast.include_this": "Add this one",
+  "broadcast.leave_this": "Leave this one out",
+  "broadcast.stop": "Stop broadcast",
+  "broadcast.tab_toggle": "Broadcast typing to this tab",
+  "broadcast.group": "Broadcast to the group's terminals",
+  "broadcast.all": "Broadcast to all terminals",
+  "broadcast.tab_mark": "In the broadcast: typing goes to every marked tab",
+  "broadcast.paste_note": "Broadcast is on: this also goes to the other marked terminals ({{count}}).",
+  "broadcast.palette_add": "Add this tab to the broadcast",
+  "broadcast.palette_remove": "Take this tab out of the broadcast",
+  "broadcast.keywords": "broadcast multi-send send to all type into several terminals"
 }

@@ -2641,5 +2641,19 @@
   "credential.folder_none": "Ninguna",
   "credential.own_login_hop": "Credenciales propias de este salto",
   "session.rdm_import_credentials": "Guardar las {{count}} credenciales de la exportación, para {{hosts}} hosts seleccionados",
-  "session.rdm_import_credentials_hint": "Las contraseñas de RDM no se importan: escribe cada una una vez en la pestaña Credenciales y todas las sesiones que la usan la reciben. Las credenciales que transmite un grupo pasan a ser las de su carpeta."
+  "session.rdm_import_credentials_hint": "Las contraseñas de RDM no se importan: escribe cada una una vez en la pestaña Credenciales y todas las sesiones que la usan la reciben. Las credenciales que transmite un grupo pasan a ser las de su carpeta.",
+  "broadcast.bar_one": "Hay un terminal elegido para difundir. Añade otro para empezar: clic derecho en su pestaña.",
+  "broadcast.bar_on": "Difundiendo: lo que escribas aquí va a los {{count}} terminales marcados",
+  "broadcast.bar_elsewhere": "La difusión está activa en {{count}} terminales. Este no está incluido, lo que escribas aquí solo va aquí.",
+  "broadcast.include_this": "Añadir este",
+  "broadcast.leave_this": "Excluir este",
+  "broadcast.stop": "Detener difusión",
+  "broadcast.tab_toggle": "Difundir lo escrito a esta pestaña",
+  "broadcast.group": "Difundir a los terminales del grupo",
+  "broadcast.all": "Difundir a todos los terminales",
+  "broadcast.tab_mark": "En la difusión: lo escrito va a cada pestaña marcada",
+  "broadcast.paste_note": "La difusión está activa: esto también va a los demás terminales marcados ({{count}}).",
+  "broadcast.palette_add": "Añadir esta pestaña a la difusión",
+  "broadcast.palette_remove": "Quitar esta pestaña de la difusión",
+  "broadcast.keywords": "broadcast difusión multi-send enviar a todos varios terminales"
 }

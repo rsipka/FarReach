@@ -11,6 +11,8 @@
 	import { updateStats, removeStats } from '#lib/state/monitoring.svelte.js';
 	import Terminal from '#lib/components/terminal/Terminal.svelte';
 	import RdpPanel from '#lib/components/rdp/RdpPanel.svelte';
+	import BroadcastBar from '#lib/components/terminal/BroadcastBar.svelte';
+	import { getBroadcastTargets, toggleBroadcastTarget } from '#lib/state/broadcast.svelte.js';
 	import MonitoringBar from '#lib/components/terminal/MonitoringBar.svelte';
 	import RemoteTerminal from '#lib/components/share/RemoteTerminal.svelte';
 	import * as share from '#lib/state/share.svelte.js';
@@ -56,6 +58,7 @@
 	let tabs = $derived(getTabs());
 	let activeTab = $derived(getActiveTab());
 	let activePage = $derived(getActivePage());
+	let broadcastTargets = $derived(getBroadcastTargets());
 
 	// Two tabs side by side (#106); the rules are in #lib/terminal/split.
 	let areaEl = $state<HTMLDivElement>();
@@ -131,7 +134,7 @@
 	});
 
 	// Ctrl+Shift+E splits right, Ctrl+Shift+O down (as Terminator), Ctrl+Shift+U
-	// back to one. Caught before the terminal sees them: no shell binds them.
+	// back to one, Ctrl+Shift+B in or out of the broadcast. Caught before the terminal sees them: no shell binds them.
 	$effect(() => {
 		const onKey = (e: KeyboardEvent) => {
 			if (activePage !== 'terminal' || !(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return;
@@ -147,6 +150,11 @@
 				e.preventDefault();
 				e.stopPropagation();
 				unsplit();
+			} else if (k === 'b' && activeTab) {
+				// In or out of the broadcast: typing into several terminals at once.
+				e.preventDefault();
+				e.stopPropagation();
+				toggleBroadcastTarget(activeTab.id);
 			}
 		};
 		window.addEventListener('keydown', onKey, { capture: true });
@@ -313,6 +321,7 @@
 			{:else}
 				<!-- Side by side with the other person's terminal while a share is
 				     connected and they are sharing one. Left is always mine. -->
+				<BroadcastBar />
 				<div class="terminal-split" class:sharing={share.isShowingRemote()}>
 				<div class="terminal-area" bind:this={areaEl}>
 					{#each tabs as tab (tab.id)}
@@ -324,6 +333,7 @@
 							class:active={focused || pane !== null}
 							class:pane={pane !== null}
 							class:focused={pane !== null && focused}
+							class:broadcast={broadcastTargets.includes(tab.id)}
 							style={pane && shownSplit ? paneStyle(shownSplit, pane) : undefined}
 							onpointerdowncapture={() => {
 								if (pane && !focused) activateTab(tab.id);
@@ -475,6 +485,22 @@
 
 	.terminal-wrapper.pane.focused::after {
 		border: 2px solid var(--color-accent);
+	}
+
+	/* In a broadcast: what is typed into one of these goes to all of them.
+	   Drawn above the split's own border, in the broadcast bar's colour. */
+	.terminal-wrapper.broadcast::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: 6;
+		pointer-events: none;
+		border: 2px dashed var(--color-warning);
+	}
+
+	.terminal-wrapper.broadcast.focused::before,
+	.terminal-wrapper.broadcast:not(.pane)::before {
+		border-style: solid;
 	}
 
 	.split-divider {

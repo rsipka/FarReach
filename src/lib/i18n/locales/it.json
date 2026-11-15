@@ -2641,5 +2641,19 @@
   "credential.folder_none": "Nessuna",
   "credential.own_login_hop": "Credenziali proprie di questo jump host",
   "session.rdm_import_credentials": "Salva i {{count}} accessi dell'esportazione come credenziali, per {{hosts}} host selezionati",
-  "session.rdm_import_credentials_hint": "Le password di RDM non vengono importate: inseriscile una volta nella scheda Credenziali e tutte le sessioni che le usano le ricevono. Le credenziali trasmesse da un gruppo diventano quelle della sua cartella."
+  "session.rdm_import_credentials_hint": "Le password di RDM non vengono importate: inseriscile una volta nella scheda Credenziali e tutte le sessioni che le usano le ricevono. Le credenziali trasmesse da un gruppo diventano quelle della sua cartella.",
+  "broadcast.bar_one": "Un terminale è scelto per la trasmissione. Aggiungine un altro per iniziare: clic destro sulla sua scheda.",
+  "broadcast.bar_on": "Trasmissione: ciò che digiti qui va a tutti i {{count}} terminali contrassegnati",
+  "broadcast.bar_elsewhere": "La trasmissione è attiva per {{count}} terminali. Questo non è incluso, ciò che digiti qui va solo qui.",
+  "broadcast.include_this": "Aggiungi questo",
+  "broadcast.leave_this": "Escludi questo",
+  "broadcast.stop": "Interrompi trasmissione",
+  "broadcast.tab_toggle": "Trasmetti la digitazione a questa scheda",
+  "broadcast.group": "Trasmetti ai terminali del gruppo",
+  "broadcast.all": "Trasmetti a tutti i terminali",
+  "broadcast.tab_mark": "Nella trasmissione: la digitazione va a ogni scheda contrassegnata",
+  "broadcast.paste_note": "La trasmissione è attiva: questo va anche agli altri terminali contrassegnati ({{count}}).",
+  "broadcast.palette_add": "Aggiungi questa scheda alla trasmissione",
+  "broadcast.palette_remove": "Togli questa scheda dalla trasmissione",
+  "broadcast.keywords": "broadcast trasmissione multi-send invia a tutti più terminali"
 }

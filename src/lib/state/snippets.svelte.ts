@@ -75,7 +75,11 @@ export function canPasteSnippet(): boolean {
 export interface TerminalInput {
 	/** Whether the shell in it has turned bracketed paste on. */
 	bracketed: () => boolean;
+	/** Into this terminal only. */
 	send: (data: number[]) => void;
+	/** As if typed here: also into the terminals it broadcasts to
+	 *  (#lib/state/broadcast). */
+	type?: (data: number[]) => void;
 }
 
 const inputs = new Map<string, TerminalInput>();
@@ -86,6 +90,10 @@ export function registerTerminalInput(tabId: string, input: TerminalInput): void
 
 export function unregisterTerminalInput(tabId: string, input: TerminalInput): void {
 	if (inputs.get(tabId) === input) inputs.delete(tabId);
+}
+
+export function getTerminalInput(tabId: string): TerminalInput | undefined {
+	return inputs.get(tabId);
 }
 
 /** Types `command` into the active terminal. Without `run` it waits for
@@ -101,7 +109,7 @@ export function pasteSnippet(command: string, run = false): boolean {
 	if (!text) return true;
 	const data = Array.from(new TextEncoder().encode(text));
 	if (input) {
-		input.send(data);
+		(input.type ?? input.send)(data);
 	} else if (target.ssh) {
 		sshSend(target.id, data);
 	} else {
