@@ -1,4 +1,4 @@
-package io.github.rsipka.farreach
+package com.farreach.desktop
 
 import android.os.Bundle
 import android.view.View
