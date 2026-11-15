@@ -18,22 +18,29 @@
 > as pull requests; most of them are meant to land upstream. If you don't need what FarReach adds,
 > use [Reach](https://github.com/alexandrosnt/Reach) itself.
 >
-> FarReach reads the same data as Reach (same app id, vault and keychain entries), so it replaces a
-> Reach install on the same device. Don't run both at once.
+> FarReach has its own app id, data folder and keychain entries, so it installs and runs next to
+> Reach. It starts empty: restore a Reach backup or point it at your sync location to bring data over.
 
 ---
 
-<p align="center">
-  <a href="https://reachssh.com/download/">
-    <img src="assets/banner.png" alt="Reach — manage your servers, everywhere" width="900" />
-  </a>
-</p>
+## Why FarReach?
 
----
+PuTTY hasn't changed in decades, MobaXterm is Windows-only, and Termius charges a subscription for the basics. Reach, which FarReach is built on, is an SSH client built from scratch: native Rust networking, a fast UI, encrypted storage, and the same app on Windows, macOS, Linux and Android. No Electron, no subscription, no account.
 
-## Why Reach?
+FarReach adds what people moving from Remote Desktop Manager and similar tools miss most: importing from RDM, saved credentials shared by many sessions, session notes, Telnet, broadcast input, and sync through a folder, SFTP, Git or an SMB share.
 
-PuTTY hasn't changed in decades, MobaXterm is Windows-only, and Termius charges a subscription for the basics. Reach is an SSH client built from scratch: native Rust networking, a fast UI, encrypted storage, and the same app on Windows, macOS, Linux and Android. No Electron, no subscription, no account.
+## Added in FarReach
+
+- **Import from Remote Desktop Manager**: RDP, SSH, VNC and Telnet entries, folders, logins and notes from an RDM export.
+- **Saved credentials**: one login kept once in a vault and used by many sessions, by every session in a folder, or by a jump host.
+- **Session notes and custom fields**, like RDM's Documentation tab, encrypted and synced with the session.
+- **Telnet sessions** for switches, routers and console servers, with automatic login.
+- **Broadcast input**: type into several terminals at once.
+- **Favorites** on the start screen, and an option to open sessions with a double click.
+- **Local-first sync**: every vault works offline and syncs in the background, through Turso, a folder, SFTP, Git or an SMB share without mounting it. Conflicting edits are kept as copies, not lost.
+- **Czech translation**, and early **iOS** builds.
+
+See the [changelog](CHANGELOG.md) for details. Most of these are offered back to Reach.
 
 ## Features
 
@@ -97,7 +104,7 @@ FarReach updates itself from those releases. Reach itself is also on Scoop and i
 
 ## Built with
 
-[Tauri 2](https://v2.tauri.app), Rust and Svelte 5. The SSH stack is pure Rust ([russh](https://github.com/warp-tech/russh)), with no OpenSSH dependency, and the UI uses the system webview instead of a bundled Chromium, so Reach stays small and light.
+[Tauri 2](https://v2.tauri.app), Rust and Svelte 5. The SSH stack is pure Rust ([russh](https://github.com/warp-tech/russh)), with no OpenSSH dependency, and the UI uses the system webview instead of a bundled Chromium, so FarReach stays small and light.
 
 | | |
 |---|---|
