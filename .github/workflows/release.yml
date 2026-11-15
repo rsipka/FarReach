@@ -35,7 +35,7 @@ jobs:
           if [ -z "$id" ]; then
             id=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
               -f tag_name="$GITHUB_REF_NAME" \
-              -f name="Reach $GITHUB_REF_NAME" \
+              -f name="FarReach $GITHUB_REF_NAME" \
               -F body=@.github/release-notes.md \
               -F draft=true \
               --jq .id)
@@ -164,7 +164,7 @@ jobs:
           # linuxdeploy's AppImage plugin embeds it and writes the .zsync file,
           # so AppImageUpdate, AppImageLauncher and Gear Lever can update Reach
           # as well as its own updater. Read only by the Linux build.
-          LDAI_UPDATE_INFORMATION: gh-releases-zsync|alexandrosnt|Reach|latest|Reach_*_amd64.AppImage.zsync
+          LDAI_UPDATE_INFORMATION: gh-releases-zsync|rsipka|FarReach|latest|FarReach_*_amd64.AppImage.zsync
         with:
           # Into the release made above, never a new one.
           releaseId: ${{ needs.create-release.outputs.id }}
@@ -358,7 +358,7 @@ jobs:
           # launcher icons (adaptive included) replace it.
           cp -r src-tauri/icons/android/. src-tauri/gen/android/app/src/main/res/
           # Its activity also makes room for the phone keyboard (#127).
-          cp src-tauri/android/MainActivity.kt src-tauri/gen/android/app/src/main/java/com/reach/desktop/MainActivity.kt
+          cp src-tauri/android/MainActivity.kt src-tauri/gen/android/app/src/main/java/com/farreach/client/MainActivity.kt
 
       # One permanent key, kept as a repository secret. Android installs an
       # update only over an app signed with the same key, so a key made fresh
@@ -412,8 +412,8 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           OUT=src-tauri/gen/android/app/build/outputs/apk
           mkdir -p dist-android
-          cp "$(find $OUT -path '*arm64*' -name '*release*.apk' | head -1)" "dist-android/Reach_${VERSION}_android_arm64.apk"
-          cp "$(find $OUT -path '*arm*' ! -path '*arm64*' -name '*release*.apk' | head -1)" "dist-android/Reach_${VERSION}_android_armv7.apk"
+          cp "$(find $OUT -path '*arm64*' -name '*release*.apk' | head -1)" "dist-android/FarReach_${VERSION}_android_arm64.apk"
+          cp "$(find $OUT -path '*arm*' ! -path '*arm64*' -name '*release*.apk' | head -1)" "dist-android/FarReach_${VERSION}_android_armv7.apk"
           BUILD_TOOLS=$(ls -d $ANDROID_SDK_ROOT/build-tools/*/ | sort -V | tail -1)
           for apk in dist-android/*.apk; do ${BUILD_TOOLS}apksigner verify "$apk"; done
           ls -la dist-android

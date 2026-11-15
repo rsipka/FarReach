@@ -92,6 +92,16 @@ use std::sync::OnceLock;
 /// store read from this instead.
 static APP_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
+/// The product name the fork shows (FarReach, a fork of Reach). Identifiers
+/// that existing data depends on (the app id, keychain services, vault file
+/// names) keep their Reach names on purpose.
+pub const APP_NAME: &str = "FarReach";
+
+/// FarReach's own app id and desktop data folder name, so it installs and
+/// runs next to Reach (`com.reach.desktop`, data in `com.reach.app`) without
+/// sharing its data, keychain entries or single-instance lock.
+pub const APP_ID: &str = "com.farreach.client";
+
 /// The app, for code with no handle of its own that needs a mobile plugin:
 /// the keychain functions, which on Android go through the Keystore.
 #[cfg(target_os = "android")]
@@ -113,7 +123,7 @@ pub fn app_data_dir() -> PathBuf {
     APP_DATA_DIR.get().cloned().unwrap_or_else(|| {
         dirs::data_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("com.reach.app")
+            .join(APP_ID)
     })
 }
 
@@ -1191,7 +1201,7 @@ pub fn run() {
             // Failure is ignored — a temp directory we cannot clear is not a
             // reason to refuse to start.
             {
-                let stale = std::env::temp_dir().join("reach-drag");
+                let stale = std::env::temp_dir().join("farreach-drag");
                 if stale.is_dir() {
                     let _ = std::fs::remove_dir_all(&stale);
                 }
@@ -1200,10 +1210,9 @@ pub fn run() {
             // Root all storage at a writable data dir, then manage AppState here
             // (not before build) so it picks up that dir.
             //
-            // Desktop KEEPS its historical `dirs::data_dir()/com.reach.app`
-            // location — the bundle identifier is `com.reach.desktop`, so
-            // `app_data_dir()` would resolve to `.../com.reach.desktop` and make
-            // existing users' vaults look lost. Do NOT relocate them.
+            // Desktop keeps its data in `dirs::data_dir()/APP_ID` (upstream Reach
+            // uses `com.reach.app`). FarReach has its own folder so it can run
+            // next to Reach.
             //
             // Mobile MUST use the Tauri-resolved OS sandbox: there
             // `dirs::data_dir()` is read-only, so vault writes fail with
@@ -1244,17 +1253,17 @@ pub fn run() {
                 use tauri::menu::MenuItemBuilder;
                 use tauri::Emitter;
 
-                let app_name = "Reach";
+                let app_name = APP_NAME;
 
                 // --- Reach menu ---
-                let about = PredefinedMenuItem::about(app, Some("About Reach"), None)?;
+                let about = PredefinedMenuItem::about(app, Some(&format!("About {APP_NAME}")), None)?;
                 let services = PredefinedMenuItem::services(app, None)?;
                 let separator1 = PredefinedMenuItem::separator(app)?;
-                let hide = PredefinedMenuItem::hide(app, Some("Hide Reach"))?;
+                let hide = PredefinedMenuItem::hide(app, Some(&format!("Hide {APP_NAME}")))?;
                 let hide_others = PredefinedMenuItem::hide_others(app, None)?;
                 let show_all = PredefinedMenuItem::show_all(app, None)?;
                 let separator2 = PredefinedMenuItem::separator(app)?;
-                let quit = PredefinedMenuItem::quit(app, Some("Quit Reach"))?;
+                let quit = PredefinedMenuItem::quit(app, Some(&format!("Quit {APP_NAME}")))?;
                 let reach_menu = SubmenuBuilder::new(app, app_name)
                     .item(&about)
                     .item(&services)
@@ -1366,7 +1375,7 @@ pub fn run() {
 
                 TrayIconBuilder::new()
                     .icon(icon)
-                    .tooltip("Reach")
+                    .tooltip(APP_NAME)
                     .menu(&tray_menu)
                     .on_menu_event(|app_handle, event| {
                         match event.id().as_ref() {
@@ -1570,11 +1579,11 @@ mod metainfo_tests {
     /// version being built, so a release cannot ship with a stale history.
     #[test]
     fn metainfo_lists_this_version() {
-        let xml = include_str!("../linux/com.reach.desktop.metainfo.xml");
+        let xml = include_str!("../linux/com.farreach.client.metainfo.xml");
         let release = format!("<release version=\"{}\"", env!("CARGO_PKG_VERSION"));
         assert!(
             xml.contains(&release),
-            "linux/com.reach.desktop.metainfo.xml has no {release} entry: add this version to <releases>"
+            "linux/com.farreach.client.metainfo.xml has no {release} entry: add this version to <releases>"
         );
     }
 }

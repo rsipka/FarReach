@@ -10,6 +10,7 @@
 	import { toggleAIPanel, getAIChatState } from '#lib/state/ai-chat.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { isMac, isMobile } from '#lib/platform.js';
+	import { APP_NAME } from '#lib/brand.js';
 
 	/** On a Mac the window keeps the system's own traffic lights, drawn over
 	 *  this bar (tauri.macos.conf.json): they are what a Mac user reaches for,
@@ -49,7 +50,7 @@
 <header class="titlebar" class:mac={macWindow} data-tauri-drag-region>
 	<div class="titlebar-left" data-tauri-drag-region>
 		<img src="/app-icon.png" alt="" class="app-icon" draggable="false" />
-		<span class="app-name">Reach</span>
+		<span class="app-name">{APP_NAME}</span>
 		<span class="app-version">v{__APP_VERSION__}</span>
 		<!-- The gear is the only route to the settings tabs, so a badge on a tab
 		     would only ever be seen by someone already inside. -->

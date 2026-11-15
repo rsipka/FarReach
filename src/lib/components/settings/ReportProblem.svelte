@@ -14,6 +14,7 @@
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { sessionList } from '#lib/ipc/sessions.js';
 	import { reportPrepare, reportReveal, type Private, type Report } from '#lib/ipc/report.js';
+	import { APP_NAME, REPO_URL } from '#lib/brand.js';
 
 	interface Props {
 		open: boolean;
@@ -22,7 +23,7 @@
 
 	let { open, onclose }: Props = $props();
 
-	const NEW_ISSUE = 'https://github.com/alexandrosnt/Reach/issues/new';
+	const NEW_ISSUE = `${REPO_URL}/issues/new`;
 	/** GitHub refuses longer links; the log goes as a file, not in the link. */
 	const MAX_URL = 7000;
 
@@ -69,7 +70,7 @@
 	}
 
 	function issueUrl(r: Report): string {
-		const system = [`Reach ${r.version}`, r.os, r.desktop].filter(Boolean).join(' · ');
+		const system = [`${APP_NAME} ${r.version}`, r.os, r.desktop].filter(Boolean).join(' · ');
 		const build = (problems: string[]) => {
 			const body = [
 				'**What happened**',
@@ -84,7 +85,7 @@
 				'---',
 				system,
 				...(problems.length ? ['', 'Recent warnings and errors (cleaned):', '```', ...problems, '```'] : []),
-				...(attach ? ['', '_Log: drag reach-report.log from the folder Reach opened into this box._'] : [])
+				...(attach ? ['', '_Log: drag reach-report.log from the folder FarReach opened into this box._'] : [])
 			].join('\n');
 			return `${NEW_ISSUE}?body=${encodeURIComponent(body)}`;
 		};

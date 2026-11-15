@@ -3,6 +3,8 @@
   "version": "0.9.1",
   "private": true,
   "license": "MIT",
+  "description": "FarReach, a fork of Reach: cross-platform SSH and remote management tool",
+  "repository": "github:rsipka/FarReach",
   "type": "module",
   "scripts": {
     "dev": "vite dev",

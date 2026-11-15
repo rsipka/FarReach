@@ -2,7 +2,8 @@
 name = "reach"
 version = "0.9.1"
 description = "Cross-platform SSH & Remote Management Tool"
-authors = ["Reach Contributors"]
+authors = ["Reach Contributors", "FarReach contributors"]
+repository = "https://github.com/rsipka/FarReach"
 edition = "2021"
 license = "MIT"
 

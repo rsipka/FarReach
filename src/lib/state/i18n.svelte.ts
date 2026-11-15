@@ -1,4 +1,5 @@
 import enLocale from '../i18n/locales/en.json';
+import { brand } from '#lib/brand.js';
 
 let locale: string = $state('en');
 let translations: Map<string, string> = $state(new Map());
@@ -6,7 +7,7 @@ let translations: Map<string, string> = $state(new Map());
 function loadEntries(entries: Record<string, string>): void {
 	const newMap = new Map<string, string>();
 	for (const key of Object.keys(entries)) {
-		newMap.set(key, entries[key]);
+		newMap.set(key, brand(key, entries[key]));
 	}
 	translations = newMap;
 }

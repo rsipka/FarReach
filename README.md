@@ -1,31 +1,25 @@
 <p align="center">
-  <img src="src-tauri/icons/128x128.png" alt="Reach" width="80" />
+  <img src="src-tauri/icons/128x128.png" alt="FarReach" width="80" />
 </p>
 
-<h1 align="center">Reach</h1>
+<h1 align="center">FarReach</h1>
 
 <p align="center">
-  A modern, cross-platform SSH client and remote management tool.<br>
-  Built for engineers who got tired of PuTTY and wanted something that just works.
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/github/v/release/alexandrosnt/Reach?style=flat-square&color=0a84ff" alt="Release" />
-  <img src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-333?style=flat-square" alt="Platforms" />
-  <img src="https://img.shields.io/github/license/alexandrosnt/Reach?style=flat-square&cacheSeconds=60" alt="License" />
-  <a href="https://discord.gg/CSbEybvDVV"><img src="https://img.shields.io/discord/1547361202340892714?style=flat-square&logo=discord&logoColor=white&label=discord&color=5865F2" alt="Discord" /></a>
-  <a href="https://github.com/sponsors/alexandrosnt"><img src="https://img.shields.io/github/sponsors/alexandrosnt?style=flat-square&logo=githubsponsors&logoColor=white&label=sponsors&color=ea4aaa" alt="Sponsors" /></a>
+  A fork of <a href="https://github.com/alexandrosnt/Reach">Reach</a>, the modern, cross-platform SSH client and remote management tool.
 </p>
 
 <p align="center">
-  <a href="https://reachssh.com/"><strong>Documentation</strong></a> · <a href="https://github.com/alexandrosnt/Reach/releases">Download</a> · <a href="https://discord.gg/CSbEybvDVV">Discord</a> · <a href="https://github.com/alexandrosnt/Reach/issues">Report a Bug</a>
+  <a href="https://github.com/rsipka/FarReach/releases">Download</a> · <a href="https://github.com/rsipka/FarReach/issues">Report a Bug</a> · <a href="https://reachssh.com/">Reach documentation</a> · <a href="https://github.com/alexandrosnt/Reach">Upstream Reach</a>
 </p>
 
-<p align="center">
-  <a href="https://alternativeto.net/software/reach-ssh/about/?utm_source=badge&utm_medium=referral">
-    <img src="https://alternativeto.net/static/badges/badge-compact-color.svg" alt="Reach SSH | AlternativeTo" width="244" height="79" />
-  </a>
-</p>
+> **FarReach is built on Reach** by [Alexander Nt.](https://github.com/alexandrosnt) and the
+> [Reach contributors](https://github.com/alexandrosnt/Reach/graphs/contributors). Almost everything
+> here is their work. FarReach adds features that are tested here first and offered back to Reach
+> as pull requests; most of them are meant to land upstream. If you don't need what FarReach adds,
+> use [Reach](https://github.com/alexandrosnt/Reach) itself.
+>
+> FarReach reads the same data as Reach (same app id, vault and keychain entries), so it replaces a
+> Reach install on the same device. Don't run both at once.
 
 ---
 
@@ -92,14 +86,14 @@ Each tool is off on a fresh install. Switching one off hides it without deleting
 
 ## Download
 
-Get the current release from the [download page](https://reachssh.com/download/):
+Get FarReach from its [releases page](https://github.com/rsipka/FarReach/releases):
 
 - Windows: `.exe`, `.msi`
 - macOS: `.dmg`, Apple silicon and Intel
 - Linux: `.AppImage`, `.deb`, `.rpm`
 - Android: `.apk`
 
-Reach is also on Scoop and in apt/dnf repositories, and updates itself once installed. On Android, [Obtainium](https://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://github.com/alexandrosnt/Reach) installs new releases straight from GitHub.
+FarReach updates itself from those releases. Reach itself is also on Scoop and in apt/dnf repositories; FarReach is not.
 
 ## Built with
 
@@ -117,8 +111,8 @@ Reach is also on Scoop and in apt/dnf repositories, and updates itself once inst
 You'll need [Rust](https://rustup.rs), [Node.js 22+](https://nodejs.org) and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS.
 
 ```bash
-git clone https://github.com/alexandrosnt/Reach.git
-cd Reach
+git clone https://github.com/rsipka/FarReach.git
+cd FarReach
 npm install
 npm run tauri dev     # run it
 npm run tauri build   # package it
@@ -126,19 +120,20 @@ npm run tauri build   # package it
 
 ## Community
 
-- **[Discord](https://discord.gg/CSbEybvDVV)**: questions, ideas, and release announcements.
-- **[Issues](https://github.com/alexandrosnt/Reach/issues)**: bug reports and feature requests. For a larger change, open an issue first so we can agree on the approach.
+- **[Reach Discord](https://discord.gg/CSbEybvDVV)**: the upstream Reach community.
+- **[FarReach issues](https://github.com/rsipka/FarReach/issues)**: bugs in FarReach and in the features it adds.
+- **[Reach issues](https://github.com/alexandrosnt/Reach/issues)**: bugs that Reach has too belong upstream. For a larger change, open an issue there first.
 - **[Changelog](CHANGELOG.md)**: what changed in each release.
 
 Pull requests, translations and recipes for the [registry](https://github.com/alexandrosnt/reach-recipes-registry) are all welcome.
 
-## Support
+## Support Reach
 
-Reach is free and MIT licensed, and it stays that way: nothing is or ever will be paywalled. It's built in spare time with no budget, which is why the installers aren't code-signed yet. If Reach saves you time, **[GitHub Sponsors](https://github.com/sponsors/alexandrosnt)** helps pay for a signing certificate, test hardware, and more evenings spent on Reach. A good bug report or telling a colleague helps just as much.
+FarReach exists because of Reach. Reach is free and MIT licensed, and it stays that way: nothing is or ever will be paywalled. It's built in spare time with no budget, which is why the installers aren't code-signed yet. If Reach saves you time, **[GitHub Sponsors](https://github.com/sponsors/alexandrosnt)** helps pay for a signing certificate, test hardware, and more evenings spent on Reach. A good bug report or telling a colleague helps just as much.
 
 ## Contributors
 
-Thank you to everyone who has sent code to Reach. The picture is drawn from the repository's own contributor list, so a merged pull request puts you in it (it can take a few days to show).
+Thank you to everyone who has sent code to Reach, which FarReach is built on. The picture is drawn from the repository's own contributor list, so a merged pull request puts you in it (it can take a few days to show).
 
 <a href="https://github.com/alexandrosnt/Reach/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=alexandrosnt/Reach&max=100" alt="Contributors to Reach" />
