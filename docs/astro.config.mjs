@@ -120,6 +120,7 @@ export default defineConfig({
 						{ label: 'What is Turso?', slug: 'sync/what-is-turso' },
 						{ label: 'Setting Up Cloud Sync', slug: 'sync/setup' },
 						{ label: 'How Sync Works', slug: 'sync/how-sync-works' },
+						{ label: 'Sync to Your Own Storage', slug: 'sync/own-storage' },
 						{ label: 'Syncing Shared Vaults', slug: 'sync/shared-vaults' },
 						{ label: 'Troubleshooting', slug: 'sync/troubleshooting' },
 					],

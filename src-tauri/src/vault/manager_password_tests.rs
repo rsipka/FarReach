@@ -27,7 +27,7 @@ async fn a_synced_vault_is_local_first() {
     let one = a.create_secret(&vault.id, "Production Xostme V2", SecretCategory::Session, put("one")).await.unwrap();
     a.create_secret(&vault.id, "Servers", SecretCategory::Folder, put("folder")).await.unwrap();
     let a = tokio::sync::Mutex::new(a);
-    let (changed, failed) = sync_vaults(&a, None).await;
+    let (changed, failed) = sync_vaults(&a, None, false).await;
     assert!(failed.is_empty(), "{:?}", failed.iter().map(|(_, e)| e.to_string()).collect::<Vec<_>>());
     assert!(changed.is_empty(), "sending changes is not a change here");
 
@@ -49,7 +49,7 @@ async fn a_synced_vault_is_local_first() {
     assert!(b.unlock("local-first-pass").await.unwrap());
     assert!(b.read_secret(&vault.id, &one).await.is_err(), "nothing until the first sync");
     let b = tokio::sync::Mutex::new(b);
-    let (changed, failed) = sync_vaults(&b, None).await;
+    let (changed, failed) = sync_vaults(&b, None, false).await;
     assert!(failed.is_empty());
     assert_eq!(changed, vec![vault.id.clone()]);
     assert_eq!(b.lock().await.read_secret(&vault.id, &one).await.unwrap().expose_secret(), b"one");
@@ -63,12 +63,69 @@ async fn a_synced_vault_is_local_first() {
 
     // Back online, the edit goes out and reaches a.
     std::fs::rename(dir.join("server.away"), &server).unwrap();
-    let (_, failed) = sync_vaults(&b, None).await;
+    let (_, failed) = sync_vaults(&b, None, false).await;
     assert!(failed.is_empty());
     assert_eq!(b.lock().await.sync_statuses().await[0].pending, 0);
-    let (changed, _) = sync_vaults(&a, None).await;
+    let (changed, _) = sync_vaults(&a, None, false).await;
     assert_eq!(changed, vec![vault.id.clone()]);
     assert_eq!(a.lock().await.read_secret(&vault.id, &two).await.unwrap().expose_secret(), b"two");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Personal data synced through a folder (a mounted share, say): turned on
+/// on one device, then on a second device that joins the vault already
+/// there and brings along what it held alone.
+#[tokio::test]
+async fn personal_data_syncs_through_a_folder() {
+    let dir = tmp_dir("personal-folder");
+    let share = dir.join("share");
+    std::fs::create_dir_all(&share).unwrap();
+    let url = format!("folder:{}", share.display());
+    let put = |text: &str| SecretBox::new(Box::new(text.as_bytes().to_vec()));
+
+    let mut a = VaultManager::new(dir.join("a"));
+    a.init_identity("folder-pass").await.unwrap();
+    let local = a.vault_names.get(SETTINGS_VAULT).cloned().unwrap();
+    let early = a.create_secret(&local, "Before sync", SecretCategory::Session, put("early")).await.unwrap();
+    // The identity as it is before sync, for the second device.
+    let before = std::fs::read_to_string(dir.join("a/vault_identity.json")).unwrap();
+
+    a.set_personal_sync_config(Some(url.clone()), Some(String::new())).await.unwrap();
+    let vault = a.vault_names.get(SETTINGS_VAULT).cloned().unwrap();
+    assert_eq!(a.read_secret(&vault, &early).await.unwrap().expose_secret(), b"early", "moved into the synced vault");
+    let one = a.create_secret(&vault, "Production Xostme V2", SecretCategory::Session, put("one")).await.unwrap();
+    let a = tokio::sync::Mutex::new(a);
+    let (_, failed) = sync_vaults(&a, None, false).await;
+    assert!(failed.is_empty(), "{:?}", failed.iter().map(|(_, e)| e.to_string()).collect::<Vec<_>>());
+    let raw = std::fs::read(share.join(crate::vault::sync_store::FILE_NAME)).unwrap();
+    assert!(!raw.windows(10).any(|w| w == b"Production"), "the file names nothing");
+    assert_eq!(a.lock().await.sync_statuses().await[0].backend, "folder");
+
+    // A second device with the same identity, not syncing yet, with a
+    // secret of its own.
+    std::fs::create_dir_all(dir.join("b")).unwrap();
+    let mut file: serde_json::Value = serde_json::from_str(&before).unwrap();
+    file.as_object_mut().unwrap().remove("device_id");
+    file.as_object_mut().unwrap().remove("internal_vault_ids");
+    std::fs::write(dir.join("b/vault_identity.json"), file.to_string()).unwrap();
+    let mut b = VaultManager::new(dir.join("b"));
+    assert!(b.unlock("folder-pass").await.unwrap());
+    let b_local = b.vault_names.get(SETTINGS_VAULT).cloned().unwrap();
+    let mine = b.create_secret(&b_local, "Only on b", SecretCategory::Session, put("mine")).await.unwrap();
+    b.set_personal_sync_config(Some(url.clone()), Some(String::new())).await.unwrap();
+    assert_eq!(b.vault_names.get(SETTINGS_VAULT), Some(&vault), "joins the vault in the folder");
+    let b = tokio::sync::Mutex::new(b);
+    let (_, failed) = sync_vaults(&b, None, false).await;
+    assert!(failed.is_empty(), "{:?}", failed.iter().map(|(_, e)| e.to_string()).collect::<Vec<_>>());
+    assert_eq!(b.lock().await.read_secret(&vault, &one).await.unwrap().expose_secret(), b"one");
+    let (changed, _) = sync_vaults(&a, None, false).await;
+    assert_eq!(changed, vec![vault.clone()]);
+    assert_eq!(a.lock().await.read_secret(&vault, &mine).await.unwrap().expose_secret(), b"mine");
+
+    // A timed sync with nothing to send waits a few minutes between reads.
+    let (changed, failed) = sync_vaults(&a, None, true).await;
+    assert!(changed.is_empty() && failed.is_empty());
 
     let _ = std::fs::remove_dir_all(&dir);
 }

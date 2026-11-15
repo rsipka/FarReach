@@ -20,9 +20,12 @@
 //! that lets a device ask only for what changed since its last sync. The
 //! upgrade is the user's choice, because older Reach versions cannot read
 //! the new format.
+//!
+//! The other backends hold the vault as one file, in a folder, on an SFTP
+//! server or in a Git repository; see [`crate::vault::sync_bundle`].
 
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use libsql::{Connection, TransactionBehavior};
@@ -33,6 +36,7 @@ use crate::vault::error::VaultError;
 use crate::vault::sync::{create_replica, SyncConfig};
 use crate::vault::sync_local::{self, Dirty, Row};
 use crate::vault::sync_record::{Record, RecordKey};
+use crate::vault::sync_store::{GitTarget, SftpTarget, SmbTarget, Store};
 use crate::vault::types::{Dek, EncryptedPayload, WrappedDek};
 
 /// How long one sync of one vault may take in all.
@@ -52,14 +56,153 @@ pub const STATE_LAST_ERROR: &str = "last_error";
 pub const STATE_CONFLICTS: &str = "conflicts";
 pub const STATE_BACKEND: &str = "backend";
 
+/// How often a vault on a file backend is read when nothing changed here.
+/// Each read is a connection to a server or a fetch; Turso is read every
+/// minute.
+const FILE_POLL_MS: i64 = 5 * 60 * 1000;
+
+/// The Git branch a vault goes to when none is named.
+pub const DEFAULT_GIT_BRANCH: &str = "reach-vault";
+
 /// Where a vault syncs to.
 #[derive(Clone)]
 pub enum Backend {
     /// A Turso (libsql) database.
     Turso { url: String, token: String },
+    /// A folder: on this disk, a mounted share, a UNC path.
+    Folder { path: PathBuf },
+    Sftp(SftpTarget),
+    /// An SMB share, reached by Reach's own client.
+    Smb(SmbTarget),
+    Git(GitTarget),
+}
+
+/// What an SFTP backend's token holds: whatever logs in.
+#[derive(serde::Deserialize, Default)]
+struct SftpSecret {
+    #[serde(default)]
+    password: Option<String>,
+    #[serde(default)]
+    key: Option<String>,
+    #[serde(default)]
+    passphrase: Option<String>,
 }
 
 impl Backend {
+    /// The backend a vault's sync URL and token name:
+    ///
+    /// - `folder:<path>`
+    /// - `sftp://user@host[:port]/path?hostkey=SHA256:…`, where `/~/path` is
+    ///   under the login folder, with a token of JSON `{password, key,
+    ///   passphrase}` (or just the password);
+    /// - `smb://[domain;]user@server[:port]/share/folder`, with the password
+    ///   as token;
+    /// - `git:<remote>[#branch]`, with an optional token for https;
+    /// - anything else is a Turso URL.
+    pub fn parse(url: &str, token: &str, app_dir: &Path) -> Result<Backend, VaultError> {
+        let url = url.trim();
+        if let Some(path) = url.strip_prefix("folder:") {
+            let path = PathBuf::from(path.trim());
+            if !path.is_absolute() {
+                return Err(VaultError::SyncError("The sync folder must be a full path".into()));
+            }
+            return Ok(Backend::Folder { path });
+        }
+        if url.len() >= 7 && url[..7].eq_ignore_ascii_case("sftp://") {
+            let parsed = url::Url::parse(url).map_err(|e| VaultError::SyncError(format!("SFTP address: {e}")))?;
+            let host = parsed.host_str().filter(|h| !h.is_empty()).ok_or_else(|| VaultError::SyncError("SFTP address has no host".into()))?;
+            let user = percent(parsed.username());
+            if user.is_empty() {
+                return Err(VaultError::SyncError("SFTP address has no user name".into()));
+            }
+            let raw_path = percent(parsed.path());
+            let path = match raw_path.strip_prefix("/~") {
+                Some(rest) => rest.trim_start_matches('/').to_string(),
+                None => raw_path.clone(),
+            };
+            let host_key = parsed.query_pairs().find(|(k, _)| k == "hostkey").map(|(_, v)| v.into_owned());
+            let secret = if token.trim_start().starts_with('{') {
+                serde_json::from_str::<SftpSecret>(token).map_err(|_| VaultError::SyncError("SFTP credentials are damaged".into()))?
+            } else {
+                SftpSecret { password: Some(token.to_string()).filter(|t| !t.is_empty()), ..Default::default() }
+            };
+            return Ok(Backend::Sftp(SftpTarget {
+                host: host.trim_start_matches('[').trim_end_matches(']').to_string(),
+                port: parsed.port().unwrap_or(22),
+                user,
+                path,
+                host_key,
+                password: secret.password,
+                key: secret.key,
+                passphrase: secret.passphrase,
+            }));
+        }
+        if url.len() >= 6 && url[..6].eq_ignore_ascii_case("smb://") {
+            let parsed = url::Url::parse(url).map_err(|e| VaultError::SyncError(format!("SMB address: {e}")))?;
+            let server = parsed.host_str().filter(|h| !h.is_empty()).ok_or_else(|| VaultError::SyncError("SMB address has no server".into()))?;
+            let raw_user = percent(parsed.username());
+            let user = match raw_user.split_once(';') {
+                Some((domain, user)) => format!("{domain}\\{user}"),
+                None => raw_user,
+            };
+            if user.is_empty() {
+                return Err(VaultError::SyncError("SMB address has no user name".into()));
+            }
+            let path = percent(parsed.path());
+            let mut parts = path.split('/').filter(|p| !p.is_empty());
+            let share = parts.next().ok_or_else(|| VaultError::SyncError("SMB address names no share".into()))?.to_string();
+            let folder = parts.collect::<Vec<_>>().join("\\");
+            return Ok(Backend::Smb(SmbTarget {
+                server: server.trim_start_matches('[').trim_end_matches(']').to_string(),
+                port: parsed.port().unwrap_or(445),
+                share,
+                path: folder,
+                user,
+                password: token.to_string(),
+            }));
+        }
+        if let Some(rest) = url.strip_prefix("git:") {
+            let (remote, branch) = match rest.rsplit_once('#') {
+                Some((r, b)) if !b.trim().is_empty() => (r.trim(), b.trim()),
+                _ => (rest.trim().trim_end_matches('#'), DEFAULT_GIT_BRANCH),
+            };
+            if remote.is_empty() {
+                return Err(VaultError::SyncError("The Git repository address is empty".into()));
+            }
+            if branch.starts_with('-') || branch.contains("..") || branch.contains(char::is_whitespace) {
+                return Err(VaultError::SyncError("That Git branch name is not valid".into()));
+            }
+            if !token.is_empty() {
+                // The token goes with every request.
+                crate::vault::sync::check_sync_url(remote)?;
+            }
+            let id: String = sha2::Digest::finalize(<sha2::Sha256 as sha2::Digest>::new_with_prefix(format!("{remote}#{branch}")))
+                .iter()
+                .take(8)
+                .map(|b| format!("{b:02x}"))
+                .collect();
+            return Ok(Backend::Git(GitTarget {
+                remote: remote.to_string(),
+                branch: branch.to_string(),
+                token: Some(token.to_string()).filter(|t| !t.is_empty()),
+                work_dir: app_dir.join("sync-git").join(id),
+            }));
+        }
+        crate::vault::sync::check_sync_url(url)?;
+        Ok(Backend::Turso { url: url.to_string(), token: token.to_string() })
+    }
+
+    /// What kind of backend this is, as the interface names it.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Backend::Turso { .. } => "turso",
+            Backend::Folder { .. } => "folder",
+            Backend::Sftp(_) => "sftp",
+            Backend::Smb(_) => "smb",
+            Backend::Git(_) => "git",
+        }
+    }
+
     /// What names this backend, to notice when a vault is pointed at
     /// another one. Never holds a credential.
     pub fn identity(&self) -> String {
@@ -73,8 +216,52 @@ impl Backend {
                     .to_string();
                 format!("turso:{host}")
             }
+            Backend::Folder { path } => format!("folder:{}", path.display()),
+            Backend::Sftp(t) => format!("sftp:{}@{}:{}/{}", t.user, t.host.to_ascii_lowercase(), t.port, t.path),
+            Backend::Smb(t) => format!("smb:{}@{}:{}/{}/{}", t.user.to_ascii_lowercase(), t.server.to_ascii_lowercase(), t.port, t.share.to_ascii_lowercase(), t.path.to_ascii_lowercase()),
+            Backend::Git(t) => format!("git:{}#{}", t.remote, t.branch),
         }
     }
+
+    /// The store of a backend that holds a file; `None` for Turso.
+    pub async fn store(&self) -> Result<Option<Store>, VaultError> {
+        Ok(Some(match self {
+            Backend::Turso { .. } => return Ok(None),
+            Backend::Folder { path } => Store::folder(path).await?,
+            Backend::Sftp(t) => Store::sftp(t).await?,
+            Backend::Smb(t) => Store::smb(t).await?,
+            Backend::Git(t) => Store::git(t).await?,
+        }))
+    }
+
+    /// The vault header and members the backend holds, if it holds a vault.
+    pub async fn read_header(&self) -> Result<Option<crate::vault::sync_bundle::HeaderRows>, VaultError> {
+        match self {
+            Backend::Turso { url, token } => {
+                let remote = connect_turso(url, token).await?;
+                match turso::read_header(&remote).await {
+                    Ok(rows) => Ok(Some(rows)),
+                    Err(_) if !turso::has_header(&remote).await => Ok(None),
+                    Err(e) => Err(e),
+                }
+            }
+            _ => {
+                let mut store = self.store().await?.expect("a file backend");
+                match store.get().await? {
+                    Some((data, _)) => Ok(Some(crate::vault::sync_bundle::read_header(&data)?)),
+                    None => Ok(None),
+                }
+            }
+        }
+    }
+}
+
+/// `%xx` in part of a URL, decoded.
+fn percent(s: &str) -> String {
+    url::form_urlencoded::parse(format!("x={}", s.replace('+', "%2B")).as_bytes())
+        .next()
+        .map(|(_, v)| v.into_owned())
+        .unwrap_or_default()
 }
 
 /// Everything one sync of one vault needs, gathered while the vault manager
@@ -174,14 +361,50 @@ async fn sync_inner(target: &Target, local: &Connection) -> Result<Report, Vault
             let remote = connect_turso(url, token).await?;
             turso::sync(target, local, &remote).await
         }
+        backend => {
+            let mut store = backend.store().await?.expect("a file backend");
+            crate::vault::sync_bundle::sync(target, local, &mut store).await
+        }
     }
+}
+
+/// Whether a timed sync should run now. A file backend is read every few
+/// minutes, or as soon as this device has a change to send.
+pub async fn due(target: &Target) -> bool {
+    if matches!(target.backend, Backend::Turso { .. }) {
+        return true;
+    }
+    let Ok(local) = open_local(&target.local_path).await else { return true };
+    if sync_local::dirty_count(&local).await.unwrap_or(1) > 0 {
+        return true;
+    }
+    if sync_local::state(&local, STATE_BACKEND).await.ok().flatten().as_deref() != Some(target.backend.identity().as_str()) {
+        return true;
+    }
+    let last = sync_local::state(&local, STATE_LAST_SYNC).await.ok().flatten().and_then(|v| v.parse::<i64>().ok()).unwrap_or(0);
+    let failed = sync_local::state(&local, STATE_LAST_ERROR).await.ok().flatten().is_some();
+    failed || now_ms() - last >= FILE_POLL_MS
+}
+
+/// Try a backend before it is used: whether it can be reached, and whether
+/// it already holds a vault (and whose).
+pub async fn probe(backend: &Backend) -> Result<Option<String>, VaultError> {
+    let header = tokio::time::timeout(SYNC_TIMEOUT, backend.read_header())
+        .await
+        .map_err(|_| VaultError::SyncError(format!("no answer within {} seconds", SYNC_TIMEOUT.as_secs())))??;
+    Ok(header.and_then(|(h, _)| match h.first() {
+        Some(libsql::Value::Text(id)) => Some(id.clone()),
+        _ => None,
+    }))
 }
 
 /// Move a legacy Turso vault to the sealed record format. Syncs first, so
 /// nothing is lost, then moves the rows over in one transaction and keeps the
 /// old table under another name.
 pub async fn upgrade(target: &Target) -> Result<(), VaultError> {
-    let Backend::Turso { url, token } = &target.backend;
+    let Backend::Turso { url, token } = &target.backend else {
+        return Ok(()); // only Turso has an old format
+    };
     sync(target).await?;
     let local = open_local(&target.local_path).await?;
     let remote = connect_turso(url, token).await?;
@@ -393,7 +616,7 @@ pub mod turso {
     }
 
     /// Whether the database has a vault header at all.
-    async fn has_header(remote: &Connection) -> bool {
+    pub async fn has_header(remote: &Connection) -> bool {
         match remote.query("SELECT 1 FROM vault_header LIMIT 1", ()).await {
             Ok(mut rows) => matches!(rows.next().await, Ok(Some(_))),
             Err(_) => false,

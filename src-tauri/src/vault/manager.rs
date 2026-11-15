@@ -135,6 +135,7 @@ pub struct VaultConnection {
 pub async fn sync_vaults(
     manager: &tokio::sync::Mutex<VaultManager>,
     only: Option<&str>,
+    timed: bool,
 ) -> (Vec<String>, Vec<(String, VaultError)>) {
     let targets = match manager.lock().await.sync_targets(only) {
         Ok(t) => t,
@@ -143,6 +144,9 @@ pub async fn sync_vaults(
     let mut changed = Vec::new();
     let mut failed = Vec::new();
     for target in targets {
+        if timed && !sync_engine::due(&target).await {
+            continue;
+        }
         match sync_engine::sync(&target).await {
             Ok(report) => {
                 tracing::debug!(vault = %target.vault_id, ?report, "Vault synced");
@@ -1438,7 +1442,7 @@ impl VaultManager {
                 // A database another device already set up holds the vault:
                 // open that one instead of writing a second header into it.
                 if let (Some(url), Some(token)) = (sync_url.as_deref(), sync_token.as_deref()) {
-                    if let Some(existing) = Self::remote_vault_id(url, token).await {
+                    if let Some(existing) = self.remote_vault_id(url, token).await {
                         tracing::info!("Personal sync database already holds vault {}; opening it", existing);
                         self.open_vault(&existing, Some(url), Some(token)).await?;
                         self.unlock_vault(&existing).await?;
@@ -1835,7 +1839,14 @@ impl VaultManager {
         );
         const INSERT_HEADER: &str = "INSERT INTO vault_header (id, name, salt, user_uuid, created_at, vault_type, wrapped_master_dek) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
-        if let Some(config) = &sync_config {
+        let turso = sync_config.as_ref().filter(|c| {
+            matches!(
+                sync_engine::Backend::parse(&c.sync_url, &c.auth_token, &self.app_dir),
+                Ok(sync_engine::Backend::Turso { .. })
+            )
+        });
+        // A file backend gets the vault on its first sync.
+        if let Some(config) = turso {
             let remote = sync_engine::connect_turso(&config.sync_url, &config.auth_token).await?;
             bounded(true, remote.execute_batch(crate::vault::schema::SCHEMA)).await?;
             sync_engine::turso::init_records(&remote).await?;
@@ -1918,7 +1929,7 @@ impl VaultManager {
             targets.push(sync_engine::Target {
                 vault_id: id.clone(),
                 local_path: vault_dir.join(format!("{id}.db")),
-                backend: sync_engine::Backend::Turso { url: url.clone(), token: token.clone() },
+                backend: sync_engine::Backend::parse(url, token, &self.app_dir)?,
                 master: master.with_key(|k| Dek::from_fn(|d| d.copy_from_slice(k))),
                 // Bound to the vault's own id, which every member's file shares,
                 // not to the id this device files it under.
@@ -1930,6 +1941,18 @@ impl VaultManager {
         Ok(targets)
     }
 
+    /// The backend a sync URL and token name, for this app's folders.
+    pub fn sync_backend(&self, url: &str, token: &str) -> Result<sync_engine::Backend, VaultError> {
+        sync_engine::Backend::parse(url, token, &self.app_dir)
+    }
+
+    /// The id of the vault that holds this device's own data when it syncs,
+    /// once there is one.
+    pub fn personal_vault_id(&self) -> Option<String> {
+        let id = self.internal_vault_ids.get("__personal__")?;
+        Some(self.vaults.get(id).map(|v| v.header.id.clone()).unwrap_or_else(|| id.clone()))
+    }
+
     /// How each synced vault's sync stands, from its local file.
     pub async fn sync_statuses(&self) -> Vec<SyncStatus> {
         let mut out = Vec::new();
@@ -1938,6 +1961,10 @@ impl VaultManager {
                 continue;
             }
             let Ok(conn) = vault.conn() else { continue };
+            let backend = match (&vault.sync_url, &vault.auth_token) {
+                (Some(url), Some(token)) => sync_engine::Backend::parse(url, token, &self.app_dir).map(|b| b.kind()).unwrap_or("turso"),
+                _ => "turso",
+            };
             let state = |key: &'static str| {
                 let conn = conn.clone();
                 async move { sync_local::state(&conn, key).await.ok().flatten() }
@@ -1945,7 +1972,7 @@ impl VaultManager {
             out.push(SyncStatus {
                 vault_id: id.clone(),
                 name: vault.header.name.clone(),
-                backend: "turso".into(),
+                backend: backend.into(),
                 format: state(sync_engine::STATE_FORMAT).await,
                 last_sync: state(sync_engine::STATE_LAST_SYNC).await.and_then(|v| v.parse().ok()),
                 last_error: state(sync_engine::STATE_LAST_ERROR).await,
@@ -1967,13 +1994,12 @@ impl VaultManager {
     /// its header and members from the backend, no secrets yet. The first
     /// sync brings those. Each request is bounded, so a backend that never
     /// answers fails the open instead of hanging it.
-    async fn bootstrap_synced(db_path: &std::path::Path, config: &SyncConfig) -> Result<(), VaultError> {
-        let remote = sync_engine::connect_turso(&config.sync_url, &config.auth_token).await?;
-        let (header, members) = match tokio::time::timeout(REMOTE_TIMEOUT, sync_engine::turso::read_header(&remote)).await {
-            Ok(read) => read?,
+    async fn bootstrap_synced(db_path: &std::path::Path, backend: &sync_engine::Backend) -> Result<(), VaultError> {
+        let (header, members) = match tokio::time::timeout(REMOTE_TIMEOUT, backend.read_header()).await {
+            Ok(read) => read?.ok_or_else(|| VaultError::NotFound("vault header".into()))?,
             Err(_) => {
                 return Err(VaultError::SyncError(format!(
-                    "Turso did not answer within {} seconds",
+                    "The sync backend did not answer within {} seconds",
                     REMOTE_TIMEOUT.as_secs()
                 )))
             }
@@ -2050,7 +2076,8 @@ impl VaultManager {
             match &sync_config {
                 Some(config) => {
                     let _ = std::fs::remove_file(&db_path);
-                    Self::bootstrap_synced(&db_path, config).await?;
+                    let backend = sync_engine::Backend::parse(&config.sync_url, &config.auth_token, &self.app_dir)?;
+                    Self::bootstrap_synced(&db_path, &backend).await?;
                 }
                 None => return Err(VaultError::NotFound(vault_id.to_string())),
             }
@@ -2680,20 +2707,24 @@ impl VaultManager {
     // ==================== SHARING ====================
 
     /// The id of the vault a backend database already holds, if any.
-    async fn remote_vault_id(url: &str, token: &str) -> Option<String> {
-        let remote = sync_engine::connect_turso(url, token).await.ok()?;
-        let read = tokio::time::timeout(REMOTE_TIMEOUT, async {
-            let mut rows = remote.query("SELECT id FROM vault_header LIMIT 1", ()).await.ok()?;
-            rows.next().await.ok()??.get::<String>(0).ok()
-        });
-        read.await.ok().flatten()
+    async fn remote_vault_id(&self, url: &str, token: &str) -> Option<String> {
+        let backend = sync_engine::Backend::parse(url, token, &self.app_dir).ok()?;
+        let read = tokio::time::timeout(REMOTE_TIMEOUT, backend.read_header());
+        let (header, _) = read.await.ok()?.ok()??;
+        match header.first() {
+            Some(libsql::Value::Text(id)) => Some(id.clone()),
+            _ => None,
+        }
     }
 
     /// Where a vault's member list and shares are kept: on its backend for a
     /// synced vault, which every member reads, otherwise in its file.
     async fn admin_conn(&self, vault: &VaultConnection) -> Result<Connection, VaultError> {
         match (&vault.sync_url, &vault.auth_token) {
-            (Some(url), Some(token)) => sync_engine::connect_turso(url, token).await,
+            (Some(url), Some(token)) if matches!(
+                sync_engine::Backend::parse(url, token, &self.app_dir),
+                Ok(sync_engine::Backend::Turso { .. })
+            ) => sync_engine::connect_turso(url, token).await,
             _ => vault.conn(),
         }
     }

@@ -555,6 +555,7 @@ pub fn run() {
             vault_lock_vault,
             vault_sync,
             vault_sync_status,
+            vault_sync_test,
             vault_sync_upgrade,
             vault_sync_clear_conflicts,
             vault_secret_create,
@@ -968,6 +969,7 @@ pub fn run() {
             vault_lock_vault,
             vault_sync,
             vault_sync_status,
+            vault_sync_test,
             vault_sync_upgrade,
             vault_sync_clear_conflicts,
             vault_secret_create,
@@ -1443,14 +1445,15 @@ pub fn run() {
                     let mut every_minute = tokio::time::interval(std::time::Duration::from_secs(60));
                     every_minute.tick().await;
                     loop {
-                        tokio::select! {
-                            _ = every_minute.tick() => {}
+                        let timed = tokio::select! {
+                            _ = every_minute.tick() => true,
                             _ = vault::manager::sync_requested() => {
                                 // Let a burst of changes go out together.
                                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                                false
                             }
-                        }
-                        let (changed, _failed) = vault::manager::sync_vaults(&vaults, None).await;
+                        };
+                        let (changed, _failed) = vault::manager::sync_vaults(&vaults, None, timed).await;
                         for vault_id in changed {
                             let _ = tauri::Emitter::emit(&handle, "vault-synced", vault_id);
                         }

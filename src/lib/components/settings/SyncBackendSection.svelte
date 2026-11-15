@@ -1,0 +1,451 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import Button from '#lib/components/shared/Button.svelte';
+	import Input from '#lib/components/shared/Input.svelte';
+	import { getPersonalSync, setPersonalSync, testSyncBackend, type SyncProbe } from '#lib/ipc/vault.js';
+	import { addToast } from '#lib/state/toasts.svelte.js';
+	import { t } from '#lib/state/i18n.svelte.js';
+
+	type Kind = 'folder' | 'smb' | 'sftp' | 'git';
+
+	let kind = $state<Kind>('folder');
+	let folderPath = $state('');
+	let sftpHost = $state('');
+	let sftpPort = $state('22');
+	let sftpUser = $state('');
+	let sftpFolder = $state('reach');
+	let sftpAuth = $state<'password' | 'key'>('password');
+	let sftpPassword = $state('');
+	let sftpKey = $state('');
+	let sftpPassphrase = $state('');
+	let sftpHostKey = $state('');
+	let smbServer = $state('');
+	let smbPort = $state('445');
+	let smbShare = $state('');
+	let smbFolder = $state('');
+	let smbUser = $state('');
+	let smbPassword = $state('');
+	let gitRemote = $state('');
+	let gitBranch = $state('reach-vault');
+	let gitToken = $state('');
+
+	let active = $state<string | null>(null);
+	let probe = $state<SyncProbe | null>(null);
+	let busy = $state<'test' | 'use' | null>(null);
+
+	onMount(async () => {
+		try {
+			const [url, token] = await getPersonalSync();
+			if (url) {
+				active = url;
+				prefill(url, token ?? '');
+			}
+		} catch {
+			// Not unlocked yet: nothing to show.
+		}
+	});
+
+	/** Fill the form from the location in use, when it is one of these. */
+	function prefill(url: string, token: string) {
+		if (url.startsWith('folder:')) {
+			kind = 'folder';
+			folderPath = url.slice('folder:'.length);
+		} else if (url.toLowerCase().startsWith('sftp://')) {
+			try {
+				const u = new URL(url);
+				kind = 'sftp';
+				sftpHost = u.hostname.replace(/^\[|\]$/g, '');
+				sftpPort = u.port || '22';
+				sftpUser = decodeURIComponent(u.username);
+				const path = decodeURIComponent(u.pathname);
+				sftpFolder = path.startsWith('/~/') ? path.slice(3) : path;
+				sftpHostKey = u.searchParams.get('hostkey') ?? '';
+				const secret = token.trim().startsWith('{') ? JSON.parse(token) : { password: token };
+				if (secret.key) {
+					sftpAuth = 'key';
+					sftpKey = secret.key;
+					sftpPassphrase = secret.passphrase ?? '';
+				} else {
+					sftpAuth = 'password';
+					sftpPassword = secret.password ?? '';
+				}
+			} catch {
+				// Leave the form empty.
+			}
+		} else if (url.toLowerCase().startsWith('smb://')) {
+			try {
+				const u = new URL(url);
+				kind = 'smb';
+				smbServer = u.hostname.replace(/^\[|\]$/g, '');
+				smbPort = u.port || '445';
+				smbUser = decodeURIComponent(u.username).replace(';', '\\');
+				const parts = decodeURIComponent(u.pathname).split('/').filter(Boolean);
+				smbShare = parts[0] ?? '';
+				smbFolder = parts.slice(1).join('/');
+				smbPassword = token;
+			} catch {
+				// Leave the form empty.
+			}
+		} else if (url.startsWith('git:')) {
+			kind = 'git';
+			const rest = url.slice('git:'.length);
+			const hash = rest.lastIndexOf('#');
+			gitRemote = hash >= 0 ? rest.slice(0, hash) : rest;
+			gitBranch = hash >= 0 ? rest.slice(hash + 1) : 'reach-vault';
+			gitToken = token;
+		}
+	}
+
+	/** The sync URL and token for what the form says. */
+	function location(): { url: string; token: string } | null {
+		if (kind === 'folder') {
+			const path = folderPath.trim();
+			return path ? { url: `folder:${path}`, token: '' } : null;
+		}
+		if (kind === 'smb') {
+			const server = smbServer.trim();
+			const share = smbShare.trim().replace(/^[\\/]+|[\\/]+$/g, '');
+			const user = smbUser.trim();
+			if (!server || !share || !user) return null;
+			const hostPart = server.includes(':') ? `[${server}]` : server;
+			// DOMAIN\user is written DOMAIN;user in the address.
+			const userPart = user
+				.split('\\')
+				.map(encodeURIComponent)
+				.join(';');
+			const folder = smbFolder
+				.trim()
+				.split(/[\\/]/)
+				.filter(Boolean)
+				.map(encodeURIComponent)
+				.join('/');
+			const port = Number(smbPort) || 445;
+			return {
+				url: `smb://${userPart}@${hostPart}:${port}/${encodeURIComponent(share)}${folder ? '/' + folder : ''}`,
+				token: smbPassword
+			};
+		}
+		if (kind === 'sftp') {
+			const host = sftpHost.trim();
+			const user = sftpUser.trim();
+			if (!host || !user) return null;
+			const hostPart = host.includes(':') ? `[${host}]` : host;
+			const folder = sftpFolder.trim();
+			const segments = (f: string) => f.split('/').map(encodeURIComponent).join('/');
+			const path = folder.startsWith('/') ? segments(folder) : `/~/${segments(folder)}`;
+			const query = sftpHostKey ? `?hostkey=${encodeURIComponent(sftpHostKey)}` : '';
+			const port = Number(sftpPort) || 22;
+			const secret =
+				sftpAuth === 'key'
+					? { key: sftpKey, passphrase: sftpPassphrase || undefined }
+					: { password: sftpPassword };
+			return {
+				url: `sftp://${encodeURIComponent(user)}@${hostPart}:${port}${path}${query}`,
+				token: JSON.stringify(secret)
+			};
+		}
+		const remote = gitRemote.trim();
+		if (!remote) return null;
+		const branch = gitBranch.trim() || 'reach-vault';
+		return { url: `git:${remote}#${branch}`, token: gitToken.trim() };
+	}
+
+	let ready = $derived(location() !== null);
+
+	function changed() {
+		probe = null;
+	}
+
+	async function test(): Promise<SyncProbe | null> {
+		const loc = location();
+		if (!loc) return null;
+		busy = 'test';
+		try {
+			probe = await testSyncBackend(loc.url, loc.token);
+			return probe;
+		} catch (e) {
+			probe = { ok: false, hostKey: null, holds: null, error: e instanceof Error ? e.message : String(e) };
+			return probe;
+		} finally {
+			busy = null;
+		}
+	}
+
+	async function trustHostKey() {
+		if (!probe?.hostKey) return;
+		sftpHostKey = probe.hostKey;
+		await test();
+	}
+
+	async function use() {
+		const result = probe ?? (await test());
+		const loc = location();
+		if (!result?.ok || result.holds === 'other' || !loc) return;
+		busy = 'use';
+		try {
+			await setPersonalSync(loc.url, loc.token);
+			active = loc.url;
+			addToast(t('sync.backend_switched_toast'), 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : String(e), 'error');
+		} finally {
+			busy = null;
+		}
+	}
+
+	/** The location in use, without anything secret. */
+	function describe(url: string): string {
+		if (url.startsWith('folder:')) return url.slice('folder:'.length);
+		if (url.startsWith('git:')) return url.slice('git:'.length);
+		if (url.toLowerCase().startsWith('smb://')) {
+			try {
+				const u = new URL(url);
+				return `\\\\${u.hostname}${decodeURIComponent(u.pathname).replace(/\//g, '\\')}`;
+			} catch {
+				return url;
+			}
+		}
+		return url.split('?')[0];
+	}
+</script>
+
+<div class="section">
+	<h3 class="section-title">{t('sync.backend_title')}</h3>
+	<p class="section-desc">{t('sync.backend_desc')}</p>
+
+	{#if active}
+		<p class="section-desc active">{t('sync.backend_active', { where: describe(active) })}</p>
+	{/if}
+
+	<div class="form-field">
+		<label class="field-label" for="sync-backend-kind">{t('sync.backend_kind')}</label>
+		<select
+			id="sync-backend-kind"
+			class="field"
+			bind:value={kind}
+			onchange={changed}
+			disabled={busy !== null}
+		>
+			<option value="folder">{t('sync.kind_folder')}</option>
+			<option value="smb">{t('sync.kind_smb')}</option>
+			<option value="sftp">{t('sync.kind_sftp')}</option>
+			<option value="git">{t('sync.kind_git')}</option>
+		</select>
+	</div>
+
+	{#if kind === 'folder'}
+		<div class="form-field">
+			<Input
+				label={t('sync.folder_path')}
+				placeholder={'\\\\nas\\share\\reach  ·  /mnt/nas/reach'}
+				bind:value={folderPath}
+				oninput={changed}
+			/>
+		</div>
+		<p class="section-desc">{t('sync.folder_hint')}</p>
+	{:else if kind === 'smb'}
+		<div class="row">
+			<div class="grow"><Input label={t('sync.smb_server')} placeholder="nas.local" bind:value={smbServer} oninput={changed} /></div>
+			<div class="port"><Input label={t('sync.sftp_port')} placeholder="445" bind:value={smbPort} oninput={changed} /></div>
+		</div>
+		<div class="form-field">
+			<Input label={t('sync.smb_share')} placeholder="backup" bind:value={smbShare} oninput={changed} />
+		</div>
+		<div class="form-field">
+			<Input label={t('sync.smb_folder')} placeholder="reach" bind:value={smbFolder} oninput={changed} />
+		</div>
+		<div class="form-field">
+			<Input label={t('sync.smb_user')} placeholder="DOMAIN\user" bind:value={smbUser} oninput={changed} />
+		</div>
+		<div class="form-field">
+			<Input label={t('sync.sftp_auth_password')} type="password" bind:value={smbPassword} oninput={changed} />
+		</div>
+		<p class="section-desc">{t('sync.smb_hint')}</p>
+	{:else if kind === 'sftp'}
+		<div class="row">
+			<div class="grow"><Input label={t('sync.sftp_host')} placeholder="files.example.com" bind:value={sftpHost} oninput={changed} /></div>
+			<div class="port"><Input label={t('sync.sftp_port')} placeholder="22" bind:value={sftpPort} oninput={changed} /></div>
+		</div>
+		<div class="form-field">
+			<Input label={t('sync.sftp_user')} bind:value={sftpUser} oninput={changed} />
+		</div>
+		<div class="form-field">
+			<Input label={t('sync.sftp_folder')} placeholder="reach" bind:value={sftpFolder} oninput={changed} />
+		</div>
+		<div class="form-field">
+			<label class="field-label" for="sync-sftp-auth">{t('sync.sftp_auth')}</label>
+			<select id="sync-sftp-auth" class="field" bind:value={sftpAuth} onchange={changed}>
+				<option value="password">{t('sync.sftp_auth_password')}</option>
+				<option value="key">{t('sync.sftp_auth_key')}</option>
+			</select>
+		</div>
+		{#if sftpAuth === 'password'}
+			<div class="form-field">
+				<Input label={t('sync.sftp_auth_password')} type="password" bind:value={sftpPassword} oninput={changed} />
+			</div>
+		{:else}
+			<textarea
+				class="field key-text"
+				bind:value={sftpKey}
+				oninput={changed}
+				rows="4"
+				spellcheck="false"
+				autocomplete="off"
+				aria-label={t('sync.sftp_auth_key')}
+				placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+			></textarea>
+			<div class="form-field">
+				<Input label={t('sync.sftp_passphrase')} type="password" bind:value={sftpPassphrase} oninput={changed} />
+			</div>
+		{/if}
+		{#if sftpHostKey}
+			<p class="section-desc mono">{t('sync.host_key_trusted', { key: sftpHostKey })}</p>
+		{/if}
+	{:else}
+		<div class="form-field">
+			<Input label={t('sync.git_remote')} placeholder="git@github.com:me/reach-vault.git" bind:value={gitRemote} oninput={changed} />
+		</div>
+		<div class="form-field">
+			<Input label={t('sync.git_branch')} placeholder="reach-vault" bind:value={gitBranch} oninput={changed} />
+		</div>
+		<div class="form-field">
+			<Input label={t('sync.git_token')} type="password" bind:value={gitToken} oninput={changed} />
+		</div>
+		<p class="section-desc">{t('sync.git_hint')}</p>
+	{/if}
+
+	{#if probe}
+		{#if probe.hostKey}
+			<div class="notice">
+				<p>{t('sync.host_key_confirm', { key: probe.hostKey })}</p>
+				<div class="buttons">
+					<Button variant="secondary" size="sm" onclick={trustHostKey} disabled={busy !== null}>
+						{t('sync.host_key_trust')}
+					</Button>
+				</div>
+			</div>
+		{:else if probe.error}
+			<p class="form-error">{probe.error}</p>
+		{:else if probe.holds === 'other'}
+			<p class="form-error">{t('sync.probe_other')}</p>
+		{:else if probe.holds === 'this'}
+			<p class="section-desc ok">{t('sync.probe_this')}</p>
+		{:else}
+			<p class="section-desc ok">{t('sync.probe_empty')}</p>
+		{/if}
+	{/if}
+
+	<div class="action-row buttons">
+		<Button variant="secondary" size="sm" onclick={test} disabled={!ready || busy !== null}>
+			{busy === 'test' ? t('sync.testing') : t('sync.test_connection')}
+		</Button>
+		<Button
+			variant="primary"
+			size="sm"
+			onclick={use}
+			disabled={!ready || busy !== null || (probe !== null && (!probe.ok || probe.holds === 'other'))}
+		>
+			{busy === 'use' ? t('sync.switching') : t('sync.use_backend')}
+		</Button>
+	</div>
+	<p class="section-desc">{t('sync.backend_note')}</p>
+</div>
+
+<style>
+	.section-desc {
+		margin: 0;
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
+	}
+
+	.section-desc.active {
+		color: var(--color-text-primary);
+	}
+
+	.section-desc.ok {
+		color: var(--color-success);
+	}
+
+	.mono {
+		font-family: var(--font-mono);
+		word-break: break-all;
+	}
+
+	.form-field {
+		width: 100%;
+	}
+
+	.field-label {
+		display: block;
+		margin-bottom: 4px;
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
+	}
+
+	.field {
+		width: 100%;
+		min-width: 0;
+		box-sizing: border-box;
+		padding: 7px 10px;
+		border-radius: var(--radius-btn);
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-primary);
+		color: var(--color-text-primary);
+		font-family: inherit;
+		font-size: 0.8125rem;
+	}
+
+	.field:focus {
+		outline: none;
+		border-color: var(--color-accent);
+	}
+
+	.key-text {
+		font-family: var(--font-mono);
+		font-size: 0.6875rem;
+		resize: vertical;
+	}
+
+	.row {
+		display: flex;
+		gap: 8px;
+	}
+
+	.grow {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.port {
+		width: 80px;
+		flex-shrink: 0;
+	}
+
+	.buttons {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+
+	.notice {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding: 10px 12px;
+		font-size: 0.75rem;
+		background: rgba(255, 214, 10, 0.08);
+		border: 1px solid rgba(255, 214, 10, 0.3);
+		border-radius: 8px;
+		word-break: break-all;
+	}
+
+	.notice p {
+		margin: 0;
+	}
+
+	.form-error {
+		margin: 0;
+		font-size: 0.75rem;
+		color: var(--color-danger);
+	}
+</style>
