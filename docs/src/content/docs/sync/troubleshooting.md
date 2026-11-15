@@ -29,6 +29,10 @@ This means Reach can't find your encryption key in the OS keychain. Usually happ
 
 **If you don't have the backup key:** You'll need to "Start Fresh", which creates a new identity. Your old encrypted data will be lost. This is why we keep telling you to save that backup key.
 
-## Windows: Turso Connection Issues
+## Changes Not Showing on Another Device
 
-There's a known bug with embedded Turso replicas on Windows. Reach uses remote-only connections as a workaround. This means data is always fetched from the server instead of cached locally. It works fine, just slightly slower on each request.
+Open **Settings > Sync > Sync status** on both devices. A vault that shows "Changes waiting to be sent" has not reached the backend yet; press **Sync now**, and check the error under it if it fails. A vault marked "Old format" on one device and not the other means one device runs an older Reach: update it before using **Upgrade format**.
+
+## A Session Appears Twice, One Named "(conflict copy …)"
+
+Two devices changed the same session before either synced. The newer change won, and the other was kept as the copy so nothing was lost. Keep whichever you want and delete the other. See [How Sync Works](/sync/how-sync-works/).

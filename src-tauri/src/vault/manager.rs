@@ -13,13 +13,13 @@ use crate::vault::crypto::{
     decrypt_secret, encrypt_secret, generate_dek, unwrap_dek, wrap_dek, wrap_dek_with_key, unwrap_dek_with_key,
 };
 use crate::vault::error::{describe_db_error, VaultError};
-use crate::vault::{biometric, cache, private_fs, sync_tokens};
+use crate::vault::{biometric, private_fs, sync_engine, sync_local, sync_record, sync_tokens};
 use crate::vault::schema::init_schema;
 use crate::vault::sync::{create_replica, SyncConfig};
 use crate::vault::types::{
     AppSettings, Dek, EncryptedPayload, InviteInfo, Kek, MemberInfo, MemberRole, ReceivedShare,
-    SecretCategory, SecretMetadata, ShareItemResult, SharedItemInfo, UserIdentity, VaultHeader,
-    VaultInfo, VaultType, WrappedDek,
+    SecretCategory, SecretMetadata, ShareItemResult, SharedItemInfo, SyncStatus, UserIdentity,
+    VaultHeader, VaultInfo, VaultType, WrappedDek,
 };
 
 /// Row id of a secret copied from an internal vault into the unified personal
@@ -126,151 +126,61 @@ pub struct VaultConnection {
     pub master_dek: Option<Dek>,
     pub sync_url: Option<String>,
     pub auth_token: Option<String>,
-    /// For a synced vault, its encrypted copy on this device; see
-    /// [`crate::vault::cache`].
-    pub cache: Option<CacheState>,
 }
 
-/// A synced vault's cache: where it lives, the key that seals it, and what it
-/// holds now. `None` inside until the first refresh has filled it.
-pub struct CacheState {
-    path: PathBuf,
-    key: cache::CacheKey,
-    snapshot: std::sync::Mutex<Option<cache::Snapshot>>,
-}
-
-impl CacheState {
-    fn snapshot(&self) -> Option<cache::Snapshot> {
-        self.snapshot.lock().unwrap_or_else(|p| p.into_inner()).clone()
-    }
-
-    /// Change the cached rows after a write that Turso has accepted, and save
-    /// the result. Nothing to do before the first refresh has filled it.
-    fn edit(&self, change: impl FnOnce(&mut Vec<cache::CachedSecret>)) {
-        let mut guard = self.snapshot.lock().unwrap_or_else(|p| p.into_inner());
-        if let Some(snapshot) = guard.as_mut() {
-            change(&mut snapshot.secrets);
-            snapshot.secrets.sort_by(|a, b| a.id.cmp(&b.id));
-            if let Err(e) = cache::save(&self.path, &self.key, snapshot) {
-                tracing::warn!("Could not save the vault cache: {}", e);
-            }
-        }
-    }
-
-    /// Take a fresh snapshot from Turso. Returns whether anything changed.
-    fn replace(&self, fresh: cache::Snapshot) -> bool {
-        let mut guard = self.snapshot.lock().unwrap_or_else(|p| p.into_inner());
-        match guard.as_ref() {
-            Some(old) if *old == fresh => return false,
-            Some(old) => tracing::info!(
-                vault = %fresh.header.id,
-                header = old.header != fresh.header,
-                member = old.member != fresh.member,
-                secrets = old.secrets != fresh.secrets,
-                "Vault cache updated from Turso"
-            ),
-            None => tracing::info!(vault = %fresh.header.id, "Vault cache created"),
-        }
-        if let Err(e) = cache::save(&self.path, &self.key, &fresh) {
-            tracing::warn!("Could not save the vault cache: {}", e);
-        }
-        *guard = Some(fresh);
-        true
-    }
-
-    /// Stop trusting the cache: forget it here and on disk.
-    fn discard(&self) {
-        *self.snapshot.lock().unwrap_or_else(|p| p.into_inner()) = None;
-        cache::remove(&self.path);
-    }
-}
-
-/// What a synced vault's cache should hold, read from Turso: three queries,
-/// whatever the vault's size.
-pub async fn fetch_snapshot(conn: &Connection, my_uuid: &str) -> Result<cache::Snapshot, VaultError> {
-    let mut rows = conn
-        .query(
-            "SELECT id, name, salt, user_uuid, created_at, vault_type, wrapped_master_dek FROM vault_header LIMIT 1",
-            (),
-        )
-        .await?;
-    let row = rows
-        .next()
-        .await?
-        .ok_or_else(|| VaultError::NotFound("vault header".into()))?;
-    let header = cache::CachedHeader {
-        id: row.get(0)?,
-        name: row.get(1)?,
-        salt: row.get(2)?,
-        user_uuid: row.get(3)?,
-        created_at: row.get(4)?,
-        vault_type_json: row.get(5)?,
-        wrapped_master_dek: row.get(6)?,
+/// Sync every synced vault, or only `only`, with its backend. The manager is
+/// held only to gather what each sync needs and to read the results, never
+/// while a backend answers. Returns the vaults whose contents changed, and
+/// the error of each vault that could not sync.
+pub async fn sync_vaults(
+    manager: &tokio::sync::Mutex<VaultManager>,
+    only: Option<&str>,
+) -> (Vec<String>, Vec<(String, VaultError)>) {
+    let targets = match manager.lock().await.sync_targets(only) {
+        Ok(t) => t,
+        Err(e) => return (Vec::new(), vec![(only.unwrap_or_default().to_string(), e)]),
     };
-    drop(rows);
-
-    let member = if header.user_uuid == my_uuid {
-        None
-    } else {
-        let mut rows = conn
-            .query(
-                "SELECT wrapped_master_dek, inviter_public_key FROM vault_members WHERE user_uuid = ?",
-                [my_uuid],
-            )
-            .await?;
-        match rows.next().await? {
-            Some(row) => row
-                .get::<Option<String>>(1)?
-                .map(|inviter_public_key| -> Result<_, VaultError> {
-                    Ok(cache::CachedMember { wrapped_master_dek: row.get(0)?, inviter_public_key })
-                })
-                .transpose()?,
-            None => None,
-        }
-    };
-
-    let mut rows = conn
-        .query(
-            "SELECT id, name, category, nonce, ciphertext, wrapped_dek, created_at, updated_at              FROM secrets ORDER BY id",
-            (),
-        )
-        .await?;
-    let mut secrets = Vec::new();
-    while let Some(row) = rows.next().await? {
-        secrets.push(cache::CachedSecret {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            category: row.get(2)?,
-            nonce: row.get(3)?,
-            ciphertext: row.get(4)?,
-            wrapped_dek: row.get(5)?,
-            created_at: row.get(6)?,
-            updated_at: row.get(7)?,
-        });
-    }
-    Ok(cache::Snapshot { header, member, secrets })
-}
-
-/// Bring every synced vault's cache up to date. The manager is held only to
-/// list the vaults and to store the results, never while Turso answers.
-/// Returns the vaults whose contents changed.
-pub async fn refresh_caches(manager: &tokio::sync::Mutex<VaultManager>) -> Vec<String> {
-    let targets = manager.lock().await.cache_refresh_targets();
     let mut changed = Vec::new();
-    for (vault_id, conn, my_uuid) in targets {
-        let fetched = tokio::time::timeout(std::time::Duration::from_secs(20), fetch_snapshot(&conn, &my_uuid)).await;
-        drop(conn);
-        match fetched {
-            Ok(Ok(snapshot)) => {
-                if manager.lock().await.apply_snapshot(&vault_id, snapshot) {
-                    changed.push(vault_id);
+    let mut failed = Vec::new();
+    for target in targets {
+        match sync_engine::sync(&target).await {
+            Ok(report) => {
+                tracing::debug!(vault = %target.vault_id, ?report, "Vault synced");
+                if report.changed() {
+                    changed.push(target.vault_id.clone());
                 }
             }
-            Ok(Err(e)) => tracing::warn!(vault = %vault_id, "Could not refresh the vault cache: {}", e),
-            Err(_) => tracing::warn!(vault = %vault_id, "Refreshing the vault cache timed out"),
+            Err(e) => {
+                tracing::warn!(vault = %target.vault_id, "Vault did not sync: {}", e);
+                failed.push((target.vault_id.clone(), e));
+            }
         }
     }
-    changed
+    (changed, failed)
+}
+
+/// Move a vault on Turso's old format to sealed records, after syncing it.
+pub async fn upgrade_sync_format(manager: &tokio::sync::Mutex<VaultManager>, vault_id: &str) -> Result<(), VaultError> {
+    let target = manager
+        .lock()
+        .await
+        .sync_targets(Some(vault_id))?
+        .pop()
+        .ok_or_else(|| VaultError::SyncError("this vault does not sync".into()))?;
+    sync_engine::upgrade(&target).await
+}
+
+static SYNC_REQUESTED: tokio::sync::Notify = tokio::sync::Notify::const_new();
+
+/// Ask for a sync soon, as after a vault unlocks or a synced vault changes.
+/// Several requests before the sync runs count as one.
+pub fn request_sync() {
+    SYNC_REQUESTED.notify_one();
+}
+
+/// Wait until a sync has been asked for.
+pub async fn sync_requested() {
+    SYNC_REQUESTED.notified().await;
 }
 
 /// A shared vault's master key, as a member unwraps it: with the key agreed
@@ -345,21 +255,17 @@ async fn bounded<T>(
     }
 }
 
-impl VaultConnection {
-    /// One secret's stored row, from the cache, if the cache has it.
-    fn cached_secret(&self, secret_id: &str) -> Option<cache::CachedSecret> {
-        self.cache
-            .as_ref()?
-            .snapshot
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .as_ref()?
-            .secrets
-            .iter()
-            .find(|c| c.id == secret_id)
-            .cloned()
-    }
+/// A connection to a vault's local file that waits for the sync engine,
+/// which writes the same file from a connection of its own, rather than
+/// failing at once while it does.
+fn local_connect(db: &Database) -> Result<Connection, VaultError> {
+    let conn = db.connect().map_err(|e| VaultError::DatabaseError(e.to_string()))?;
+    conn.busy_timeout(std::time::Duration::from_secs(10))
+        .map_err(|e| VaultError::DatabaseError(e.to_string()))?;
+    Ok(conn)
+}
 
+impl VaultConnection {
     /// A connection that will actually answer right now.
     ///
     /// A remote vault talks to Turso over a hrana stream identified by a baton
@@ -387,20 +293,25 @@ impl VaultConnection {
         let now = std::time::Instant::now();
         let stale = cached.retired
             || should_reconnect(
-                self.sync_url.is_some(),
+                false,
                 cached.last_used.elapsed(),
                 cached.opened.elapsed(),
             );
         if stale {
-            cached.conn = self
-                .db
-                .connect()
-                .map_err(|e| VaultError::DatabaseError(e.to_string()))?;
+            cached.conn = local_connect(&self.db)?;
             cached.opened = now;
             cached.retired = false;
         }
         cached.last_used = now;
         Ok(cached.conn.clone())
+    }
+
+    /// After a write: a synced vault asks for a sync, so the change leaves
+    /// this device soon.
+    fn changed(&self) {
+        if self.sync_url.is_some() {
+            request_sync();
+        }
     }
 
     /// Mark the current connection as not to be used again.
@@ -435,7 +346,7 @@ impl VaultConnection {
     where
         P: libsql::params::IntoParams + Clone,
     {
-        let remote = self.sync_url.is_some();
+        let remote = false; // every vault is a local file now
         match bounded(remote, self.conn()?.query(sql, params.clone())).await {
             Ok(rows) => Ok(rows),
             Err(first) => {
@@ -456,7 +367,7 @@ impl VaultConnection {
     where
         P: libsql::params::IntoParams + Clone,
     {
-        let remote = self.sync_url.is_some();
+        let remote = false;
         match bounded(remote, self.conn()?.execute(sql, params.clone())).await {
             Ok(n) => Ok(n),
             Err(first) => {
@@ -542,6 +453,9 @@ pub(crate) struct StoredIdentity {
     /// older version's file may still have.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) sealed_tokens: Option<String>,
+    /// This installation's id in sync records, made on first unlock.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) device_id: Option<String>,
 }
 
 /// Vault manager - core state machine for encrypted vault operations.
@@ -573,6 +487,9 @@ pub struct VaultManager {
     /// Personal sync token
     personal_sync_token: Option<String>,
 
+    /// This installation's id in sync records.
+    device_id: Option<String>,
+
     /// Stored internal vault IDs for persistence
     internal_vault_ids: HashMap<String, String>,
 
@@ -599,6 +516,7 @@ impl VaultManager {
             identity_public_key: None,
             personal_sync_url: None,
             personal_sync_token: None,
+            device_id: None,
             internal_vault_ids: HashMap::new(),
             user_vaults: Vec::new(),
             held: false,
@@ -634,6 +552,7 @@ impl VaultManager {
         self.identity = Some(UserIdentity::new(user_uuid.clone(), secret_key.clone()));
         self.user_uuid = Some(user_uuid.clone());
         self.identity_public_key = Some(public_key.to_bytes());
+        self.device_id = Some(uuid::Uuid::new_v4().to_string());
 
         // Store secret key in OS keychain
         if let Err(e) = store_key_in_keychain(&user_uuid, secret_key.as_bytes()) {
@@ -755,10 +674,13 @@ impl VaultManager {
             stored.sealed_tokens.as_deref(),
         );
         self.harden_app_dir();
-        if plain_tokens {
-            // A file from before the tokens were sealed: seal them now.
+        let new_device = stored.device_id.is_none();
+        self.device_id = Some(stored.device_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()));
+        if plain_tokens || new_device {
+            // A file from before the tokens were sealed, or without a device
+            // id yet: write it as it should be now.
             match self.save_identity_current().await {
-                Ok(()) => tracing::info!("Sync tokens moved out of the identity file's plain text"),
+                Ok(()) => tracing::info!("Identity file brought up to date"),
                 Err(e) => tracing::warn!("Could not seal the sync tokens yet: {}", e),
             }
         }
@@ -920,10 +842,13 @@ impl VaultManager {
             stored.sealed_tokens.as_deref(),
         );
         self.harden_app_dir();
-        if plain_tokens {
-            // A file from before the tokens were sealed: seal them now.
+        let new_device = stored.device_id.is_none();
+        self.device_id = Some(stored.device_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()));
+        if plain_tokens || new_device {
+            // A file from before the tokens were sealed, or without a device
+            // id yet: write it as it should be now.
             match self.save_identity_current().await {
-                Ok(()) => tracing::info!("Sync tokens moved out of the identity file's plain text"),
+                Ok(()) => tracing::info!("Identity file brought up to date"),
                 Err(e) => tracing::warn!("Could not seal the sync tokens yet: {}", e),
             }
         }
@@ -1044,11 +969,6 @@ impl VaultManager {
         self.identity = None;
         for vault in self.vaults.values_mut() {
             vault.master_dek = None;
-            // The cache's key is derived from the identity, and its rows carry
-            // names in the clear once opened: neither stays in memory while
-            // locked. The key is wiped as it drops; unlocking reads the sealed
-            // file again.
-            vault.cache = None;
         }
     }
 
@@ -1515,6 +1435,21 @@ impl VaultManager {
             }
 
             if vault_id.is_none() {
+                // A database another device already set up holds the vault:
+                // open that one instead of writing a second header into it.
+                if let (Some(url), Some(token)) = (sync_url.as_deref(), sync_token.as_deref()) {
+                    if let Some(existing) = Self::remote_vault_id(url, token).await {
+                        tracing::info!("Personal sync database already holds vault {}; opening it", existing);
+                        self.open_vault(&existing, Some(url), Some(token)).await?;
+                        self.unlock_vault(&existing).await?;
+                        self.internal_vault_ids.insert(UNIFIED_VAULT_NAME.to_string(), existing.clone());
+                        self.save_identity_current().await?;
+                        vault_id = Some(existing);
+                    }
+                }
+            }
+
+            if vault_id.is_none() {
                 // Create the unified vault
                 tracing::info!("Creating unified personal vault");
                 let vault = self
@@ -1714,6 +1649,7 @@ impl VaultManager {
                 .map(|v| StoredVaultRef { sync_token: None, ..v.clone() })
                 .collect(),
             sealed_tokens: self.seal_sync_tokens()?,
+            device_id: self.device_id.clone(),
         };
 
         let json = serde_json::to_string_pretty(&stored)?;
@@ -1764,7 +1700,7 @@ impl VaultManager {
                 .identity_secret()
                 .and_then(|secret| {
                     let uuid = self.user_uuid.as_deref().ok_or(VaultError::Locked)?;
-                    sync_tokens::open(&*secret, uuid, sealed)
+                    sync_tokens::open(&secret, uuid, sealed)
                 });
             match opened {
                 Ok(tokens) => {
@@ -1795,7 +1731,11 @@ impl VaultManager {
             result = private_fs::private_dir(&vault_dir).and_then(|()| {
                 for entry in std::fs::read_dir(&vault_dir)? {
                     let path = entry?.path();
-                    if path.is_file() {
+                    if path.extension().is_some_and(|e| e == "cache") {
+                        // The encrypted copies synced vaults used to keep;
+                        // their local file has taken over.
+                        let _ = std::fs::remove_file(&path);
+                    } else if path.is_file() {
                         private_fs::restrict_file(&path)?;
                     }
                 }
@@ -1873,28 +1813,36 @@ impl VaultManager {
             _ => None,
         };
 
-        let cache_state = sync_config.as_ref().and_then(|_| self.open_cache(&vault_id));
-        let db = create_replica(&db_path, sync_config.as_ref()).await?;
-        let conn = db.connect().map_err(|e| VaultError::DatabaseError(e.to_string()))?;
+        // Every vault is a local file; a synced one also gets its database
+        // on the backend, in the sealed record format, with the same header.
+        let db = create_replica(&db_path, None).await?;
+        let conn = local_connect(&db)?;
 
         init_schema(&conn).await?;
+        sync_local::init(&conn).await?;
 
         // Store header
         let wrapped_dek_json = serde_json::to_string(&wrapped_master_dek)?;
         let vault_type_json = serde_json::to_string(&header.vault_type)?;
+        let header_row = (
+            header.id.clone(),
+            header.name.clone(),
+            header.salt.to_vec(),
+            header.user_uuid.clone(),
+            header.created_at,
+            vault_type_json,
+            wrapped_dek_json,
+        );
+        const INSERT_HEADER: &str = "INSERT INTO vault_header (id, name, salt, user_uuid, created_at, vault_type, wrapped_master_dek) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
-        conn.execute(
-            "INSERT INTO vault_header (id, name, salt, user_uuid, created_at, vault_type, wrapped_master_dek) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                header.id.as_str(),
-                header.name.as_str(),
-                header.salt.as_slice(),
-                header.user_uuid.as_str(),
-                header.created_at,
-                vault_type_json,
-                wrapped_dek_json,
-            ),
-        ).await?;
+        if let Some(config) = &sync_config {
+            let remote = sync_engine::connect_turso(&config.sync_url, &config.auth_token).await?;
+            bounded(true, remote.execute_batch(crate::vault::schema::SCHEMA)).await?;
+            sync_engine::turso::init_records(&remote).await?;
+            bounded(true, remote.execute(INSERT_HEADER, header_row.clone())).await?;
+            sync_local::set_state(&conn, sync_engine::STATE_FORMAT, "2").await?;
+        }
+        conn.execute(INSERT_HEADER, header_row).await?;
 
         let member_count = match &vault_type {
             VaultType::Private => None,
@@ -1917,7 +1865,6 @@ impl VaultManager {
                 master_dek: Some(master_dek),
                 sync_url: sync_url.map(|s| s.to_string()),
                 auth_token: sync_token.map(|s| s.to_string()),
-                cache: cache_state,
             },
         );
 
@@ -1954,40 +1901,99 @@ impl VaultManager {
         })
     }
 
-    /// Open an existing vault.
-    /// The cache of a synced vault, read from disk if there is one. `None`
-    /// before the identity is loaded, which the cache key comes from.
-    fn open_cache(&self, vault_id: &str) -> Option<CacheState> {
-        let identity = self.identity.as_ref()?;
-        let key = identity.with_secret(|secret| cache::CacheKey::derive(secret.as_bytes(), vault_id)).ok()?;
-        let path = cache::cache_path(&self.app_dir.join("vaults"), vault_id);
-        let snapshot = cache::load(&path, &key);
-        Some(CacheState { path, key, snapshot: std::sync::Mutex::new(snapshot) })
+    /// What each synced vault's sync needs, for `sync_vaults`: every unlocked
+    /// vault with a backend, or only `only`.
+    pub fn sync_targets(&self, only: Option<&str>) -> Result<Vec<sync_engine::Target>, VaultError> {
+        let my_uuid = self.user_uuid.clone().ok_or(VaultError::Locked)?;
+        let device = self.device_id.clone().ok_or(VaultError::Locked)?;
+        let vault_dir = self.app_dir.join("vaults");
+        let mut targets = Vec::new();
+        for (id, vault) in &self.vaults {
+            if only.is_some_and(|o| o != id) {
+                continue;
+            }
+            let (Some(url), Some(token), Some(master)) = (&vault.sync_url, &vault.auth_token, &vault.master_dek) else {
+                continue;
+            };
+            targets.push(sync_engine::Target {
+                vault_id: id.clone(),
+                local_path: vault_dir.join(format!("{id}.db")),
+                backend: sync_engine::Backend::Turso { url: url.clone(), token: token.clone() },
+                master: master.with_key(|k| Dek::from_fn(|d| d.copy_from_slice(k))),
+                // Bound to the vault's own id, which every member's file shares,
+                // not to the id this device files it under.
+                key: sync_record::RecordKey::derive(master, &vault.header.id)?,
+                device: device.clone(),
+                my_uuid: my_uuid.clone(),
+            });
+        }
+        Ok(targets)
     }
 
-    /// The synced vaults whose cache a refresh should bring up to date, each
-    /// with a connection of its own, so the refresh can talk to Turso
-    /// without holding the manager.
-    pub fn cache_refresh_targets(&self) -> Vec<(String, Connection, String)> {
-        let Some(my_uuid) = self.user_uuid.clone() else {
-            return Vec::new();
+    /// How each synced vault's sync stands, from its local file.
+    pub async fn sync_statuses(&self) -> Vec<SyncStatus> {
+        let mut out = Vec::new();
+        for (id, vault) in &self.vaults {
+            if vault.sync_url.is_none() {
+                continue;
+            }
+            let Ok(conn) = vault.conn() else { continue };
+            let state = |key: &'static str| {
+                let conn = conn.clone();
+                async move { sync_local::state(&conn, key).await.ok().flatten() }
+            };
+            out.push(SyncStatus {
+                vault_id: id.clone(),
+                name: vault.header.name.clone(),
+                backend: "turso".into(),
+                format: state(sync_engine::STATE_FORMAT).await,
+                last_sync: state(sync_engine::STATE_LAST_SYNC).await.and_then(|v| v.parse().ok()),
+                last_error: state(sync_engine::STATE_LAST_ERROR).await,
+                conflicts: state(sync_engine::STATE_CONFLICTS).await.and_then(|v| v.parse().ok()).unwrap_or(0),
+                pending: sync_local::dirty_count(&conn).await.unwrap_or(0),
+            });
+        }
+        out.sort_by(|a, b| a.name.cmp(&b.name));
+        out
+    }
+
+    /// Forget the count of conflict copies made, once the user has seen them.
+    pub async fn clear_sync_conflicts(&self, vault_id: &str) -> Result<(), VaultError> {
+        let vault = self.vaults.get(vault_id).ok_or_else(|| VaultError::NotFound(vault_id.to_string()))?;
+        sync_local::clear_state(&vault.conn()?, sync_engine::STATE_CONFLICTS).await
+    }
+
+    /// Make the local file of a synced vault seen here for the first time:
+    /// its header and members from the backend, no secrets yet. The first
+    /// sync brings those. Each request is bounded, so a backend that never
+    /// answers fails the open instead of hanging it.
+    async fn bootstrap_synced(db_path: &std::path::Path, config: &SyncConfig) -> Result<(), VaultError> {
+        let remote = sync_engine::connect_turso(&config.sync_url, &config.auth_token).await?;
+        let (header, members) = match tokio::time::timeout(REMOTE_TIMEOUT, sync_engine::turso::read_header(&remote)).await {
+            Ok(read) => read?,
+            Err(_) => {
+                return Err(VaultError::SyncError(format!(
+                    "Turso did not answer within {} seconds",
+                    REMOTE_TIMEOUT.as_secs()
+                )))
+            }
         };
-        self.vaults
-            .iter()
-            .filter(|(_, vault)| vault.cache.is_some() && vault.master_dek.is_some())
-            .filter_map(|(id, vault)| vault.conn().ok().map(|conn| (id.clone(), conn, my_uuid.clone())))
-            .collect()
+        let tmp = db_path.with_extension("db.new");
+        let _ = std::fs::remove_file(&tmp);
+        {
+            let db = create_replica(&tmp, None).await?;
+            let conn = local_connect(&db)?;
+            init_schema(&conn).await?;
+            sync_local::init(&conn).await?;
+            sync_engine::mirror_header(&conn, &header, &members).await?;
+        }
+        std::fs::rename(&tmp, db_path)?;
+        private_fs::restrict_file(db_path)?;
+        Ok(())
     }
 
-    /// Put a fresh snapshot in a vault's cache. Returns whether it changed
-    /// anything the interface shows.
-    pub fn apply_snapshot(&self, vault_id: &str, snapshot: cache::Snapshot) -> bool {
-        self.vaults
-            .get(vault_id)
-            .and_then(|vault| vault.cache.as_ref())
-            .is_some_and(|cache_state| cache_state.replace(snapshot))
-    }
-
+    /// Open an existing vault: always its local file. A synced vault that has
+    /// none yet on this device gets one from its backend first.
     pub async fn open_vault(
         &mut self,
         vault_id: &str,
@@ -2017,6 +2023,7 @@ impl VaultManager {
         }
 
         let vault_dir = self.app_dir.join("vaults");
+        private_fs::private_dir(&vault_dir)?;
         let db_path = vault_dir.join(format!("{}.db", vault_id));
 
         let sync_config = match (sync_url, token) {
@@ -2027,43 +2034,42 @@ impl VaultManager {
             _ => None,
         };
 
-        // For local-only vaults, check if file exists
-        // For synced vaults, we connect to remote directly (no local file needed)
-        if sync_config.is_none() && !db_path.exists() {
-            return Err(VaultError::NotFound(vault_id.to_string()));
+        // A file left by an older version that never held this vault's
+        // header (a backup restore wrote one) is completed from the backend
+        // too: the first sync then replaces its rows with the backend's.
+        let has_header = if db_path.exists() {
+            let db = create_replica(&db_path, None).await?;
+            let conn = local_connect(&db)?;
+            init_schema(&conn).await?;
+            let mut rows = conn.query("SELECT 1 FROM vault_header LIMIT 1", ()).await?;
+            rows.next().await?.is_some()
+        } else {
+            false
+        };
+        if !has_header {
+            match &sync_config {
+                Some(config) => {
+                    let _ = std::fs::remove_file(&db_path);
+                    Self::bootstrap_synced(&db_path, config).await?;
+                }
+                None => return Err(VaultError::NotFound(vault_id.to_string())),
+            }
         }
 
-        let db = create_replica(&db_path, sync_config.as_ref()).await?;
-
-        let conn = db.connect().map_err(|e| VaultError::DatabaseError(e.to_string()))?;
-
-        // A synced vault with a cache opens from it, without asking Turso;
-        // the background refresh brings it up to date.
-        let cache_state = sync_config.as_ref().and_then(|_| self.open_cache(vault_id));
-        let cached = cache_state.as_ref().and_then(CacheState::snapshot);
+        let db = create_replica(&db_path, None).await?;
+        let conn = local_connect(&db)?;
+        init_schema(&conn).await?;
+        sync_local::init(&conn).await?;
 
         // Load header
-        let (id, name, salt_blob, user_uuid, created_at, vault_type_json) = match &cached {
-            Some(c) => (
-                c.header.id.clone(),
-                c.header.name.clone(),
-                c.header.salt.clone(),
-                c.header.user_uuid.clone(),
-                c.header.created_at,
-                c.header.vault_type_json.clone(),
-            ),
-            None => {
-                let remote = sync_config.is_some();
-                let mut rows = bounded(
-                    remote,
-                    conn.query("SELECT id, name, salt, user_uuid, created_at, vault_type FROM vault_header LIMIT 1", ()),
-                )
+        let (id, name, salt_blob, user_uuid, created_at, vault_type_json) = {
+            let mut rows = conn
+                .query("SELECT id, name, salt, user_uuid, created_at, vault_type FROM vault_header LIMIT 1", ())
                 .await?;
-                let row = bounded(remote, rows.next())
-                    .await?
-                    .ok_or_else(|| VaultError::NotFound(vault_id.to_string()))?;
-                (row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)
-            }
+            let row = rows.next().await?.ok_or_else(|| VaultError::NotFound(vault_id.to_string()))?;
+            let header: (String, String, Vec<u8>, String, i64, String) =
+                (row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?);
+            header
         };
 
         if salt_blob.len() != 32 {
@@ -2091,22 +2097,8 @@ impl VaultManager {
             VaultType::Shared { members } => Some(members.len()),
         };
 
-        // Count secrets. Remote-only for shared vaults, so treat a failure the
-        // same way `list_vaults` does: the vault is open and usable, we just
-        // could not reach it to count. Failing here would leave a vault the
-        // user has a valid key for permanently unopenable.
-        let counted = match &cached {
-            Some(c) => Ok(c.secrets.len()),
-            None => Self::count_secrets_on(&conn).await,
-        };
-        let (secret_count, sync_error) = match counted {
-            Ok(n) => (n, None),
-            Err(e) => {
-                let reason = describe_db_error(&e.to_string());
-                tracing::warn!(vault = %name, "vault unreachable on open: {}", reason);
-                (0, Some(reason))
-            }
-        };
+        let secret_count = Self::count_secrets_on(&conn).await.unwrap_or(0);
+        let sync_error = sync_local::state(&conn, sync_engine::STATE_LAST_ERROR).await.ok().flatten();
 
         // Store in memory (O(1))
         self.vault_names.insert(name.clone(), vault_id.to_string());
@@ -2124,7 +2116,6 @@ impl VaultManager {
                 master_dek: None,
                 sync_url: sync_url.map(|s| s.to_string()),
                 auth_token: token.map(|s| s.to_string()),
-                cache: cache_state,
             },
         );
 
@@ -2138,7 +2129,7 @@ impl VaultManager {
             member_count,
             secret_count,
             last_sync: None,
-            unreachable: sync_error.is_some(),
+            unreachable: false,
             sync_error,
         })
     }
@@ -2148,26 +2139,14 @@ impl VaultManager {
     /// For invitees: unwrap using X25519 shared secret from vault_members.
     pub async fn unlock_vault(&mut self, vault_id: &str) -> Result<(), VaultError> {
         self.unlock_vault_keys(vault_id).await?;
-        // Now that it can be read, bring its cache up to date (or make it).
-        if self.vaults.get(vault_id).is_some_and(|v| v.cache.is_some()) {
-            cache::request_refresh();
+        // Now that it can be read, bring it up to date with its backend.
+        if self.vaults.get(vault_id).is_some_and(|v| v.sync_url.is_some()) {
+            request_sync();
         }
         Ok(())
     }
 
     async fn unlock_vault_keys(&mut self, vault_id: &str) -> Result<(), VaultError> {
-        // Locking dropped the cache from memory; take it up again from disk.
-        let reload = self
-            .vaults
-            .get(vault_id)
-            .is_some_and(|v| v.cache.is_none() && v.sync_url.is_some());
-        if reload {
-            let cache_state = self.open_cache(vault_id);
-            if let Some(vault) = self.vaults.get_mut(vault_id) {
-                vault.cache = cache_state;
-            }
-        }
-
         let kek = self.kek.as_ref().ok_or(VaultError::Locked)?;
         let identity = self.identity.as_ref().ok_or(VaultError::Locked)?;
         let my_uuid = self.user_uuid.clone().ok_or(VaultError::IdentityNotInitialized)?;
@@ -2179,33 +2158,6 @@ impl VaultManager {
 
         if vault.master_dek.is_some() {
             return Ok(()); // Already unlocked
-        }
-
-        // From the cache when there is one. A cached key that does not open
-        // means the cache is out of date (the owner re-wrapped it, say), so
-        // it is dropped and the vault is unlocked from Turso below.
-        if let Some(cache_state) = vault.cache.as_ref() {
-            if let Some(snapshot) = cache_state.snapshot() {
-                let from_cache = if snapshot.header.user_uuid == my_uuid {
-                    serde_json::from_str::<WrappedDek>(&snapshot.header.wrapped_master_dek)
-                        .map_err(VaultError::from)
-                        .and_then(|wrapped| unwrap_dek(kek, &wrapped))
-                } else if let Some(member) = &snapshot.member {
-                    unwrap_member_dek(identity, &member.wrapped_master_dek, &member.inviter_public_key)
-                } else {
-                    Err(VaultError::AccessDenied("not in the cached member list".into()))
-                };
-                match from_cache {
-                    Ok(master_dek) => {
-                        vault.master_dek = Some(master_dek);
-                        return Ok(());
-                    }
-                    Err(e) => {
-                        tracing::warn!("Vault {} did not unlock from its cache ({}); asking Turso", vault_id, e);
-                        cache_state.discard();
-                    }
-                }
-            }
         }
 
         // Check if we're the vault owner
@@ -2325,7 +2277,7 @@ impl VaultManager {
         if db_path.exists() {
             tokio::fs::remove_file(&db_path).await?;
         }
-        cache::remove(&cache::cache_path(&vault_dir, vault_id));
+        let _ = std::fs::remove_file(vault_dir.join(format!("{vault_id}.cache")));
 
         Ok(())
     }
@@ -2389,6 +2341,15 @@ impl VaultManager {
                     }
                 };
 
+            // The vault answers from its file; whether it reached its backend
+            // the last time it tried is in the file too.
+            let (last_sync, sync_error) = match (sync_error, vault.sync_url.is_some(), vault.conn()) {
+                (None, true, Ok(conn)) => (
+                    sync_local::state(&conn, sync_engine::STATE_LAST_SYNC).await.ok().flatten().and_then(|v| v.parse::<i64>().ok()).map(|ms| ms / 1000),
+                    sync_local::state(&conn, sync_engine::STATE_LAST_ERROR).await.ok().flatten().map(|e| describe_db_error(&e)),
+                ),
+                (sync_error, _, _) => (None, sync_error),
+            };
             vaults.push(VaultInfo {
                 id: vault_id.clone(),
                 name: vault.header.name.clone(),
@@ -2398,7 +2359,7 @@ impl VaultManager {
                 },
                 member_count,
                 secret_count,
-                last_sync: None,
+                last_sync,
                 unreachable: sync_error.is_some(),
                 sync_error,
             });
@@ -2406,11 +2367,8 @@ impl VaultManager {
         Ok(vaults)
     }
 
-    /// Sync a vault with Turso. A synced vault is opened as a remote
-    /// connection (see `sync::create_replica`), so every read and write
-    /// already goes to Turso and there is nothing to sync; libsql refuses
-    /// `sync()` on such a connection. What is left to check is that the vault
-    /// is open.
+    /// Check that a vault is open. The sync itself runs in
+    /// [`sync_vaults`], without holding the manager.
     pub async fn sync_vault(&mut self, vault_id: &str) -> Result<(), VaultError> {
         self.vaults
             .get(vault_id)
@@ -2498,23 +2456,7 @@ impl VaultManager {
             ),
         ).await?;
 
-        if let Some(cache_state) = &vault.cache {
-            let row = cache::CachedSecret {
-                id: secret_id.to_string(),
-                name: name.to_string(),
-                category: category.to_string(),
-                nonce: payload.nonce.to_vec(),
-                ciphertext: payload.ciphertext.clone(),
-                wrapped_dek: wrapped_dek_json,
-                created_at: now,
-                updated_at: now,
-            };
-            cache_state.edit(|secrets| {
-                secrets.retain(|c| c.id != row.id);
-                secrets.push(row);
-            });
-        }
-
+        vault.changed();
         Ok(())
     }
 
@@ -2532,10 +2474,6 @@ impl VaultManager {
             .master_dek
             .as_ref()
             .ok_or_else(|| VaultError::NotUnlocked(vault_id.to_string()))?;
-
-        if let Some(c) = vault.cached_secret(secret_id) {
-            return decrypt_stored(master_dek, c.nonce, c.ciphertext, c.wrapped_dek);
-        }
 
         let mut rows = vault
             
@@ -2576,25 +2514,6 @@ impl VaultManager {
         if categories.is_empty() {
             return Ok(Vec::new());
         }
-        if let Some(snapshot) = vault.cache.as_ref().and_then(CacheState::snapshot) {
-            return Ok(snapshot
-                .secrets
-                .into_iter()
-                .filter(|c| categories.contains(&c.category.as_str()))
-                .map(|c| {
-                    let plaintext = decrypt_stored(master_dek, c.nonce, c.ciphertext, c.wrapped_dek);
-                    let meta = SecretMetadata {
-                        id: c.id,
-                        name: c.name,
-                        category: c.category,
-                        created_at: c.created_at,
-                        updated_at: c.updated_at,
-                    };
-                    (meta, plaintext)
-                })
-                .collect());
-        }
-
         let placeholders = vec!["?"; categories.len()].join(", ");
         let sql = format!(
             "SELECT id, name, category, created_at, updated_at, nonce, ciphertext, wrapped_dek              FROM secrets WHERE category IN ({placeholders})"
@@ -2651,16 +2570,7 @@ impl VaultManager {
             )
             .await?;
 
-        if let Some(cache_state) = &vault.cache {
-            cache_state.edit(|secrets| {
-                if let Some(c) = secrets.iter_mut().find(|c| c.id == secret_id) {
-                    c.nonce = payload.nonce.to_vec();
-                    c.ciphertext = payload.ciphertext.clone();
-                    c.wrapped_dek = wrapped_dek_json;
-                    c.updated_at = now;
-                }
-            });
-        }
+        vault.changed();
 
         Ok(())
     }
@@ -2687,14 +2597,7 @@ impl VaultManager {
             )
             .await?;
 
-        if let Some(cache_state) = &vault.cache {
-            cache_state.edit(|secrets| {
-                if let Some(c) = secrets.iter_mut().find(|c| c.id == secret_id) {
-                    c.name = name.to_string();
-                    c.updated_at = now;
-                }
-            });
-        }
+        vault.changed();
 
         Ok(())
     }
@@ -2711,9 +2614,7 @@ impl VaultManager {
             .execute("DELETE FROM secrets WHERE id = ?", [secret_id])
             .await?;
 
-        if let Some(cache_state) = &vault.cache {
-            cache_state.edit(|secrets| secrets.retain(|c| c.id != secret_id));
-        }
+        vault.changed();
 
         Ok(())
     }
@@ -2738,9 +2639,6 @@ impl VaultManager {
             .vaults
             .get(vault_id)
             .ok_or_else(|| VaultError::NotFound(vault_id.to_string()))?;
-        if vault.cached_secret(secret_id).is_some() {
-            return Ok(true);
-        }
         let mut rows = vault.query("SELECT 1 FROM secrets WHERE id = ?", [secret_id]).await?;
         Ok(rows.next().await?.is_some())
     }
@@ -2756,20 +2654,6 @@ impl VaultManager {
             .vaults
             .get(vault_id)
             .ok_or_else(|| VaultError::NotFound(vault_id.to_string()))?;
-
-        if let Some(snapshot) = vault.cache.as_ref().and_then(CacheState::snapshot) {
-            return Ok(snapshot
-                .secrets
-                .into_iter()
-                .map(|c| SecretMetadata {
-                    id: c.id,
-                    name: c.name,
-                    category: c.category,
-                    created_at: c.created_at,
-                    updated_at: c.updated_at,
-                })
-                .collect());
-        }
 
         let mut rows = vault
             
@@ -2794,6 +2678,25 @@ impl VaultManager {
     }
 
     // ==================== SHARING ====================
+
+    /// The id of the vault a backend database already holds, if any.
+    async fn remote_vault_id(url: &str, token: &str) -> Option<String> {
+        let remote = sync_engine::connect_turso(url, token).await.ok()?;
+        let read = tokio::time::timeout(REMOTE_TIMEOUT, async {
+            let mut rows = remote.query("SELECT id FROM vault_header LIMIT 1", ()).await.ok()?;
+            rows.next().await.ok()??.get::<String>(0).ok()
+        });
+        read.await.ok().flatten()
+    }
+
+    /// Where a vault's member list and shares are kept: on its backend for a
+    /// synced vault, which every member reads, otherwise in its file.
+    async fn admin_conn(&self, vault: &VaultConnection) -> Result<Connection, VaultError> {
+        match (&vault.sync_url, &vault.auth_token) {
+            (Some(url), Some(token)) => sync_engine::connect_turso(url, token).await,
+            _ => vault.conn(),
+        }
+    }
 
     /// Invite member to shared vault.
     pub async fn invite_member(
@@ -2837,8 +2740,8 @@ impl VaultManager {
             identity.public_key.as_bytes(),
         );
 
-        vault
-            
+        let admin = self.admin_conn(vault).await?;
+        admin
             .execute(
                 "INSERT OR REPLACE INTO vault_members (user_uuid, public_key, wrapped_master_dek, role, added_at, inviter_public_key) VALUES (?, ?, ?, ?, ?, ?)",
                 (
@@ -2852,6 +2755,7 @@ impl VaultManager {
             )
             .await?;
 
+        vault.changed(); // mirror the member list into the local file
         let sync_url = vault.sync_url.clone().unwrap_or_default();
         let token = vault.auth_token.clone().unwrap_or_default();
 
@@ -2930,13 +2834,14 @@ impl VaultManager {
             .get(vault_id)
             .ok_or_else(|| VaultError::NotFound(vault_id.to_string()))?;
 
-        vault
-            
+        let admin = self.admin_conn(vault).await?;
+        admin
             .execute(
                 "DELETE FROM vault_members WHERE user_uuid = ?",
                 [user_uuid],
             )
             .await?;
+        vault.changed();
 
         Ok(())
     }
@@ -2948,8 +2853,8 @@ impl VaultManager {
             .get(vault_id)
             .ok_or_else(|| VaultError::NotFound(vault_id.to_string()))?;
 
-        let mut rows = vault
-            
+        let admin = self.admin_conn(vault).await?;
+        let mut rows = admin
             .query(
                 "SELECT user_uuid, public_key, role, added_at FROM vault_members",
                 (),
@@ -2992,7 +2897,8 @@ impl VaultManager {
 
         // TODO: Re-wrap DEK with recipient's public key
 
-        vault.execute(
+        let admin = self.admin_conn(vault).await?;
+        admin.execute(
             "INSERT INTO shared_items (id, secret_id, recipient_uuid, recipient_public_key, wrapped_dek, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 share_id.as_str(),
@@ -3021,8 +2927,8 @@ impl VaultManager {
             .get(vault_id)
             .ok_or_else(|| VaultError::NotFound(vault_id.to_string()))?;
 
-        let mut rows = vault
-            
+        let admin = self.admin_conn(vault).await?;
+        let mut rows = admin
             .query(
                 "SELECT id, secret_id, recipient_uuid, expires_at, created_at FROM shared_items",
                 (),
@@ -3050,8 +2956,8 @@ impl VaultManager {
             .get(vault_id)
             .ok_or_else(|| VaultError::NotFound(vault_id.to_string()))?;
 
-        vault
-            
+        let admin = self.admin_conn(vault).await?;
+        admin
             .execute("DELETE FROM shared_items WHERE id = ?", [share_id])
             .await?;
 
@@ -3109,6 +3015,8 @@ impl VaultManager {
         self.identity = Some(UserIdentity::new(user_uuid.clone(), secret_key.clone()));
         self.user_uuid = Some(user_uuid.clone());
         self.identity_public_key = Some(public_key.to_bytes());
+
+        self.device_id = Some(uuid::Uuid::new_v4().to_string());
 
         // Store in keychain
         if let Err(e) = store_key_in_keychain(&user_uuid, secret_key.as_bytes()) {
@@ -3545,7 +3453,7 @@ impl VaultManager {
         } else {
             let mut secret = zeroize::Zeroizing::new([0u8; 32]);
             secret.copy_from_slice(&secret_key_bytes);
-            Some(sync_tokens::seal(&*secret, &bundle.identity.user_uuid, &tokens)?)
+            Some(sync_tokens::seal(&secret, &bundle.identity.user_uuid, &tokens)?)
         };
         let user_vaults: Vec<StoredVaultRef> = user_vaults
             .into_iter()
@@ -3562,6 +3470,8 @@ impl VaultManager {
             internal_vault_ids,
             user_vaults,
             sealed_tokens,
+            // A restored identity on another machine is another device.
+            device_id: None,
         };
 
         let identity_json = serde_json::to_string_pretty(&stored)?;
@@ -3581,8 +3491,6 @@ impl VaultManager {
                 let _ = tokio::fs::remove_file(&db_path).await;
                 let _ = tokio::fs::remove_file(vault_dir.join(format!("{}.db-wal", exported_vault.vault_id))).await;
                 let _ = tokio::fs::remove_file(vault_dir.join(format!("{}.db-shm", exported_vault.vault_id))).await;
-                // The restored vault is the truth now; its cache is rebuilt.
-                cache::remove(&cache::cache_path(&vault_dir, &exported_vault.vault_id));
             }
 
             let db = crate::vault::sync::create_replica(&db_path, None).await?;

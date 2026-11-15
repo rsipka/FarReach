@@ -116,7 +116,6 @@ async fn local_vault(name: &str) -> (VaultConnection, PathBuf) {
         master_dek: None,
         sync_url: None,
         auth_token: None,
-        cache: None,
     };
     (vault, path)
 }

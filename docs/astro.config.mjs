@@ -119,6 +119,7 @@ export default defineConfig({
 					items: [
 						{ label: 'What is Turso?', slug: 'sync/what-is-turso' },
 						{ label: 'Setting Up Cloud Sync', slug: 'sync/setup' },
+						{ label: 'How Sync Works', slug: 'sync/how-sync-works' },
 						{ label: 'Syncing Shared Vaults', slug: 'sync/shared-vaults' },
 						{ label: 'Troubleshooting', slug: 'sync/troubleshooting' },
 					],
@@ -137,6 +138,7 @@ export default defineConfig({
 					items: [
 						{ label: 'Development Setup', slug: 'development/setup' },
 						{ label: 'Project Architecture', slug: 'development/architecture' },
+						{ label: 'Sync Server API (draft)', slug: 'development/sync-server-api' },
 					],
 				},
 			],

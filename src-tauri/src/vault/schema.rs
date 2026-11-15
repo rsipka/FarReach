@@ -2,10 +2,8 @@ use libsql::Connection;
 
 use crate::vault::error::VaultError;
 
-/// Initialize vault database schema.
-pub async fn init_schema(conn: &Connection) -> Result<(), VaultError> {
-    conn.execute_batch(
-        r#"
+/// The tables every vault database has, local or on a backend.
+pub const SCHEMA: &str = r#"
         -- Vault header (single row per DB)
         CREATE TABLE IF NOT EXISTS vault_header (
             id TEXT PRIMARY KEY,
@@ -58,9 +56,10 @@ pub async fn init_schema(conn: &Connection) -> Result<(), VaultError> {
 
         CREATE INDEX IF NOT EXISTS idx_shared_items_recipient ON shared_items(recipient_uuid);
         CREATE INDEX IF NOT EXISTS idx_shared_items_secret ON shared_items(secret_id);
-        "#,
-    )
-    .await?;
+        "#;
 
+/// Initialize vault database schema.
+pub async fn init_schema(conn: &Connection) -> Result<(), VaultError> {
+    conn.execute_batch(SCHEMA).await?;
     Ok(())
 }

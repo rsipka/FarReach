@@ -11,90 +11,66 @@ fn tmp_dir(name: &str) -> PathBuf {
     dir
 }
 
-/// The cache of a synced vault, end to end against a real libsql server:
-/// built by the first refresh, enough on its own to open, unlock and list
-/// the vault with the server out of reach, updated when someone else
-/// changes the vault, and unreadable on disk.
-///
-/// Needs a libsql server, so it is skipped unless one is named, e.g.
-/// `docker run -d -p 58080:8080 ghcr.io/tursodatabase/libsql-server` and
-/// `REACH_TEST_SQLD=http://127.0.0.1:58080`.
+/// A synced vault end to end, with a local file standing in for Turso:
+/// written on one device, synced, opened on another device, readable there
+/// with the "server" gone, and edited offline until it syncs again.
 #[tokio::test]
-#[ignore]
-async fn a_synced_vault_opens_and_lists_from_its_cache() {
-    let Ok(url) = std::env::var("REACH_TEST_SQLD") else { return };
-    let server = libsql::Builder::new_remote(url.clone(), String::new())
-        .connector(crate::vault::turso_tls::TursoConnector::new().unwrap())
-        .build()
-        .await
-        .unwrap();
-    let other_device = server.connect().unwrap();
-    other_device
-        .execute_batch("DROP TABLE IF EXISTS secrets; DROP TABLE IF EXISTS vault_members; DROP TABLE IF EXISTS vault_header;")
-        .await
-        .unwrap();
-
-    let dir = tmp_dir("cache-e2e");
-    let mut mgr = VaultManager::new(dir.clone());
-    mgr.init_identity("cache-e2e-pass").await.unwrap();
-    let vault = mgr.create_vault("synced", VaultType::Private, Some(&url), Some("")).await.unwrap();
+async fn a_synced_vault_is_local_first() {
+    let dir = tmp_dir("local-first");
+    let server = dir.join("server.db");
+    let url = format!("file:{}", server.display());
     let put = |text: &str| SecretBox::new(Box::new(text.as_bytes().to_vec()));
-    let keep = mgr.create_secret(&vault.id, "Production Xostme V2", SecretCategory::Session, put("one")).await.unwrap();
-    let gone = mgr.create_secret(&vault.id, "FiveM BoX", SecretCategory::Session, put("two")).await.unwrap();
-    mgr.create_secret(&vault.id, "Servers", SecretCategory::Folder, put("folder")).await.unwrap();
 
-    // The first refresh makes the cache.
-    let mgr = tokio::sync::Mutex::new(mgr);
-    assert_eq!(refresh_caches(&mgr).await, vec![vault.id.clone()]);
-    let cache_file = cache::cache_path(&dir.join("vaults"), &vault.id);
-    let on_disk = std::fs::read(&cache_file).unwrap();
-    for name in ["Production Xostme V2", "FiveM BoX", "Servers", "session"] {
-        assert!(!on_disk.windows(name.len()).any(|w| w == name.as_bytes()), "{name} is readable on disk");
+    let mut a = VaultManager::new(dir.join("a"));
+    a.init_identity("local-first-pass").await.unwrap();
+    let vault = a.create_vault("synced", VaultType::Private, Some(&url), Some("t")).await.unwrap();
+    let one = a.create_secret(&vault.id, "Production Xostme V2", SecretCategory::Session, put("one")).await.unwrap();
+    a.create_secret(&vault.id, "Servers", SecretCategory::Folder, put("folder")).await.unwrap();
+    let a = tokio::sync::Mutex::new(a);
+    let (changed, failed) = sync_vaults(&a, None).await;
+    assert!(failed.is_empty(), "{:?}", failed.iter().map(|(_, e)| e.to_string()).collect::<Vec<_>>());
+    assert!(changed.is_empty(), "sending changes is not a change here");
+
+    // The server holds no names.
+    let raw = std::fs::read(&server).unwrap();
+    for name in ["Production Xostme V2", "Servers", "session"] {
+        assert!(!raw.windows(name.len()).any(|w| w == name.as_bytes()), "{name} is readable on the server");
     }
-    // Nothing changed since, so a second refresh reports nothing.
-    assert!(refresh_caches(&mgr).await.is_empty());
 
-    // Another run of the app, with the server out of reach: the vault
-    // opens, unlocks and lists from the cache alone.
-    let mut offline = VaultManager::new(dir.clone());
-    offline.unlock("cache-e2e-pass").await.unwrap();
-    offline.close_vault(&vault.id).await.unwrap();
-    offline.open_vault(&vault.id, Some("http://127.0.0.1:9"), Some("")).await.unwrap();
-    offline.unlock_vault(&vault.id).await.unwrap();
-    let mut listed: Vec<Vec<u8>> = offline
-        .read_secrets_in(&vault.id, &["session"])
-        .await
-        .unwrap()
-        .into_iter()
-        .map(|(_, plain)| plain.unwrap().expose_secret().clone())
-        .collect();
-    listed.sort();
-    assert_eq!(listed, vec![b"one".to_vec(), b"two".to_vec()]);
-    assert_eq!(offline.read_secret(&vault.id, &keep).await.unwrap().expose_secret(), b"one");
+    // A second device, with the same identity (as after a backup restore,
+    // which also brings the list of vaults): unlocking opens the vault from
+    // the server, and the first sync brings its secrets.
+    std::fs::create_dir_all(dir.join("b")).unwrap();
+    let mut file: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("a/vault_identity.json")).unwrap()).unwrap();
+    file.as_object_mut().unwrap().remove("device_id");
+    std::fs::write(dir.join("b/vault_identity.json"), file.to_string()).unwrap();
+    let mut b = VaultManager::new(dir.join("b"));
+    assert!(b.unlock("local-first-pass").await.unwrap());
+    assert!(b.read_secret(&vault.id, &one).await.is_err(), "nothing until the first sync");
+    let b = tokio::sync::Mutex::new(b);
+    let (changed, failed) = sync_vaults(&b, None).await;
+    assert!(failed.is_empty());
+    assert_eq!(changed, vec![vault.id.clone()]);
+    assert_eq!(b.lock().await.read_secret(&vault.id, &one).await.unwrap().expose_secret(), b"one");
 
-    // Locked, nothing of the cache stays in memory; unlocked again, it is
-    // read back from the sealed file, still without the server.
-    offline.lock();
-    assert!(offline.vaults.values().all(|v| v.cache.is_none()));
-    offline.unlock("cache-e2e-pass").await.unwrap();
-    offline.unlock_vault(&vault.id).await.unwrap();
-    assert_eq!(offline.read_secret(&vault.id, &keep).await.unwrap().expose_secret(), b"one");
-    drop(offline);
+    // The server goes away: b still reads, and writes, from its file.
+    std::fs::rename(&server, dir.join("server.away")).unwrap();
+    let two = b.lock().await.create_secret(&vault.id, "Offline edit", SecretCategory::Session, put("two")).await.unwrap();
+    assert_eq!(b.lock().await.read_secret(&vault.id, &two).await.unwrap().expose_secret(), b"two");
+    let statuses = b.lock().await.sync_statuses().await;
+    assert_eq!(statuses[0].pending, 1);
 
-    // Someone else deletes a session on the server; the next refresh
-    // takes it in and says so.
-    other_device.execute("DELETE FROM secrets WHERE id = ?", [gone.as_str()]).await.unwrap();
-    assert_eq!(refresh_caches(&mgr).await, vec![vault.id.clone()]);
-    let names: Vec<String> = mgr
-        .lock()
-        .await
-        .read_secrets_in(&vault.id, &["session"])
-        .await
-        .unwrap()
-        .into_iter()
-        .map(|(meta, _)| meta.name)
-        .collect();
-    assert_eq!(names, ["Production Xostme V2"]);
+    // Back online, the edit goes out and reaches a.
+    std::fs::rename(dir.join("server.away"), &server).unwrap();
+    let (_, failed) = sync_vaults(&b, None).await;
+    assert!(failed.is_empty());
+    assert_eq!(b.lock().await.sync_statuses().await[0].pending, 0);
+    let (changed, _) = sync_vaults(&a, None).await;
+    assert_eq!(changed, vec![vault.id.clone()]);
+    assert_eq!(a.lock().await.read_secret(&vault.id, &two).await.unwrap().expose_secret(), b"two");
+
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// With a device unlock method on, the vault opens by that method's key

@@ -608,8 +608,40 @@ pub async fn vault_sync(
     vault_id: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let mut manager = state.vault_manager.lock().await;
-    manager.sync_vault(&vault_id).await.map_err(|e| e.to_string())
+    // Not under the manager's lock: the backend may take a while.
+    let (_, failed) = crate::vault::manager::sync_vaults(&state.vault_manager, Some(&vault_id)).await;
+    match failed.into_iter().next() {
+        Some((_, e)) => Err(e.to_string()),
+        None => Ok(()),
+    }
+}
+
+/// Every synced vault with how its sync stands.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn vault_sync_status(state: State<'_, AppState>) -> Result<Vec<crate::vault::SyncStatus>, String> {
+    Ok(state.vault_manager.lock().await.sync_statuses().await)
+}
+
+/// Move a vault on Turso's old format to sealed records. Older Reach
+/// versions cannot read it afterwards; the interface asks first.
+#[tauri::command(rename_all = "snake_case")]
+#[tracing::instrument(skip(state))]
+pub async fn vault_sync_upgrade(vault_id: String, state: State<'_, AppState>) -> Result<(), String> {
+    crate::vault::manager::upgrade_sync_format(&state.vault_manager, &vault_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Forget the count of conflict copies once the user has looked at them.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn vault_sync_clear_conflicts(vault_id: String, state: State<'_, AppState>) -> Result<(), String> {
+    state
+        .vault_manager
+        .lock()
+        .await
+        .clear_sync_conflicts(&vault_id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 // ==================== SECRETS ====================
