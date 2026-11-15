@@ -101,6 +101,24 @@ with `npx tauri ios dev --open` and press Run in Xcode.
 The first time, iOS refuses to open an app from a free account: Settings ›
 General › VPN & Device Management › your Apple ID › Trust.
 
+### Unsigned, for LiveContainer
+
+LiveContainer runs an unsigned app and signs it with its own certificate, so
+no Apple account is needed:
+
+```sh
+npx tauri ios build --no-sign --target aarch64
+```
+
+writes `src-tauri/gen/apple/build/arm64/Reach.ipa`; import it in LiveContainer.
+Inside LiveContainer the local network permission and the keychain are
+LiveContainer's own.
+
+Without a Mac: the **iOS build** workflow (`.github/workflows/ios-build.yml`)
+builds the same unsigned IPA on a GitHub macOS runner. Run it from the Actions
+tab, or it runs on every pull request; the IPA is the run's
+`Reach-ios-unsigned` artifact (a zip holding the `.ipa`).
+
 ## Bundle identifier
 
 `src-tauri/tauri.ios.conf.json` sets `io.github.rsipka.reach`. Apple makes
