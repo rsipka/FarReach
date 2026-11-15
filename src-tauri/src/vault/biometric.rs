@@ -50,7 +50,7 @@ pub const FIDO2: &str = "fido2";
 pub const ANDROID_KEY_ALIAS: &str = "reach-vault-fingerprint";
 
 /// The keychain service Touch ID's sealing keys live under, one per seal.
-const TOUCH_ID_SERVICE: &str = "reach-vault-touch-id";
+const TOUCH_ID_SERVICE: &str = "farreach-vault-touch-id";
 
 /// The platform biometric this build offers, if any.
 pub fn platform_method() -> Option<&'static str> {
@@ -401,7 +401,7 @@ mod hello {
     };
     use zeroize::Zeroizing;
 
-    const CREDENTIAL_NAME: &str = "Reach vault";
+    const CREDENTIAL_NAME: &str = "FarReach vault";
 
     pub fn available() -> bool {
         KeyCredentialManager::IsSupportedAsync()

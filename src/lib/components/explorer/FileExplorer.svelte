@@ -202,7 +202,7 @@
 			const base = await tempDir();
 			// Its own folder, because the copy must keep the file's real name
 			// and two remote files can share one.
-			const localPath = await join(base, 'reach-drag', key, safeLocalName(entry.name));
+			const localPath = await join(base, 'farreach-drag', key, safeLocalName(entry.name));
 			const done = await runTransfer({
 				kind: 'downloading',
 				connectionId: conn,
