@@ -370,6 +370,10 @@ kube = { version = "4.2", default-features = false, features = ["webpki-roots"] 
 [target.'cfg(target_os = "ios")'.dependencies]
 apple-native-keyring-store = { version = "1", features = ["protected"] }
 webpki-root-certs = "1"
+# zlib compiled in. Rust builds a static library on iOS that Xcode links, and
+# the system libz the crate otherwise asks for is not passed on to Xcode, so
+# the app failed to link (_deflate, _inflate undefined). Same version as flate2's.
+libz-sys = { version = "1", features = ["static"] }
 
 # libsql with its double close of a local connection fixed; see the header of
 # vendor/libsql/Cargo.toml.
