@@ -7,6 +7,7 @@
 	import CommunityPrompt from '#lib/components/shared/CommunityPrompt.svelte';
 	import LockScreen from '#lib/components/shared/LockScreen.svelte';
 	import CommandPalette from '#lib/components/shared/CommandPalette.svelte';
+	import AppContextMenu from '#lib/components/shared/AppContextMenu.svelte';
 	import AskHost from '#lib/components/shared/AskHost.svelte';
 	import PasswordPrompt from '#lib/components/shared/PasswordPrompt.svelte';
 	import { applyUiZoom } from '#lib/state/ui-zoom.js';
@@ -141,6 +142,9 @@
 		}
 	});
 </script>
+
+<!-- Every right-click the app has no menu for: never the webview's own. -->
+<AppContextMenu />
 
 {#if isEditorWindow}
 	{@render children()}

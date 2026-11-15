@@ -1224,8 +1224,7 @@
 	</div>
 {/snippet}
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="session-list" oncontextmenu={(e) => e.preventDefault()}>
+<div class="session-list">
 	{#if !hasIdentity}
 		<!-- First run: Initialize identity (TLS-style, no password) -->
 		<div class="init-section">
