@@ -1,0 +1,65 @@
+name: iOS build
+
+# An unsigned iOS build (.ipa) of Reach, for running inside LiveContainer or
+# signing yourself (Sideloadly, AltStore and the like). Nothing is signed and
+# no Apple account is needed; see src-tauri/ios/README.md.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_PROFILE_DEV_DEBUG: 0
+
+jobs:
+  ipa:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Rust
+        # The same fixed Rust as build-check.yml and release.yml.
+        uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ios
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          # tauri ios init generates the Xcode project with XcodeGen.
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+
+      - name: Generate the Xcode project
+        run: ./scripts/ios-init.sh
+
+      - name: Build the unsigned IPA
+        run: npx tauri ios build --no-sign --target aarch64
+
+      - name: Upload the IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Reach-ios-unsigned
+          path: src-tauri/gen/apple/build/arm64/*.ipa
+          if-no-files-found: error
+          retention-days: 14

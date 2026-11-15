@@ -36,11 +36,17 @@ export function isWindows(): boolean {
 }
 
 /**
- * True on a phone or tablet (Android today). The system manages windows
- * there, and there is no hardware keyboard to count on: desktop chrome goes,
- * and the terminal and remote desktop get an extra-keys bar. Android's
- * WebView always names Android in its user agent.
+ * True on a phone or tablet (Android, iPhone, iPad). The system manages
+ * windows there, and there is no hardware keyboard to count on: desktop
+ * chrome goes, and the terminal and remote desktop get an extra-keys bar.
+ * Android's WebView always names Android in its user agent, and an iPhone's
+ * names iPhone. An iPad's does not: since iPadOS 13 its WKWebView asks for
+ * desktop pages and says "Macintosh", like a Mac. It is told apart by its
+ * touch screen, which no Mac has.
  */
 export function isMobile(): boolean {
-	return typeof navigator !== 'undefined' && /Android|iPhone|iPad/i.test(navigator.userAgent);
+	if (typeof navigator === 'undefined') return false;
+	const ua = navigator.userAgent;
+	if (/Android|iPhone|iPad|iPod/i.test(ua)) return true;
+	return /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
 }

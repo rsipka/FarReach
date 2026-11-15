@@ -260,6 +260,35 @@ fn purge_logs_with_secrets(dir: &std::path::Path) {
     }
 }
 
+/// iOS keeps its trusted certificate authorities in the keychain, where
+/// rustls-native-certs (RDP's TLS upgrade, the database drivers) does not
+/// look: on iOS it reads files only, finds none, and every connection that
+/// asks for the platform's roots fails with "no usable roots". It honours
+/// SSL_CERT_FILE, so write Mozilla's roots to one in the app's own temporary
+/// folder and point it there. Android's equivalent is SSL_CERT_DIR in run().
+#[cfg(target_os = "ios")]
+fn ios_cert_file() {
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+    if std::env::var_os("SSL_CERT_FILE").is_some() {
+        return;
+    }
+    let mut pem = String::new();
+    for cert in webpki_root_certs::TLS_SERVER_ROOT_CERTS {
+        pem.push_str("-----BEGIN CERTIFICATE-----\n");
+        let b64 = BASE64.encode(cert.as_ref());
+        for line in b64.as_bytes().chunks(64) {
+            pem.push_str(std::str::from_utf8(line).unwrap_or_default());
+            pem.push('\n');
+        }
+        pem.push_str("-----END CERTIFICATE-----\n");
+    }
+    let path = std::env::temp_dir().join("reach-roots.pem");
+    match std::fs::write(&path, pem) {
+        Ok(()) => std::env::set_var("SSL_CERT_FILE", &path),
+        Err(e) => tracing::warn!("Could not write the root certificates for TLS: {e}"),
+    }
+}
+
 /// Mobile platforms keep their own system log (logcat on Android).
 #[cfg(mobile)]
 fn log_file() -> Option<std::fs::File> {
@@ -303,6 +332,9 @@ pub fn run() {
             tracing::info!("Trusted certificates from {}", dir);
         }
     }
+
+    #[cfg(target_os = "ios")]
+    ios_cert_file();
 
     tracing::info!("Starting Reach application");
 

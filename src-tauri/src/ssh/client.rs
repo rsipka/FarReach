@@ -3176,7 +3176,7 @@ async fn escape_command(line: &str, forwarder: Option<&Arc<crate::ssh::forwardin
 }
 
 /// LocalCommand, run on this machine with the user's shell; its output.
-#[cfg(not(target_os = "android"))]
+#[cfg(not(mobile))]
 fn run_local_command(cmd: &str) -> Result<String, String> {
     #[cfg(windows)]
     let out = {
@@ -3195,7 +3195,7 @@ fn run_local_command(cmd: &str) -> Result<String, String> {
     Ok(text)
 }
 
-#[cfg(target_os = "android")]
+#[cfg(mobile)]
 fn run_local_command(cmd: &str) -> Result<String, String> {
     Err(format!("A phone cannot run \"{cmd}\""))
 }

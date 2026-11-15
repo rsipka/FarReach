@@ -4793,6 +4793,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85bc9657773828b90eeb625adff10eeac83cc21bbfd8e23a03eaa8a33c9e28d9"
 dependencies = [
  "cc",
+ "libc",
  "pkg-config",
  "vcpkg",
 ]
@@ -7163,6 +7164,7 @@ dependencies = [
  "libc",
  "libloading 0.8.9",
  "libsql",
+ "libz-sys",
  "linux-keyutils-keyring-store",
  "log",
  "memsec",
