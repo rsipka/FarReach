@@ -170,6 +170,22 @@ async fn both_edited_the_newer_wins_and_the_other_is_kept_as_a_copy() {
 }
 
 #[tokio::test]
+async fn a_conflict_copy_survives_a_first_full_read() {
+    let w = world(false).await;
+    let a = device(&w, "a").await;
+    let b = device(&w, "b").await;
+    a.put("s1", "web from a").await;
+    b.put("s1", "web from b").await; // never synced, so b reads everything
+    a.later(5_000).await;
+    a.sync(&w).await;
+    assert_eq!(b.sync(&w).await.conflicts, 1);
+    let names = b.names().await;
+    assert_eq!(names.len(), 2, "{names:?}");
+    a.sync(&w).await;
+    assert_eq!(a.names().await, names);
+}
+
+#[tokio::test]
 async fn an_edit_beats_a_delete() {
     let w = world(false).await;
     let a = device(&w, "a").await;

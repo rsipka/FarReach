@@ -236,8 +236,11 @@ pub async fn merge(target: &Target, local: &Connection, incoming: Vec<Record>, f
     }
 
     if full {
+        // Read again: the conflict copies just made are changes of this
+        // device, not rows deleted elsewhere.
+        let dirty: HashSet<String> = sync_local::dirty(local).await?.into_iter().map(|d| d.id).collect();
         for row in sync_local::all_rows(local).await? {
-            if !seen.contains(&row.id) && !dirty.contains_key(&row.id) {
+            if !seen.contains(&row.id) && !dirty.contains(&row.id) {
                 sync_local::apply(local, &row.id, None).await?;
                 local.execute("DELETE FROM sync_known WHERE id = ?", [row.id.as_str()]).await?;
                 report.pulled += 1;
