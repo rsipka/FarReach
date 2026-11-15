@@ -23,6 +23,9 @@ All notable changes to FarReach are documented here. FarReach is a fork of [Reac
 ## Unreleased
 - **Right-click shows the app's menu, not the browser's** — Right-clicking where Reach had no menu of its own showed the webview's: Back, Reload and Inspect Element, and Reload closed every terminal, file list and tab. That menu no longer opens. Text fields and the SQL, YAML and file editors get Undo, Cut, Copy, Paste and Select all; selected text elsewhere gets Copy; empty space gets nothing. The menus for sessions, tabs, files, databases and containers, and the terminal's copy or paste on right-click, are unchanged. In a development build, Shift+right-click still opens the webview's menu for Inspect Element.
 
+## Unreleased
+- **The Sessions + menu shows in full** — In a narrow sidebar, the menu under the + button was cut off on the left, hiding the start of each item. It now opens over the window, lined up with the button and moved left only as far as it needs to fit.
+
 ## v0.9.1
 - **File explorer: Details view** — A new toolbar button shows each entry as a row of columns, as MobaXterm does: Name, Size, Modified, Owner, Group and Access. Click a heading to sort by it and again to reverse; folders stay on top. Right-click the headings to choose which columns show. A sidebar narrower than the columns scrolls sideways. The view, columns and sort order are remembered on each device. Servers whose `ls` cannot print exact times (BusyBox, BSD, macOS) leave Modified empty. Asked for on Discord.
 - **F5 no longer closes your sessions** — F5, Ctrl+R and Ctrl+F5 (Cmd+R on a Mac) reloaded the app's window and closed every terminal, file list and tab. The reload is stopped; the key still reaches the terminal, so F5 in Midnight Commander and Ctrl+R history search work as before. Reported on Discord.

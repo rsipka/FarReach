@@ -16,12 +16,15 @@ import { safeInsets } from '#lib/edges.js';
 export interface MenuPos {
 	x: number;
 	y: number;
+	/** `end` puts the menu's right edge at `x`, as a menu dropped from a
+	 *  button at the right of a narrow panel wants. Default `start`. */
+	align?: 'start' | 'end';
 }
 
 const MARGIN = 8;
 
 export function positionMenu(node: HTMLElement, pos: MenuPos) {
-	function place({ x, y }: MenuPos) {
+	function place({ x, y, align }: MenuPos) {
 		const w = node.offsetWidth;
 		const h = node.offsetHeight;
 		// The viewport less a phone's status bar, camera cutout and gesture bar.
@@ -33,7 +36,7 @@ export function positionMenu(node: HTMLElement, pos: MenuPos) {
 
 		// Horizontal: flip to the left of the cursor if opening right overflows,
 		// then clamp inside the viewport.
-		let left = x + w + MARGIN > vw ? x - w : x;
+		let left = align === 'end' ? x - w : x + w + MARGIN > vw ? x - w : x;
 		left = Math.min(Math.max(minX, left), Math.max(minX, vw - w - MARGIN));
 
 		// Vertical: flip above the cursor if opening down overflows, then clamp.

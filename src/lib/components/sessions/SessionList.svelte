@@ -110,6 +110,16 @@
 	// ---- The "+" menu -------------------------------------------------------
 	let showAddMenu = $state(false);
 	let addMenuEl = $state<HTMLDivElement | undefined>();
+	/** Where the menu drops from: the "+" button's bottom-right corner. The
+	 *  menu is `position: fixed` so the sidebar's `overflow: hidden` can't cut
+	 *  it off when it is wider than the panel. */
+	let addMenuAnchor = $state({ x: 0, y: 0 });
+
+	function toggleAddMenu(e: MouseEvent): void {
+		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		addMenuAnchor = { x: rect.right, y: rect.bottom + 4 };
+		showAddMenu = !showAddMenu;
+	}
 
 	$effect(() => {
 		if (!showAddMenu) return;
@@ -1312,12 +1322,12 @@
 					aria-expanded={showAddMenu}
 					title={t('session.add')}
 					aria-label={t('session.add')}
-					onclick={() => (showAddMenu = !showAddMenu)}
+					onclick={toggleAddMenu}
 				>
 					<FaIcon icon={faPlus} size={13} />
 				</button>
 				{#if showAddMenu}
-					<div class="add-menu pop-in" role="menu">
+					<div class="add-menu pop-in" role="menu" use:positionMenu={{ ...addMenuAnchor, align: 'end' }}>
 						<button class="menu-item" role="menuitem" onclick={() => fromMenu(handleNewSession)}>
 							<FaIcon icon={faServer} size={12} />
 							<span>{t('session.new_session')}</span>
@@ -1735,10 +1745,8 @@
 	}
 
 	.add-menu {
-		position: absolute;
-		right: 0;
-		top: calc(100% + 4px);
-		z-index: 30;
+		position: fixed;
+		z-index: 1000;
 		min-width: 200px;
 		/* Scrolls within a short window, as a phone on its side is. */
 		max-height: calc(100dvh - 120px);
