@@ -411,8 +411,6 @@ jobs:
   build-ios:
     needs: create-release
     runs-on: macos-latest
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.99.1
@@ -423,48 +421,21 @@ jobs:
           node-version: '22'
       - run: npm ci
 
-      - name: Initialize the Xcode project and export a signed IPA
-        env:
-          APPLE_DEVELOPMENT_TEAM: ${{ vars.APPLE_DEVELOPMENT_TEAM }}
-          IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
-          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-          IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
+      - name: Build an unsigned iOS IPA
         run: |
           set -euo pipefail
-          for credential in APPLE_DEVELOPMENT_TEAM IOS_CERTIFICATE IOS_CERTIFICATE_PASSWORD IOS_MOBILE_PROVISION; do
-            if [ -z "${!credential}" ]; then
-              echo "::error::Configure $credential before releasing iOS."
-              exit 1
-            fi
-          done
           VERSION="${GITHUB_REF_NAME#v}"
           BUILD_NUMBER="$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT"
           ./scripts/ios-init.sh
-          npx tauri ios build --ci --target aarch64 --export-method app-store-connect \
+          npx tauri ios build --ci --target aarch64 --no-sign \
             --config "{\"version\":\"${VERSION%-dev.*}\",\"bundle\":{\"iOS\":{\"bundleVersion\":\"$BUILD_NUMBER\"}}}"
           ipa=$(find src-tauri/gen/apple/build -type f -name '*.ipa' -print)
           test -f "$ipa"
-          cp "$ipa" "$RUNNER_TEMP/FarReach.ipa"
+          unzip -tq "$ipa"
+          mkdir -p dist-ios
+          cp "$ipa" "dist-ios/FarReach_${VERSION}_ios_arm64_unsigned.ipa"
 
-      - name: Upload the IPA to TestFlight
+      - name: Upload IPA to release
         env:
-          APP_STORE_CONNECT_KEY_ID: ${{ vars.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ vars.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
-        run: |
-          set -euo pipefail
-          for credential in APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY; do
-            if [ -z "${!credential}" ]; then
-              echo "::error::Configure $credential before uploading to TestFlight."
-              exit 1
-            fi
-          done
-          umask 077
-          key_dir="$RUNNER_TEMP/app-store-connect"
-          mkdir -p "$key_dir"
-          key_path="$key_dir/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
-          trap 'rm -f "$key_path"' EXIT
-          printf '%s\n' "$APP_STORE_CONNECT_KEY" > "$key_path"
-          API_PRIVATE_KEYS_DIR="$key_dir" xcrun altool --upload-app --type ios \
-            --file "$RUNNER_TEMP/FarReach.ipa" --apiKey "$APP_STORE_CONNECT_KEY_ID" \
-            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist-ios/*.ipa --clobber
