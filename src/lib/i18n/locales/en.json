@@ -2676,7 +2676,7 @@
   "sync.upgrading": "Upgrading…",
   "sync.upgraded_toast": "Vault moved to the sealed format",
   "sync.backend_title": "Sync to your own storage",
-  "sync.backend_desc": "Keep your personal data (sessions, credentials, settings) in a folder, on an SFTP server or in a Git repository. It is encrypted on this device before it leaves, names included. Shared vaults stay on Turso.",
+  "sync.backend_desc": "Keep your personal data (sessions, credentials, settings) in a folder, on an SMB share or SFTP server, or in a Git repository. It is encrypted on this device before it leaves, names included. Shared vaults stay on Turso.",
   "sync.backend_active": "Your personal data syncs to: {{where}}",
   "sync.backend_kind": "Where",
   "sync.kind_folder": "Folder (this disk, a network share or a UNC path)",
@@ -2707,5 +2707,11 @@
   "sync.use_backend": "Use for sync",
   "sync.switching": "Switching…",
   "sync.backend_switched_toast": "Sync location changed",
-  "sync.backend_note": "Choosing a location here replaces Turso for your personal data. Other devices follow once you choose the same location on them."
+  "sync.backend_note": "Choosing a location here replaces Turso for your personal data. Other devices follow once you choose the same location on them.",
+  "sync.kind_smb": "SMB share (Windows file sharing, NAS)",
+  "sync.smb_server": "Server",
+  "sync.smb_share": "Share",
+  "sync.smb_folder": "Folder in the share (optional)",
+  "sync.smb_user": "User name",
+  "sync.smb_hint": "Reach connects to the share itself, so it does not need to be mounted or mapped to a drive letter. The folder must exist."
 }

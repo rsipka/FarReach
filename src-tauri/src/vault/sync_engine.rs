@@ -36,7 +36,7 @@ use crate::vault::error::VaultError;
 use crate::vault::sync::{create_replica, SyncConfig};
 use crate::vault::sync_local::{self, Dirty, Row};
 use crate::vault::sync_record::{Record, RecordKey};
-use crate::vault::sync_store::{GitTarget, SftpTarget, Store};
+use crate::vault::sync_store::{GitTarget, SftpTarget, SmbTarget, Store};
 use crate::vault::types::{Dek, EncryptedPayload, WrappedDek};
 
 /// How long one sync of one vault may take in all.
@@ -72,6 +72,8 @@ pub enum Backend {
     /// A folder: on this disk, a mounted share, a UNC path.
     Folder { path: PathBuf },
     Sftp(SftpTarget),
+    /// An SMB share, reached by Reach's own client.
+    Smb(SmbTarget),
     Git(GitTarget),
 }
 
@@ -93,6 +95,8 @@ impl Backend {
     /// - `sftp://user@host[:port]/path?hostkey=SHA256:…`, where `/~/path` is
     ///   under the login folder, with a token of JSON `{password, key,
     ///   passphrase}` (or just the password);
+    /// - `smb://[domain;]user@server[:port]/share/folder`, with the password
+    ///   as token;
     /// - `git:<remote>[#branch]`, with an optional token for https;
     /// - anything else is a Turso URL.
     pub fn parse(url: &str, token: &str, app_dir: &Path) -> Result<Backend, VaultError> {
@@ -133,6 +137,30 @@ impl Backend {
                 passphrase: secret.passphrase,
             }));
         }
+        if url.len() >= 6 && url[..6].eq_ignore_ascii_case("smb://") {
+            let parsed = url::Url::parse(url).map_err(|e| VaultError::SyncError(format!("SMB address: {e}")))?;
+            let server = parsed.host_str().filter(|h| !h.is_empty()).ok_or_else(|| VaultError::SyncError("SMB address has no server".into()))?;
+            let raw_user = percent(parsed.username());
+            let user = match raw_user.split_once(';') {
+                Some((domain, user)) => format!("{domain}\\{user}"),
+                None => raw_user,
+            };
+            if user.is_empty() {
+                return Err(VaultError::SyncError("SMB address has no user name".into()));
+            }
+            let path = percent(parsed.path());
+            let mut parts = path.split('/').filter(|p| !p.is_empty());
+            let share = parts.next().ok_or_else(|| VaultError::SyncError("SMB address names no share".into()))?.to_string();
+            let folder = parts.collect::<Vec<_>>().join("\\");
+            return Ok(Backend::Smb(SmbTarget {
+                server: server.trim_start_matches('[').trim_end_matches(']').to_string(),
+                port: parsed.port().unwrap_or(445),
+                share,
+                path: folder,
+                user,
+                password: token.to_string(),
+            }));
+        }
         if let Some(rest) = url.strip_prefix("git:") {
             let (remote, branch) = match rest.rsplit_once('#') {
                 Some((r, b)) if !b.trim().is_empty() => (r.trim(), b.trim()),
@@ -170,6 +198,7 @@ impl Backend {
             Backend::Turso { .. } => "turso",
             Backend::Folder { .. } => "folder",
             Backend::Sftp(_) => "sftp",
+            Backend::Smb(_) => "smb",
             Backend::Git(_) => "git",
         }
     }
@@ -189,6 +218,7 @@ impl Backend {
             }
             Backend::Folder { path } => format!("folder:{}", path.display()),
             Backend::Sftp(t) => format!("sftp:{}@{}:{}/{}", t.user, t.host.to_ascii_lowercase(), t.port, t.path),
+            Backend::Smb(t) => format!("smb:{}@{}:{}/{}/{}", t.user.to_ascii_lowercase(), t.server.to_ascii_lowercase(), t.port, t.share.to_ascii_lowercase(), t.path.to_ascii_lowercase()),
             Backend::Git(t) => format!("git:{}#{}", t.remote, t.branch),
         }
     }
@@ -199,6 +229,7 @@ impl Backend {
             Backend::Turso { .. } => return Ok(None),
             Backend::Folder { path } => Store::folder(path).await?,
             Backend::Sftp(t) => Store::sftp(t).await?,
+            Backend::Smb(t) => Store::smb(t).await?,
             Backend::Git(t) => Store::git(t).await?,
         }))
     }

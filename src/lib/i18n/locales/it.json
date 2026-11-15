@@ -2707,5 +2707,11 @@
   "sync.use_backend": "Usa per la sincronizzazione",
   "sync.switching": "Cambio in corso…",
   "sync.backend_switched_toast": "Posizione di sincronizzazione cambiata",
-  "sync.backend_note": "Scegliere una posizione qui sostituisce Turso per i tuoi dati personali. Gli altri dispositivi seguono quando scegli la stessa posizione su di essi."
+  "sync.backend_note": "Scegliere una posizione qui sostituisce Turso per i tuoi dati personali. Gli altri dispositivi seguono quando scegli la stessa posizione su di essi.",
+  "sync.kind_smb": "Condivisione SMB (condivisione file di Windows, NAS)",
+  "sync.smb_server": "Server",
+  "sync.smb_share": "Condivisione",
+  "sync.smb_folder": "Cartella nella condivisione (facoltativa)",
+  "sync.smb_user": "Nome utente",
+  "sync.smb_hint": "Reach si connette da solo alla condivisione, quindi non serve montarla né assegnarle una lettera di unità. La cartella deve esistere."
 }

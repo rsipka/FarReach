@@ -6,7 +6,7 @@
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 
-	type Kind = 'folder' | 'sftp' | 'git';
+	type Kind = 'folder' | 'smb' | 'sftp' | 'git';
 
 	let kind = $state<Kind>('folder');
 	let folderPath = $state('');
@@ -19,6 +19,12 @@
 	let sftpKey = $state('');
 	let sftpPassphrase = $state('');
 	let sftpHostKey = $state('');
+	let smbServer = $state('');
+	let smbPort = $state('445');
+	let smbShare = $state('');
+	let smbFolder = $state('');
+	let smbUser = $state('');
+	let smbPassword = $state('');
 	let gitRemote = $state('');
 	let gitBranch = $state('reach-vault');
 	let gitToken = $state('');
@@ -66,6 +72,20 @@
 			} catch {
 				// Leave the form empty.
 			}
+		} else if (url.toLowerCase().startsWith('smb://')) {
+			try {
+				const u = new URL(url);
+				kind = 'smb';
+				smbServer = u.hostname.replace(/^\[|\]$/g, '');
+				smbPort = u.port || '445';
+				smbUser = decodeURIComponent(u.username).replace(';', '\\');
+				const parts = decodeURIComponent(u.pathname).split('/').filter(Boolean);
+				smbShare = parts[0] ?? '';
+				smbFolder = parts.slice(1).join('/');
+				smbPassword = token;
+			} catch {
+				// Leave the form empty.
+			}
 		} else if (url.startsWith('git:')) {
 			kind = 'git';
 			const rest = url.slice('git:'.length);
@@ -81,6 +101,29 @@
 		if (kind === 'folder') {
 			const path = folderPath.trim();
 			return path ? { url: `folder:${path}`, token: '' } : null;
+		}
+		if (kind === 'smb') {
+			const server = smbServer.trim();
+			const share = smbShare.trim().replace(/^[\\/]+|[\\/]+$/g, '');
+			const user = smbUser.trim();
+			if (!server || !share || !user) return null;
+			const hostPart = server.includes(':') ? `[${server}]` : server;
+			// DOMAIN\user is written DOMAIN;user in the address.
+			const userPart = user
+				.split('\\')
+				.map(encodeURIComponent)
+				.join(';');
+			const folder = smbFolder
+				.trim()
+				.split(/[\\/]/)
+				.filter(Boolean)
+				.map(encodeURIComponent)
+				.join('/');
+			const port = Number(smbPort) || 445;
+			return {
+				url: `smb://${userPart}@${hostPart}:${port}/${encodeURIComponent(share)}${folder ? '/' + folder : ''}`,
+				token: smbPassword
+			};
 		}
 		if (kind === 'sftp') {
 			const host = sftpHost.trim();
@@ -154,6 +197,14 @@
 	function describe(url: string): string {
 		if (url.startsWith('folder:')) return url.slice('folder:'.length);
 		if (url.startsWith('git:')) return url.slice('git:'.length);
+		if (url.toLowerCase().startsWith('smb://')) {
+			try {
+				const u = new URL(url);
+				return `\\\\${u.hostname}${decodeURIComponent(u.pathname).replace(/\//g, '\\')}`;
+			} catch {
+				return url;
+			}
+		}
 		return url.split('?')[0];
 	}
 </script>
@@ -176,6 +227,7 @@
 			disabled={busy !== null}
 		>
 			<option value="folder">{t('sync.kind_folder')}</option>
+			<option value="smb">{t('sync.kind_smb')}</option>
 			<option value="sftp">{t('sync.kind_sftp')}</option>
 			<option value="git">{t('sync.kind_git')}</option>
 		</select>
@@ -191,6 +243,24 @@
 			/>
 		</div>
 		<p class="section-desc">{t('sync.folder_hint')}</p>
+	{:else if kind === 'smb'}
+		<div class="row">
+			<div class="grow"><Input label={t('sync.smb_server')} placeholder="nas.local" bind:value={smbServer} oninput={changed} /></div>
+			<div class="port"><Input label={t('sync.sftp_port')} placeholder="445" bind:value={smbPort} oninput={changed} /></div>
+		</div>
+		<div class="form-field">
+			<Input label={t('sync.smb_share')} placeholder="backup" bind:value={smbShare} oninput={changed} />
+		</div>
+		<div class="form-field">
+			<Input label={t('sync.smb_folder')} placeholder="reach" bind:value={smbFolder} oninput={changed} />
+		</div>
+		<div class="form-field">
+			<Input label={t('sync.smb_user')} placeholder="DOMAIN\user" bind:value={smbUser} oninput={changed} />
+		</div>
+		<div class="form-field">
+			<Input label={t('sync.sftp_auth_password')} type="password" bind:value={smbPassword} oninput={changed} />
+		</div>
+		<p class="section-desc">{t('sync.smb_hint')}</p>
 	{:else if kind === 'sftp'}
 		<div class="row">
 			<div class="grow"><Input label={t('sync.sftp_host')} placeholder="files.example.com" bind:value={sftpHost} oninput={changed} /></div>

@@ -2707,5 +2707,11 @@
   "sync.use_backend": "Utiliser pour la synchronisation",
   "sync.switching": "Changement…",
   "sync.backend_switched_toast": "Emplacement de synchronisation modifié",
-  "sync.backend_note": "Choisir un emplacement ici remplace Turso pour vos données personnelles. Les autres appareils suivent dès que vous y choisissez le même emplacement."
+  "sync.backend_note": "Choisir un emplacement ici remplace Turso pour vos données personnelles. Les autres appareils suivent dès que vous y choisissez le même emplacement.",
+  "sync.kind_smb": "Partage SMB (partage de fichiers Windows, NAS)",
+  "sync.smb_server": "Serveur",
+  "sync.smb_share": "Partage",
+  "sync.smb_folder": "Dossier dans le partage (facultatif)",
+  "sync.smb_user": "Nom d'utilisateur",
+  "sync.smb_hint": "Reach se connecte lui-même au partage : inutile de le monter ou de lui attribuer une lettre de lecteur. Le dossier doit exister."
 }

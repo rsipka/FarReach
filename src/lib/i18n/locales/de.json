@@ -2707,5 +2707,11 @@
   "sync.use_backend": "Für Synchronisierung verwenden",
   "sync.switching": "Wechsle…",
   "sync.backend_switched_toast": "Synchronisierungsort geändert",
-  "sync.backend_note": "Ein hier gewählter Ort ersetzt Turso für Ihre persönlichen Daten. Andere Geräte folgen, sobald Sie dort denselben Ort wählen."
+  "sync.backend_note": "Ein hier gewählter Ort ersetzt Turso für Ihre persönlichen Daten. Andere Geräte folgen, sobald Sie dort denselben Ort wählen.",
+  "sync.kind_smb": "SMB-Freigabe (Windows-Dateifreigabe, NAS)",
+  "sync.smb_server": "Server",
+  "sync.smb_share": "Freigabe",
+  "sync.smb_folder": "Ordner in der Freigabe (optional)",
+  "sync.smb_user": "Benutzername",
+  "sync.smb_hint": "Reach verbindet sich selbst mit der Freigabe, sie muss also weder eingebunden noch als Laufwerk verbunden sein. Der Ordner muss existieren."
 }

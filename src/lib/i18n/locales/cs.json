@@ -2676,7 +2676,7 @@
   "sync.upgrading": "Převádím…",
   "sync.upgraded_toast": "Trezor převeden do zapečetěného formátu",
   "sync.backend_title": "Synchronizace do vlastního úložiště",
-  "sync.backend_desc": "Uložte osobní data (relace, přihlašovací údaje, nastavení) do složky, na SFTP server nebo do Git repozitáře. Před odesláním se v tomto zařízení zašifrují, včetně názvů. Sdílené trezory zůstávají v Turso.",
+  "sync.backend_desc": "Uložte osobní data (relace, přihlašovací údaje, nastavení) do složky, na sdílenou složku SMB, SFTP server nebo do Git repozitáře. Před odesláním se v tomto zařízení zašifrují, včetně názvů. Sdílené trezory zůstávají v Turso.",
   "sync.backend_active": "Osobní data se synchronizují do: {{where}}",
   "sync.backend_kind": "Kam",
   "sync.kind_folder": "Složka (tento disk, síťová sdílená složka nebo cesta UNC)",
@@ -2707,5 +2707,11 @@
   "sync.use_backend": "Použít pro synchronizaci",
   "sync.switching": "Přepínám…",
   "sync.backend_switched_toast": "Umístění synchronizace změněno",
-  "sync.backend_note": "Výběrem umístění zde nahradíte Turso pro osobní data. Ostatní zařízení se připojí, jakmile na nich zvolíte stejné umístění."
+  "sync.backend_note": "Výběrem umístění zde nahradíte Turso pro osobní data. Ostatní zařízení se připojí, jakmile na nich zvolíte stejné umístění.",
+  "sync.kind_smb": "Sdílená složka SMB (sdílení souborů Windows, NAS)",
+  "sync.smb_server": "Server",
+  "sync.smb_share": "Sdílená složka",
+  "sync.smb_folder": "Složka ve sdílené složce (nepovinné)",
+  "sync.smb_user": "Uživatelské jméno",
+  "sync.smb_hint": "Reach se ke sdílené složce připojí sám, takže ji není nutné připojovat ani mapovat jako jednotku. Složka musí existovat."
 }

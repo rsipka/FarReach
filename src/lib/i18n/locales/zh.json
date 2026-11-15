@@ -2707,5 +2707,11 @@
   "sync.use_backend": "用于同步",
   "sync.switching": "正在切换…",
   "sync.backend_switched_toast": "同步位置已更改",
-  "sync.backend_note": "在此选择位置后，个人数据将不再使用 Turso。在其他设备上选择相同位置后，它们也会跟上。"
+  "sync.backend_note": "在此选择位置后，个人数据将不再使用 Turso。在其他设备上选择相同位置后，它们也会跟上。",
+  "sync.kind_smb": "SMB 共享（Windows 文件共享、NAS）",
+  "sync.smb_server": "服务器",
+  "sync.smb_share": "共享名",
+  "sync.smb_folder": "共享中的文件夹（可选）",
+  "sync.smb_user": "用户名",
+  "sync.smb_hint": "Reach 会自行连接共享，无需挂载或映射为驱动器号。文件夹必须已存在。"
 }

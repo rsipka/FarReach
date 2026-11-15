@@ -5,7 +5,7 @@ description: "How Reach keeps every vault on your device, syncs changes with its
 
 Every vault lives in a file on your device, whether it syncs or not. Reach reads and writes that file, so your sessions open at once and you can add or edit them offline. A synced vault exchanges its changes with its backend in the background: when it unlocks, a few seconds after each change, and every minute.
 
-Your personal data can sync to Turso or to storage of your own: a folder or network share, an SFTP server or a Git repository (see [Sync to Your Own Storage](/sync/own-storage/)). Shared vaults sync through Turso.
+Your personal data can sync to Turso or to storage of your own: a folder, an SMB share, an SFTP server or a Git repository (see [Sync to Your Own Storage](/sync/own-storage/)). Shared vaults sync through Turso.
 
 ## What the backend sees
 

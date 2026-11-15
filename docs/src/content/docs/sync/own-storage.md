@@ -1,11 +1,12 @@
 ---
 title: "Sync to Your Own Storage"
-description: "Sync your personal data through a folder, a network share, an SFTP server or a Git repository instead of Turso."
+description: "Sync your personal data through a folder, an SMB share, an SFTP server or a Git repository instead of Turso."
 ---
 
 Your personal data (sessions, saved credentials, folders, settings) can sync through storage you already have, with no Turso account:
 
 - **Folder**: a folder on this computer, a mounted network share (SMB/NFS), a UNC path such as `\\nas\share\reach`, or a folder that a sync client such as Syncthing or Nextcloud keeps in step.
+- **SMB share**: a Windows file share or a NAS, reached by Reach itself, with no need to mount it or map a drive letter.
 - **SFTP server**: any server you can log in to with a password or a private key.
 - **Git repository**: any repository you can push to, through the `git` command.
 
@@ -31,6 +32,10 @@ Conflicts are handled as for Turso: item by item, the newer change wins, and a l
 ### Folder
 
 The folder must exist. If a network share is not connected, Reach reports that and waits; it never creates an empty folder in its place. Two devices writing at once are kept apart by a short-lived lock file, `reach-vault.reach.lock`, next to the vault file.
+
+### SMB share
+
+Give the server, the share and optionally a folder in it, with your user name (`DOMAIN\user` for a domain account) and password. Reach speaks SMB 2 and 3 itself (and encrypts the connection when the share asks for it), so this works the same on Windows, macOS, Linux and Android. The folder must exist. On Windows you can also use the **Folder** option with a UNC path, which logs in as you.
 
 ### SFTP
 

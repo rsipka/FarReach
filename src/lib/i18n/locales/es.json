@@ -2707,5 +2707,11 @@
   "sync.use_backend": "Usar para sincronizar",
   "sync.switching": "Cambiando…",
   "sync.backend_switched_toast": "Ubicación de sincronización cambiada",
-  "sync.backend_note": "Elegir una ubicación aquí sustituye a Turso para tus datos personales. Los demás dispositivos te siguen cuando eliges la misma ubicación en ellos."
+  "sync.backend_note": "Elegir una ubicación aquí sustituye a Turso para tus datos personales. Los demás dispositivos te siguen cuando eliges la misma ubicación en ellos.",
+  "sync.kind_smb": "Recurso compartido SMB (uso compartido de Windows, NAS)",
+  "sync.smb_server": "Servidor",
+  "sync.smb_share": "Recurso compartido",
+  "sync.smb_folder": "Carpeta en el recurso (opcional)",
+  "sync.smb_user": "Nombre de usuario",
+  "sync.smb_hint": "Reach se conecta al recurso por sí mismo, así que no hace falta montarlo ni asignarle una letra de unidad. La carpeta debe existir."
 }

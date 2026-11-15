@@ -483,6 +483,11 @@ fn backends_are_read_from_their_urls() {
     assert_eq!((t.port, t.path.as_str(), t.password.as_deref()), (22, "/srv/reach", Some("pw")));
     assert!(!b.identity().contains("pw"));
 
+    let Backend::Smb(t) = Backend::parse("smb://CORP;me@nas.local/Team%20Share/reach/vault", "pw", app).unwrap() else { panic!() };
+    assert_eq!((t.user.as_str(), t.server.as_str(), t.port), ("CORP\\me", "nas.local", 445));
+    assert_eq!((t.share.as_str(), t.path.as_str(), t.password.as_str()), ("Team Share", "reach\\vault", "pw"));
+    assert!(Backend::parse("smb://me@nas", "pw", app).is_err(), "no share");
+
     let Backend::Git(g) = Backend::parse("git:git@github.com:me/vault.git", "", app).unwrap() else { panic!() };
     assert_eq!((g.remote.as_str(), g.branch.as_str()), ("git@github.com:me/vault.git", DEFAULT_GIT_BRANCH));
     let Backend::Git(g) = Backend::parse("git:https://example.com/r.git#mine", "tok", app).unwrap() else { panic!() };

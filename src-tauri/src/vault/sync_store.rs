@@ -1,5 +1,6 @@
 //! Places that hold a vault as one file: a folder (on this disk, a mounted
-//! share or a UNC path), an SFTP server, or a Git repository.
+//! share or a UNC path), an SMB share reached directly, an SFTP server, or a
+//! Git repository.
 //!
 //! Each store gives the file with a revision, and takes a new one only if the
 //! revision is still the one read: two devices writing at once cannot both
@@ -59,6 +60,19 @@ pub struct SftpTarget {
     pub passphrase: Option<String>,
 }
 
+/// How to reach an SMB share, without mounting it.
+#[derive(Clone)]
+pub struct SmbTarget {
+    pub server: String,
+    pub port: u16,
+    pub share: String,
+    /// The folder in the share, `\`-separated, empty for its root.
+    pub path: String,
+    /// `user`, `DOMAIN\user` or `user@domain`.
+    pub user: String,
+    pub password: String,
+}
+
 /// How to reach a Git repository.
 #[derive(Clone)]
 pub struct GitTarget {
@@ -83,6 +97,10 @@ impl Store {
 
     pub async fn sftp(target: &SftpTarget) -> Result<Store, VaultError> {
         Ok(Store::Files(Files::Sftp(Box::new(bounded("The SFTP connection", SftpFiles::connect(target)).await?))))
+    }
+
+    pub async fn smb(target: &SmbTarget) -> Result<Store, VaultError> {
+        Ok(Store::Files(Files::Smb(Box::new(bounded("The SMB connection", SmbFiles::connect(target)).await?))))
     }
 
     pub async fn git(target: &GitTarget) -> Result<Store, VaultError> {
@@ -114,6 +132,7 @@ impl Store {
 pub enum Files {
     Local(PathBuf),
     Sftp(Box<SftpFiles>),
+    Smb(Box<SmbFiles>),
 }
 
 impl Files {
@@ -201,6 +220,7 @@ impl Files {
                 ))),
             },
             Files::Sftp(s) => s.check_dir().await,
+            Files::Smb(s) => s.check_dir().await,
         }
     }
 
@@ -212,6 +232,7 @@ impl Files {
                 Err(e) => Err(sync_error(format!("Could not read {}: {e}", dir.join(name).display()))),
             },
             Files::Sftp(s) => s.read(name).await,
+            Files::Smb(s) => s.read(name).await,
         }
     }
 
@@ -231,6 +252,7 @@ impl Files {
                 .map_err(|e| sync_error(format!("Could not write to the sync folder: {e}")))
             }
             Files::Sftp(s) => s.write(name, data).await,
+            Files::Smb(s) => s.write(name, data).await,
         }
     }
 
@@ -255,6 +277,7 @@ impl Files {
                 .map_err(|e| sync_error(format!("Could not write to the sync folder: {e}")))
             }
             Files::Sftp(s) => s.create_new(name, data).await,
+            Files::Smb(s) => s.create_new(name, data).await,
         }
     }
 
@@ -266,6 +289,7 @@ impl Files {
                 Err(e) => Err(sync_error(format!("Could not remove {name}: {e}"))),
             },
             Files::Sftp(s) => s.remove(name).await,
+            Files::Smb(s) => s.remove(name).await,
         }
     }
 
@@ -277,6 +301,7 @@ impl Files {
                 .await
                 .map_err(|e| sync_error(format!("Could not replace the vault file: {e}"))),
             Files::Sftp(s) => s.replace(from, to).await,
+            Files::Smb(s) => s.replace(from, to).await,
         }
     }
 }
@@ -465,6 +490,191 @@ impl SftpFiles {
         }
         self.sftp.rename(self.path(from), self.path(to)).await.map_err(|e| sftp_error("replacing the vault file", e))?;
         self.remove(&old).await
+    }
+}
+
+/// A folder on an SMB share, through Reach's own SMB client: no mount, and
+/// the same on every system.
+pub struct SmbFiles {
+    client: smb::Client,
+    root: smb::UncPath,
+    dir: String,
+}
+
+fn smb_error(what: &str, e: impl std::fmt::Display) -> VaultError {
+    sync_error(format!("SMB: {what}: {e}"))
+}
+
+/// The NT status an SMB error carries, if any.
+fn smb_status(e: &smb::Error) -> Option<u32> {
+    match e {
+        smb::Error::UnexpectedMessageStatus(s) | smb::Error::ReceivedErrorMessage(s, _) => Some(*s),
+        _ => None,
+    }
+}
+
+const STATUS_OBJECT_NAME_NOT_FOUND: u32 = 0xC000_0034;
+const STATUS_OBJECT_NAME_COLLISION: u32 = 0xC000_0035;
+const STATUS_OBJECT_PATH_NOT_FOUND: u32 = 0xC000_003A;
+
+fn smb_not_found(e: &smb::Error) -> bool {
+    matches!(smb_status(e), Some(STATUS_OBJECT_NAME_NOT_FOUND | STATUS_OBJECT_PATH_NOT_FOUND))
+}
+
+impl SmbFiles {
+    async fn connect(t: &SmbTarget) -> Result<SmbFiles, VaultError> {
+        use std::str::FromStr;
+        let config = smb::ClientConfig {
+            connection: smb::ConnectionConfig {
+                port: Some(t.port),
+                timeout: Some(STEP_TIMEOUT),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let client = smb::Client::new(config);
+        let root = smb::UncPath::from_str(&format!(r"\\{}\{}", t.server, t.share))
+            .map_err(|e| smb_error("the share's address", e))?;
+        client
+            .share_connect(&root, &t.user, t.password.clone())
+            .await
+            .map_err(|e| smb_error(&format!("could not connect to \\\\{}\\{}", t.server, t.share), e))?;
+        Ok(SmbFiles { client, root, dir: t.path.trim_matches('\\').to_string() })
+    }
+
+    fn path(&self, name: &str) -> smb::UncPath {
+        if self.dir.is_empty() {
+            self.root.clone().with_path(name)
+        } else {
+            self.root.clone().with_path(&format!("{}\\{}", self.dir, name))
+        }
+    }
+
+    async fn open(&self, path: &smb::UncPath, args: &smb::FileCreateArgs) -> Result<smb::Resource, smb::Error> {
+        self.client.create_file(path, args).await
+    }
+
+    async fn check_dir(&self) -> Result<(), VaultError> {
+        if self.dir.is_empty() {
+            return Ok(());
+        }
+        let path = self.root.clone().with_path(&self.dir);
+        let args = smb::FileCreateArgs::make_open_existing(smb::FileAccessMask::new().with_generic_read(true));
+        match self.open(&path, &args).await {
+            Ok(r) => {
+                let is_dir = r.is_dir();
+                if let Some(d) = r.as_dir() {
+                    let _ = d.close().await;
+                } else if let Some(f) = r.as_file() {
+                    let _ = f.close().await;
+                }
+                if is_dir {
+                    Ok(())
+                } else {
+                    Err(sync_error(format!("SMB: {} is not a folder", self.dir)))
+                }
+            }
+            Err(e) if smb_not_found(&e) => Err(sync_error(format!("SMB: the folder {} is not on the share", self.dir))),
+            Err(e) => Err(smb_error(&self.dir, e)),
+        }
+    }
+
+    async fn read(&self, name: &str) -> Result<Option<Vec<u8>>, VaultError> {
+        use smb::resource::{GetLen, ReadAt};
+        let args = smb::FileCreateArgs::make_open_existing(smb::FileAccessMask::new().with_generic_read(true));
+        let file = match self.open(&self.path(name), &args).await {
+            Ok(r) if r.is_file() => r.unwrap_file(),
+            Ok(_) => return Err(sync_error(format!("SMB: {name} is not a file"))),
+            Err(e) if smb_not_found(&e) => return Ok(None),
+            Err(e) => return Err(smb_error(&format!("reading {name}"), e)),
+        };
+        let result = async {
+            let len = file.get_len().await? as usize;
+            let mut data = vec![0u8; len];
+            let mut at = 0;
+            while at < len {
+                let n = file.read_at(&mut data[at..], at as u64).await?;
+                if n == 0 {
+                    break;
+                }
+                at += n;
+            }
+            data.truncate(at);
+            Ok::<_, smb::Error>(data)
+        }
+        .await;
+        let _ = file.close().await;
+        result.map(Some).map_err(|e| smb_error(&format!("reading {name}"), e))
+    }
+
+    async fn write_all(file: &smb::File, data: &[u8]) -> Result<(), smb::Error> {
+        use smb::resource::WriteAt;
+        let mut at = 0;
+        while at < data.len() {
+            let n = file.write_at(&data[at..], at as u64).await?;
+            if n == 0 {
+                return Err(smb::Error::InvalidMessage("the server took no data".into()));
+            }
+            at += n;
+        }
+        Ok(())
+    }
+
+    async fn write(&self, name: &str, data: &[u8]) -> Result<(), VaultError> {
+        let args = smb::FileCreateArgs::make_overwrite(Default::default(), Default::default());
+        let file = self
+            .open(&self.path(name), &args)
+            .await
+            .map_err(|e| smb_error(&format!("writing {name}"), e))?
+            .unwrap_file();
+        let result = Self::write_all(&file, data).await;
+        let _ = file.flush().await;
+        let closed = file.close().await;
+        result.and(closed).map_err(|e| smb_error(&format!("writing {name}"), e))
+    }
+
+    async fn create_new(&self, name: &str, data: &[u8]) -> Result<bool, VaultError> {
+        let args = smb::FileCreateArgs::make_create_new(Default::default(), Default::default());
+        let file = match self.open(&self.path(name), &args).await {
+            Ok(r) => r.unwrap_file(),
+            Err(e) if smb_status(&e) == Some(STATUS_OBJECT_NAME_COLLISION) => return Ok(false),
+            Err(e) => return Err(smb_error(&format!("creating {name}"), e)),
+        };
+        let result = Self::write_all(&file, data).await;
+        let closed = file.close().await;
+        result.and(closed).map_err(|e| smb_error(&format!("writing {name}"), e))?;
+        Ok(true)
+    }
+
+    async fn remove(&self, name: &str) -> Result<(), VaultError> {
+        let args = smb::FileCreateArgs::make_open_existing(smb::FileAccessMask::new().with_generic_all(true));
+        let file = match self.open(&self.path(name), &args).await {
+            Ok(r) => r.unwrap_file(),
+            Err(e) if smb_not_found(&e) => return Ok(()),
+            Err(e) => return Err(smb_error(&format!("removing {name}"), e)),
+        };
+        let result = file.set_info(smb::FileDispositionInformation::default()).await;
+        let closed = file.close().await;
+        result.and(closed).map_err(|e| smb_error(&format!("removing {name}"), e))
+    }
+
+    async fn replace(&self, from: &str, to: &str) -> Result<(), VaultError> {
+        let args = smb::FileCreateArgs::make_open_existing(smb::FileAccessMask::new().with_generic_all(true));
+        let file = self
+            .open(&self.path(from), &args)
+            .await
+            .map_err(|e| smb_error("replacing the vault file", e))?
+            .unwrap_file();
+        let target = if self.dir.is_empty() { to.to_string() } else { format!("{}\\{}", self.dir, to) };
+        let result = file
+            .set_info(smb::FileRenameInformation {
+                replace_if_exists: true.into(),
+                root_directory: 0,
+                file_name: target.as_str().into(),
+            })
+            .await;
+        let closed = file.close().await;
+        result.and(closed).map_err(|e| smb_error("replacing the vault file", e))
     }
 }
 
@@ -761,6 +971,28 @@ mod tests {
         assert_eq!(store.get().await.unwrap().unwrap().0, b"three");
         let bad = serde_json::json!({ "password": "wrong" }).to_string();
         assert!(Store::sftp(&parse(&pinned, &bad)).await.is_err());
+    }
+
+    /// Against a real SMB share: `REACH_SMB_TEST=smb://user@host:port/share`
+    /// (a share, or a folder in one, that is empty) and
+    /// `REACH_SMB_PASSWORD`, then
+    /// `cargo test --lib sync_store::tests::live -- --ignored`.
+    #[tokio::test]
+    #[ignore = "needs an SMB share"]
+    async fn live_smb() {
+        let url = std::env::var("REACH_SMB_TEST").expect("REACH_SMB_TEST");
+        let password = std::env::var("REACH_SMB_PASSWORD").unwrap();
+        let target = |pw: &str| match crate::vault::sync_engine::Backend::parse(&url, pw, Path::new("/unused")).unwrap() {
+            crate::vault::sync_engine::Backend::Smb(t) => t,
+            _ => panic!("not smb"),
+        };
+        let mut store = Store::smb(&target(&password)).await.unwrap();
+        compare_and_swap(&mut store).await;
+        let mut other = Store::smb(&target(&password)).await.unwrap();
+        let (_, rev) = other.get().await.unwrap().unwrap();
+        assert!(other.put(b"three", Some(&rev)).await.unwrap(), "replace an existing file");
+        assert_eq!(store.get().await.unwrap().unwrap().0, b"three");
+        assert!(Store::smb(&target("wrong")).await.is_err());
     }
 
     #[test]
