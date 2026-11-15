@@ -23,6 +23,8 @@
 	import { trieMatch, registerTerminalInput, unregisterTerminalInput, type TerminalInput } from '#lib/state/snippets.svelte.js';
 	import { terminalFocusRequests } from '#lib/state/palette.svelte.js';
 	import { setTabLink } from '#lib/state/tabs.svelte.js';
+	import { broadcastInput, getBroadcastTargets } from '#lib/state/broadcast.svelte.js';
+	import { isTerminalReply, TYPED_WINDOW_MS } from '#lib/terminal/broadcast.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { readText as clipboardReadText, writeText as clipboardWriteText } from '@tauri-apps/plugin-clipboard-manager';
 	import { openUrl } from '@tauri-apps/plugin-opener';
@@ -154,7 +156,7 @@
 			barCtrl = false;
 			barAlt = false;
 		}
-		sendData(Array.from(new TextEncoder().encode(seq)));
+		typed(Array.from(new TextEncoder().encode(seq)));
 		terminal?.focus();
 	}
 	let fitAddon: FitAddon | undefined = $state();
@@ -208,9 +210,37 @@
 		if (warn) {
 			pastePreview = text;
 		} else {
-			term.paste(text);
+			pasteTyped(term, text);
 		}
 	}
+
+	/** A paste the user asked for, which goes where typing goes. */
+	function pasteTyped(term: Terminal, text: string): void {
+		pasting = true;
+		try {
+			term.paste(text);
+		} finally {
+			pasting = false;
+		}
+	}
+
+	// What xterm sends its program is only passed on to the terminals this
+	// one broadcasts to when the user typed or pasted it, not a mouse report
+	// or an answer to the program (#lib/terminal/broadcast).
+	let pasting = false;
+	let userInputAt = -Infinity;
+	function markUserInput(): void {
+		userInputAt = performance.now();
+	}
+	function isTyped(data: string): boolean {
+		return pasting || (performance.now() - userInputAt < TYPED_WINDOW_MS && !isTerminalReply(data));
+	}
+
+	/** How many other terminals what is typed here goes to as well. */
+	let broadcastCount = $derived.by(() => {
+		const ids = getBroadcastTargets();
+		return ids.includes(ptyId) ? ids.length - 1 : 0;
+	});
 
 	/**
 	 * Pasting with "do not ask again" ticked turns the setting off for
@@ -219,7 +249,7 @@
 	 */
 	function confirmPaste(): void {
 		if (dontAskAgain) updateSetting('warnOnMultilinePaste', false);
-		if (pastePreview && terminal) terminal.paste(pastePreview);
+		if (pastePreview && terminal) pasteTyped(terminal, pastePreview);
 		pastePreview = null;
 		dontAskAgain = false;
 		terminal?.focus();
@@ -450,6 +480,13 @@
 		}
 	}
 
+	/** Input from the user here: into this terminal, and on to the others
+	 *  it broadcasts to (#lib/state/broadcast). */
+	function typed(data: number[]): void {
+		sendData(data);
+		broadcastInput(ptyId, data);
+	}
+
 	function sendResize(cols: number, rows: number): void {
 		if (termType === 'ssh' && currentConnectionId) {
 			sshResize(currentConnectionId, cols, rows).catch((err) => {
@@ -523,7 +560,7 @@
 		const remaining = suggestion.command.slice(inputBuffer.length);
 		if (remaining.length > 0) {
 			const encoded = Array.from(new TextEncoder().encode(remaining));
-			sendData(encoded);
+			typed(encoded);
 		}
 		inputBuffer = '';
 		suggestion = null;
@@ -562,12 +599,14 @@
 			}
 
 			const encoded = Array.from(new TextEncoder().encode(data));
-			sendData(encoded);
+			if (isTyped(data)) typed(encoded);
+			else sendData(encoded);
 		});
 
 		term.onBinary((data: string) => {
 			const bytes = Array.from(data, (c) => c.charCodeAt(0));
-			sendData(bytes);
+			if (isTyped(data)) typed(bytes);
+			else sendData(bytes);
 		});
 
 		// Ctrl+C copies when text is selected, otherwise sends SIGINT as normal.
@@ -743,6 +782,11 @@
 			}
 			termEl.addEventListener('contextmenu', onContextMenu);
 
+			// The moments the user typed, for what may be broadcast (isTyped).
+			for (const type of ['keydown', 'keypress', 'beforeinput', 'input', 'compositionend']) {
+				termEl.addEventListener(type, markUserInput, { capture: true });
+			}
+
 			// On macOS, Cmd+V and Edit → Paste arrive as the native paste: the
 			// menu item runs the paste: selector and WebKit fires a DOM paste
 			// event on the focused element, which is xterm's hidden textarea.
@@ -838,7 +882,8 @@
 			// its shell takes a bracketed paste (#lib/terminal/snippet).
 			snippetInput = {
 				bracketed: () => term.modes.bracketedPasteMode,
-				send: sendData
+				send: sendData,
+				type: typed
 			};
 			registerTerminalInput(ptyId, snippetInput);
 
@@ -990,6 +1035,9 @@
 	maxWidth="560px"
 >
 	<p class="paste-msg">{t('terminal.paste_confirm_message', { lines: String(pasteLineCount) })}</p>
+	{#if broadcastCount > 0}
+		<p class="paste-msg paste-broadcast">{t('broadcast.paste_note', { count: String(broadcastCount) })}</p>
+	{/if}
 	<pre class="paste-preview">{pastePreview}</pre>
 
 	<label class="paste-dont-ask">
@@ -1026,6 +1074,11 @@
 		font-size: 0.875rem;
 		line-height: 1.5;
 		color: var(--color-text-primary);
+	}
+
+	.paste-broadcast {
+		color: var(--color-warning, #f59e0b);
+		font-weight: 600;
 	}
 
 	.paste-preview {

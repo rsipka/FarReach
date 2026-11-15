@@ -20,6 +20,13 @@
 		type CloseScope
 	} from '#lib/state/tabs.svelte.js';
 	import { canDuplicate, duplicateTab } from '#lib/terminal/duplicate-tab.js';
+	import {
+		getBroadcastTargets,
+		isTerminalTab,
+		toggleBroadcastTarget,
+		broadcastToAll,
+		stopBroadcast
+	} from '#lib/state/broadcast.svelte.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { getSnippets, loadSnippets, pasteSnippet, canPasteSnippet } from '#lib/state/snippets.svelte.js';
 	import { getActivePage, setActivePage } from '#lib/state/navigation.svelte.js';
@@ -95,6 +102,31 @@
 		for (const [scope, key] of scopes) {
 			if (tabsBeside(tab.id, scope).length === 0) continue;
 			out.push({ id: `action:tab-close-${scope}`, group, label: t(key), run: () => requestCloseBeside(tab.id, scope) });
+		}
+		return [...out, ...broadcastActions(tab.id)];
+	}
+
+	/** Typing into several terminals at once (#lib/state/broadcast). */
+	function broadcastActions(tabId: string): Item[] {
+		const group = t('palette.group_actions');
+		const targets = getBroadcastTargets();
+		const out: Item[] = [];
+		const keywords = t('broadcast.keywords');
+		if (isTerminalTab(getActiveTab())) {
+			out.push({
+				id: 'action:broadcast-tab',
+				group,
+				label: targets.includes(tabId) ? t('broadcast.palette_remove') : t('broadcast.palette_add'),
+				hint: shortcutLabel('B', { ctrl: true, shift: true }),
+				keywords,
+				run: () => toggleBroadcastTarget(tabId)
+			});
+		}
+		if (getTabs().filter(isTerminalTab).length >= 2) {
+			out.push({ id: 'action:broadcast-all', group, label: t('broadcast.all'), keywords, run: () => broadcastToAll() });
+		}
+		if (targets.length > 0) {
+			out.push({ id: 'action:broadcast-stop', group, label: t('broadcast.stop'), keywords, run: stopBroadcast });
 		}
 		return out;
 	}

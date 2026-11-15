@@ -2641,5 +2641,19 @@
   "credential.folder_none": "Keine",
   "credential.own_login_hop": "Eigene Anmeldung dieses Jump-Hosts",
   "session.rdm_import_credentials": "Die {{count}} Anmeldungen aus dem Export als Zugangsdaten speichern, für {{hosts}} ausgewählte Hosts",
-  "session.rdm_import_credentials_hint": "Passwörter aus RDM werden nicht importiert: Jedes einmal im Tab Zugangsdaten eingeben, dann erhält es jede Sitzung, die es nutzt. Eine Anmeldung, die eine Gruppe weitergibt, wird zu den Zugangsdaten dieses Ordners."
+  "session.rdm_import_credentials_hint": "Passwörter aus RDM werden nicht importiert: Jedes einmal im Tab Zugangsdaten eingeben, dann erhält es jede Sitzung, die es nutzt. Eine Anmeldung, die eine Gruppe weitergibt, wird zu den Zugangsdaten dieses Ordners.",
+  "broadcast.bar_one": "Ein Terminal ist für die Übertragung gewählt. Fügen Sie ein weiteres hinzu: Rechtsklick auf seinen Tab.",
+  "broadcast.bar_on": "Übertragung: Was Sie hier tippen, geht an alle {{count}} markierten Terminals",
+  "broadcast.bar_elsewhere": "Die Übertragung läuft für {{count}} Terminals. Dieses gehört nicht dazu, Eingaben hier gehen nur hierher.",
+  "broadcast.include_this": "Dieses hinzufügen",
+  "broadcast.leave_this": "Dieses auslassen",
+  "broadcast.stop": "Übertragung beenden",
+  "broadcast.tab_toggle": "Eingaben an diesen Tab übertragen",
+  "broadcast.group": "An die Terminals der Gruppe übertragen",
+  "broadcast.all": "An alle Terminals übertragen",
+  "broadcast.tab_mark": "In der Übertragung: Eingaben gehen an jeden markierten Tab",
+  "broadcast.paste_note": "Die Übertragung läuft: Dies geht auch an die anderen markierten Terminals ({{count}}).",
+  "broadcast.palette_add": "Diesen Tab zur Übertragung hinzufügen",
+  "broadcast.palette_remove": "Diesen Tab aus der Übertragung nehmen",
+  "broadcast.keywords": "broadcast übertragung multi-send an alle senden mehrere terminals"
 }

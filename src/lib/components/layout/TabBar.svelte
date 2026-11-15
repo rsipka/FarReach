@@ -6,6 +6,10 @@
 		tabsBeside, requestCloseBeside, getPendingClose, confirmPendingClose, cancelPendingClose
 	} from '#lib/state/tabs.svelte.js';
 	import { canDuplicate, duplicateTab } from '#lib/terminal/duplicate-tab.js';
+	import {
+		getBroadcastTargets, isTerminalTab, toggleBroadcastTarget, broadcastToAll, stopBroadcast
+	} from '#lib/state/broadcast.svelte.js';
+	import { BROADCAST_ICON } from '#lib/terminal/broadcast.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
 	import Modal from '#lib/components/shared/Modal.svelte';
@@ -51,6 +55,27 @@
 	let tabs = $derived(getTabs());
 	let activeTab = $derived(getActiveTab());
 	let activePage = $derived(getActivePage());
+	let broadcastTargets = $derived(getBroadcastTargets());
+
+	/** Typing into several terminals at once: this tab in or out, a group,
+	 *  every terminal, or none. */
+	function broadcastItems(tab: Tab | undefined): MenuItem[] {
+		if (!isTerminalTab(tab) || !tab) return [];
+		const items: MenuItem[] = [
+			{ label: '', separator: true },
+			{
+				label: t('broadcast.tab_toggle'),
+				hint: `${mod}B`,
+				icon: BROADCAST_ICON,
+				checked: broadcastTargets.includes(tab.id),
+				action: () => toggleBroadcastTarget(tab.id)
+			}
+		];
+		if (tab.groupId) items.push({ label: t('broadcast.group'), action: () => broadcastToAll(tab.groupId) });
+		items.push({ label: t('broadcast.all'), disabled: tabs.filter(isTerminalTab).length < 2, action: () => broadcastToAll() });
+		if (broadcastTargets.length > 0) items.push({ label: t('broadcast.stop'), action: stopBroadcast });
+		return items;
+	}
 
 	function handleNewTab(): void {
 		createTab('local');
@@ -119,6 +144,8 @@
 			items.push({ label: t('tabs.group_add', { name: g.name }), icon: DOT_ICON, iconColor: groupColor(g.color), action: () => addToGroup(id, g.id) });
 		}
 		if (tab?.groupId) items.push({ label: t('tabs.group_remove'), action: () => removeFromGroup(id) });
+
+		items.push(...broadcastItems(tab));
 
 		// Duplicate and close, as a browser's tab menu has them (#160).
 		items.push(
@@ -193,6 +220,7 @@
 		return [
 			{ label: g.collapsed ? t('tabs.group_expand') : t('tabs.group_collapse'), action: () => toggleGroup(id) },
 			{ label: t('tabs.group_rename'), action: () => beginRename(g) },
+			{ label: t('broadcast.group'), icon: BROADCAST_ICON, disabled: !tabs.some((x) => x.groupId === id && isTerminalTab(x)), action: () => broadcastToAll(id) },
 			{ label: '', separator: true },
 			...GROUP_COLORS.map((c) => ({
 				label: t(`tabs.color_${c}`),
@@ -307,6 +335,7 @@
 					style:--group={tab.groupId ? groupColor(groups.find((x) => x.id === tab.groupId)?.color ?? 'grey') : undefined}
 					class:active={tab.id === activeTab?.id}
 					class:in-split={inSplit(tab.id)}
+					class:broadcast={broadcastTargets.includes(tab.id)}
 					class:dragging={dragged === tab.id}
 					onclick={() => onTabClick(tab.id)}
 					onpointerdown={(e) => beginDrag(e, tab.id)}
@@ -335,6 +364,13 @@
 					{/if}
 
 					<span class="tab-title">{tab.sessionName || tab.title}</span>
+					{#if broadcastTargets.includes(tab.id)}
+						<!-- Typing into one of the marked tabs goes to all of them. -->
+						<svg class="broadcast-mark" width="13" height="13" viewBox="0 0 24 24" fill="none" role="img" aria-label={t('broadcast.tab_mark')}>
+							<title>{t('broadcast.tab_mark')}</title>
+							<path d={BROADCAST_ICON} stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+						</svg>
+					{/if}
 					{#if tab.link}
 						<!-- Seen from any tab: this session dropped, or is coming back. -->
 						<span
@@ -616,6 +652,17 @@
 	.tab.in-split:not(.active) {
 		color: var(--color-text-primary);
 		border-bottom-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+	}
+
+	/* In a broadcast: tinted, with the waves mark, from anywhere in the bar. */
+	.tab.broadcast {
+		background-color: color-mix(in srgb, var(--color-warning) 14%, transparent);
+		border-bottom-color: var(--color-warning);
+	}
+
+	.broadcast-mark {
+		flex-shrink: 0;
+		color: var(--color-warning);
 	}
 
 	.tab.dragging {

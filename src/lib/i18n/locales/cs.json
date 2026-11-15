@@ -2638,5 +2638,22 @@
   "credential.folder_none": "Žádné",
   "credential.own_login_hop": "Vlastní přihlášení jump hostu",
   "session.rdm_import_credentials": "Uložit {{count}} přihlášení z exportu jako přihlašovací údaje pro {{hosts}} vybraných hostitelů",
-  "session.rdm_import_credentials_hint": "Hesla z RDM se neimportují: každé zadáte jednou na kartě Přihlašovací údaje a dostanou ho všechny relace, které ho používají. Přihlášení, které předává skupina, se stane přihlašovacími údaji dané složky."
+  "session.rdm_import_credentials_hint": "Hesla z RDM se neimportují: každé zadáte jednou na kartě Přihlašovací údaje a dostanou ho všechny relace, které ho používají. Přihlášení, které předává skupina, se stane přihlašovacími údaji dané složky.",
+  "broadcast.bar_one": "Pro vysílání je vybraný jeden terminál. Začněte přidáním dalšího: klikněte pravým tlačítkem na jeho kartu.",
+  "broadcast.bar_on": "Vysílání: co zde napíšete, půjde do všech označených terminálů (počet: {{count}})",
+  "broadcast.bar_elsewhere": "Vysílání je zapnuté pro jiné terminály (počet: {{count}}). Tento v něm není, psaní zde jde jen sem.",
+  "broadcast.include_this": "Přidat tento",
+  "broadcast.leave_this": "Vynechat tento",
+  "broadcast.stop": "Zastavit vysílání",
+  "broadcast.tab_toggle": "Vysílat psaní do této karty",
+  "broadcast.group": "Vysílat do terminálů skupiny",
+  "broadcast.all": "Vysílat do všech terminálů",
+  "broadcast.tab_mark": "Ve vysílání: psaní jde do všech označených karet",
+  "broadcast.paste_note": "Vysílání je zapnuté: vložený text půjde i do ostatních označených terminálů (počet: {{count}}).",
+  "broadcast.palette_add": "Přidat kartu do vysílání",
+  "broadcast.palette_remove": "Odebrat kartu z vysílání",
+  "broadcast.keywords": "broadcast vysílání multi-send poslat všem psát do více terminálů",
+  "settings.double_click_open": "Otevírat relace dvojklikem",
+  "settings.double_click_open_desc": "Jedním kliknutím relaci v seznamu vyberete, dvojklikem se připojíte. Enter se připojí i nadále.",
+  "session.double_click_connect_to": "Dvojklikem se připojíte k {{name}}"
 }
