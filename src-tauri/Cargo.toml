@@ -198,8 +198,10 @@ k8s-openapi = { version = "0.28", features = ["v1_32"] }
 # YAML for viewing and editing resources: the same parser kube itself uses.
 serde-saphyr = { version = "0.0.29", features = ["serialize"] }
 
-# PTY, Serial, Autostart, Updater, native drag-out (desktop only)
-[target.'cfg(not(target_os = "android"))'.dependencies]
+# PTY, Serial, Autostart, Updater, native drag-out (desktop only). Neither
+# phone builds them: Android and iOS have no PTY, serial port, autostart,
+# self-update or drag-out, and the code using them is behind cfg(desktop).
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 # The local clipboard for RDP: text and file lists. Android has no file clipboard and uses the plugin.
 arboard = { version = "3.6", default-features = false }
 # Sound for RDP. The same crate again with one more feature: Cargo unions the
@@ -359,6 +361,15 @@ webpki-root-certs = "1"
 # Mozilla roots here, as Reach's HTTP client is: the OS verifier needs a Java
 # component Reach does not ship. With a CA (the usual case) only that CA counts.
 kube = { version = "4.2", default-features = false, features = ["webpki-roots"] }
+
+# iOS. The keychain is the "protected data" store, the only one iOS has; the
+# legacy keychain the macOS build uses does not exist there. Mozilla's roots,
+# written out at start for crates that look for the system's in files (see
+# ios_cert_file in lib.rs): iOS keeps its own where no file-reading crate
+# finds them.
+[target.'cfg(target_os = "ios")'.dependencies]
+apple-native-keyring-store = { version = "1", features = ["protected"] }
+webpki-root-certs = "1"
 
 # libsql with its double close of a local connection fixed; see the header of
 # vendor/libsql/Cargo.toml.

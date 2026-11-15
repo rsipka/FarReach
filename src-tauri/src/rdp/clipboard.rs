@@ -224,7 +224,7 @@ impl CliprdrBackend for Backend {
 
 /// What is on the local clipboard, as far as the remote is concerned.
 enum Local {
-    #[cfg_attr(target_os = "android", expect(dead_code, reason = "Android's clipboard carries text only"))]
+    #[cfg_attr(mobile, expect(dead_code, reason = "a phone's clipboard carries text only"))]
     Files(Vec<PathBuf>),
     Text(String),
     Empty,
@@ -282,12 +282,12 @@ struct Fetch {
 }
 
 /// The local clipboard, owned by the worker thread.
-#[cfg(not(target_os = "android"))]
+#[cfg(not(mobile))]
 struct LocalClipboard {
     inner: Option<arboard::Clipboard>,
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(mobile))]
 impl LocalClipboard {
     fn new(_app: AppHandle) -> Self {
         Self { inner: None }
@@ -334,13 +334,13 @@ impl LocalClipboard {
     }
 }
 
-/// Android: text through the clipboard plugin, no files.
-#[cfg(target_os = "android")]
+/// A phone (Android, iOS): text through the clipboard plugin, no files.
+#[cfg(mobile)]
 struct LocalClipboard {
     app: AppHandle,
 }
 
-#[cfg(target_os = "android")]
+#[cfg(mobile)]
 impl LocalClipboard {
     fn new(app: AppHandle) -> Self {
         Self { app }

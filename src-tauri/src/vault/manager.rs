@@ -3698,7 +3698,11 @@ pub(crate) fn keychain_entry_in(service: &str, user: &str) -> Result<keyring_cor
             let store = apple_native_keyring_store::keychain::Store::new();
             #[cfg(all(not(test), target_os = "linux"))]
             let store = super::linux_keychain::Store::new();
-            #[cfg(all(not(test), not(any(target_os = "windows", target_os = "macos", target_os = "linux"))))]
+            // iOS has one keychain, the data protection one; items stay on
+            // this device (no iCloud sync) in the app's own access group.
+            #[cfg(all(not(test), target_os = "ios"))]
+            let store = apple_native_keyring_store::protected::Store::new();
+            #[cfg(all(not(test), not(any(target_os = "windows", target_os = "macos", target_os = "linux", target_os = "ios"))))]
             let store = keyring_core::mock::Store::new();
             store.map(|s| keyring_core::set_default_store(s)).map_err(|e| e.to_string())
         })

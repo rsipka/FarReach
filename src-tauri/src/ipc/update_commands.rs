@@ -60,6 +60,11 @@ fn decide(current: &str, feed: &str, arch: &str) -> Option<AppUpdate> {
 /// updater does not run; a desktop asks the updater plugin instead.
 #[tauri::command]
 pub async fn app_update_check(app: tauri::AppHandle) -> Result<Option<AppUpdate>, String> {
+    // iOS installs apps only through the App Store, TestFlight or Xcode, never
+    // from a downloaded file, so there is nothing to offer and no feed to ask.
+    if cfg!(target_os = "ios") {
+        return Ok(None);
+    }
     let current = app.package_info().version.to_string();
     let client = crate::http::client_builder()
         .timeout(std::time::Duration::from_secs(20))

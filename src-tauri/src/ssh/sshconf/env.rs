@@ -163,7 +163,7 @@ impl Env for SystemEnv {
 
 /// Run a command the way ssh does (`$SHELL -c`, or `sh`); its exit status
 /// is the answer.
-#[cfg(not(target_os = "android"))]
+#[cfg(not(mobile))]
 pub fn run_shell(command: &str) -> Result<bool, String> {
     #[cfg(windows)]
     let status = {
@@ -179,7 +179,7 @@ pub fn run_shell(command: &str) -> Result<bool, String> {
     status.map(|s| s.success()).map_err(|e| format!("could not run \"{command}\": {e}"))
 }
 
-#[cfg(target_os = "android")]
+#[cfg(mobile)]
 pub fn run_shell(command: &str) -> Result<bool, String> {
     Err(format!("A phone cannot run \"{command}\""))
 }

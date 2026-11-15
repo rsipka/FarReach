@@ -66,7 +66,7 @@ pub const DEFAULT_NAME: &str = "&H-&Y&M&D-&T.log";
 /// the app's own storage on Android (which has no shared Documents folder an
 /// app may write to without asking).
 pub fn default_dir() -> PathBuf {
-    #[cfg(not(target_os = "android"))]
+    #[cfg(not(mobile))]
     if let Some(docs) = dirs::document_dir() {
         return docs.join("Reach Logs");
     }
