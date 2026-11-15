@@ -106,7 +106,7 @@ jobs:
         run: npx tauri ios build --no-sign --target aarch64
 
       - name: Upload the IPA
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Reach-ios-unsigned
           path: src-tauri/gen/apple/build/arm64/*.ipa
