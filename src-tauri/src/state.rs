@@ -48,6 +48,7 @@ pub enum SessionKind {
     Rdp,
     Vnc,
     Wsl,
+    Telnet,
 }
 
 impl SessionKind {
@@ -85,6 +86,9 @@ pub struct SessionConfig {
     /// WSL only: distribution name (e.g. "Ubuntu")
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wsl_distro: Option<String>,
+    /// Telnet only: how it talks to the device (mode, Enter, Backspace).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub telnet: Option<crate::telnet::protocol::TelnetOptions>,
     pub folder_id: Option<String>,
     pub tags: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -288,6 +292,7 @@ pub struct AppState {
     #[cfg(desktop)]
     pub serial_manager: Arc<tokio::sync::Mutex<SerialManager>>,
     pub rdp_manager: Arc<tokio::sync::Mutex<RdpManager>>,
+    pub telnet_manager: Arc<tokio::sync::Mutex<crate::telnet::TelnetManager>>,
     pub vnc_manager: Arc<tokio::sync::Mutex<VncManager>>,
     pub vault_manager: Arc<tokio::sync::Mutex<VaultManager>>,
     pub plugin_manager: Arc<tokio::sync::Mutex<PluginManager>>,
@@ -337,6 +342,7 @@ impl AppState {
             #[cfg(desktop)]
             serial_manager: Arc::new(tokio::sync::Mutex::new(SerialManager::new())),
             rdp_manager: Arc::new(tokio::sync::Mutex::new(RdpManager::new())),
+            telnet_manager: Arc::new(tokio::sync::Mutex::new(crate::telnet::TelnetManager::new())),
             vnc_manager: Arc::new(tokio::sync::Mutex::new(VncManager::new())),
             vault_manager: Arc::new(tokio::sync::Mutex::new(VaultManager::new(app_dir.clone()))),
             plugin_manager: Arc::new(tokio::sync::Mutex::new(PluginManager::new(app_dir.join("plugins")))),

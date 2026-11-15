@@ -9,6 +9,7 @@
 	import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 	import { ptyWrite, ptyResize } from '#lib/ipc/pty.js';
 	import { sshSend, sshResize, sshConnect, sshReady, type SshConnectParams } from '#lib/ipc/ssh.js';
+	import { telnetConnect, telnetDisconnect, telnetSend, telnetResize, type TelnetConnectParams } from '#lib/ipc/telnet.js';
 	import { untrustedRefsFromError } from '#lib/ipc/sessions.js';
 	import { noteLineEntered } from '#lib/state/explorer.svelte.js';
 	import { registerBufferReader, unregisterBufferReader } from '#lib/state/terminal-buffer.svelte.js';
@@ -35,7 +36,7 @@
 
 	interface Props {
 		ptyId: string;
-		type: 'local' | 'ssh';
+		type: 'local' | 'ssh' | 'telnet';
 		connectionId?: string;
 		/** Has the keyboard. */
 		active: boolean;
@@ -43,11 +44,15 @@
 		visible?: boolean;
 		onTitleChange?: (title: string) => void;
 		sshConnectParams?: SshConnectParams;
+		/** Telnet: where to connect. The terminal connects once it listens. */
+		telnetConnectParams?: TelnetConnectParams;
 		onReconnected?: (newConnectionId: string) => void;
 		onReady?: () => void;
 	}
 
-	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, onReconnected, onReady }: Props = $props();
+	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, telnetConnectParams, onReconnected, onReady }: Props = $props();
+	/** A connection made by Reach (SSH, Telnet) that can drop and be made again. */
+	let remote = $derived(termType === 'ssh' || termType === 'telnet');
 	let shown = $derived(visible ?? active);
 
 	// Local state seeded from the `connectionId` prop and overridden in-place on
@@ -473,6 +478,12 @@
 			sshSend(currentConnectionId, data).catch((err) => {
 				console.error('[Terminal] Failed to write to SSH:', err);
 			});
+		} else if (termType === 'telnet') {
+			if (currentConnectionId && !disconnected) {
+				telnetSend(currentConnectionId, data).catch((err) => {
+					console.error('[Terminal] Failed to write to Telnet:', err);
+				});
+			}
 		} else {
 			ptyWrite(ptyId, data).catch((err) => {
 				console.error('[Terminal] Failed to write to PTY:', err);
@@ -492,6 +503,8 @@
 			sshResize(currentConnectionId, cols, rows).catch((err) => {
 				console.error('[Terminal] Failed to resize SSH:', err);
 			});
+		} else if (termType === 'telnet') {
+			if (currentConnectionId && !disconnected) telnetResize(currentConnectionId, cols, rows).catch(() => {});
 		} else {
 			ptyResize(ptyId, cols, rows).catch((err) => {
 				console.error('[Terminal] Failed to resize PTY:', err);
@@ -660,9 +673,10 @@
 	}
 
 	async function setupEventListeners(term: Terminal): Promise<void> {
-		const eventId = termType === 'ssh' && currentConnectionId ? currentConnectionId : ptyId;
-		const dataEventName = termType === 'ssh' ? `ssh-data-${eventId}` : `pty-data-${eventId}`;
-		const exitEventName = termType === 'ssh' ? `ssh-exit-${eventId}` : `pty-exit-${eventId}`;
+		const eventId = remote && currentConnectionId ? currentConnectionId : ptyId;
+		const prefix = termType === 'local' ? 'pty' : termType;
+		const dataEventName = `${prefix}-data-${eventId}`;
+		const exitEventName = `${prefix}-exit-${eventId}`;
 
 		unlistenData = await listen<number[]>(dataEventName, (event) => {
 			const payload = event.payload;
@@ -675,7 +689,13 @@
 			}
 		});
 
-		unlistenExit = await listen<{ code: number }>(exitEventName, (event) => {
+		unlistenExit = await listen<{ code?: number; error?: string | null }>(exitEventName, (event) => {
+			if (termType === 'telnet') {
+				const error = event.payload?.error;
+				term.write(`\r\n\x1b[90m[${error ? `${t('telnet.closed')}: ${error}` : t('telnet.closed')}]\x1b[0m\r\n`);
+				disconnected = true;
+				return;
+			}
 			const code = event.payload?.code ?? 0;
 			term.write(`\r\n\x1b[90m[Process exited with code ${code}]\x1b[0m\r\n`);
 			if (termType === 'ssh') {
@@ -692,7 +712,44 @@
 		}
 	}
 
+	/**
+	 * Open the Telnet connection: listen under a new id first, so nothing the
+	 * device sends at once (a banner, a login prompt) is lost, then connect.
+	 * Reconnecting is the same; the tab drops the old connection.
+	 */
+	async function connectTelnet(term: Terminal): Promise<void> {
+		if (!telnetConnectParams || reconnecting) return;
+		reconnecting = true;
+		disconnected = false;
+		const newId = crypto.randomUUID();
+		const { host, port } = telnetConnectParams;
+		try {
+			unlistenData?.();
+			unlistenExit?.();
+			currentConnectionId = newId;
+			await setupEventListeners(term);
+			term.write(`\x1b[90m[${t('telnet.connecting', { host: `${host}:${port}` })}]\x1b[0m\r\n`);
+			await telnetConnect(newId, telnetConnectParams, term.cols, term.rows);
+			// The tab was closed while connecting: nothing would ever close this.
+			if (!terminal) {
+				void telnetDisconnect(newId).catch(() => {});
+				return;
+			}
+			onReconnected?.(newId);
+		} catch (err) {
+			const reason = untrustedRefsFromError(err) ? t('pwmanager.untrusted_reopen') : String(err);
+			term.write(`\r\n\x1b[31m[${t('telnet.connect_failed')}: ${reason}]\x1b[0m\r\n`);
+			disconnected = true;
+		} finally {
+			reconnecting = false;
+		}
+	}
+
 	async function handleReconnect(): Promise<void> {
+		if (terminal && termType === 'telnet') {
+			await connectTelnet(terminal);
+			return;
+		}
 		if (!terminal || !sshConnectParams || reconnecting) return;
 		reconnecting = true;
 		disconnected = false;
@@ -761,7 +818,10 @@
 			});
 
 			setupInputHandler(term);
-			setupEventListeners(term);
+			// A Telnet tab connects from here, once; a terminal mounted again
+			// for a tab already connected only listens.
+			if (termType === 'telnet' && !currentConnectionId) void connectTelnet(term);
+			else setupEventListeners(term);
 			setupResizeObserver(term, fit, containerEl);
 
 			// Detect user changes (e.g. sudo su -) via OSC 2 terminal title updates
@@ -987,9 +1047,9 @@
 		});
 	});
 
-	// The tab shows whether this SSH session is still connected.
+	// The tab shows whether this SSH or Telnet session is still connected.
 	$effect(() => {
-		if (termType !== 'ssh') return;
+		if (!remote) return;
 		setTabLink(ptyId, reconnecting ? 'reconnecting' : disconnected ? 'down' : undefined);
 	});
 
@@ -1010,7 +1070,7 @@
 	{#if onPhone && !disconnected}
 		<MobileKeyBar bind:ctrl={barCtrl} bind:alt={barAlt} zoom onkey={onBarKey} />
 	{/if}
-	{#if disconnected && termType === 'ssh'}
+	{#if disconnected && remote}
 		<div class="reconnect-overlay">
 			<div class="reconnect-card">
 				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">

@@ -1,10 +1,11 @@
 import type { SshConnectParams } from '#lib/ipc/ssh.js';
 import { rdpDisconnect, type RdpConnectParams } from '#lib/ipc/rdp.js';
 import { vncDisconnect, type VncConnectParams } from '#lib/ipc/vnc.js';
+import type { TelnetConnectParams } from '#lib/ipc/telnet.js';
 import * as splits from '#lib/terminal/split.js';
 import type { Direction, Split } from '#lib/terminal/split.js';
 
-export type TabType = 'local' | 'ssh' | 'rdp' | 'vnc';
+export type TabType = 'local' | 'ssh' | 'rdp' | 'vnc' | 'telnet';
 
 /** A tab that shows a remote desktop rather than a terminal. */
 export function isDesktopTab(tab: Pick<Tab, 'type'> | undefined): boolean {
@@ -27,6 +28,11 @@ export interface Tab {
 	rdpConnectParams?: RdpConnectParams;
 	/** What a VNC tab connects to. */
 	vncConnectParams?: VncConnectParams;
+	/** What a Telnet tab connects to; its terminal connects once it listens. */
+	telnetConnectParams?: TelnetConnectParams;
+	/** A Telnet tab's open connection. Kept apart from `connectionId`, which
+	 *  the file explorer, recipes and the rest read as an SSH connection. */
+	telnetConnectionId?: string;
 	/** A local tab that runs this program instead of the default shell
 	 *  (a shell inside a container on this computer, say). */
 	localCommand?: { program: string; args: string[] };
@@ -34,7 +40,7 @@ export interface Tab {
 	wslDistro?: string;
 	/** The tab group it is in, if any (see TabGroup). */
 	groupId?: string;
-	/** An SSH tab whose connection dropped, or is being made again: shown on
+	/** An SSH or Telnet tab whose connection dropped, or is being made again: shown on
 	 *  the tab, so a dead session is seen from any tab, not only its own. */
 	link?: 'down' | 'reconnecting';
 }
@@ -118,7 +124,7 @@ export function createTab(type: TabType, title?: string, connectionId?: string, 
 
 	const tab: Tab = {
 		id,
-		title: title ?? numbered(type === 'local' ? 'Local' : type === 'rdp' ? 'RDP' : type === 'vnc' ? 'VNC' : 'SSH'),
+		title: title ?? numbered(type === 'local' ? 'Local' : type === 'rdp' ? 'RDP' : type === 'vnc' ? 'VNC' : type === 'telnet' ? 'Telnet' : 'SSH'),
 		type,
 		connectionId,
 		active: true,
@@ -190,6 +196,11 @@ export function updateTabOs(connectionId: string, os: string): void {
 	if (tab) {
 		tab.detectedOs = os;
 	}
+}
+
+export function setTelnetConnection(tabId: string, connectionId: string): void {
+	const tab = tabs.find((t) => t.id === tabId);
+	if (tab) tab.telnetConnectionId = connectionId;
 }
 
 export function updateTabConnection(tabId: string, newConnectionId: string): void {

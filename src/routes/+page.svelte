@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getTabs, getActiveTab, updateTabTitle, updateTabConnection, createTab, activateTab, getSplit, setSplitRatio, getDraggedTab, setDraggedTab, splitWith, unsplit } from '#lib/state/tabs.svelte.js';
+	import { getTabs, getActiveTab, updateTabTitle, updateTabConnection, setTelnetConnection, createTab, activateTab, getSplit, setSplitRatio, getDraggedTab, setDraggedTab, splitWith, unsplit } from '#lib/state/tabs.svelte.js';
 	import { paneOf, paneStyle, dividerStyle, dropZone, neighbour, type Direction } from '#lib/terminal/split.js';
 	import { getActivePage } from '#lib/state/navigation.svelte.js';
 	import { isDevopsEnabled } from '#lib/state/devops.svelte.js';
@@ -7,6 +7,7 @@
 	import StartScreen from '#lib/components/layout/StartScreen.svelte';
 	import { ptySpawn, ptyClose } from '#lib/ipc/pty.js';
 	import { sshDisconnect } from '#lib/ipc/ssh.js';
+	import { telnetDisconnect } from '#lib/ipc/telnet.js';
 	import { monitoringStart, monitoringStop, monitoringGetStats, monitoringStartWsl } from '#lib/ipc/monitoring.js';
 	import { updateStats, removeStats } from '#lib/state/monitoring.svelte.js';
 	import Terminal from '#lib/components/terminal/Terminal.svelte';
@@ -179,6 +180,7 @@
 
 	let spawnedPtys = $state(new Set<string>());
 	let connectedSsh = $state(new Set<string>());
+	let connectedTelnet = $state(new Set<string>());
 	let monitoredConnections = $state(new Set<string>());
 	let pollIntervals = $state(new Map<string, ReturnType<typeof setInterval>>());
 
@@ -198,6 +200,9 @@
 		for (const tab of tabs) {
 			if (tab.type === 'ssh' && tab.connectionId) {
 				connectedSsh.add(tab.connectionId);
+			}
+			if (tab.type === 'telnet' && tab.telnetConnectionId) {
+				connectedTelnet.add(tab.telnetConnectionId);
 			}
 		}
 	});
@@ -289,6 +294,15 @@
 			}
 		}
 
+		// A Telnet tab closed, or connected again under a new id.
+		const openTelnet = new Set(tabs.map((t) => t.telnetConnectionId).filter(Boolean));
+		for (const connId of connectedTelnet) {
+			if (!openTelnet.has(connId)) {
+				connectedTelnet.delete(connId);
+				telnetDisconnect(connId).catch(() => {});
+			}
+		}
+
 		for (const connId of monitoredConnections) {
 			if (!activeConnectionIds.has(connId)) {
 				monitoredConnections.delete(connId);
@@ -347,12 +361,13 @@
 								<Terminal
 									ptyId={tab.id}
 									type={tab.type}
-									connectionId={tab.connectionId}
+									connectionId={tab.type === 'telnet' ? tab.telnetConnectionId : tab.connectionId}
 									active={focused}
 									visible={focused || pane !== null}
 									onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
 									sshConnectParams={tab.sshConnectParams}
-									onReconnected={(newId) => updateTabConnection(tab.id, newId)}
+									telnetConnectParams={tab.telnetConnectParams}
+									onReconnected={(newId) => (tab.type === 'telnet' ? setTelnetConnection(tab.id, newId) : updateTabConnection(tab.id, newId))}
 									onReady={() => handleTerminalReady(tab)}/>
 							{/if}
 						</div>

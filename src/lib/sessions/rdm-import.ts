@@ -3,8 +3,9 @@
  *
  * RDM writes the same entry model in two shapes: a .rdm (or .xml) file, which
  * is XML, and a .json file. Both are turned into plain objects first, then
- * every object that says its ConnectionType is read as an entry. RDP, SSH and
- * VNC entries become hosts; groups and credential entries are not hosts but
+ * every object that says its ConnectionType is read as an entry. RDP, SSH,
+ * VNC and Telnet entries become hosts (PuTTY entries too, by their protocol:
+ * a Raw one is a Telnet session in raw TCP mode); groups and credential entries are not hosts but
  * a credential entry linked from a host lends it its username and domain.
  * A host whose credentials are "inherited" takes them from the nearest group
  * that has some: a linked credential entry, or a login of its own. Each
@@ -27,7 +28,7 @@
 
 import type { Folder, SessionConfig, SessionKind } from '#lib/ipc/sessions.js';
 
-export type RdmKind = Extract<SessionKind, 'ssh' | 'rdp' | 'vnc'>;
+export type RdmKind = Extract<SessionKind, 'ssh' | 'rdp' | 'vnc' | 'telnet'>;
 
 export interface RdmImportHost {
 	/** Position in the export, unique within one file. */
@@ -47,6 +48,8 @@ export interface RdmImportHost {
 	jump: RdmGateway[];
 	/** The credential the host logs in with, if it has a username. */
 	credential: RdmHostCredential | null;
+	/** Telnet only: plain TCP with no Telnet (a PuTTY Raw entry). */
+	raw: boolean;
 }
 
 /** A login RDM keeps apart from the hosts: a credential entry, or a group's own. */
@@ -86,7 +89,7 @@ export type RdmParseResult =
 	| { ok: false; error: 'encrypted' }
 	| { ok: false; error: 'no_hosts' };
 
-const DEFAULT_PORT: Record<RdmKind, number> = { ssh: 22, rdp: 3389, vnc: 5900 };
+const DEFAULT_PORT: Record<RdmKind, number> = { ssh: 22, rdp: 3389, vnc: 5900, telnet: 23 };
 
 type Obj = Record<string, unknown>;
 
@@ -257,7 +260,7 @@ function collectEntries(value: unknown, out: Obj[]): void {
 	for (const v of Object.values(value)) collectEntries(v, out);
 }
 
-type EntryClass = { kind: RdmKind } | { ignore: true } | { unsupported: string };
+type EntryClass = { kind: RdmKind; raw?: boolean } | { ignore: true } | { unsupported: string };
 
 /** What an entry is, from its ConnectionType, or from its settings block when the type is a number. */
 function classify(entry: Obj): EntryClass {
@@ -273,11 +276,16 @@ function classify(entry: Obj): EntryClass {
 			return { kind: 'ssh' };
 		case 'vnc':
 			return { kind: 'vnc' };
+		case 'telnet':
+			return { kind: 'telnet' };
 		case 'vpn':
 			return isGatewayEntry(entry) ? { ignore: true } : { unsupported: raw };
 		case 'putty': {
 			const protocol = pick(entry, ['Putty.Protocol', 'Putty.ProtocolType', 'Protocol']).toLowerCase();
-			return protocol === '' || protocol === 'ssh' ? { kind: 'ssh' } : { unsupported: `Putty (${protocol})` };
+			if (protocol === '' || protocol === 'ssh') return { kind: 'ssh' };
+			if (protocol === 'telnet') return { kind: 'telnet' };
+			if (protocol === 'raw') return { kind: 'telnet', raw: true };
+			return { unsupported: `Putty (${protocol})` };
 		}
 		case 'group':
 		case 'credential':
@@ -361,17 +369,20 @@ export function splitGroup(group: string): string[] {
 const HOST_PATHS: Record<RdmKind, string[]> = {
 	ssh: ['Terminal.Host', 'Putty.Host', 'Host', 'Url', 'HostName'],
 	rdp: ['Url', 'RDP.Host', 'Host', 'HostName'],
-	vnc: ['VNC.Host', 'Url', 'Host', 'HostName']
+	vnc: ['VNC.Host', 'Url', 'Host', 'HostName'],
+	telnet: ['Terminal.Host', 'Telnet.Host', 'Putty.Host', 'Host', 'Url', 'HostName']
 };
 const PORT_PATHS: Record<RdmKind, string[]> = {
 	ssh: ['Terminal.HostPort', 'Terminal.Port', 'Putty.Port', 'HostPort', 'Port'],
 	rdp: ['RDP.Port', 'RDP.HostPort', 'HostPort', 'Port'],
-	vnc: ['VNC.Port', 'VNC.HostPort', 'HostPort', 'Port']
+	vnc: ['VNC.Port', 'VNC.HostPort', 'HostPort', 'Port'],
+	telnet: ['Terminal.HostPort', 'Terminal.Port', 'Telnet.Port', 'Telnet.HostPort', 'Putty.Port', 'HostPort', 'Port']
 };
 const USER_PATHS: Record<RdmKind, string[]> = {
 	ssh: ['Terminal.Username', 'Terminal.UserName', 'Putty.Username', 'UserName', 'Username'],
 	rdp: ['RDP.UserName', 'RDP.Username', 'UserName', 'Username'],
-	vnc: ['VNC.Username', 'VNC.UserName', 'UserName', 'Username']
+	vnc: ['VNC.Username', 'VNC.UserName', 'UserName', 'Username'],
+	telnet: ['Terminal.Username', 'Terminal.UserName', 'Telnet.Username', 'Telnet.UserName', 'Putty.Username', 'UserName', 'Username']
 };
 const CREDENTIAL_USER_PATHS = ['Credentials.UserName', 'Credentials.Username', 'UserName', 'Username'];
 const CREDENTIAL_DOMAIN_PATHS = ['Credentials.Domain', 'Domain'];
@@ -516,7 +527,8 @@ export function parseRdmExport(raw: string): RdmParseResult {
 			keyPath,
 			folder: splitGroup(text(field(entry, 'Group'))),
 			jump,
-			credential
+			credential,
+			raw: kind === 'telnet' && cls.raw === true
 		});
 	});
 

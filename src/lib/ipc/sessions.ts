@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { SecretRef } from './pwmanager';
+import type { TelnetOptions } from './telnet';
 import { t } from '#lib/state/i18n.svelte.js';
 
 export interface AuthMethod {
@@ -58,6 +59,8 @@ export interface SessionConfig {
   ssh_options?: SshOptions | null;
   /** WSL only: the distribution name, e.g. "Ubuntu" */
   wsl_distro?: string | null;
+  /** Telnet only: how it talks to the device. Absent: the defaults. */
+  telnet?: TelnetOptions | null;
   /** A saved credential this session logs in with (see savedCredentials.ts).
    *  Unset: its folder's, if one applies. */
   credential_id?: string | null;
@@ -100,7 +103,7 @@ export interface SshOptions {
   my_accepted_weakenings?: string[] | null;
 }
 
-export type SessionKind = 'ssh' | 'rdp' | 'vnc' | 'wsl';
+export type SessionKind = 'ssh' | 'rdp' | 'vnc' | 'wsl' | 'telnet';
 
 export function sessionKind(session: Pick<SessionConfig, 'kind'>): SessionKind {
   return session.kind ?? 'ssh';
@@ -155,6 +158,7 @@ export async function sessionCreate(params: {
   sshOptions?: SshOptions | null;
   wslDistro?: string | null;
   credentialId?: string | null;
+  telnet?: TelnetOptions | null;
 }): Promise<SessionConfig> {
   return invoke<SessionConfig>('session_create', {
     name: params.name,
@@ -177,6 +181,7 @@ export async function sessionCreate(params: {
     sshOptions: params.sshOptions ?? null,
     wslDistro: params.wslDistro || null,
     credentialId: params.credentialId || null,
+    telnet: params.kind === 'telnet' ? (params.telnet ?? null) : null,
   });
 }
 
