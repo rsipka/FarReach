@@ -224,6 +224,21 @@ export async function syncStatus(): Promise<SyncStatus[]> {
 	return invoke<SyncStatus[]>('vault_sync_status');
 }
 
+/** What trying a sync backend found. */
+export interface SyncProbe {
+	ok: boolean;
+	/** An SFTP server's host key, to confirm before anything is sent. */
+	hostKey: string | null;
+	/** 'empty', 'this' (this device's own data) or 'other' (another vault). */
+	holds: 'empty' | 'this' | 'other' | null;
+	error: string | null;
+}
+
+/** Try a sync backend before using it. */
+export async function testSyncBackend(url: string, token: string): Promise<SyncProbe> {
+	return invoke<SyncProbe>('vault_sync_test', { url, token });
+}
+
 export async function upgradeSyncFormat(vaultId: string): Promise<void> {
 	return invoke('vault_sync_upgrade', { vault_id: vaultId });
 }

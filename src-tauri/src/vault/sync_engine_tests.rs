@@ -324,3 +324,173 @@ fn a_backend_is_named_without_its_token() {
     let same = Backend::Turso { url: "https://db-org.turso.io".into(), token: "other".into() };
     assert_eq!(b.identity(), same.identity());
 }
+
+// ---------------------------------------------------------------------------
+// File backends: the same rules, the vault as one file in a folder or a Git
+// repository.
+
+struct FileWorld {
+    dir: PathBuf,
+}
+
+impl Drop for FileWorld {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+fn file_world() -> FileWorld {
+    let dir = std::env::temp_dir().join(format!("reach-files-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(dir.join("share")).unwrap();
+    FileWorld { dir }
+}
+
+/// A device syncing to `url`; `first` holds the vault header, as the device
+/// that created the vault does.
+async fn file_device(w: &FileWorld, name: &str, url: &str, first: bool) -> Device {
+    let path = w.dir.join(format!("{name}.db"));
+    let local = open_local(&path).await.unwrap();
+    crate::vault::schema::init_schema(&local).await.unwrap();
+    sync_local::init(&local).await.unwrap();
+    if first {
+        local
+            .execute(
+                "INSERT INTO vault_header (id, name, salt, user_uuid, created_at, vault_type, wrapped_master_dek) VALUES (?, '__personal__', ?, 'me', 1, '\"Private\"', '{}')",
+                (VAULT, vec![0u8; 32]),
+            )
+            .await
+            .unwrap();
+    }
+    let target = Target {
+        vault_id: VAULT.into(),
+        local_path: path,
+        backend: Backend::parse(url, "", &w.dir.join(format!("{name}-app"))).unwrap(),
+        master: master(),
+        key: RecordKey::derive(&master(), VAULT).unwrap(),
+        device: name.into(),
+        my_uuid: "me".into(),
+    };
+    Device { target, local }
+}
+
+impl Device {
+    async fn sync_file(&self) -> Report {
+        sync(&self.target).await.unwrap()
+    }
+}
+
+async fn the_rules_hold(w: &FileWorld, url: &str) {
+    let a = file_device(w, "a", url, true).await;
+    let b = file_device(w, "b", url, false).await;
+    a.put("s1", "web").await;
+    assert_eq!(a.sync_file().await.pushed, 1);
+    assert_eq!(b.sync_file().await.pulled, 1);
+    assert_eq!(b.names().await, vec!["web"]);
+    let mut rows = b.local.query("SELECT id FROM vault_header", ()).await.unwrap();
+    assert_eq!(rows.next().await.unwrap().unwrap().get::<String>(0).unwrap(), VAULT, "the header comes along");
+    drop(rows);
+    assert_eq!(sync_local::dirty_count(&b.local).await.unwrap(), 0);
+
+    // Both edit; the newer wins and the other is kept as a copy.
+    a.put("s1", "web from a").await;
+    b.put("s1", "web from b").await;
+    a.later(5_000).await;
+    a.sync_file().await;
+    assert_eq!(b.sync_file().await.conflicts, 1);
+    a.sync_file().await;
+    assert_eq!(a.names().await, b.names().await);
+    assert_eq!(a.names().await.len(), 2);
+
+    // A delete reaches the other device.
+    b.delete("s1").await;
+    b.sync_file().await;
+    a.sync_file().await;
+    assert_eq!(a.names().await.len(), 1);
+    assert!(a.names().await[0].starts_with("web from b (conflict copy "));
+}
+
+#[tokio::test]
+async fn a_folder_carries_the_vault_between_devices() {
+    let w = file_world();
+    let url = format!("folder:{}", w.dir.join("share").display());
+    the_rules_hold(&w, &url).await;
+
+    // The file names nothing.
+    let data = std::fs::read(w.dir.join("share").join(crate::vault::sync_store::FILE_NAME)).unwrap();
+    assert!(!data.windows(3).any(|x| x == b"web"));
+}
+
+#[tokio::test]
+async fn a_git_repository_carries_the_vault_between_devices() {
+    if !std::process::Command::new("git").arg("--version").output().is_ok_and(|o| o.status.success()) {
+        eprintln!("git not installed; skipped");
+        return;
+    }
+    let w = file_world();
+    let remote = w.dir.join("remote.git");
+    assert!(std::process::Command::new("git").args(["init", "--bare", "--quiet"]).arg(&remote).status().unwrap().success());
+    the_rules_hold(&w, &format!("git:{}", remote.display())).await;
+}
+
+#[tokio::test]
+async fn an_older_file_put_back_deletes_nothing() {
+    let w = file_world();
+    let share = w.dir.join("share");
+    let url = format!("folder:{}", share.display());
+    let a = file_device(&w, "a", &url, true).await;
+    let b = file_device(&w, "b", &url, false).await;
+    a.put("s1", "one").await;
+    a.sync_file().await;
+    let file = share.join(crate::vault::sync_store::FILE_NAME);
+    let old = std::fs::read(&file).unwrap();
+    a.put("s2", "two").await;
+    a.sync_file().await;
+    b.sync_file().await;
+    assert_eq!(b.names().await, vec!["one", "two"]);
+
+    // A backup of the share from before "two" is put back.
+    std::fs::write(&file, &old).unwrap();
+    b.sync_file().await;
+    assert_eq!(b.names().await, vec!["one", "two"], "nothing is taken as deleted");
+    a.sync_file().await;
+    assert_eq!(a.names().await, vec!["one", "two"]);
+    let c = file_device(&w, "c", &url, false).await;
+    c.sync_file().await;
+    assert_eq!(c.names().await, vec!["one", "two"], "and the file has it all again");
+}
+
+#[tokio::test]
+async fn a_folder_holding_another_vault_is_refused() {
+    let w = file_world();
+    let url = format!("folder:{}", w.dir.join("share").display());
+    let a = file_device(&w, "a", &url, true).await;
+    a.sync_file().await;
+    let mut other = file_device(&w, "x", &url, false).await;
+    other.target.key = RecordKey::derive(&master(), "another-vault").unwrap();
+    let err = sync(&other.target).await.unwrap_err().to_string();
+    assert!(err.contains("another vault"), "{err}");
+}
+
+#[test]
+fn backends_are_read_from_their_urls() {
+    let app = std::path::Path::new("/app");
+    let b = Backend::parse("sftp://me%40corp@files.example.com:2222/~/reach?hostkey=SHA256:abc", r#"{"password":"pw"}"#, app).unwrap();
+    let Backend::Sftp(t) = &b else { panic!("not sftp") };
+    assert_eq!((t.user.as_str(), t.host.as_str(), t.port, t.path.as_str()), ("me@corp", "files.example.com", 2222, "reach"));
+    assert_eq!(t.host_key.as_deref(), Some("SHA256:abc"));
+    assert_eq!(t.password.as_deref(), Some("pw"));
+    let Backend::Sftp(t) = Backend::parse("sftp://me@h/srv/reach", "pw", app).unwrap() else { panic!() };
+    assert_eq!((t.port, t.path.as_str(), t.password.as_deref()), (22, "/srv/reach", Some("pw")));
+    assert!(!b.identity().contains("pw"));
+
+    let Backend::Git(g) = Backend::parse("git:git@github.com:me/vault.git", "", app).unwrap() else { panic!() };
+    assert_eq!((g.remote.as_str(), g.branch.as_str()), ("git@github.com:me/vault.git", DEFAULT_GIT_BRANCH));
+    let Backend::Git(g) = Backend::parse("git:https://example.com/r.git#mine", "tok", app).unwrap() else { panic!() };
+    assert_eq!(g.branch, "mine");
+    assert!(g.work_dir.starts_with("/app/sync-git"));
+    assert!(Backend::parse("git:http://example.com/r.git", "tok", app).is_err(), "a token in the clear");
+    assert!(Backend::parse("git:x#--upload-pack=evil", "", app).is_err());
+
+    assert!(Backend::parse("folder:relative/path", "", app).is_err());
+    assert!(matches!(Backend::parse("libsql://db.turso.io", "t", app), Ok(Backend::Turso { .. })));
+}

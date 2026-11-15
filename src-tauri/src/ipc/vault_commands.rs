@@ -609,7 +609,7 @@ pub async fn vault_sync(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     // Not under the manager's lock: the backend may take a while.
-    let (_, failed) = crate::vault::manager::sync_vaults(&state.vault_manager, Some(&vault_id)).await;
+    let (_, failed) = crate::vault::manager::sync_vaults(&state.vault_manager, Some(&vault_id), false).await;
     match failed.into_iter().next() {
         Some((_, e)) => Err(e.to_string()),
         None => Ok(()),
@@ -620,6 +620,46 @@ pub async fn vault_sync(
 #[tauri::command(rename_all = "snake_case")]
 pub async fn vault_sync_status(state: State<'_, AppState>) -> Result<Vec<crate::vault::SyncStatus>, String> {
     Ok(state.vault_manager.lock().await.sync_statuses().await)
+}
+
+/// What trying a sync backend found.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncProbe {
+    pub ok: bool,
+    /// An SFTP server's host key, to confirm before anything is sent.
+    pub host_key: Option<String>,
+    /// "empty", "this" (this device's own vault) or "other" (another vault).
+    pub holds: Option<String>,
+    pub error: Option<String>,
+}
+
+/// Try a sync backend: whether it can be reached, and what it holds.
+#[tauri::command(rename_all = "snake_case")]
+#[tracing::instrument(skip(state, token))]
+pub async fn vault_sync_test(url: String, token: String, state: State<'_, AppState>) -> Result<SyncProbe, String> {
+    let (backend, mine) = {
+        let manager = state.vault_manager.lock().await;
+        (manager.sync_backend(&url, &token).map_err(|e| e.to_string())?, manager.personal_vault_id())
+    };
+    Ok(match crate::vault::sync_engine::probe(&backend).await {
+        Ok(found) => SyncProbe {
+            ok: true,
+            host_key: None,
+            holds: Some(match (found, mine) {
+                (None, _) => "empty".into(),
+                (Some(id), Some(mine)) if id == mine => "this".into(),
+                // Joined on first use, when this device has no vault of its own yet.
+                (Some(_), None) => "this".into(),
+                (Some(_), Some(_)) => "other".into(),
+            }),
+            error: None,
+        },
+        Err(e) => match crate::vault::sync_store::host_key_in(&e) {
+            Some(key) => SyncProbe { ok: false, host_key: Some(key), holds: None, error: None },
+            None => SyncProbe { ok: false, host_key: None, holds: None, error: Some(e.to_string()) },
+        },
+    })
 }
 
 /// Move a vault on Turso's old format to sealed records. Older Reach
