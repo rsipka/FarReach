@@ -66,6 +66,8 @@ export interface SessionConfig {
   credential_id?: string | null;
   /** Read only: the saved credential the login was filled in from. */
   credential?: CredentialUse | null;
+  /** On the start screen's Favorites. Stored on the session, so it syncs. */
+  favorite?: boolean;
 }
 
 /** Which saved credential a session's login came from, as read. */
@@ -283,6 +285,12 @@ export async function sessionDelete(sessionId: string): Promise<void> {
  *  Only the folder changes; returns how many moved. */
 export async function sessionMoveToFolder(sessionIds: string[], folderId: string | null): Promise<number> {
   return invoke<number>('session_move_to_folder', { sessionIds, folderId });
+}
+
+/** Mark sessions as favorites (or not) in one call. Only that flag
+ *  changes; returns how many changed. */
+export async function sessionSetFavorite(sessionIds: string[], favorite: boolean): Promise<number> {
+  return invoke<number>('session_set_favorite', { sessionIds, favorite });
 }
 
 export async function sessionListFolders(): Promise<Folder[]> {
