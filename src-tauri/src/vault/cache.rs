@@ -151,9 +151,7 @@ pub fn load(path: &Path, key: &CacheKey) -> Option<Snapshot> {
 /// part way leaves the old cache or the new one, never half of each.
 pub fn save(path: &Path, key: &CacheKey, snapshot: &Snapshot) -> Result<(), VaultError> {
     let sealed = key.seal(snapshot)?;
-    let tmp = path.with_extension("cache.tmp");
-    std::fs::write(&tmp, &sealed)?;
-    std::fs::rename(&tmp, path)?;
+    crate::vault::private_fs::write(path, &sealed)?;
     Ok(())
 }
 

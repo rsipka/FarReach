@@ -12,10 +12,12 @@ pub mod kdf;
 #[cfg(target_os = "linux")]
 pub mod linux_keychain;
 pub mod manager;
+pub mod private_fs;
 pub mod schema;
 pub mod shield;
 pub mod sharing;
 pub mod sync;
+pub mod sync_tokens;
 pub mod turso_api;
 pub mod turso_tls;
 pub mod types;

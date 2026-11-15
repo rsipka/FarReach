@@ -13,7 +13,7 @@ use crate::vault::crypto::{
     decrypt_secret, encrypt_secret, generate_dek, unwrap_dek, wrap_dek, wrap_dek_with_key, unwrap_dek_with_key,
 };
 use crate::vault::error::{describe_db_error, VaultError};
-use crate::vault::{biometric, cache};
+use crate::vault::{biometric, cache, private_fs, sync_tokens};
 use crate::vault::schema::init_schema;
 use crate::vault::sync::{create_replica, SyncConfig};
 use crate::vault::types::{
@@ -537,6 +537,11 @@ pub(crate) struct StoredIdentity {
     /// User-created vaults (shared, private) - persisted for reopening after restart
     #[serde(default)]
     pub(crate) user_vaults: Vec<StoredVaultRef>,
+    /// Every sync token above, sealed under the identity key (see
+    /// `sync_tokens`). Written in place of the plain token fields, which an
+    /// older version's file may still have.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) sealed_tokens: Option<String>,
 }
 
 /// Vault manager - core state machine for encrypted vault operations.
@@ -740,15 +745,23 @@ impl VaultManager {
             );
         }
 
-        // Load personal sync config
+        // Load personal sync config, stored internal vault IDs and
+        // user-created vaults; their tokens are sealed in the file.
         self.personal_sync_url = stored.personal_sync_url;
-        self.personal_sync_token = stored.personal_sync_token;
-
-        // Load stored internal vault IDs
         self.internal_vault_ids = stored.internal_vault_ids;
-
-        // Load user-created vaults
-        self.user_vaults = stored.user_vaults;
+        let plain_tokens = self.restore_sync_tokens(
+            stored.personal_sync_token,
+            stored.user_vaults,
+            stored.sealed_tokens.as_deref(),
+        );
+        self.harden_app_dir();
+        if plain_tokens {
+            // A file from before the tokens were sealed: seal them now.
+            match self.save_identity_current().await {
+                Ok(()) => tracing::info!("Sync tokens moved out of the identity file's plain text"),
+                Err(e) => tracing::warn!("Could not seal the sync tokens yet: {}", e),
+            }
+        }
 
         // Open and unlock internal vaults (will use personal sync if configured)
         self.ensure_internal_vaults().await?;
@@ -897,15 +910,23 @@ impl VaultManager {
         self.user_uuid = Some(stored.user_uuid);
         self.identity_public_key = Some(public_key.to_bytes());
 
-        // Load personal sync config
+        // Load personal sync config, stored internal vault IDs and
+        // user-created vaults; their tokens are sealed in the file.
         self.personal_sync_url = stored.personal_sync_url;
-        self.personal_sync_token = stored.personal_sync_token;
-
-        // Load stored internal vault IDs
         self.internal_vault_ids = stored.internal_vault_ids;
-
-        // Load user-created vaults
-        self.user_vaults = stored.user_vaults;
+        let plain_tokens = self.restore_sync_tokens(
+            stored.personal_sync_token,
+            stored.user_vaults,
+            stored.sealed_tokens.as_deref(),
+        );
+        self.harden_app_dir();
+        if plain_tokens {
+            // A file from before the tokens were sealed: seal them now.
+            match self.save_identity_current().await {
+                Ok(()) => tracing::info!("Sync tokens moved out of the identity file's plain text"),
+                Err(e) => tracing::warn!("Could not seal the sync tokens yet: {}", e),
+            }
+        }
 
         // Open internal vaults
         self.ensure_internal_vaults().await?;
@@ -1169,6 +1190,10 @@ impl VaultManager {
         sync_url: Option<String>,
         sync_token: Option<String>,
     ) -> Result<(), VaultError> {
+        // Refuse a clear-text URL before anything is closed or migrated.
+        if let Some(url) = sync_url.as_deref() {
+            crate::vault::sync::check_sync_url(url)?;
+        }
         let was_sync_enabled =
             self.personal_sync_url.is_some() && self.personal_sync_token.is_some();
 
@@ -1681,19 +1706,107 @@ impl VaultManager {
             nonce,
             public_key: BASE64.encode(public_key.as_bytes()),
             personal_sync_url: self.personal_sync_url.clone(),
-            personal_sync_token: self.personal_sync_token.clone(),
+            personal_sync_token: None,
             internal_vault_ids: self.internal_vault_ids.clone(),
-            user_vaults: self.user_vaults.clone(),
+            user_vaults: self
+                .user_vaults
+                .iter()
+                .map(|v| StoredVaultRef { sync_token: None, ..v.clone() })
+                .collect(),
+            sealed_tokens: self.seal_sync_tokens()?,
         };
 
         let json = serde_json::to_string_pretty(&stored)?;
-        tokio::fs::create_dir_all(&self.app_dir).await?;
-        tokio::fs::write(&identity_path, json).await?;
+        private_fs::private_dir(&self.app_dir)?;
+        private_fs::write_async(&identity_path, json.into_bytes()).await?;
 
         Ok(())
     }
 
     /// Save identity with current salt.
+    /// The identity's secret key, for keys derived from it.
+    fn identity_secret(&self) -> Result<zeroize::Zeroizing<[u8; 32]>, VaultError> {
+        let identity = self.identity.as_ref().ok_or(VaultError::Locked)?;
+        Ok(zeroize::Zeroizing::new(identity.with_secret(|s| s.to_bytes())))
+    }
+
+    /// Every sync token held in memory, sealed for the identity file; `None`
+    /// when there is none.
+    fn seal_sync_tokens(&self) -> Result<Option<String>, VaultError> {
+        let tokens = sync_tokens::SyncTokens {
+            personal: self.personal_sync_token.clone(),
+            vaults: self
+                .user_vaults
+                .iter()
+                .filter_map(|v| Some((v.id.clone(), v.sync_token.clone()?)))
+                .collect(),
+        };
+        if tokens.is_empty() {
+            return Ok(None);
+        }
+        let uuid = self.user_uuid.as_deref().ok_or(VaultError::Locked)?;
+        Ok(Some(sync_tokens::seal(&*self.identity_secret()?, uuid, &tokens)?))
+    }
+
+    /// Put the sync tokens read from the identity file back in memory: plain
+    /// ones from an older file as they are, sealed ones opened. Returns
+    /// whether the file had any in plain text, so it can be saved sealed.
+    fn restore_sync_tokens(
+        &mut self,
+        plain_personal: Option<String>,
+        mut user_vaults: Vec<StoredVaultRef>,
+        sealed: Option<&str>,
+    ) -> bool {
+        let had_plain = plain_personal.is_some() || user_vaults.iter().any(|v| v.sync_token.is_some());
+        let mut personal = plain_personal;
+        if let Some(sealed) = sealed {
+            let opened = self
+                .identity_secret()
+                .and_then(|secret| {
+                    let uuid = self.user_uuid.as_deref().ok_or(VaultError::Locked)?;
+                    sync_tokens::open(&*secret, uuid, sealed)
+                });
+            match opened {
+                Ok(tokens) => {
+                    if personal.is_none() {
+                        personal = tokens.personal;
+                    }
+                    for v in &mut user_vaults {
+                        if v.sync_token.is_none() {
+                            v.sync_token = tokens.vaults.get(&v.id).cloned();
+                        }
+                    }
+                }
+                Err(e) => tracing::error!("The sealed sync tokens could not be opened: {}", e),
+            }
+        }
+        self.personal_sync_token = personal;
+        self.user_vaults = user_vaults;
+        had_plain
+    }
+
+    /// Make the app's data directory, its vaults and their caches readable
+    /// by this user only. Best effort: a failure is logged, never fatal.
+    fn harden_app_dir(&self) {
+        let vault_dir = self.app_dir.join("vaults");
+        let mut result = private_fs::private_dir(&self.app_dir)
+            .and_then(|()| private_fs::restrict_file(&self.app_dir.join("vault_identity.json")));
+        if result.is_ok() && vault_dir.is_dir() {
+            result = private_fs::private_dir(&vault_dir).and_then(|()| {
+                for entry in std::fs::read_dir(&vault_dir)? {
+                    let path = entry?.path();
+                    if path.is_file() {
+                        private_fs::restrict_file(&path)?;
+                    }
+                }
+                Ok(())
+            });
+        }
+        if let Err(e) = result {
+            tracing::warn!("Could not make the vault files private to this user: {}", e);
+        }
+    }
+
     async fn save_identity_current(&self) -> Result<(), VaultError> {
         let identity_path = self.app_dir.join("vault_identity.json");
         if identity_path.exists() {
@@ -1749,7 +1862,7 @@ impl VaultManager {
 
         // Create vault directory
         let vault_dir = self.app_dir.join("vaults");
-        tokio::fs::create_dir_all(&vault_dir).await?;
+        private_fs::private_dir(&vault_dir)?;
         let db_path = vault_dir.join(format!("{}.db", vault_id));
 
         let sync_config = match (sync_url, sync_token) {
@@ -3251,11 +3364,12 @@ impl VaultManager {
         }
 
         // Sync config
-        let sync_config = if stored.personal_sync_url.is_some() || !stored.user_vaults.is_empty() {
+        // Tokens come from memory: the file holds them sealed.
+        let sync_config = if self.personal_sync_url.is_some() || !self.user_vaults.is_empty() {
             Some(ExportedSyncConfig {
-                personal_sync_url: stored.personal_sync_url,
-                personal_sync_token: stored.personal_sync_token,
-                user_vaults: stored
+                personal_sync_url: self.personal_sync_url.clone(),
+                personal_sync_token: self.personal_sync_token.clone(),
+                user_vaults: self
                     .user_vaults
                     .iter()
                     .map(|v| ExportedUserVault {
@@ -3417,7 +3531,26 @@ impl VaultManager {
                 .collect()
         };
 
-        // Step 7: Write vault_identity.json with FULL sync config
+        // Step 7: Write vault_identity.json with FULL sync config, its
+        // tokens sealed under the restored identity key.
+        let tokens = sync_tokens::SyncTokens {
+            personal: bundle.sync_config.as_ref().and_then(|sc| sc.personal_sync_token.clone()),
+            vaults: user_vaults
+                .iter()
+                .filter_map(|v| Some((v.id.clone(), v.sync_token.clone()?)))
+                .collect(),
+        };
+        let sealed_tokens = if tokens.is_empty() {
+            None
+        } else {
+            let mut secret = zeroize::Zeroizing::new([0u8; 32]);
+            secret.copy_from_slice(&secret_key_bytes);
+            Some(sync_tokens::seal(&*secret, &bundle.identity.user_uuid, &tokens)?)
+        };
+        let user_vaults: Vec<StoredVaultRef> = user_vaults
+            .into_iter()
+            .map(|v| StoredVaultRef { sync_token: None, ..v })
+            .collect();
         let stored = StoredIdentity {
             user_uuid: bundle.identity.user_uuid.clone(),
             salt: bundle.identity.salt.clone(),
@@ -3425,19 +3558,20 @@ impl VaultManager {
             nonce: bundle.identity.nonce.clone(),
             public_key: bundle.identity.public_key.clone(),
             personal_sync_url: bundle.sync_config.as_ref().and_then(|sc| sc.personal_sync_url.clone()),
-            personal_sync_token: bundle.sync_config.as_ref().and_then(|sc| sc.personal_sync_token.clone()),
+            personal_sync_token: None,
             internal_vault_ids,
             user_vaults,
+            sealed_tokens,
         };
 
         let identity_json = serde_json::to_string_pretty(&stored)?;
-        tokio::fs::create_dir_all(&self.app_dir).await?;
-        tokio::fs::write(&identity_path, &identity_json).await?;
+        private_fs::private_dir(&self.app_dir)?;
+        private_fs::write_async(&identity_path, identity_json.into_bytes()).await?;
         tracing::info!("Identity file written with full sync config");
 
         // Step 8: Create local vault DBs from bundle (fallback for offline / non-sync)
         let vault_dir = self.app_dir.join("vaults");
-        tokio::fs::create_dir_all(&vault_dir).await?;
+        private_fs::private_dir(&vault_dir)?;
 
         for exported_vault in &bundle.vaults {
             let db_path = vault_dir.join(format!("{}.db", exported_vault.vault_id));
@@ -3792,3 +3926,7 @@ mod keychain_tests;
 #[cfg(test)]
 #[path = "manager_copied_ids_tests.rs"]
 mod copied_ids_tests;
+
+#[cfg(test)]
+#[path = "manager_sync_tokens_tests.rs"]
+mod sync_tokens_tests;

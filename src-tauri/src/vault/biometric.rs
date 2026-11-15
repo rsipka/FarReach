@@ -374,9 +374,7 @@ pub fn load(app_dir: &Path) -> Option<Unlockers> {
 }
 
 pub fn save(app_dir: &Path, unlockers: &Unlockers) -> std::io::Result<()> {
-    let tmp = app_dir.join(format!("{FILE}.tmp"));
-    std::fs::write(&tmp, serde_json::to_vec_pretty(unlockers)?)?;
-    std::fs::rename(&tmp, app_dir.join(FILE))
+    crate::vault::private_fs::write(&app_dir.join(FILE), &serde_json::to_vec_pretty(unlockers)?)
 }
 
 pub fn remove(app_dir: &Path) -> std::io::Result<()> {
