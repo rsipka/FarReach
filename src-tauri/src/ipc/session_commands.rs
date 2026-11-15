@@ -797,6 +797,7 @@ pub async fn session_create(
         shell,
         ssh_options: ssh_options.filter(|o| !o.is_empty()),
         credential_id: credential_id.filter(|c| !c.is_empty()),
+        favorite: false,
         credential: None,
     };
 
@@ -928,6 +929,50 @@ pub async fn session_move_to_folder(
     }
     tracing::info!("Moved {moved} sessions to folder {folder_id:?}");
     Ok(moved)
+}
+
+/// Mark sessions as favorites, or unmark them, in one go. Like
+/// `session_move_to_folder`, only `favorite` changes: each stored session
+/// is written back with every other field as it was. Returns how many
+/// changed; a session that no longer exists is skipped.
+#[tauri::command]
+#[tracing::instrument(skip(state, session_ids), fields(count = session_ids.len()))]
+pub async fn session_set_favorite(
+    state: State<'_, AppState>,
+    session_ids: Vec<String>,
+    favorite: bool,
+) -> Result<u32, String> {
+    let manager = state.vault_manager.lock().await;
+    if manager.is_locked() {
+        return Err("Vault is locked".to_string());
+    }
+    let mut changed = 0u32;
+    for id in &session_ids {
+        let Some(loc) = locate_session(&manager, id).await else { continue };
+        let plaintext = manager.read_secret(&loc.vault_id, &loc.secret_id).await.map_err(|e| e.to_string())?;
+        use secrecy::ExposeSecret;
+        let mut value: serde_json::Value =
+            serde_json::from_slice(plaintext.expose_secret()).map_err(|e| format!("Invalid session data: {e}"))?;
+        let Some(obj) = value.as_object_mut() else { return Err(format!("Invalid session data: {id}")) };
+        let was = obj.get("favorite").and_then(serde_json::Value::as_bool).unwrap_or(false);
+        if was == favorite {
+            continue;
+        }
+        // Off is no field at all, as a session that was never a favorite.
+        if favorite {
+            obj.insert("favorite".into(), serde_json::Value::Bool(true));
+        } else {
+            obj.remove("favorite");
+        }
+        let json = serde_json::to_vec(&value).map_err(|e| e.to_string())?;
+        manager
+            .update_secret(&loc.vault_id, &loc.secret_id, SecretBox::new(Box::new(json)))
+            .await
+            .map_err(|e| e.to_string())?;
+        changed += 1;
+    }
+    tracing::info!("Set favorite={favorite} on {changed} sessions");
+    Ok(changed)
 }
 
 /// Delete a session by ID. O(1) delete.
@@ -1516,6 +1561,16 @@ mod unique_tests {
             crate::vault::manager::unified_secret_id(SESSIONS_VAULT_NAME, "ab8dc7a4-4d90-4c04-bb80-fb0ac8ed3afa"),
             "__sessions___ab8dc7a4-4d90-4c04-bb80-fb0ac8ed3afa"
         );
+    }
+
+    #[test]
+    fn favorite_is_stored_only_when_on() {
+        let mut s = session("a", "v1");
+        assert!(!s.favorite);
+        assert!(serde_json::to_value(&s).unwrap().get("favorite").is_none());
+        s.favorite = true;
+        let back: SessionConfig = serde_json::from_value(serde_json::to_value(&s).unwrap()).unwrap();
+        assert!(back.favorite);
     }
 
     #[test]

@@ -117,6 +117,10 @@ pub struct SessionConfig {
     /// "own": the session's own login even then.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credential_id: Option<String>,
+    /// Pinned to the start screen's Favorites. Kept on the session so it
+    /// syncs with it; omitted from disk when off.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub favorite: bool,
     /// Read only: the saved credential this session's login was filled
     /// from when it was read, if one applies. Never stored.
     #[serde(default, skip_serializing_if = "Option::is_none")]
