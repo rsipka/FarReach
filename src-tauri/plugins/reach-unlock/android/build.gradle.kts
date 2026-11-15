@@ -30,12 +30,12 @@ kotlin {
 }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.9.0")
-    implementation("androidx.appcompat:appcompat:1.6.0")
+    implementation("androidx.core:core-ktx:1.19.1")
+    implementation("androidx.appcompat:appcompat:1.8.0")
     // BiometricPrompt with a CryptoObject (latest stable).
     implementation("androidx.biometric:biometric:1.1.0")
     // FIDO2 security keys over USB and NFC.
-    implementation("com.yubico.yubikit:android:3.2.1")
-    implementation("com.yubico.yubikit:fido:3.2.1")
+    implementation("com.yubico.yubikit:android:3.3.0")
+    implementation("com.yubico.yubikit:fido:3.3.0")
     implementation(project(":tauri-android"))
 }
