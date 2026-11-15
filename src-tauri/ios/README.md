@@ -121,9 +121,9 @@ tab, or it runs on every pull request; the IPA is the run's
 
 ## Bundle identifier
 
-`src-tauri/tauri.ios.conf.json` sets `io.github.rsipka.reach`. Apple makes
-every bundle identifier unique to one team, so anyone else building this fork
-changes it to one of their own.
+iOS uses the app's own `identifier` from `src-tauri/tauri.conf.json`. Apple
+makes every bundle identifier unique to one team, so anyone else building this
+fork with their own Apple account changes it to one of their own.
 
 ## Free Apple account limits
 
