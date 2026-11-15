@@ -18,16 +18,8 @@
 > as pull requests; most of them are meant to land upstream. If you don't need what FarReach adds,
 > use [Reach](https://github.com/alexandrosnt/Reach) itself.
 >
-> FarReach reads the same data as Reach (same app id, vault and keychain entries), so it replaces a
-> Reach install on the same device. Don't run both at once.
-
----
-
-<p align="center">
-  <a href="https://reachssh.com/download/">
-    <img src="assets/banner.png" alt="Reach — manage your servers, everywhere" width="900" />
-  </a>
-</p>
+> FarReach has its own app id, data folder and keychain entries, so it installs and runs next to
+> Reach. It starts empty: restore a Reach backup or point it at your sync location to bring data over.
 
 ---
 
