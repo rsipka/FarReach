@@ -223,12 +223,13 @@
 		<main class="main-content">
 			{@render children()}
 		</main>
-		<!-- The assistant works on terminals. A desktop tab has no shell for it
-		     to read or type into, so it is told there is no tab. -->
+		<!-- The assistant works on shells. A desktop tab has none for it to
+		     read or type into, nor does a Telnet device's console (it runs
+		     no shell commands), so it is told there is no tab. -->
 		<AIPanel
 			connectionId={activeConnectionId}
-			activeTabId={isDesktopTab(activeTab) ? undefined : activeTab?.id}
-			activeTabType={activeTab?.type === 'rdp' || activeTab?.type === 'vnc' ? undefined : activeTab?.type}
+			activeTabId={isDesktopTab(activeTab) || activeTab?.type === 'telnet' ? undefined : activeTab?.id}
+			activeTabType={activeTab?.type === 'local' || activeTab?.type === 'ssh' ? activeTab.type : undefined}
 		/>
 	</div>
 

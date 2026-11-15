@@ -37,6 +37,7 @@
 	import { sessionUntrustedSecretRefs, sessionApproveSecretRefs, untrustedRefsFromError, type UntrustedRefs } from '#lib/ipc/sessions.js';
 	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionMoveToFolder, sessionSetFolderCredential, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
+	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
 	import { sshConnect, sshDisconnect, sshDetectOs, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
 	// Passwords are now stored encrypted in vault, not in memory cache
 	import { createTab, updateTabOs } from '#lib/state/tabs.svelte.js';
@@ -686,6 +687,26 @@
 		addToast(t('session.connected_toast', { name: session.name }), 'success');
 	}
 
+	/**
+	 * Open a saved Telnet session in a terminal tab, which connects by
+	 * itself once it is listening. Telnet has no login of its own: a saved
+	 * user name and password are typed in when the device asks for them.
+	 */
+	function openTelnet(session: SessionConfig): void {
+		setActivePage('terminal');
+		const auth = session.auth_method;
+		const tab = createTab('telnet', session.host, undefined, session.name, session.detected_os ?? null);
+		tab.telnetConnectParams = {
+			host: session.host,
+			port: session.port,
+			options: { ...DEFAULT_TELNET_OPTIONS, ...(session.telnet ?? {}) },
+			username: session.username || null,
+			password: auth.type === 'Password' && !auth.password_ref ? (auth.password ?? null) : null,
+			passwordRef: auth.type === 'Password' ? (auth.password_ref ?? null) : null,
+			sessionId: session.id,
+		};
+	}
+
 	/** Launch a local WSL session as a terminal tab */
 	function openWsl(session: SessionConfig): void {
 		const distro = session.wsl_distro?.trim();
@@ -787,6 +808,10 @@
 		}
 		if (sessionKind(session) === 'wsl') {
 			openWsl(session);
+			return;
+		}
+		if (sessionKind(session) === 'telnet') {
+			openTelnet(session);
 			return;
 		}
 		// Check if credentials are stored in the session (from vault)

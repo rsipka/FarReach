@@ -30,6 +30,7 @@ pub mod ssh;
 pub mod state;
 pub mod text;
 pub mod theme;
+pub mod telnet;
 pub mod tofu;
 pub mod toolchain;
 pub mod tunnel;
@@ -59,6 +60,7 @@ use ipc::monitoring_commands::*;
 use ipc::pty_commands::*;
 #[cfg(desktop)]
 use ipc::serial_commands::*;
+use ipc::telnet_commands::*;
 use ipc::saved_credential_commands::*;
 use ipc::session_commands::*;
 use ipc::sftp_commands::*;
@@ -341,6 +343,10 @@ pub fn run() {
             // MCP server. Off until the user enables it; nothing here starts
             // a listener or shares a session on its own.
             mcp_start,
+            telnet_connect,
+            telnet_send,
+            telnet_resize,
+            telnet_disconnect,
             rdp_connect,
             rdp_disconnect,
             rdp_mouse,
@@ -756,6 +762,10 @@ pub fn run() {
             // MCP server. Off until the user enables it; nothing here starts
             // a listener or shares a session on its own.
             mcp_start,
+            telnet_connect,
+            telnet_send,
+            telnet_resize,
+            telnet_disconnect,
             rdp_connect,
             rdp_disconnect,
             rdp_mouse,

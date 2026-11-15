@@ -113,6 +113,9 @@
 						<rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" />
 					{:else if session.kind === 'wsl'}
 						<path d="M5 8l4 4-4 4M11 16h7" />
+					{:else if session.kind === 'telnet'}
+						<!-- A console: a network device's prompt rather than a server. -->
+						<rect x="3" y="5" width="18" height="14" rx="2" /><path d="M7 10l3 2-3 2M12 14h5" />
 					{:else}
 						<rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" /><path d="M7 7.5h.01M7 16.5h.01" />
 					{/if}

@@ -14,6 +14,7 @@
 	import Button from '#lib/components/shared/Button.svelte';
 	import { sessionCreate, sessionCreateFolder, sessionList, sessionListFolders, sessionSetFolderCredential, type AuthMethod, type Folder, type JumpHostConfig, type SessionConfig } from '#lib/ipc/sessions.js';
 	import { findChildFolder, findExisting, parseRdmExport, type RdmCredential, type RdmImportHost, type RdmSkipped } from '#lib/sessions/rdm-import.js';
+	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
 	import { savedCredentialCreate, savedCredentialList, credentialsFor } from '#lib/ipc/savedCredentials.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -65,9 +66,9 @@
 	const selectedCount = $derived(selected.size);
 	/** Selected SSH and RDP hosts that would be saved without a username, which they cannot log in without. */
 	const missingUser = $derived(
-		fallbackUser.trim() ? 0 : hosts.filter((h) => selected.has(h.id) && h.kind !== 'vnc' && !h.username).length
+		fallbackUser.trim() ? 0 : hosts.filter((h) => selected.has(h.id) && needsUser(h) && !h.username).length
 	);
-	const anyWithoutUser = $derived(hosts.some((h) => h.kind !== 'vnc' && !h.username));
+	const anyWithoutUser = $derived(hosts.some((h) => needsUser(h) && !h.username));
 	const canImport = $derived(parsed && selectedCount > 0 && missingUser === 0 && !busy);
 
 	function isSaved(host: RdmImportHost): boolean {
@@ -164,8 +165,14 @@
 		return h.keyPath ? { type: 'Key', path: h.keyPath } : { type: 'Password' };
 	}
 
+	/** VNC has no user name; Telnet's is optional, typed at the device's
+	 *  prompt, so the one asked for here is not forced on it. */
+	function needsUser(h: RdmImportHost): boolean {
+		return h.kind !== 'vnc' && h.kind !== 'telnet';
+	}
+
 	function userFor(h: RdmImportHost): string {
-		return h.username || (h.kind === 'vnc' ? '' : fallbackUser.trim());
+		return h.username || (needsUser(h) ? fallbackUser.trim() : '');
 	}
 
 	/** The gateway hops; their own credentials are not in the export, so the login asks. */
@@ -268,7 +275,8 @@
 					tags: ['rdm-import'],
 					kind: h.kind,
 					domain: h.kind === 'rdp' ? h.domain : null,
-					detectedOs: h.kind === 'rdp' ? 'windows' : null
+					detectedOs: h.kind === 'rdp' ? 'windows' : null,
+					telnet: h.kind === 'telnet' ? { ...DEFAULT_TELNET_OPTIONS, mode: h.raw ? 'raw' : 'active' } : null
 				});
 				count++;
 			} catch (err) {

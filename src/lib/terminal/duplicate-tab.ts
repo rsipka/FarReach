@@ -3,7 +3,8 @@
  * just after the original and in its group.
  *
  * An SSH tab opens another login with the tab's own connect settings, as
- * Reconnect does, so it asks nothing a reconnect would not. Remote desktops
+ * Reconnect does, so it asks nothing a reconnect would not; a Telnet tab
+ * connects again the same way. Remote desktops
  * are not duplicated: a second RDP login as the same user usually logs the
  * first one off.
  */
@@ -13,7 +14,7 @@ import { createTab, getTabs, placeAfter, type Tab } from '#lib/state/tabs.svelte
 
 export function canDuplicate(tab: Tab | undefined): boolean {
 	if (!tab) return false;
-	return tab.type === 'local' || (tab.type === 'ssh' && !!tab.sshConnectParams);
+	return tab.type === 'local' || (tab.type === 'ssh' && !!tab.sshConnectParams) || (tab.type === 'telnet' && !!tab.telnetConnectParams);
 }
 
 export async function duplicateTab(id: string): Promise<void> {
@@ -34,6 +35,14 @@ export async function duplicateTab(id: string): Promise<void> {
 			from.localCommand ? { program: from.localCommand.program, args: [...from.localCommand.args] } : undefined,
 			from.wslDistro
 		);
+		placeAfter(tab.id, from.id);
+		return;
+	}
+
+	if (from.type === 'telnet') {
+		// Its terminal connects by itself, as the first one did.
+		const tab = createTab('telnet', from.title, undefined, from.sessionName, from.detectedOs);
+		tab.telnetConnectParams = { ...from.telnetConnectParams!, options: { ...from.telnetConnectParams!.options } };
 		placeAfter(tab.id, from.id);
 		return;
 	}

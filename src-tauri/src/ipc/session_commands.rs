@@ -741,6 +741,7 @@ pub async fn session_create(
     ssh_options: Option<crate::ssh::sshconf::session::SshOptions>,
     wsl_distro: Option<String>,
     credential_id: Option<String>,
+    telnet: Option<crate::telnet::protocol::TelnetOptions>,
 ) -> Result<SessionConfig, String> {
     let mut manager = state.vault_manager.lock().await;
     let kind = kind.unwrap_or_default();
@@ -773,6 +774,7 @@ pub async fn session_create(
         auth_method,
         kind,
         wsl_distro,
+        telnet: telnet.filter(|_| kind == crate::state::SessionKind::Telnet),
         domain: domain.filter(|d| !d.trim().is_empty()),
         share_path: share_path.filter(|d| !d.trim().is_empty()),
         via_session_id: via_session_id.filter(|s| !s.is_empty()),

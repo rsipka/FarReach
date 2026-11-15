@@ -12,6 +12,7 @@
 	import { folderPath } from '#lib/sessions/folder-tree.js';
 	import { open as openDialog } from '@tauri-apps/plugin-dialog';
 	import { savedCredentialList, credentialsFor, type SavedCredential } from '#lib/ipc/savedCredentials.js';
+	import { DEFAULT_TELNET_OPTIONS, type TelnetOptions } from '#lib/ipc/telnet.js';
 
 	interface Props {
 		open: boolean;
@@ -41,6 +42,8 @@
 	/** VNC only: the saved SSH session to go through, or '' for direct. */
 	let viaSessionId = $state('');
 	let wslDistro = $state('');
+	/** Telnet only: how it talks to the device. */
+	let telnetOptions = $state<TelnetOptions>({ ...DEFAULT_TELNET_OPTIONS });
 	let availableDistros = $state<string[]>([]);
 	let sshSessions = $state<SessionConfig[]>([]);
 
@@ -148,7 +151,7 @@
 	let portStr = $state('22');
 	let username = $state('root');
 
-	const DEFAULT_PORT: Record<SessionKind, string> = { ssh: '22', rdp: '3389', vnc: '5900', wsl: '0' };
+	const DEFAULT_PORT: Record<SessionKind, string> = { ssh: '22', rdp: '3389', vnc: '5900', wsl: '0', telnet: '23' };
 
 	function setKind(next: SessionKind): void {
 		if (next === kind) return;
@@ -191,7 +194,7 @@
 	let canSave = $derived(
 		name.trim().length > 0 &&
 		(kind === 'wsl' ? wslDistro.trim().length > 0 : host.trim().length > 0) &&
-		(kind === 'vnc' || kind === 'wsl' || !!usedCredential || username.trim().length > 0) &&
+		(kind === 'vnc' || kind === 'wsl' || kind === 'telnet' || !!usedCredential || username.trim().length > 0) &&
 		!saving
 	);
 
@@ -204,6 +207,7 @@
 			sharePath = editSession.share_path ?? '';
 			viaSessionId = editSession.via_session_id ?? '';
 			wslDistro = editSession.wsl_distro ?? '';
+			telnetOptions = { ...DEFAULT_TELNET_OPTIONS, ...(editSession.telnet ?? {}) };
 			credentialId = editSession.credential_id ?? '';
 			name = editSession.name;
 			host = editSession.host;
@@ -258,6 +262,7 @@
 			os = 'windows';
 			sharePath = '';
 			viaSessionId = '';
+			telnetOptions = { ...DEFAULT_TELNET_OPTIONS };
 			credentialId = '';
 			name = '';
 			host = '';
@@ -305,11 +310,12 @@
 		const rdp = kind === 'rdp';
 		const vnc = kind === 'vnc';
 		const wsl = kind === 'wsl';
+		const telnet = kind === 'telnet';
 		/** Jump hosts, proxies, login shells and ssh_config are SSH's alone. */
-		const desktop = rdp || vnc || wsl;
+		const desktop = rdp || vnc || wsl || telnet;
 		const via = vnc ? viaSessionId || null : null;
 		/** WSL and VNC have no username to share; their login stays their own. */
-		const credential = rdp || kind === 'ssh' ? credentialId || null : null;
+		const credential = rdp || telnet || kind === 'ssh' ? credentialId || null : null;
 		// RDP and VNC are password logons; the toggle below is SSH-only and
 		// its value is ignored here rather than trusted. WSL signs in by
 		// itself: nothing to keep, so a password left in the form is not saved.
@@ -404,6 +410,7 @@
 					via_session_id: via,
 					try_agent_keys: !desktop && authType === 'Key' && tryAgentKeys ? true : null,
 					wsl_distro: kind === 'wsl' ? wslDistro.trim() : null,
+					telnet: telnet ? { ...telnetOptions } : null,
 					ssh_options: sshOptionsToSave,
 					credential_id: credential,
 					credential: null,
@@ -429,6 +436,7 @@
 					tryAgentKeys: !desktop && authType === 'Key' && tryAgentKeys,
 					sshOptions: sshOptionsToSave,
 					wslDistro: kind === 'wsl' ? wslDistro.trim() : null,
+					telnet: telnet ? { ...telnetOptions } : null,
 					credentialId: credential
 				});
 			}
@@ -514,6 +522,9 @@
 				<button type="button" class="auth-btn" class:active={kind === 'vnc'} disabled={saving} onclick={() => setKind('vnc')}>
 					{t('session.protocol_vnc')}
 				</button>
+				<button type="button" class="auth-btn" class:active={kind === 'telnet'} disabled={saving} onclick={() => setKind('telnet')}>
+					{t('session.protocol_telnet')}
+				</button>
 				<!-- Only show WSL option on Windows -->
 				{#if isWindows()}
 					<button type="button" class="auth-btn" class:active={kind === 'wsl'} disabled={saving} onclick={() => setKind('wsl')}>
@@ -523,7 +534,7 @@
 			</div>
 		</div>
 
-		<Input label={t('session.name')} bind:value={name} placeholder={kind === 'rdp' ? 'Office PC' : 'My Server'} disabled={saving} />
+		<Input label={t('session.name')} bind:value={name} placeholder={kind === 'rdp' ? 'Office PC' : kind === 'telnet' ? 'Core switch' : 'My Server'} disabled={saving} />
 
 		{#if kind === 'wsl'}
 			<div class="shell-field">
@@ -554,7 +565,7 @@
 			</div>
 		{/if}
 
-		{#if kind === 'ssh' || kind === 'rdp'}
+		{#if kind === 'ssh' || kind === 'rdp' || kind === 'telnet'}
 			<div class="shell-field">
 				<label class="via-label" for="session-login">{t('credential.login')}</label>
 				<select id="session-login" class="via-select" value={credentialId} onchange={(e) => pickCredential(e.currentTarget.value)} disabled={saving}>
@@ -580,7 +591,7 @@
 		{/if}
 
 		{#if kind !== 'vnc' && kind !== 'wsl' && !usedCredential}
-			<Input label={t('session.username')} bind:value={username} placeholder={kind === 'rdp' ? 'Administrator' : 'root'} disabled={saving} />
+			<Input label={kind === 'telnet' ? t('session.telnet_username') : t('session.username')} bind:value={username} placeholder={kind === 'rdp' ? 'Administrator' : kind === 'telnet' ? 'admin' : 'root'} disabled={saving} />
 		{/if}
 
 		{#if kind === 'rdp'}
@@ -624,6 +635,42 @@
 				</select>
 				<p class="shell-hint">{t('session.vnc_via_hint')}</p>
 			</div>
+		{:else if kind === 'telnet'}
+			<!-- Telnet has no login of its own: what is saved here is typed in
+			     when the device prompts for it. No keys, jump hosts or proxies. -->
+			{#if !usedCredential}
+				<div class="shell-field">
+					<SecretRefField approvable label={t('session.password_optional')} bind:value={password} bind:secretRef={passwordRef} placeholder={t('session.stored_encrypted')} disabled={saving} onpick={(e) => (username = nameFromEntry(username, e))} />
+					<p class="shell-hint">{t('session.telnet_login_hint')}</p>
+				</div>
+			{/if}
+			<div class="shell-field">
+				<label class="via-label" for="telnet-mode">{t('session.telnet_mode')}</label>
+				<select id="telnet-mode" class="via-select" bind:value={telnetOptions.mode} disabled={saving}>
+					<option value="active">{t('session.telnet_mode_active')}</option>
+					<option value="passive">{t('session.telnet_mode_passive')}</option>
+					<option value="raw">{t('session.telnet_mode_raw')}</option>
+				</select>
+				<p class="shell-hint">{t('session.telnet_mode_hint')}</p>
+			</div>
+			<div class="row">
+				<div class="shell-field telnet-half">
+					<label class="via-label" for="telnet-newline">{t('session.telnet_enter')}</label>
+					<select id="telnet-newline" class="via-select" bind:value={telnetOptions.newline} disabled={saving}>
+						<option value="crlf">CR LF</option>
+						<option value="cr">CR</option>
+						<option value="lf">LF</option>
+					</select>
+				</div>
+				<div class="shell-field telnet-half">
+					<label class="via-label" for="telnet-backspace">{t('session.telnet_backspace')}</label>
+					<select id="telnet-backspace" class="via-select" bind:value={telnetOptions.backspace} disabled={saving}>
+						<option value="del">DEL (^?)</option>
+						<option value="ctrlh">Ctrl+H (^H)</option>
+					</select>
+				</div>
+			</div>
+			<p class="shell-hint">{t('session.telnet_keys_hint')}</p>
 		{:else if kind === 'wsl'}
 			<!-- wsl.exe signs in by itself: no password, key, jump host, proxy or
 			     ssh_config here. Only which Linux user, if not the distro's default. -->
@@ -888,6 +935,11 @@
 		display: flex;
 		gap: 10px;
 		align-items: flex-start;
+	}
+
+	.telnet-half {
+		flex: 1;
+		min-width: 0;
 	}
 
 	.field-host {

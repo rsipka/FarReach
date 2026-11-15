@@ -226,6 +226,10 @@ section('.json export');
 			{ ConnectionType: 'SSHShell', Name: 'db', Group: 'Prod/DB', Terminal: { Host: 'db.internal', Username: 'root', Password: 'nope' } },
 			{ ConnectionType: 'RDPConfigured', Name: 'jump', Url: '[fe80::1]:3391', RDP: { UserName: 'u' } },
 			{ ConnectionType: 'Putty', Name: 'telnet box', Url: 'old.local', Putty: { Protocol: 'Telnet' } },
+			{ ConnectionType: 'Putty', Name: 'console port', Url: 'cs.local', Putty: { Protocol: 'Raw', Port: 2003 } },
+			{ ConnectionType: 'Putty', Name: 'serial', Putty: { Protocol: 'Serial' } },
+			{ ConnectionType: 'Telnet', Name: 'core switch', Group: 'Net', Terminal: { Host: 'sw1.local', HostPort: 2323, Username: 'admin', Password: 'nope' } },
+			{ ConnectionType: 'Telnet', Name: 'access switch', Url: 'sw2.local' },
 			{ ConnectionType: 'Putty', Name: 'putty ssh', Url: 'p.local', Putty: { Protocol: 'Ssh', Port: 2200, Username: 'pu' } },
 			{ ConnectionType: 1, Name: 'numeric rdp', Url: 'n.local', RDP: {} }
 		]
@@ -236,7 +240,11 @@ section('.json export');
 	check('SSH from JSON, default port 22', byName.db && byName.db.port === 22 && byName.db.username === 'root' && byName.db.folder.join('/') === 'Prod/DB');
 	check('a bracketed IPv6 address with a port', byName.jump && byName.jump.host === 'fe80::1' && byName.jump.port === 3391);
 	check('PuTTY over SSH becomes an SSH host', byName['putty ssh'] && byName['putty ssh'].kind === 'ssh' && byName['putty ssh'].port === 2200 && byName['putty ssh'].username === 'pu');
-	check('PuTTY over Telnet is skipped', r.ok && r.skipped.some((s) => s.label === 'telnet box' && s.reason === 'unsupported'));
+	check('PuTTY over Telnet becomes a Telnet host', byName['telnet box'] && byName['telnet box'].kind === 'telnet' && byName['telnet box'].port === 23 && !byName['telnet box'].raw);
+	check('PuTTY Raw becomes a raw Telnet host', byName['console port'] && byName['console port'].kind === 'telnet' && byName['console port'].port === 2003 && byName['console port'].raw);
+	check('PuTTY over serial is skipped', r.ok && r.skipped.some((s) => s.label === 'serial' && s.reason === 'unsupported'));
+	check('a Telnet entry with its port and user', byName['core switch'] && byName['core switch'].kind === 'telnet' && byName['core switch'].host === 'sw1.local' && byName['core switch'].port === 2323 && byName['core switch'].username === 'admin' && byName['core switch'].folder.join('/') === 'Net');
+	check('a Telnet entry with only an address takes port 23', byName['access switch'] && byName['access switch'].port === 23 && byName['access switch'].username === '');
 	check('a numeric type is read from its settings block', byName['numeric rdp'] && byName['numeric rdp'].kind === 'rdp');
 	check('the password is not read', !JSON.stringify(r).includes('nope'));
 }
