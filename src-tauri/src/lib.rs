@@ -548,6 +548,9 @@ pub fn run() {
             vault_unlock_vault,
             vault_lock_vault,
             vault_sync,
+            vault_sync_status,
+            vault_sync_upgrade,
+            vault_sync_clear_conflicts,
             vault_secret_create,
             vault_secret_read,
             vault_secret_update,
@@ -954,6 +957,9 @@ pub fn run() {
             vault_unlock_vault,
             vault_lock_vault,
             vault_sync,
+            vault_sync_status,
+            vault_sync_upgrade,
+            vault_sync_clear_conflicts,
             vault_secret_create,
             vault_secret_read,
             vault_secret_update,
@@ -1416,10 +1422,10 @@ pub fn run() {
                 }));
             }
 
-            // Synced vaults open and list from an encrypted copy on this device.
-            // Refresh it from Turso once a vault unlocks and every minute after,
-            // and tell the interface when a refresh changed something (someone
-            // edited a shared vault) so it reloads what it shows.
+            // Every vault is a local file; synced ones exchange changes with
+            // their backend once a vault unlocks, a few seconds after each
+            // change, and every minute. When a sync brought something in,
+            // the interface is told so it reloads what it shows.
             {
                 let vaults = app.state::<AppState>().vault_manager.clone();
                 let handle = app.handle().clone();
@@ -1429,11 +1435,16 @@ pub fn run() {
                     loop {
                         tokio::select! {
                             _ = every_minute.tick() => {}
-                            _ = vault::cache::refresh_requested() => {}
+                            _ = vault::manager::sync_requested() => {
+                                // Let a burst of changes go out together.
+                                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                            }
                         }
-                        for vault_id in vault::manager::refresh_caches(&vaults).await {
+                        let (changed, _failed) = vault::manager::sync_vaults(&vaults, None).await;
+                        for vault_id in changed {
                             let _ = tauri::Emitter::emit(&handle, "vault-synced", vault_id);
                         }
+                        let _ = tauri::Emitter::emit(&handle, "vault-sync-status", ());
                     }
                 });
             }

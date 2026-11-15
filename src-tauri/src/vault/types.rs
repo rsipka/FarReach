@@ -89,6 +89,26 @@ pub enum VaultType {
     Shared { members: Vec<String> },
 }
 
+/// How a synced vault's sync stands, for the Sync tab.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncStatus {
+    pub vault_id: String,
+    pub name: String,
+    /// "turso", or a file backend's kind.
+    pub backend: String,
+    /// "legacy" (a Turso database older versions also read), "2" (sealed
+    /// records), or not known before the first sync.
+    pub format: Option<String>,
+    /// Milliseconds since the epoch.
+    pub last_sync: Option<i64>,
+    pub last_error: Option<String>,
+    /// Changes made here and not yet sent.
+    pub pending: usize,
+    /// Conflict copies made since the user last cleared the count.
+    pub conflicts: usize,
+}
+
 /// Vault info returned to frontend.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

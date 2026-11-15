@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod compat_tests;
 pub mod biometric;
-pub mod cache;
 pub mod crypto;
 #[cfg(any(target_os = "linux", test))]
 pub mod deadline;
@@ -17,6 +16,9 @@ pub mod schema;
 pub mod shield;
 pub mod sharing;
 pub mod sync;
+pub mod sync_engine;
+pub mod sync_local;
+pub mod sync_record;
 pub mod sync_tokens;
 pub mod turso_api;
 pub mod turso_tls;
@@ -28,5 +30,5 @@ pub use manager::{
 };
 pub use types::{
     AppSettings, InviteInfo, MemberInfo, MemberRole, ReceivedShare, SecretCategory, SecretMetadata,
-    ShareItemResult, SharedItemInfo, TursoDbInfo, VaultInfo, VaultType,
+    ShareItemResult, SharedItemInfo, SyncStatus, TursoDbInfo, VaultInfo, VaultType,
 };

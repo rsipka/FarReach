@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Button from '#lib/components/shared/Button.svelte';
 	import Input from '#lib/components/shared/Input.svelte';
+	import SyncStatusSection from './SyncStatusSection.svelte';
 	import { getSettings, saveSettings, exportIdentity } from '#lib/state/vault.svelte.js';
 	import type { AppSettings } from '#lib/ipc/vault.js';
 	import { createTursoDatabase, createTursoDatabaseToken, setPersonalSync, acceptInvite } from '#lib/ipc/vault.js';
@@ -278,6 +279,8 @@
 				</Button>
 			</div>
 		</div>
+
+		<SyncStatusSection />
 
 		<!-- Accept Invite Section -->
 		<div class="section">

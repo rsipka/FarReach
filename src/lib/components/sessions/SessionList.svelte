@@ -173,9 +173,9 @@
 				showQuickConnect = true;
 			}
 		});
-		// Synced vaults list from an encrypted copy on this device that is
-		// refreshed from Turso in the background. When a refresh brings in a
-		// change, such as a session someone added to a shared vault, show it.
+		// Every vault lists from its file on this device, which syncs with its
+		// backend in the background. When a sync brings in a change, such as
+		// a session someone added to a shared vault, show it.
 		const unlistenSynced = listen<string>('vault-synced', () => {
 			void loadSessions();
 		});

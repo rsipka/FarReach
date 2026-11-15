@@ -205,6 +205,33 @@ export async function syncVault(vaultId: string): Promise<void> {
 	return invoke('vault_sync', { vault_id: vaultId });
 }
 
+/** How a synced vault's sync stands. */
+export interface SyncStatus {
+	vaultId: string;
+	name: string;
+	/** "turso", or a file backend's kind. */
+	backend: string;
+	/** "legacy" (older Reach versions read it too), "2" (sealed records), or null before the first sync. */
+	format: string | null;
+	/** Milliseconds since the epoch. */
+	lastSync: number | null;
+	lastError: string | null;
+	pending: number;
+	conflicts: number;
+}
+
+export async function syncStatus(): Promise<SyncStatus[]> {
+	return invoke<SyncStatus[]>('vault_sync_status');
+}
+
+export async function upgradeSyncFormat(vaultId: string): Promise<void> {
+	return invoke('vault_sync_upgrade', { vault_id: vaultId });
+}
+
+export async function clearSyncConflicts(vaultId: string): Promise<void> {
+	return invoke('vault_sync_clear_conflicts', { vault_id: vaultId });
+}
+
 // ==================== SECRETS ====================
 
 export async function createSecret(
