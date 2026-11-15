@@ -35,7 +35,7 @@
 	import Button from '#lib/components/shared/Button.svelte';
 	import UntrustedRefsDialog from '#lib/components/pwmanager/UntrustedRefsDialog.svelte';
 	import { sessionUntrustedSecretRefs, sessionApproveSecretRefs, untrustedRefsFromError, type UntrustedRefs } from '#lib/ipc/sessions.js';
-	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionMoveToFolder, sessionSetFolderCredential, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
+	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetFolderCredential, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
 	import { sshConnect, sshDisconnect, sshDetectOs, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
@@ -133,7 +133,7 @@
 	}
 
 	// Something outside the list changed what it holds: a vault joined twice
-	// was merged back into one.
+	// was merged back into one, or a favorite was set on the start screen.
 	$effect(() => {
 		const reload = () => void loadSessions();
 		window.addEventListener('reach:sessions-changed', reload);
@@ -356,6 +356,19 @@
 				addToast(folderId ? t('session.moved_n', { count: String(n), folder: name }) : t('session.moved_out_n', { count: String(n) }), 'success');
 				clearSelection();
 			}
+		} catch (err) {
+			addToast(String(err), 'error');
+		}
+	}
+
+	/** Favorite or unfavorite a session, or every selected one if it is
+	 *  among them; the start screen hears of it. */
+	async function setFavorite(session: SessionConfig, favorite: boolean): Promise<void> {
+		const ids = selected.has(session.id) && selected.size > 1 ? [...selected] : [session.id];
+		closeContextMenu();
+		try {
+			await sessionSetFavorite(ids, favorite);
+			window.dispatchEvent(new CustomEvent('reach:sessions-changed'));
 		} catch (err) {
 			addToast(String(err), 'error');
 		}
@@ -1425,6 +1438,9 @@
 				</button>
 				<button class="context-item" onclick={() => { if (contextMenu?.session) handleEdit(contextMenu.session); closeContextMenu(); }} type="button">
 					{t('session.edit')}
+				</button>
+				<button class="context-item" onclick={() => { if (contextMenu?.session) void setFavorite(contextMenu.session, !contextMenu.session.favorite); }} type="button">
+					{contextMenu.session.favorite ? t('session.remove_favorite') : t('session.add_favorite')}
 				</button>
 				<div class="context-sep"></div>
 				<div class="context-label">{contextMenu.session && selected.has(contextMenu.session.id) && selected.size > 1 ? t('session.move_n_to_folder', { count: String(selected.size) }) : t('session.move_to_folder')}</div>

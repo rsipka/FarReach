@@ -1,15 +1,17 @@
 <script lang="ts">
 	/**
 	 * What the terminal page shows with no tab open: a way to connect right
-	 * here (an address, a session used lately, a local shell), not a single
-	 * button and a sentence in the middle of the window.
+	 * here (an address, a favorite, a session used lately, a local shell),
+	 * not a single button and a sentence in the middle of the window.
 	 */
 	import { createTab } from '#lib/state/tabs.svelte.js';
 	import { sessionAddress } from '#lib/utils/address.js';
 	import { requestSessionAction, openPalette } from '#lib/state/palette.svelte.js';
 	import { recentSessionIds } from '#lib/state/recents.svelte.js';
 	import { shortcutLabel } from '#lib/state/shortcuts.svelte.js';
-	import { sessionList, type SessionConfig } from '#lib/ipc/sessions.js';
+	import { sessionList, sessionSetFavorite, type SessionConfig } from '#lib/ipc/sessions.js';
+	import { getSettings } from '#lib/state/settings.svelte.js';
+	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { parseAddress } from '#lib/utils/address.js';
 	import { isMobile } from '#lib/platform.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -19,21 +21,67 @@
 
 	let typed = $derived(parseAddress(address));
 
-	$effect(() => {
+	const settings = getSettings();
+
+	function load(): void {
 		void sessionList()
 			.then((s) => (sessions = s))
 			.catch(() => (sessions = []));
+	}
+
+	$effect(() => {
+		load();
+		// The session list changed elsewhere, a favorite among it.
+		window.addEventListener('reach:sessions-changed', load);
+		return () => window.removeEventListener('reach:sessions-changed', load);
 	});
 
-	// Sessions used lately on this device; before any, the first few saved.
+	// Favorites (they sync with the session), by name.
+	let favorites = $derived(
+		sessions.filter((s) => s.favorite).sort((a, b) => a.name.localeCompare(b.name))
+	);
+
+	// Sessions used lately on this device, less those already in Favorites;
+	// before either, the first few saved.
 	let shown = $derived.by(() => {
 		const byId = new Map(sessions.map((s) => [s.id, s]));
 		const recent = recentSessionIds()
 			.map((id) => byId.get(id))
-			.filter((s): s is SessionConfig => !!s);
+			.filter((s): s is SessionConfig => !!s && !s.favorite);
 		if (recent.length) return { recent: true, list: recent.slice(0, 5) };
+		if (favorites.length) return { recent: true, list: [] };
 		return { recent: false, list: [...sessions].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 5) };
 	});
+
+	function connect(s: SessionConfig): void {
+		requestSessionAction({ kind: 'connect', sessionId: s.id });
+	}
+
+	/** As in the session list: with double-click to open (Settings >
+	 *  General) a mouse click only focuses the row; Enter, Space and a tap
+	 *  still connect. */
+	function onRowClick(e: MouseEvent, s: SessionConfig): void {
+		if (settings.doubleClickToOpen && e.detail > 0 && (e as PointerEvent).pointerType !== 'touch') {
+			(e.currentTarget as HTMLElement).focus();
+			return;
+		}
+		connect(s);
+	}
+
+	function onRowDouble(s: SessionConfig): void {
+		if (settings.doubleClickToOpen) connect(s);
+	}
+
+	async function toggleFavorite(s: SessionConfig): Promise<void> {
+		const on = !s.favorite;
+		try {
+			await sessionSetFavorite([s.id], on);
+			sessions = sessions.map((x) => (x.id === s.id ? { ...x, favorite: on } : x));
+			window.dispatchEvent(new CustomEvent('reach:sessions-changed'));
+		} catch (err) {
+			addToast(String(err), 'error');
+		}
+	}
 
 	function connectTyped(): void {
 		if (!typed) return;
@@ -66,20 +114,52 @@
 			<button type="submit" disabled={!typed}>{t('start.connect')}</button>
 		</form>
 
+		{#snippet row(s: SessionConfig)}
+			<li class="row">
+				<button
+					class="session"
+					onclick={(e) => onRowClick(e, s)}
+					ondblclick={() => onRowDouble(s)}
+					title={t(settings.doubleClickToOpen ? 'session.double_click_connect_to' : 'session.connect_to', { name: s.name })}
+				>
+					<span class="name">{s.name}</span>
+					<span class="addr">{sessionAddress(s)}</span>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="go" aria-hidden="true">
+						<path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+					</svg>
+				</button>
+				<button
+					class="star"
+					class:on={s.favorite}
+					onclick={() => void toggleFavorite(s)}
+					title={t(s.favorite ? 'session.remove_favorite' : 'session.add_favorite')}
+					aria-label={t(s.favorite ? 'session.remove_favorite' : 'session.add_favorite')}
+					aria-pressed={!!s.favorite}
+				>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill={s.favorite ? 'currentColor' : 'none'} aria-hidden="true">
+						<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+					</svg>
+				</button>
+			</li>
+		{/snippet}
+
+		{#if favorites.length}
+			<section>
+				<h2>{t('start.favorites')}</h2>
+				<ul>
+					{#each favorites as s (s.id)}
+						{@render row(s)}
+					{/each}
+				</ul>
+			</section>
+		{/if}
+
 		{#if shown.list.length}
 			<section>
 				<h2>{shown.recent ? t('start.recent') : t('start.saved')}</h2>
 				<ul>
 					{#each shown.list as s (s.id)}
-						<li>
-							<button class="session" onclick={() => requestSessionAction({ kind: 'connect', sessionId: s.id })}>
-								<span class="name">{s.name}</span>
-								<span class="addr">{sessionAddress(s)}</span>
-								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="go" aria-hidden="true">
-									<path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-								</svg>
-							</button>
-						</li>
+						{@render row(s)}
 					{/each}
 				</ul>
 			</section>
@@ -231,11 +311,17 @@
 		border-top: 1px solid var(--color-border);
 	}
 
+	.row {
+		display: flex;
+		align-items: stretch;
+	}
+
 	.session {
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
-		width: 100%;
+		flex: 1;
+		min-width: 0;
 		min-height: 44px;
 		padding: 0 var(--space-3) 0 var(--space-4);
 		border: none;
@@ -284,6 +370,35 @@
 	.session:hover .go,
 	.session:focus-visible .go {
 		opacity: 1;
+	}
+
+	.star {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		border: none;
+		background: transparent;
+		color: var(--color-text-tertiary);
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity var(--duration-default) var(--ease-default), color var(--duration-default) var(--ease-default);
+	}
+
+	.star.on {
+		color: var(--color-accent);
+		opacity: 1;
+	}
+
+	.row:hover .star,
+	.star:focus-visible {
+		opacity: 1;
+		outline: none;
+	}
+
+	.star:hover {
+		color: var(--color-accent);
 	}
 
 	.action {
@@ -338,7 +453,8 @@
 			min-height: 48px;
 		}
 
-		.go {
+		.go,
+		.star {
 			opacity: 1;
 		}
 	}
