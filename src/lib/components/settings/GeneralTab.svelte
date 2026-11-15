@@ -115,6 +115,21 @@
 
 	<div class="setting-row">
 		<div class="setting-info">
+			<span class="setting-label">{t('settings.double_click_open')}</span>
+			<span class="setting-description">{t('settings.double_click_open_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.doubleClickToOpen}
+				label={t('settings.double_click_open')}
+				onchange={(v) => updateSetting('doubleClickToOpen', v)}
+			/>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
 			<span class="setting-label">{t('settings.paste_warning')}</span>
 			<span class="setting-description">{t('settings.paste_warning_desc')}</span>
 		</div>
