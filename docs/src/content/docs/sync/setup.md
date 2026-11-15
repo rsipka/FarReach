@@ -96,6 +96,8 @@ The identity import step is important. Without your encryption keys, the synced 
 
 The Turso credentials are stored locally in your app settings. The API token gives access to create databases on your account, so keep it safe. Don't share it with anyone you don't trust with your Turso account.
 
+The database tokens Reach uses to reach your vaults are kept in `vault_identity.json` sealed under your vault key, never in plain text, and Reach's data folder is readable only by your user account on Linux and macOS. Sync URLs must be encrypted (`libsql://` or `https://`); plain `http://` is accepted only for a server on the same machine.
+
 ## Useful Links
 
 - [Turso quickstart](https://docs.turso.tech/quickstart)

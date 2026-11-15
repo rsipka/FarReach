@@ -64,6 +64,9 @@ impl tower_04::Service<Uri> for TursoConnector {
         let tls = self.tls.clone();
         Box::pin(async move {
             let plain = is_clear_text(&uri);
+            if plain && !super::sync::is_loopback_host(uri.authority().map(|a| a.as_str()).unwrap_or("")) {
+                return Err("refusing an unencrypted connection to another machine".into());
+            }
             let host = uri.host().ok_or("URL has no host")?.trim_matches(['[', ']']).to_owned();
             let tcp = tower_04::Service::<Uri>::call(&mut http, uri).await?;
             if plain {
