@@ -215,7 +215,7 @@ impl Unlockers {
                 Ok(seal)
             }
             Some(TOUCH_ID) => {
-                touch::verify("turn on Touch ID for your Reach vault")?;
+                touch::verify("turn on Touch ID for your FarReach vault")?;
                 let key: Zeroizing<[u8; 32]> = Zeroizing::new(rand::random());
                 let seal = self.seal_with(&key, TOUCH_ID, "Touch ID", secret)?;
                 super::manager::keychain_entry_in(TOUCH_ID_SERVICE, &seal.id)
@@ -244,7 +244,7 @@ impl Unlockers {
                 self.open_with(&key, seal)
             }
             TOUCH_ID => {
-                touch::verify("unlock your Reach vault")?;
+                touch::verify("unlock your FarReach vault")?;
                 let stored = super::manager::keychain_entry_in(TOUCH_ID_SERVICE, &seal.id)
                     .and_then(|e| e.get_password().map_err(|e| super::error::VaultError::KeychainError(e.to_string())))
                     .map_err(|e| e.to_string())?;

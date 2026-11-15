@@ -1,3 +1,4 @@
+import { APP_NAME } from '#lib/brand.js';
 import { SvelteMap } from 'svelte/reactivity';
 import * as vaultIpc from '#lib/ipc/vault.js';
 import { t } from '#lib/state/i18n.svelte.js';
@@ -203,7 +204,7 @@ export type ResumeVia = { biometric: true } | { key: true; pin?: string };
 
 /** The fingerprint prompt's text, for platforms that show Reach's own. */
 export function biometricPrompt(title: string): vaultIpc.PromptText {
-	return { title, subtitle: 'Reach', cancel: t('common.cancel') };
+	return { title, subtitle: APP_NAME, cancel: t('common.cancel') };
 }
 
 /** What people call a platform biometric. */

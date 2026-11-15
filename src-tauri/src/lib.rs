@@ -92,6 +92,11 @@ use std::sync::OnceLock;
 /// store read from this instead.
 static APP_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
+/// The product name the fork shows (FarReach, a fork of Reach). Identifiers
+/// that existing data depends on (the app id, keychain services, vault file
+/// names) keep their Reach names on purpose.
+pub const APP_NAME: &str = "FarReach";
+
 /// The app, for code with no handle of its own that needs a mobile plugin:
 /// the keychain functions, which on Android go through the Keystore.
 #[cfg(target_os = "android")]
@@ -1244,17 +1249,17 @@ pub fn run() {
                 use tauri::menu::MenuItemBuilder;
                 use tauri::Emitter;
 
-                let app_name = "Reach";
+                let app_name = APP_NAME;
 
                 // --- Reach menu ---
-                let about = PredefinedMenuItem::about(app, Some("About Reach"), None)?;
+                let about = PredefinedMenuItem::about(app, Some(&format!("About {APP_NAME}")), None)?;
                 let services = PredefinedMenuItem::services(app, None)?;
                 let separator1 = PredefinedMenuItem::separator(app)?;
-                let hide = PredefinedMenuItem::hide(app, Some("Hide Reach"))?;
+                let hide = PredefinedMenuItem::hide(app, Some(&format!("Hide {APP_NAME}")))?;
                 let hide_others = PredefinedMenuItem::hide_others(app, None)?;
                 let show_all = PredefinedMenuItem::show_all(app, None)?;
                 let separator2 = PredefinedMenuItem::separator(app)?;
-                let quit = PredefinedMenuItem::quit(app, Some("Quit Reach"))?;
+                let quit = PredefinedMenuItem::quit(app, Some(&format!("Quit {APP_NAME}")))?;
                 let reach_menu = SubmenuBuilder::new(app, app_name)
                     .item(&about)
                     .item(&services)
@@ -1366,7 +1371,7 @@ pub fn run() {
 
                 TrayIconBuilder::new()
                     .icon(icon)
-                    .tooltip("Reach")
+                    .tooltip(APP_NAME)
                     .menu(&tray_menu)
                     .on_menu_event(|app_handle, event| {
                         match event.id().as_ref() {

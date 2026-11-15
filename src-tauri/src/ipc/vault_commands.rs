@@ -115,7 +115,7 @@ pub struct PromptText {
 
 impl Default for PromptText {
     fn default() -> Self {
-        PromptText { title: "Reach".into(), subtitle: None, cancel: "Cancel".into() }
+        PromptText { title: crate::APP_NAME.into(), subtitle: None, cancel: "Cancel".into() }
     }
 }
 
