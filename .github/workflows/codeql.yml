@@ -9,8 +9,49 @@ on:
     - cron: "37 20 * * 2"
 
 jobs:
+  # A pull request analyzes only the languages it touches; a README edit
+  # analyzes nothing. Pushes to main and the weekly run analyze everything,
+  # so main's results stay complete for pull requests to compare against.
+  languages:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      list: ${{ steps.pick.outputs.list }}
+    steps:
+      - uses: dorny/paths-filter@v4
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            actions:
+              - '.github/**'
+            javascript-typescript:
+              - '**/*.{js,mjs,cjs,ts,mts,cts,svelte,astro,html}'
+              - '**/package.json'
+              - '**/package-lock.json'
+            rust:
+              - '**/*.rs'
+              - '**/Cargo.toml'
+              - '**/Cargo.lock'
+
+      - id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          CHANGED: ${{ steps.filter.outputs.changes }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            list="$CHANGED"
+          else
+            list='["actions","javascript-typescript","rust"]'
+          fi
+          echo "list=${list:-[]}" | tee -a "$GITHUB_OUTPUT"
+
   analyze:
     name: Analyze (${{ matrix.language }})
+    needs: languages
+    if: needs.languages.outputs.list != '[]'
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -23,7 +64,7 @@ jobs:
       matrix:
         # Nothing is built: CodeQL reads Rust, TypeScript/Svelte and the
         # workflows straight from the source.
-        language: [actions, javascript-typescript, rust]
+        language: ${{ fromJSON(needs.languages.outputs.list) }}
 
     steps:
       - name: Checkout repository
