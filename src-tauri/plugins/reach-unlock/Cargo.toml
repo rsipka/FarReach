@@ -8,6 +8,9 @@ publish = false
 # tauri-build finds a plugin's Android library through the DEP_<links>_* variables
 # this name produces, and wires it into the generated Android project.
 links = "tauri-plugin-reach-unlock"
+# Named outright, though it is the default: Dependabot copies only manifests and
+# lockfiles, and cargo refuses `links` when it cannot see a build script.
+build = "build.rs"
 
 [dependencies]
 tauri = "2"
