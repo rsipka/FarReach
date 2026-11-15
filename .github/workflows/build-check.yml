@@ -27,7 +27,107 @@ env:
   CARGO_PROFILE_DEV_DEBUG: 0
 
 jobs:
+  # What the change touches, so a README edit does not start 40 minutes of
+  # builds. Each job below runs only for its own part of the tree; the
+  # "Build check result" job at the end always reports, so it is the one
+  # check to make required (a skipped job counts as passed, a check that
+  # never starts would leave the pull request waiting forever).
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      frontend: ${{ steps.pick.outputs.frontend }}
+      rust: ${{ steps.pick.outputs.rust }}
+      mobile: ${{ steps.pick.outputs.mobile }}
+      docs: ${{ steps.pick.outputs.docs }}
+    steps:
+      # A pull request's files come from the API; a push needs the history.
+      - uses: actions/checkout@v7
+        if: github.event_name == 'push'
+
+      - uses: dorny/paths-filter@v4
+        id: filter
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          # Markdown never builds into the app; docs/ is its own filter.
+          predicate-quantifier: some-with-excludes
+          filters: |
+            frontend:
+              - '.github/workflows/build-check.yml'
+              - 'src/**'
+              - 'static/**'
+              - 'scripts/**'
+              - 'registry/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'vite.config.ts'
+              - 'tsconfig.json'
+              - '!**/*.md'
+            # static/ and registry/ are compiled into the Rust side too
+            # (include_bytes!/include_str!).
+            rust:
+              - '.github/workflows/build-check.yml'
+              - 'src-tauri/**'
+              - 'static/**'
+              - 'registry/**'
+              - '!**/*.md'
+            # The APK also needs the Tauri CLI from package.json to match
+            # the Rust crates.
+            mobile:
+              - '.github/workflows/build-check.yml'
+              - 'src-tauri/**'
+              - 'static/**'
+              - 'registry/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '!**/*.md'
+            docs:
+              - '.github/workflows/build-check.yml'
+              - 'docs/**'
+
+      # Started by hand, everything runs.
+      - id: pick
+        env:
+          ALL: ${{ github.event_name == 'workflow_dispatch' }}
+          FRONTEND: ${{ steps.filter.outputs.frontend }}
+          RUST: ${{ steps.filter.outputs.rust }}
+          MOBILE: ${{ steps.filter.outputs.mobile }}
+          DOCS: ${{ steps.filter.outputs.docs }}
+        run: |
+          for area in FRONTEND RUST MOBILE DOCS; do
+            value="${!area}"
+            [ "$ALL" = true ] && value=true
+            echo "${area,,}=${value:-false}" | tee -a "$GITHUB_OUTPUT"
+          done
+
+  # Type check, translations and the production build. The frontend is the
+  # same on every platform, so once on Linux is enough.
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check and build the frontend
+        run: |
+          npm run check
+          npm run i18n:check
+          npm run build
+
   test:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -70,11 +170,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check and build the frontend
-        run: |
-          npm run check
-          npm run i18n:check
-          npm run build
+      # tauri-build wants the built frontend to exist.
+      - name: Build the frontend
+        run: npm run build
 
       - name: Rust tests
         working-directory: src-tauri
@@ -96,6 +194,8 @@ jobs:
   # desktop runners: Android has its own C library, and system libraries such
   # as zlib that the app links against come from the device.
   android:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -165,6 +265,8 @@ jobs:
   # The documentation site, built the way its deploy builds it: from docs/
   # alone, with the app never set up.
   docs:
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -190,6 +292,8 @@ jobs:
   # command. Signed with a throwaway key made here, since only the release has
   # the real one. The test job above builds the Rust side only.
   android-apk:
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -286,3 +390,19 @@ jobs:
           [ "$(wc -l < /tmp/apks)" -eq 2 ]
           BUILD_TOOLS=$(ls -d $ANDROID_SDK_ROOT/build-tools/*/ | sort -V | tail -1)
           while read apk; do ${BUILD_TOOLS}apksigner verify "$apk"; done < /tmp/apks
+
+  # The one check to require in branch protection: it always runs, passes
+  # when every job above passed or was skipped, and fails otherwise.
+  result:
+    name: Build check result
+    if: always()
+    needs: [changes, frontend, test, android, docs, android-apk]
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Results: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) exit 1 ;; esac
+          done

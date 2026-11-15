@@ -18,6 +18,7 @@ All notable changes to FarReach are documented here. FarReach is a fork of [Reac
 - **RDP and VNC after logoff** — When the server logs you off, the panel no longer floods the log with input errors.
 - **Czech translation** — FarReach is available in Czech.
 - **iOS** — Early iOS support: phone code paths cover iOS as well as Android, and CI builds an unsigned IPA.
+- **CI runs only what a change touches** — A README or other Markdown edit no longer starts the full build: build checks, the iOS build and CodeQL each look at the changed files first. Frontend changes are checked once on Linux, Rust changes run the desktop and Android tests, docs/ builds the docs site, and the iOS build runs for Rust, config or dependency changes. A single *Build check result* check always reports, so it can be the required one.
 
 ## v0.9.1
 - **File explorer: Details view** — A new toolbar button shows each entry as a row of columns, as MobaXterm does: Name, Size, Modified, Owner, Group and Access. Click a heading to sort by it and again to reverse; folders stay on top. Right-click the headings to choose which columns show. A sidebar narrower than the columns scrolls sideways. The view, columns and sort order are remembered on each device. Servers whose `ls` cannot print exact times (BusyBox, BSD, macOS) leave Modified empty. Asked for on Discord.

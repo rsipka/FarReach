@@ -21,7 +21,56 @@ env:
   CARGO_PROFILE_DEV_DEBUG: 0
 
 jobs:
+  # Only when the iOS app itself can change: its Rust side, config, the
+  # Tauri CLI version or this workflow. A frontend-only pull request is
+  # checked by build-check.yml; on main it rebuilds too, so the IPA from the
+  # latest main always has the current frontend.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      build: ${{ steps.pick.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+        if: github.event_name == 'push'
+
+      - uses: dorny/paths-filter@v4
+        id: filter
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          predicate-quantifier: some-with-excludes
+          filters: |
+            ios:
+              - '.github/workflows/ios-build.yml'
+              - 'scripts/ios-init.sh'
+              - 'src-tauri/**'
+              - 'static/**'
+              - 'registry/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '!**/*.md'
+            frontend:
+              - 'src/**'
+              - 'vite.config.ts'
+              - 'tsconfig.json'
+              - '!**/*.md'
+
+      - id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          IOS: ${{ steps.filter.outputs.ios }}
+          FRONTEND: ${{ steps.filter.outputs.frontend }}
+        run: |
+          build=false
+          if [ "$EVENT" = workflow_dispatch ] || [ "$IOS" = true ]; then build=true; fi
+          if [ "$EVENT" = push ] && [ "$FRONTEND" = true ]; then build=true; fi
+          echo "build=$build" | tee -a "$GITHUB_OUTPUT"
+
   ipa:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: macos-latest
     timeout-minutes: 90
     steps:
