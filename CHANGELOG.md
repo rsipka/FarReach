@@ -1,6 +1,23 @@
 # Changelog
 
-All notable changes to Reach are documented here.
+All notable changes to FarReach are documented here. FarReach is a fork of [Reach](https://github.com/alexandrosnt/Reach); the entries from v0.9.1 down are Reach's own.
+
+## FarReach (unreleased, based on Reach v0.9.1)
+- **FarReach** — The fork has its own name, links and updates (from [rsipka/FarReach](https://github.com/rsipka/FarReach/releases)). Its app id is `com.farreach.client`, with its own data folder and keychain entries, so it installs and runs next to Reach. It starts empty: restore a Reach backup or use the same sync location to bring your data over.
+- **Import from Remote Desktop Manager** — *Import from Remote Desktop Manager* in the sessions menu reads an RDM export (`.rdm`/`.xml` or `.json`), as a file or pasted. RDP, SSH (including PuTTY over SSH), VNC and Telnet entries become sessions, RDM groups become folders, and SSH gateways become jump hosts. Logins become saved credentials, inherited ones included, and RDM's notes and custom fields come along. Hosts already in the vault are skipped.
+- **Saved credentials** — A login can be kept once in a vault and used by many sessions, set on a folder for the sessions inside it, or picked for a jump host. Change it once and every session that uses it follows.
+- **Imports check only the target vault** — The RDM, RDP and ssh_config imports skipped hosts saved in any vault; now only the vault you import into counts.
+- **Session notes and custom fields** — Each session can carry free-text notes and named fields (optionally hidden), like RDM's Documentation tab. They are encrypted and synced with the session, and search looks in them.
+- **Telnet sessions** — For switches, routers and other gear without SSH: option negotiation, active, passive and raw TCP modes for console server ports, per-session Enter and Backspace, and a saved username and password typed in at the device's login prompts.
+- **Broadcast input** — Pick terminal tabs from the tab menu, Ctrl+Shift+B, a tab group or the command palette, and what you type or paste goes to all of them. A warning bar, tinted tabs and a border on each terminal show when it is on.
+- **Favorites on the start screen** — Star a session from the start screen or the session list. The star is stored on the session, so it syncs.
+- **Open sessions with a double click** — A setting under General: a single click only picks a session, a double click connects.
+- **Local-first sync** — Every vault is a local file, synced or not, so FarReach works offline and synced vaults open at once. A background engine merges changes record by record; a losing edit to a session or credential is kept as a conflict copy instead of being lost.
+- **Sync through a folder, SFTP, Git or SMB** — Besides Turso, a personal vault can sync as one sealed file in a folder, over SFTP, in a Git repository, or on an SMB share that FarReach reaches by itself, with no mount or drive letter.
+- **Turso sync hardened** — Database tokens are sealed in the identity file, data files are private to your user on Linux and macOS, and clear-text sync URLs are refused unless they point at this machine.
+- **RDP and VNC after logoff** — When the server logs you off, the panel no longer floods the log with input errors.
+- **Czech translation** — FarReach is available in Czech.
+- **iOS** — Early iOS support: phone code paths cover iOS as well as Android, and CI builds an unsigned IPA.
 
 ## v0.9.1
 - **File explorer: Details view** — A new toolbar button shows each entry as a row of columns, as MobaXterm does: Name, Size, Modified, Owner, Group and Access. Click a heading to sort by it and again to reverse; folders stay on top. Right-click the headings to choose which columns show. A sidebar narrower than the columns scrolls sideways. The view, columns and sort order are remembered on each device. Servers whose `ls` cannot print exact times (BusyBox, BSD, macOS) leave Modified empty. Asked for on Discord.
