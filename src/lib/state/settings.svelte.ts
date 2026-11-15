@@ -15,6 +15,9 @@ export interface Settings {
 	uiZoom: number;
 	/** Tighter rows (a session on one line): space over air. Text stays its size. */
 	compactLayout: boolean;
+	/** Sessions in the list open on a double click; a single click only
+	 *  focuses the row. Off: one click connects, as before. */
+	doubleClickToOpen: boolean;
 	fontFamily: string;
 	defaultShell: string;
 	openLastSession: boolean;
@@ -124,6 +127,7 @@ const defaults: Settings = {
 	fontSize: 14,
 	uiZoom: 1,
 	compactLayout: false,
+	doubleClickToOpen: false,
 	fontFamily: 'monospace',
 	defaultShell: '/bin/bash',
 	openLastSession: false,
@@ -218,6 +222,7 @@ export function loadSettings(): void {
 			settings.fontSize = parsed.fontSize ?? defaults.fontSize;
 			settings.uiZoom = parsed.uiZoom ?? defaults.uiZoom;
 			settings.compactLayout = parsed.compactLayout ?? defaults.compactLayout;
+			settings.doubleClickToOpen = parsed.doubleClickToOpen ?? defaults.doubleClickToOpen;
 			settings.fontFamily = parsed.fontFamily ?? defaults.fontFamily;
 			settings.defaultShell = parsed.defaultShell ?? defaults.defaultShell;
 			settings.openLastSession = parsed.openLastSession ?? defaults.openLastSession;

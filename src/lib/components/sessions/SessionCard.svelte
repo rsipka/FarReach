@@ -6,6 +6,9 @@
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { sessionAddress } from '#lib/utils/address.js';
 	import { isWindows } from '#lib/platform.js';
+	import { getSettings } from '#lib/state/settings.svelte.js';
+
+	const settings = getSettings();
 
 	interface Props {
 		session: SessionConfig;
@@ -27,14 +30,35 @@
 
 	let { session, vault = null, onconnect, onedit, ondelete, oncontextmenu, ondragstart, ondragend, selecting = false, selected = false, onselect }: Props = $props();
 	let unavailable = $derived(session.kind === 'wsl' && !isWindows());
+	/** Double-click to open (Settings > General): a mouse click only focuses
+	 *  the row. Enter or Space (a click with no detail) and a tap still
+	 *  connect, as there is no double press for either. */
+	let needsDouble = $derived(settings.doubleClickToOpen && !selecting);
+
 	function onMain(e: MouseEvent): void {
 		if (unavailable && !selecting) return;
 		if (onselect && (selecting || e.ctrlKey || e.metaKey || e.shiftKey)) {
 			e.preventDefault();
 			onselect(e);
+		} else if (needsDouble && e.detail > 0 && (e as PointerEvent).pointerType !== 'touch') {
+			// The dblclick event connects. Focus the row so it shows as picked:
+			// WebKit does not focus a button on click.
+			(e.currentTarget as HTMLElement).focus();
 		} else {
 			onconnect();
 		}
+	}
+
+	let mainTitle = $derived.by(() => {
+		if (unavailable) return t('session.wsl_windows_only');
+		if (selecting) return t('session.select_name', { name: session.name });
+		return t(needsDouble ? 'session.double_click_connect_to' : 'session.connect_to', { name: session.name });
+	});
+
+	function onMainDouble(e: MouseEvent): void {
+		if (!needsDouble || unavailable) return;
+		if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+		onconnect();
 	}
 
 	/** A lock for a password, a key for a key, a link for the agent. */
@@ -54,7 +78,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="session-card" class:selected class:unavailable oncontextmenu={oncontextmenu} role="group">
+<div class="session-card" class:selected class:unavailable class:dbl={needsDouble} oncontextmenu={oncontextmenu} role="group">
 	{#if selecting}
 		<input
 			class="select-box"
@@ -76,7 +100,7 @@
 			<circle cx="2" cy="10" r="1.2"/><circle cx="6" cy="10" r="1.2"/>
 		</svg>
 	</span>
-	<button class="card-main" onclick={onMain} disabled={unavailable && !selecting} aria-pressed={selecting ? selected : undefined} title={unavailable ? t('session.wsl_windows_only') : (selecting ? t('session.select_name', { name: session.name }) : t('session.connect_to', { name: session.name }))} >
+	<button class="card-main" onclick={onMain} ondblclick={onMainDouble} disabled={unavailable && !selecting} aria-pressed={selecting ? selected : undefined} title={mainTitle} >
 		<!-- Every row has the icon's place, so names line up whether or not the
 		     OS is known yet: its logo once detected, until then a quiet mark for
 		     the kind of session. -->
@@ -528,6 +552,12 @@
 		color: var(--color-text-secondary);
 	}
 
+
+	/* Double-click to open: the row a single click picked stays marked, so
+	   it is clear something happened. */
+	.session-card.dbl:focus-within {
+		background-color: var(--color-surface-hover);
+	}
 
 	/* Compact layout: the name and the address on one line, as a list of
 	   many servers wants. Text and the row's hit area stay the size they were. */
