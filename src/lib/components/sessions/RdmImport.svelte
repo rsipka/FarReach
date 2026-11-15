@@ -81,6 +81,7 @@
 	}
 
 	function skipReason(s: RdmSkipped): string {
+		if (s.reason === 'duplicate') return t('session.rdm_import_duplicate');
 		if (s.reason === 'bad_port') return t('session.rdp_import_bad_port');
 		if (s.reason === 'unsupported') return t('session.rdm_import_unsupported', { type: s.type ?? '?' });
 		return t('session.rdp_import_no_host');
@@ -178,7 +179,7 @@
 	/** The gateway hops; their own credentials are not in the export, so the login asks. */
 	function jumpFor(h: RdmImportHost): JumpHostConfig[] | null {
 		if (h.jump.length === 0) return null;
-		return h.jump.map((g) => ({ host: g.host, port: g.port, username: fallbackUser.trim(), auth_method: { type: 'Password' } }));
+		return h.jump.map((g) => ({ host: g.host, port: g.port, username: userFor(h), auth_method: { type: 'Password' } }));
 	}
 
 	/**

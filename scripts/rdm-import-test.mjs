@@ -367,6 +367,16 @@ section('notes and custom fields');
 	check('plain notes are left as they are', plainNotes('  a < b\n\n\n\nc ') === 'a < b\n\nc');
 }
 
+section('duplicates');
+{
+	const entry = (name, group, user) => ({ Name: name, ConnectionType: 'RDPConfigured', Group: group, Url: 'DC01.corp', RDP: { UserName: user } });
+	const r = parseRdmExport(JSON.stringify({ Connections: [entry('dc', 'A', 'admin'), entry('dc copy', 'B', 'admin'), entry('dc other user', 'B', 'bob')] }));
+	check('the same host and user twice is imported once', r.ok && r.hosts.length === 2, JSON.stringify(r.hosts?.map((h) => h.name)));
+	check('the first one wins', r.ok && r.hosts[0].name === 'dc');
+	check('the second is listed as a duplicate', r.ok && r.skipped.some((s) => s.label === 'dc copy' && s.reason === 'duplicate'));
+	check('another user on the same host is kept', r.ok && r.hosts.some((h) => h.username === 'bob'));
+}
+
 section('helpers');
 {
 	check('splitAddress: scheme and path are dropped', JSON.stringify(splitAddress('rdp://h.local:3390/x')) === JSON.stringify({ host: 'h.local', port: '3390' }));

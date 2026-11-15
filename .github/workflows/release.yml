@@ -3,12 +3,10 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*-dev.*'
 
 permissions:
   contents: write
-  # To ask the docs workflow to run once the release is out; see publish-release.
-  actions: write
 
 jobs:
   # The one release every build uploads into. When each build made the
@@ -29,13 +27,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          version=$(jq -r .version src-tauri/tauri.conf.json)
+          if [[ "$GITHUB_REF_NAME" != "v$version" || ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-dev\.[1-9][0-9]*$ ]]; then
+            echo "::error::Release tag must match the app version in vMAJOR.MINOR.PATCH-dev.N format."
+            exit 1
+          fi
           # A re-run finds the draft its first run made.
           id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
             --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\") | .id" | head -1)
           if [ -z "$id" ]; then
             id=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
               -f tag_name="$GITHUB_REF_NAME" \
-              -f name="FarReach $GITHUB_REF_NAME" \
+              -f name="FarReach Dev $GITHUB_REF_NAME" \
               -F body=@.github/release-notes.md \
               -F draft=true \
               --jq .id)
@@ -152,6 +155,29 @@ jobs:
             echo 'RELEASE_NOTES_EOF'
           } >> "$GITHUB_OUTPUT"
 
+      - name: Configure the fork updater public key
+        shell: bash
+        env:
+          UPDATER_PUBLIC_KEY: ${{ vars.TAURI_SIGNING_PUBLIC_KEY }}
+          UPDATER_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$UPDATER_PUBLIC_KEY" ]; then
+            echo "::error::Set the TAURI_SIGNING_PUBLIC_KEY repository variable."
+            exit 1
+          fi
+          if [ -z "$UPDATER_PRIVATE_KEY" ]; then
+            echo "::error::Set the TAURI_SIGNING_PRIVATE_KEY repository secret."
+            exit 1
+          fi
+          unset UPDATER_PRIVATE_KEY
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const path = "src-tauri/tauri.conf.json";
+            const config = JSON.parse(fs.readFileSync(path, "utf8"));
+            config.plugins.updater.pubkey = process.env.UPDATER_PUBLIC_KEY.trim();
+            fs.writeFileSync(path, JSON.stringify(config, null, 2));
+          '
+
       - name: Build and release
         uses: tauri-apps/tauri-action@v1
         env:
@@ -164,7 +190,7 @@ jobs:
           # linuxdeploy's AppImage plugin embeds it and writes the .zsync file,
           # so AppImageUpdate, AppImageLauncher and Gear Lever can update Reach
           # as well as its own updater. Read only by the Linux build.
-          LDAI_UPDATE_INFORMATION: gh-releases-zsync|rsipka|FarReach|latest|FarReach_*_amd64.AppImage.zsync
+          LDAI_UPDATE_INFORMATION: gh-releases-zsync|${{ github.repository_owner }}|FarReach|latest|FarReach_*_amd64.AppImage.zsync
         with:
           # Into the release made above, never a new one.
           releaseId: ${{ needs.create-release.outputs.id }}
@@ -226,10 +252,7 @@ jobs:
           echo "Bundle signature verified."
 
   publish-release:
-    # Android too: the docs site is rebuilt from the published release, and a
-    # release published before its APKs arrive gives the site a download page
-    # with no Android link until the next release.
-    needs: [create-release, build-desktop, build-android]
+    needs: [create-release, build-desktop, build-android, build-ios]
     runs-on: ubuntu-latest
     steps:
       # The last look before users see it: every platform the updater serves
@@ -246,6 +269,7 @@ jobs:
             --jq '.[] | select(.name == "latest.json") | .id')
           [ -n "$asset" ] || { echo "::error::latest.json is missing from the release."; exit 1; }
           gh api -H "Accept: application/octet-stream" "repos/$GITHUB_REPOSITORY/releases/assets/$asset" > latest.json
+          jq -e --arg version "${GITHUB_REF_NAME#v}" '(.version | ltrimstr("v")) == $version' latest.json >/dev/null
           missing=0
           for platform in windows-x86_64 darwin-aarch64 darwin-x86_64 linux-x86_64; do
             sig=$(jq -r --arg p "$platform" '.platforms[$p].signature // empty' latest.json)
@@ -259,55 +283,12 @@ jobs:
           [ "$apks" -ge 2 ] || { echo "::error::The Android APKs are missing from the release."; exit 1; }
           echo "Every platform is in latest.json, and the APKs are attached."
 
-      # apt install reach / dnf install reach. The indexes are signed with
-      # the repository key (secrets APT_GPG_PRIVATE_KEY, APT_GPG_PASSPHRASE)
-      # and nothing is published without them: a missing key stops the
-      # release here, as a draft. APT's flat index goes into the release
-      # beside the .deb; dnf's repodata cannot (asset names have no
-      # folders), so it travels as one archive the docs site unpacks.
-      - uses: actions/checkout@v7
-      - name: Sign the apt and dnf repositories
+      # Mark this as latest on the fork so its desktop and Android update feeds
+      # pick it up. The dev suffix distinguishes it from upstream stable builds.
+      - name: Publish the fork dev release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_ID: ${{ needs.create-release.outputs.id }}
-          REPO_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
-          REPO_GPG_PASSPHRASE: ${{ secrets.APT_GPG_PASSPHRASE }}
-        run: |
-          set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq apt-utils createrepo-c
-          mkdir -p pkgs
-          for kind in deb rpm; do
-            id=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" \
-              --jq "[.[] | select(.name | endswith(\".$kind\"))][0].id")
-            name=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" \
-              --jq "[.[] | select(.name | endswith(\".$kind\"))][0].name")
-            [ -n "$id" ] || { echo "::error::No .$kind in the release"; exit 1; }
-            gh api -H "Accept: application/octet-stream" "repos/$GITHUB_REPOSITORY/releases/assets/$id" > "pkgs/$name"
-          done
-          bash scripts/package-repos.sh pkgs repo "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
-          tar -C repo/rpm -czf rpm-repodata.tar.gz repodata
-          for f in repo/apt/InRelease repo/apt/Release repo/apt/Release.gpg repo/apt/Packages repo/apt/Packages.gz repo/reach-packages.asc rpm-repodata.tar.gz; do
-            gh api --method POST -H "Content-Type: application/octet-stream" \
-              "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$(basename "$f")" \
-              --input "$f" --jq .name
-          done
-
-      - name: Publish release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.ref_name }}
-          draft: false
-
-      # The docs site bakes the download links in at build time, so it has to
-      # rebuild after each release. It listens for "release published", but a
-      # release made with the workflow's own token never raises that event for
-      # other workflows: GitHub's rule against workflows triggering each other.
-      # workflow_dispatch is the one event that rule exempts, so ask directly.
-      - name: Rebuild the docs site with the new download links
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run docs.yml --repo "$GITHUB_REPOSITORY" --ref main
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
 
   build-android:
     needs: create-release
@@ -364,7 +345,11 @@ jobs:
       # update only over an app signed with the same key, so a key made fresh
       # for each build meant every update failed until the old app was removed.
       - name: Restore signing key
-        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > ${{ runner.temp }}/release.keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64" || { echo "::error::Set ANDROID_KEYSTORE_BASE64."; exit 1; }
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
 
       - name: Configure signing and packaging in Gradle
         run: |
@@ -419,7 +404,67 @@ jobs:
           ls -la dist-android
 
       - name: Upload APKs to release
-        uses: softprops/action-gh-release@v3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist-android/*.apk --clobber
+
+  build-ios:
+    needs: create-release
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.99.1
         with:
-          tag_name: ${{ github.ref_name }}
-          files: dist-android/*.apk
+          targets: aarch64-apple-ios
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: npm ci
+
+      - name: Initialize the Xcode project and export a signed IPA
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ vars.APPLE_DEVELOPMENT_TEAM }}
+          IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
+        run: |
+          set -euo pipefail
+          for credential in APPLE_DEVELOPMENT_TEAM IOS_CERTIFICATE IOS_CERTIFICATE_PASSWORD IOS_MOBILE_PROVISION; do
+            if [ -z "${!credential}" ]; then
+              echo "::error::Configure $credential before releasing iOS."
+              exit 1
+            fi
+          done
+          VERSION="${GITHUB_REF_NAME#v}"
+          BUILD_NUMBER="$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT"
+          ./scripts/ios-init.sh
+          npx tauri ios build --ci --target aarch64 --export-method app-store-connect \
+            --config "{\"version\":\"${VERSION%-dev.*}\",\"bundle\":{\"iOS\":{\"bundleVersion\":\"$BUILD_NUMBER\"}}}"
+          ipa=$(find src-tauri/gen/apple/build -type f -name '*.ipa' -print)
+          test -f "$ipa"
+          cp "$ipa" "$RUNNER_TEMP/FarReach.ipa"
+
+      - name: Upload the IPA to TestFlight
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ vars.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ vars.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+        run: |
+          set -euo pipefail
+          for credential in APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY; do
+            if [ -z "${!credential}" ]; then
+              echo "::error::Configure $credential before uploading to TestFlight."
+              exit 1
+            fi
+          done
+          umask 077
+          key_dir="$RUNNER_TEMP/app-store-connect"
+          mkdir -p "$key_dir"
+          key_path="$key_dir/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          trap 'rm -f "$key_path"' EXIT
+          printf '%s\n' "$APP_STORE_CONNECT_KEY" > "$key_path"
+          API_PRIVATE_KEYS_DIR="$key_dir" xcrun altool --upload-app --type ios \
+            --file "$RUNNER_TEMP/FarReach.ipa" --apiKey "$APP_STORE_CONNECT_KEY_ID" \
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
