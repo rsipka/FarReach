@@ -22,7 +22,7 @@
 </script>
 
 <section class="disclosure" class:open>
-	<button class="head" aria-expanded={open} onclick={() => (open = !open)}>
+	<button type="button" class="head" aria-expanded={open} onclick={() => (open = !open)}>
 		<span class="title">{title}</span>
 		{#if summary && !open}
 			<span class="summary">{summary}</span>
