@@ -28,9 +28,9 @@ The AI knows what you're doing. It reads the last 50 lines of your terminal outp
 
 When the AI suggests commands, they show up as code blocks with a **Run** button. Click it and the command gets executed directly in your active terminal. No copy-pasting needed.
 
-## Auto-execution
+## Nothing runs by itself
 
-The AI can run commands, read the output, and then suggest the next step automatically. This goes up to 6 rounds without you needing to intervene. It's useful for debugging scenarios where you need to run a command, look at the result, run another one, and so on.
+A command runs only when you click its **Run** button. After it runs, the AI reads the output and may suggest the next step, which again waits for your click. The terminal output the AI reads can contain text someone else wrote (a log line, a file, a login banner), so read a command before you run it.
 
 ## Playbook generation
 
