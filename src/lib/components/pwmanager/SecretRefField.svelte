@@ -87,10 +87,14 @@
 		if (!pwManagersLoaded()) return t('pwmanager.reason_checking');
 		const err = pwManagerStatusError();
 		if (err) return t('pwmanager.reason_error', { error: err });
-		const p = pwManagerProviders()[0];
+		// The manager the user switched on themselves, if any; Passbolt (the
+		// first, on with the master switch) otherwise.
+		const all = pwManagerProviders();
+		const p = all.find((m) => m.enabled && m.id !== 'passbolt') ?? all[0];
 		if (!p) return t('pwmanager.reason_none');
 		if (!p.enabled) return t('pwmanager.reason_off');
-		if (!p.available) return t('pwmanager.reason_missing', { name: p.name });
+		// KeePass is a file, not a CLI: without it, it is not set up.
+		if (!p.available && p.id !== 'keepass') return t('pwmanager.reason_missing', { name: p.name });
 		return t('pwmanager.reason_unconfigured', { name: p.name });
 	});
 

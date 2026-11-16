@@ -1,11 +1,11 @@
 ---
-title: Password Managers (Passbolt, 1Password, Bitwarden)
-description: Let a session take its password from Passbolt, 1Password or Bitwarden instead of keeping a copy in Reach's vault.
+title: Password Managers (Passbolt, 1Password, Bitwarden, KeePass)
+description: Let a session take its password from Passbolt, 1Password, Bitwarden or a KeePass database instead of keeping a copy in Reach's vault.
 ---
 
 If your team already keeps its server passwords in a password manager, a session in Reach can point at the entry there instead of holding a copy of the password. Reach fetches the password when you connect, uses it for the login, and forgets it. Change the password in the manager and every session that points at it uses the new one the next time it connects.
 
-Reach can read from **[Passbolt](https://www.passbolt.com/)**, through Passbolt's own command-line client, **go-passbolt-cli**, and from **[1Password](https://1password.com/)**, through the **1Password CLI** (`op`), and from **[Bitwarden](https://bitwarden.com/)** (or a self-hosted Vaultwarden), through the **Bitwarden CLI** (`bw`). KeePass is planned. Passbolt is described first; see [1Password](#1password) and [Bitwarden](#bitwarden) below for their setup.
+Reach can read from **[Passbolt](https://www.passbolt.com/)**, through Passbolt's own command-line client, **go-passbolt-cli**, and from **[1Password](https://1password.com/)**, through the **1Password CLI** (`op`), and from **[Bitwarden](https://bitwarden.com/)** (or a self-hosted Vaultwarden), through the **Bitwarden CLI** (`bw`). **[KeePass](https://keepass.info/)** databases (`.kdbx`) are read directly, with no other program. Passbolt is described first; see [1Password](#1password), [Bitwarden](#bitwarden) and [KeePass](#keepass) below for their setup.
 
 ## What you need
 
@@ -68,6 +68,19 @@ When a connection needs an entry, Reach asks for your **master password** in its
 Before it reads, Reach runs `bw sync`, so a password changed elsewhere is the one used (at most once a minute when connecting; if the server cannot be reached, the copy on this computer is used). A session stores the item's id; at connect time Reach runs `bw get password` for it. The entry search lists logins only.
 
 Two things differ from the other managers. `bw` has no way to list names without the rest: `bw list items` prints every item whole, so the passwords pass through Reach's memory on their way to being discarded (the buffer is wiped; only names, usernames and addresses are kept). And the vault `bw login` leaves on this computer belongs to the `bw` CLI: `bw lock` or `bw logout` in a terminal is honoured, and Reach will ask again or tell you to sign in.
+
+## KeePass
+
+Reach reads KeePass databases itself: `.kdbx` files as written by KeePass 2, KeePassXC, KeePassDX, Strongbox and others (KDBX 3 and 4, and the old `.kdb`). Nothing else needs to be installed.
+
+1. In Settings → **Password managers**, switch on the master switch and, in the **KeePass** card, **Use KeePass**.
+2. Choose the **database file**. If the database also needs a **key file**, choose that too. Both paths are kept on this device only and are not synced, so each computer points at its own copy. The files must be on this computer, not on a network share (a folder synced by Dropbox, Syncthing or the like is fine).
+3. Choose how long a typed master password is remembered.
+4. Press **Test connection**. Reach asks for the master password, opens the database and says how many entries it can see.
+
+When a connection needs an entry, Reach asks for the database's **master password** in its window (unless it is still remembered), reads the file, takes the one password out and closes it again. The master password is kept only in memory, encrypted, for the time you chose, and is forgotten by **Forget now**, a change of settings, locking Reach's vault, and the computer locking or going to sleep. The file is read anew on every connect, so a password changed in KeePass is used the next time.
+
+Reach only ever reads the database; it never writes it, so it does not get in the way of KeePass having the same file open. The entry search lists entries that have a password, with their group, and leaves out the recycle bin. Databases opened with a key file alone (no password), a hardware key (YubiKey challenge-response) or Windows account protection are not supported.
 
 ## Using a password manager entry in a session
 

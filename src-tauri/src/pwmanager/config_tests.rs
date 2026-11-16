@@ -152,9 +152,14 @@ fn the_cli_path_is_not_kept_in_the_synced_vault() {
         passbolt: PassboltConfig { cli_path: Some("/usr/bin/passbolt".into()), ..Default::default() },
         onepassword: OnePasswordConfig { cli_path: Some("/usr/bin/op".into()), ..Default::default() },
         bitwarden: BitwardenConfig { cli_path: Some("/usr/bin/bw".into()), ..Default::default() },
+        keepass: KeepassConfig {
+            database_path: Some("/usr/bin/db.kdbx".into()),
+            key_file_path: Some("/usr/bin/db.keyx".into()),
+            ..Default::default()
+        },
     };
     let json = serde_json::to_string(&config).unwrap();
-    assert!(!json.contains("cli_path") && !json.contains("/usr/bin"), "{json}");
+    assert!(!json.contains("cli_path") && !json.contains("_path") && !json.contains("/usr/bin"), "{json}");
     // One written by an earlier build is ignored.
     let c = parse_config(r#"{"enabled":true,"passbolt":{"cli_path":"\\\\evil\\share\\passbolt.exe"}}"#).unwrap();
     assert!(c.enabled);
@@ -502,4 +507,32 @@ fn bitwarden_is_off_by_default_and_stores_no_secret() {
 
     let c = parse_config(r#"{"enabled":true,"passbolt":{}}"#).unwrap();
     assert!(!c.bitwarden.enabled);
+}
+
+#[test]
+fn keepass_paths_are_checked_and_kept_on_this_device() {
+    let mut i = input(serde_json::json!({ "enabled": true, "passbolt": {} }));
+    let v = validate_input(&mut i, None).unwrap();
+    assert!(!v.config.keepass.enabled);
+    assert_eq!(v.config.keepass.database_path, None);
+
+    let save = |keepass: serde_json::Value, device: &DeviceSettings| {
+        let mut i = input(serde_json::json!({ "enabled": true, "passbolt": {}, "keepass": keepass }));
+        validate_input_with(&mut i, device).map(|v| v.config.keepass)
+    };
+    let none = DeviceSettings::default();
+    assert!(save(serde_json::json!({ "enabled": true, "database_path": "db.kdbx" }), &none).unwrap_err().contains("full path"));
+    assert!(save(serde_json::json!({ "enabled": true, "database_path": "\\\\nas\\share\\db.kdbx" }), &none)
+        .unwrap_err()
+        .contains("network share"));
+    let missing = std::env::temp_dir().join(format!("reach-missing-{}.kdbx", uuid::Uuid::new_v4()));
+    let missing = missing.to_str().unwrap();
+    assert!(save(serde_json::json!({ "enabled": true, "database_path": missing }), &none).unwrap_err().contains("no file"));
+    // Switched off, or already this device's path: the file is not looked at.
+    assert!(save(serde_json::json!({ "enabled": false, "database_path": missing }), &none).is_ok());
+    let known = DeviceSettings { keepass_database_path: Some(missing.into()), ..Default::default() };
+    let k = save(serde_json::json!({ "enabled": true, "database_path": missing, "remember_secs": 999999 }), &known).unwrap();
+    assert_eq!(k.database_path.as_deref(), Some(missing));
+    assert_eq!(k.remember_secs, MAX_REMEMBER_SECS);
+    assert!(!serde_json::to_string(&k).unwrap().contains("kdbx"), "the path is not in the synced configuration");
 }

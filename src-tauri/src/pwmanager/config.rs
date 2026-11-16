@@ -282,6 +282,37 @@ impl BitwardenConfig {
     }
 }
 
+/// Settings → Password managers → KeePass. No secret is stored: the master
+/// password is asked for when a call needs it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct KeepassConfig {
+    /// Absolute path to the `.kdbx` file. This device's own setting, never
+    /// in the vault: the same path means another file on another computer.
+    #[serde(skip)]
+    pub database_path: Option<String>,
+    /// Absolute path to the database's key file, if it has one. This
+    /// device's own setting too.
+    #[serde(skip)]
+    pub key_file_path: Option<String>,
+    pub enabled: bool,
+    /// How long a typed master password is kept in memory (0: only for the
+    /// operation that asked).
+    pub remember_secs: u32,
+}
+
+impl Default for KeepassConfig {
+    fn default() -> Self {
+        Self { database_path: None, key_file_path: None, enabled: false, remember_secs: DEFAULT_REMEMBER_SECS }
+    }
+}
+
+impl KeepassConfig {
+    pub fn remember_secs(&self) -> u32 {
+        clamp_remember(self.remember_secs)
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct OnePasswordSecrets {
     pub service_account_token: Option<Zeroizing<String>>,
@@ -303,6 +334,7 @@ pub struct PasswordManagersConfig {
     pub passbolt: PassboltConfig,
     pub onepassword: OnePasswordConfig,
     pub bitwarden: BitwardenConfig,
+    pub keepass: KeepassConfig,
 }
 
 /// The Passbolt secrets, read from the vault for one call and wiped when
@@ -340,6 +372,18 @@ pub struct PasswordManagersView {
     pub passbolt: PassboltView,
     pub onepassword: OnePasswordView,
     pub bitwarden: BitwardenView,
+    pub keepass: KeepassView,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct KeepassView {
+    pub database_path: Option<String>,
+    pub key_file_path: Option<String>,
+    pub enabled: bool,
+    pub remember_secs: u32,
+    /// A typed master password is kept in memory right now. Filled in by
+    /// the IPC layer.
+    pub password_cached: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -414,6 +458,13 @@ impl From<&Loaded> for PasswordManagersView {
                 remember_secs: l.config.bitwarden.remember_secs(),
                 password_cached: false,
             },
+            keepass: KeepassView {
+                database_path: l.config.keepass.database_path.clone(),
+                key_file_path: l.config.keepass.key_file_path.clone(),
+                enabled: l.config.keepass.enabled,
+                remember_secs: l.config.keepass.remember_secs(),
+                password_cached: false,
+            },
         }
     }
 }
@@ -431,6 +482,22 @@ pub struct PasswordManagersConfigInput {
     /// Left out (an older window): Bitwarden's defaults, off.
     #[serde(default)]
     pub bitwarden: BitwardenConfigInput,
+    /// Left out (an older window): KeePass's defaults, off.
+    #[serde(default)]
+    pub keepass: KeepassConfigInput,
+}
+
+#[derive(Deserialize, Zeroize, ZeroizeOnDrop, Default)]
+pub struct KeepassConfigInput {
+    #[serde(default)]
+    pub database_path: Option<String>,
+    #[serde(default)]
+    pub key_file_path: Option<String>,
+    #[serde(default)]
+    #[zeroize(skip)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub remember_secs: Option<u32>,
 }
 
 #[derive(Deserialize, Zeroize, ZeroizeOnDrop, Default)]
@@ -736,6 +803,7 @@ pub fn validate_input_with(input: &mut PasswordManagersConfigInput, device: &Dev
     let current_cli_path = device.passbolt_cli_path.as_deref();
     let (onepassword, service_account_token) =
         validate_onepassword(&mut input.onepassword, input.enabled, device.onepassword_cli_path.as_deref())?;
+    let keepass = validate_keepass(&input.keepass, input.enabled, device)?;
     let bitwarden = validate_bitwarden(&input.bitwarden, input.enabled, device.bitwarden_cli_path.as_deref())?;
     let p = &mut input.passbolt;
     let new_cli_path = p.cli_path.as_deref().map(str::trim).filter(|s| !s.is_empty());
@@ -753,6 +821,7 @@ pub fn validate_input_with(input: &mut PasswordManagersConfigInput, device: &Dev
         },
         onepassword,
         bitwarden,
+        keepass,
     };
 
     let private_key = if p.clear_private_key {
@@ -866,6 +935,38 @@ fn validate_bitwarden(
     })
 }
 
+/// A KeePass database or key file path: absolute, on this computer, and,
+/// when `check_file`, an existing file.
+fn validate_keepass_path(raw: Option<&str>, what: &str, check_file: bool) -> Result<Option<String>, String> {
+    let Some(s) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+    if s.chars().count() > MAX_CLI_PATH_CHARS || s.chars().any(char::is_control) {
+        return Err(format!("The path of {what} is not valid"));
+    }
+    let strip = |e: String| e.strip_prefix("KeePass: ").map(str::to_string).unwrap_or(e);
+    let path = super::keepass::check_path(s, what).map_err(strip)?;
+    if check_file && !path.is_file() {
+        return Err(format!("There is no file at {}", path.display()));
+    }
+    Ok(Some(s.to_string()))
+}
+
+fn validate_keepass(k: &KeepassConfigInput, master_enabled: bool, device: &DeviceSettings) -> Result<KeepassConfig, String> {
+    let trimmed = |p: Option<&str>| p.map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
+    let on = master_enabled && k.enabled;
+    // A file is looked at only when its path is new: one that has since
+    // gone (a removable drive) does not block saving the rest.
+    let database_changed = trimmed(k.database_path.as_deref()) != trimmed(device.keepass_database_path.as_deref());
+    let key_file_changed = trimmed(k.key_file_path.as_deref()) != trimmed(device.keepass_key_file_path.as_deref());
+    Ok(KeepassConfig {
+        database_path: validate_keepass_path(k.database_path.as_deref(), "the database", on && database_changed)?,
+        key_file_path: validate_keepass_path(k.key_file_path.as_deref(), "the key file", on && key_file_changed)?,
+        enabled: k.enabled,
+        remember_secs: clamp_remember(k.remember_secs.unwrap_or(DEFAULT_REMEMBER_SECS)),
+    })
+}
+
 // ---------------------------------------------------------------------------
 // This device's own settings: kept out of the synced vault.
 
@@ -882,6 +983,8 @@ pub struct DeviceSettings {
     pub passbolt_cli_path: Option<String>,
     pub onepassword_cli_path: Option<String>,
     pub bitwarden_cli_path: Option<String>,
+    pub keepass_database_path: Option<String>,
+    pub keepass_key_file_path: Option<String>,
 }
 
 /// The device settings in `path`. Missing or unreadable: none (find the CLI
@@ -929,6 +1032,8 @@ pub async fn load(state: &AppState) -> Result<Loaded, String> {
     config.passbolt.cli_path = device_path(device.passbolt_cli_path);
     config.onepassword.cli_path = device_path(device.onepassword_cli_path);
     config.bitwarden.cli_path = device_path(device.bitwarden_cli_path);
+    config.keepass.database_path = device_path(device.keepass_database_path);
+    config.keepass.key_file_path = device_path(device.keepass_key_file_path);
     let secret = |v: Option<String>| v.map(Zeroizing::new).filter(|s| !s.is_empty());
     let passbolt_secrets = PassboltSecrets {
         private_key: secret(read_setting_by_key(&manager, PASSBOLT_PRIVATE_KEY).await),
@@ -951,6 +1056,7 @@ pub fn parse_config(raw: &str) -> Option<PasswordManagersConfig> {
             c.onepassword.timeout_secs = clamp_timeout(c.onepassword.timeout_secs);
             c.bitwarden.timeout_secs = clamp_timeout(c.bitwarden.timeout_secs);
             c.bitwarden.remember_secs = clamp_remember(c.bitwarden.remember_secs);
+            c.keepass.remember_secs = clamp_remember(c.keepass.remember_secs);
             Some(c)
         }
         Err(e) => {
@@ -1010,6 +1116,8 @@ pub async fn save(state: &AppState, save: &ValidatedSave) -> Result<(), String> 
         passbolt_cli_path: save.config.passbolt.cli_path.clone(),
         onepassword_cli_path: save.config.onepassword.cli_path.clone(),
         bitwarden_cli_path: save.config.bitwarden.cli_path.clone(),
+        keepass_database_path: save.config.keepass.database_path.clone(),
+        keepass_key_file_path: save.config.keepass.key_file_path.clone(),
     };
     if device != wanted {
         device = wanted;
@@ -1033,6 +1141,13 @@ pub async fn save(state: &AppState, save: &ValidatedSave) -> Result<(), String> 
         "pwmanager: bitwarden enabled={} remember={}s",
         save.config.bitwarden.enabled,
         save.config.bitwarden.remember_secs()
+    );
+    tracing::info!(
+        "pwmanager: keepass enabled={} database_set={} key_file_set={} remember={}s",
+        save.config.keepass.enabled,
+        save.config.keepass.database_path.is_some(),
+        save.config.keepass.key_file_path.is_some(),
+        save.config.keepass.remember_secs()
     );
     Ok(())
 }
