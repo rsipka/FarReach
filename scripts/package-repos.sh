@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Signed package repositories for a release, so Linux users can
-#   apt install reach   /   dnf install reach
+#   apt install far-reach   /   dnf install far-reach
 # and get updates with their system's own upgrade.
 #
 #   package-repos.sh <dir-with-the-.deb-and-.rpm> <out-dir> <base-url-of-the-packages>
@@ -53,10 +53,10 @@ cp "$deb" "$out/apt/"
 	apt-ftparchive packages . > Packages
 	gzip -9kn Packages
 	apt-ftparchive \
-		-o APT::FTPArchive::Release::Origin=Reach \
-		-o APT::FTPArchive::Release::Label=Reach \
+		-o APT::FTPArchive::Release::Origin=FarReach \
+		-o APT::FTPArchive::Release::Label=FarReach \
 		-o APT::FTPArchive::Release::Architectures=amd64 \
-		-o APT::FTPArchive::Release::Description="Reach: SSH, remote desktop and DevOps" \
+		-o APT::FTPArchive::Release::Description="FarReach: SSH, remote desktop and DevOps" \
 		release . > Release
 	sign --clearsign --output InRelease Release
 	sign --armor --detach-sign --output Release.gpg Release
@@ -73,5 +73,5 @@ cp "$rpm" "$out/rpm/"
 	rm -f ./*.rpm
 )
 
-gpg --batch --armor --export "$fpr" > "$out/reach-packages.asc"
+gpg --batch --armor --export "$fpr" > "$out/farreach-packages.asc"
 echo "Signed with $fpr"
