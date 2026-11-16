@@ -27,6 +27,7 @@ All notable changes to FarReach are documented here. FarReach is a fork of [Reac
 - **The Sessions + menu shows in full** — In a narrow sidebar, the menu under the + button was cut off on the left, hiding the start of each item. It now opens over the window, lined up with the button and moved left only as far as it needs to fit.
 
 ## Unreleased
+- **1Password** — Sessions can take their password from 1Password. Settings → Password managers has a 1Password card: install the 1Password CLI (`op`), turn on *Integrate with 1Password CLI* in the 1Password app, and pick entries from the key button next to any password field. The 1Password app asks you to approve access (Touch ID, Windows Hello or your password); Reach stores nothing. A service account token can be used instead. Each connect reads the password with `op read`; nothing is cached.
 - **Groundwork for more password managers** — The password manager code, so far written for Passbolt, now shares what any manager needs: finding and checking its command-line tool, the environment it runs with, and a question that can ask for a vault's master password as well as a key's passphrase. A reference to an entry can name which field holds the secret (the password when it names none, as every reference saved until now). The steps for adding a manager are listed at the top of `src-tauri/src/pwmanager/mod.rs`. Nothing changes for Passbolt users; 1Password, Bitwarden and KeePass follow.
 
 ## v0.9.1
