@@ -119,6 +119,22 @@ builds the same unsigned IPA on a GitHub macOS runner. Run it from the Actions
 tab, or it runs on every pull request; the IPA is the run's
 `Reach-ios-unsigned` artifact (a zip holding the `.ipa`).
 
+### Updates through a LiveContainer source
+
+Each tagged release also attaches `FarReach_<version>_ios.ipa` and `apps.json`,
+an AltStore-style source listing that IPA (and up to nine older ones). Add
+
+```
+https://github.com/rsipka/FarReach/releases/latest/download/apps.json
+```
+
+in LiveContainer's Sources tab (or open
+`livecontainer://source?url=` followed by that address, URL-encoded). The
+address always serves the newest release's file, so a new release appears as
+an update. SideStore and AltStore Classic read the same file.
+`scripts/ios-source.mjs` writes it in `release.yml`; test it with
+`npm run ios-source:test`.
+
 ## Bundle identifier
 
 iOS uses the app's own `identifier` from `src-tauri/tauri.conf.json`. Apple
