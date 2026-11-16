@@ -710,6 +710,8 @@
 			id: tab.id,
 			host: session.host,
 			port: session.port,
+			// A Mac's macOS account; empty for a VNC password.
+			username: session.username,
 			password: session.auth_method.type === 'Password' && !session.auth_method.password_ref ? (session.auth_method.password ?? '') : '',
 			passwordRef: session.auth_method.type === 'Password' ? (session.auth_method.password_ref ?? null) : null,
 			sessionId: session.id,

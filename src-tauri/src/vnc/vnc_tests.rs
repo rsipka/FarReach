@@ -80,7 +80,7 @@ async fn a_login_and_updates_reach_the_screen() {
     let port = listener.local_addr().unwrap().port();
     let server = tokio::spawn(fake_server(listener));
 
-    let client = open("127.0.0.1", port, String::new()).await.unwrap();
+    let client = open("127.0.0.1", port, &apple::Login { username: "", password: "", private_path: true }).await.unwrap();
     let mut screen = Screen::default();
     let mut text = None;
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
@@ -174,6 +174,7 @@ fn mouse_actions_parse() {
 }
 
 /// Against a real server: `REACH_VNC_TEST=host:port REACH_VNC_PASSWORD=…
+/// [REACH_VNC_USER=macos-user]
 /// cargo test --lib vnc::tests::live -- --ignored --nocapture`. Pulls as the
 /// pump does for five seconds and reports how many distinct pictures came.
 #[tokio::test]
@@ -182,7 +183,10 @@ async fn live_frame_rate() {
     let addr = std::env::var("REACH_VNC_TEST").expect("REACH_VNC_TEST=host:port");
     let (host, port) = addr.rsplit_once(':').unwrap();
     let password = std::env::var("REACH_VNC_PASSWORD").unwrap_or_default();
-    let client = open(host, port.parse().unwrap(), password).await.unwrap();
+    // A Mac: its macOS user name, the password then being the account's.
+    let username = std::env::var("REACH_VNC_USER").unwrap_or_default();
+    let login = apple::Login { username: &username, password: &password, private_path: true };
+    let client = open(host, port.parse().unwrap(), &login).await.unwrap();
 
     let mut screen = Screen::default();
     let mut pull = tokio::time::interval(PULL_EVERY);

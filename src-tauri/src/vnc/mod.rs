@@ -31,6 +31,8 @@ use vnc::{PixelFormat, VncClient, VncConnector, VncEncoding, VncEvent, X11Event}
 use crate::db::conn::Forward;
 use crate::rdp::{Cursor, Flow, RdpStatus, Screen};
 
+mod apple;
+
 /// What the webview sends to open a desktop.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,7 +40,12 @@ pub struct VncConnectParams {
     pub id: String,
     pub host: String,
     pub port: u16,
-    /// The VNC password; empty for a server that asks for none.
+    /// A macOS user name: with one, a Mac is logged in to with its own
+    /// login (see [`apple`]). Empty for a VNC password.
+    #[serde(default)]
+    pub username: String,
+    /// The VNC password, or with `username` the macOS password; empty for a
+    /// server that asks for none.
     #[serde(default)]
     pub password: String,
     /// Use the saved session's password manager entry, fetched by
@@ -205,7 +212,11 @@ async fn session(
     };
     tracing::info!("VNC {id}: connecting to {}:{}{}", params.host, params.port, if forward.is_some() { " through SSH" } else { "" });
 
-    let client = match tokio::time::timeout(CONNECT_TIMEOUT, open(&host, port, params.password.clone())).await {
+    // The older Mac login is readable on the way, so it is used only where
+    // nobody can be on the way: through SSH, or to this machine.
+    let private_path = forward.is_some() || is_loopback(&params.host);
+    let login = apple::Login { username: &params.username, password: &params.password, private_path };
+    let client = match tokio::time::timeout(CONNECT_TIMEOUT, open(&host, port, &login)).await {
         Ok(Ok(client)) => client,
         Ok(Err(e)) => {
             tracing::warn!("VNC {id}: connection failed: {e}");
@@ -229,13 +240,21 @@ async fn session(
     drop(forward);
 }
 
-/// TCP, the RFB handshake and the login.
-async fn open(host: &str, port: u16, password: String) -> Result<VncClient, String> {
-    let tcp = TcpStream::connect((host, port)).await.map_err(|e| format!("Could not reach {host}:{port}: {e}"))?;
-    // Input is many small messages; Nagle would hold each one back.
+fn is_loopback(host: &str) -> bool {
+    host.eq_ignore_ascii_case("localhost")
+        || host.trim_matches(['[', ']']).parse::<std::net::IpAddr>().is_ok_and(|ip| ip.is_loopback())
+}
+
+/// TCP, the RFB handshake and the login. A Mac's login is done before vnc-rs
+/// is handed the stream; see [`apple`].
+async fn open(host: &str, port: u16, login: &apple::Login<'_>) -> Result<VncClient, String> {
+    let mut tcp = TcpStream::connect((host, port)).await.map_err(|e| format!("Could not reach {host}:{port}: {e}"))?;
+    // Input is many small messages; Nagle would hold each one back. macOS
+    // also wants each login message to arrive in one piece.
     let _ = tcp.set_nodelay(true);
-    VncConnector::new(tcp)
-        .set_auth_method(std::future::ready(Ok(password)))
+    let prelude = apple::negotiate(&mut tcp, login).await?;
+    VncConnector::new(apple::Shim::new(tcp, prelude))
+        .set_auth_method(std::future::ready(Ok(login.password.to_string())))
         // In order of preference. Tight is the smallest on the wire, ZRLE
         // is lossless; CopyRect makes scrolling and dragging nearly free.
         .add_encoding(VncEncoding::Tight)
@@ -265,9 +284,10 @@ fn login_error(e: vnc::VncError) -> String {
     match e {
         vnc::VncError::WrongPassword => "Wrong VNC password".to_string(),
         vnc::VncError::NoPassword => "This server asks for a VNC password".to_string(),
-        // Apple's screen sharing, RealVNC's encryption, VeNCrypt.
+        // A Mac without a user name in the session, RealVNC's encryption,
+        // VeNCrypt.
         vnc::VncError::General(m) if m.contains("not been implemented") => {
-            "This server only offers a login Reach does not support yet (only the VNC password is supported)".to_string()
+            "This server only offers a login Reach does not support yet. For a Mac, enter its macOS user name in the session.".to_string()
         }
         other => other.to_string(),
     }

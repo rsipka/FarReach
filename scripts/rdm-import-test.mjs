@@ -231,7 +231,9 @@ section('.json export');
 			{ ConnectionType: 'Telnet', Name: 'core switch', Group: 'Net', Terminal: { Host: 'sw1.local', HostPort: 2323, Username: 'admin', Password: 'nope' } },
 			{ ConnectionType: 'Telnet', Name: 'access switch', Url: 'sw2.local' },
 			{ ConnectionType: 'Putty', Name: 'putty ssh', Url: 'p.local', Putty: { Protocol: 'Ssh', Port: 2200, Username: 'pu' } },
-			{ ConnectionType: 1, Name: 'numeric rdp', Url: 'n.local', RDP: {} }
+			{ ConnectionType: 1, Name: 'numeric rdp', Url: 'n.local', RDP: {} },
+			{ ConnectionType: 'AppleRemoteDesktop', Name: 'studio mac', Url: 'mac.local', ARD: { UserName: 'radek' } },
+			{ ConnectionType: 2, Name: 'numeric ard', ARD: { Host: 'mini.local', Port: 5901 } }
 		]
 	});
 	const r = parseRdmExport(json);
@@ -246,6 +248,8 @@ section('.json export');
 	check('a Telnet entry with its port and user', byName['core switch'] && byName['core switch'].kind === 'telnet' && byName['core switch'].host === 'sw1.local' && byName['core switch'].port === 2323 && byName['core switch'].username === 'admin' && byName['core switch'].folder.join('/') === 'Net');
 	check('a Telnet entry with only an address takes port 23', byName['access switch'] && byName['access switch'].port === 23 && byName['access switch'].username === '');
 	check('a numeric type is read from its settings block', byName['numeric rdp'] && byName['numeric rdp'].kind === 'rdp');
+	check('Apple Remote Desktop becomes VNC with the macOS user', byName['studio mac'] && byName['studio mac'].kind === 'vnc' && byName['studio mac'].host === 'mac.local' && byName['studio mac'].port === 5900 && byName['studio mac'].username === 'radek');
+	check('a numeric ARD entry is read from its ARD block', byName['numeric ard'] && byName['numeric ard'].kind === 'vnc' && byName['numeric ard'].host === 'mini.local' && byName['numeric ard'].port === 5901);
 	check('the password is not read', !JSON.stringify(r).includes('nope'));
 }
 

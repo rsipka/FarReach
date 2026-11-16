@@ -1896,6 +1896,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7c1832837b905bbfb5101e07cc24c8deddf52f93225eee6ead5f4d63d53ddcb"
 dependencies = [
  "const-oid 0.9.6",
+ "pem-rfc7468 0.7.0",
  "zeroize",
 ]
 
@@ -7122,6 +7123,7 @@ dependencies = [
 name = "reach"
 version = "0.9.1"
 dependencies = [
+ "aes 0.8.4",
  "anyhow",
  "apple-native-keyring-store",
  "arboard",
@@ -7144,6 +7146,7 @@ dependencies = [
  "glob",
  "hickory-resolver",
  "hkdf",
+ "hmac 0.13.0",
  "http 1.5.0",
  "http-body-util",
  "hyper 0.14.32",
@@ -7167,8 +7170,10 @@ dependencies = [
  "libz-sys",
  "linux-keyutils-keyring-store",
  "log",
+ "md-5 0.11.0",
  "memsec",
  "mlua",
+ "num-bigint 0.4.8",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
@@ -7179,6 +7184,7 @@ dependencies = [
  "redis",
  "regex",
  "reqwest 0.13.5",
+ "rsa 0.9.10",
  "russh",
  "russh-sftp",
  "rustls",
@@ -7195,6 +7201,7 @@ dependencies = [
  "socket2 0.6.5",
  "sqlx",
  "ssh-key 0.6.7",
+ "subtle",
  "tar",
  "tauri",
  "tauri-build",
