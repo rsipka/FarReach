@@ -53,3 +53,25 @@ fn the_child_starts_from_the_allowlist_only() {
     assert!(is_inherited_env(&SPEC, OsStr::new("PATH")));
     assert!(!is_inherited_env(&SPEC, OsStr::new("SECRET")));
 }
+
+#[cfg(unix)]
+#[test]
+fn only_the_owner_root_or_a_group_of_just_them_may_write() {
+    assert!(writable_only_by_trusted(0o755, || panic!("not asked when the group cannot write")));
+    assert!(!writable_only_by_trusted(0o757, || true), "world writable");
+    assert!(!writable_only_by_trusted(0o777, || true), "world writable, whatever the group");
+    assert!(!writable_only_by_trusted(0o775, || false), "a group with other members");
+    assert!(writable_only_by_trusted(0o775, || true), "a group of just the user and root");
+}
+
+#[cfg(unix)]
+#[test]
+fn group_membership_is_looked_up() {
+    // root's group: root alone, or root and system accounts on some systems;
+    // a group nobody has cannot be read at all.
+    assert!(!group_holds_only(u32::MAX - 7, 12345));
+    // SAFETY: no preconditions.
+    let (me, my_gid) = unsafe { (libc::geteuid(), libc::getegid()) };
+    // Answers without panicking for the user's own group.
+    let _ = group_holds_only(my_gid, me);
+}

@@ -135,13 +135,83 @@ pub(crate) fn check_unix_owner(name: &str, path: &Path, what: &str) -> Result<()
     if meta.uid() != me && meta.uid() != 0 {
         return Err(format!("{name}: {what} at {} belongs to another user", path.display()));
     }
-    if meta.mode() & 0o022 != 0 {
+    if !writable_only_by_trusted(meta.mode(), || group_holds_only(meta.gid(), me)) {
         return Err(format!(
             "{name}: {what} at {} can be changed by other users (group or world writable)",
             path.display()
         ));
     }
     Ok(())
+}
+
+/// Nobody but the owner, root or members of a group that holds only the
+/// user and root can write. Never world writable. Group writable is fine
+/// when `group_is_mine` says so: Homebrew's `/usr/local/bin` on an Intel
+/// Mac (`user:admin 775`, admin = root and the user) and `~/.local/bin`
+/// with a user-private group on Linux (`user:user 775`).
+#[cfg(unix)]
+pub(crate) fn writable_only_by_trusted(mode: u32, group_is_mine: impl FnOnce() -> bool) -> bool {
+    if mode & 0o002 != 0 {
+        return false;
+    }
+    mode & 0o020 == 0 || group_is_mine()
+}
+
+/// Whether every member of group `gid` is root or `me`: those listed in the
+/// group, and those whose primary group it is (which the group's own list
+/// leaves out). Anything that cannot be read counts as "no".
+#[cfg(unix)]
+pub(crate) fn group_holds_only(gid: u32, me: u32) -> bool {
+    match group_members(gid) {
+        Some(uids) => uids.iter().all(|&u| u == 0 || u == me),
+        None => false,
+    }
+}
+
+/// The uids in group `gid`, or `None` if the system cannot say.
+#[cfg(unix)]
+fn group_members(gid: u32) -> Option<Vec<u32>> {
+    use std::ffi::CStr;
+    use std::sync::Mutex;
+    // getgrgid, getpwnam and getpwent share static buffers: one caller at a
+    // time inside Reach.
+    static LOCK: Mutex<()> = Mutex::new(());
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut uids = Vec::new();
+    // SAFETY: the returned pointers are read before the next call to the
+    // same family, under the lock; null is checked.
+    unsafe {
+        let gr = libc::getgrgid(gid as libc::gid_t);
+        if gr.is_null() {
+            return None;
+        }
+        let mut names = Vec::new();
+        let mut m = (*gr).gr_mem;
+        while !m.is_null() && !(*m).is_null() {
+            names.push(CStr::from_ptr(*m).to_owned());
+            m = m.add(1);
+        }
+        for name in names {
+            let pw = libc::getpwnam(name.as_ptr());
+            if pw.is_null() {
+                // A member we cannot resolve: not provably one of us.
+                return None;
+            }
+            uids.push((*pw).pw_uid as u32);
+        }
+        libc::setpwent();
+        loop {
+            let pw = libc::getpwent();
+            if pw.is_null() {
+                break;
+            }
+            if (*pw).pw_gid as u32 == gid {
+                uids.push((*pw).pw_uid as u32);
+            }
+        }
+        libc::endpwent();
+    }
+    Some(uids)
 }
 
 /// The CLI binary: the configured path, or the program found on PATH.
