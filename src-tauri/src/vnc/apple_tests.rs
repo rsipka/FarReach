@@ -204,8 +204,8 @@ async fn fake_mac_dh(mut s: DuplexStream, and_then_desktop: bool) -> (String, St
     let key = md5::Md5::digest(&shared);
     let cipher = aes::Aes128::new(GenericArray::from_slice(&key));
     let mut creds = answer[..128].to_vec();
-    for block in creds.chunks_exact_mut(16) {
-        cipher.decrypt_block(GenericArray::from_mut_slice(block));
+    for block in creds.as_chunks_mut::<16>().0 {
+        cipher.decrypt_block(GenericArray::from_mut_slice(&mut block[..]));
     }
     let field = |b: &[u8]| String::from_utf8(b[..b.iter().position(|c| *c == 0).unwrap()].to_vec()).unwrap();
     let got = (field(&creds[..64]), field(&creds[64..]));

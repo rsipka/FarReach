@@ -226,8 +226,7 @@ pub(super) fn dh_answer(
     let x = BigUint::from_bytes_be(private);
     let public = padded(&BigUint::from(generator).modpow(&x, &p), len);
     let shared = Zeroizing::new(padded(&y.modpow(&x, &p), len));
-    let mut key = [0u8; 16];
-    key.copy_from_slice(&md5::Md5::digest(&*shared));
+    let key: [u8; 16] = md5::Md5::digest(&*shared).into();
 
     let mut credentials = Zeroizing::new([0u8; 128]);
     OsRng.fill_bytes(&mut *credentials);
@@ -236,8 +235,8 @@ pub(super) fn dh_answer(
     credentials[64..64 + password.len()].copy_from_slice(password.as_bytes());
     credentials[64 + password.len()] = 0;
     let cipher = aes::Aes128::new(GenericArray::from_slice(&key));
-    for block in credentials.chunks_exact_mut(16) {
-        cipher.encrypt_block(GenericArray::from_mut_slice(block));
+    for block in credentials.as_chunks_mut::<16>().0 {
+        cipher.encrypt_block(GenericArray::from_mut_slice(&mut block[..]));
     }
 
     let mut message = Zeroizing::new(Vec::with_capacity(128 + len));
@@ -289,8 +288,7 @@ where
         let mut a = Zeroizing::new([0u8; 64]);
         OsRng.fill_bytes(&mut *a);
         a[0] |= 0x80;
-        let mut nonce = [0u8; 16];
-        OsRng.fill_bytes(&mut nonce);
+        let nonce: [u8; 16] = rand::random();
         srp_proof(&challenge, &password, &*a, &nonce)
     })
     .await
