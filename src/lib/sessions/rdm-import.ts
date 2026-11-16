@@ -85,7 +85,7 @@ export interface RdmGateway {
 }
 
 /** Why an entry in the export could not become a session. */
-export type RdmSkipReason = 'no_host' | 'bad_port' | 'unsupported';
+export type RdmSkipReason = 'no_host' | 'bad_port' | 'unsupported' | 'duplicate';
 
 export interface RdmSkipped {
 	label: string;
@@ -575,6 +575,7 @@ export function parseRdmExport(raw: string): RdmParseResult {
 	}
 
 	const hosts: RdmImportHost[] = [];
+	const seen = new Set<string>();
 	const skipped: RdmSkipped[] = [];
 	entries.forEach((entry, i) => {
 		const cls = classify(entry);
@@ -602,6 +603,12 @@ export function parseRdmExport(raw: string): RdmParseResult {
 		const found = credentialFor(entry);
 		const ownUser = pick(entry, USER_PATHS[kind]);
 		const username = ownUser || found?.cred.username || '';
+		const sessionKey = JSON.stringify([kind, address.host.toLowerCase(), finalPort, username]);
+		if (seen.has(sessionKey)) {
+			skipped.push({ label, reason: 'duplicate' });
+			return;
+		}
+		seen.add(sessionKey);
 		let domain: string | null = null;
 		if (kind === 'rdp') {
 			domain = pick(entry, ['RDP.Domain', 'Domain']) || found?.cred.domain || null;

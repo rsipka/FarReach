@@ -58,7 +58,9 @@ eq('download URL by tag, not the draft asset URL', app.versions[0].downloadURL,
 eq('size in bytes from the asset', app.versions.map((v) => v.size), [300, 200, 150]);
 eq('the release being made is dated now', app.versions[0].date, '2026-12-01T12:00:00.000Z');
 eq('older ones keep their publish date', app.versions[1].date, '2026-11-20T10:00:00.000Z');
-eq('buildVersion matches version', app.versions[0].buildVersion, '1.1.0');
+eq('stable build number', app.versions[0].buildVersion, '1000');
+const dev = buildSource({ releases: [rel('v0.9.2-dev.3', null, [ipa('d.ipa', 9)], { draft: true })], tag: 'v0.9.2-dev.3', repo: 'a/b', now }).apps[0].versions[0];
+eq('a dev tag: numeric version, dev number as build, full tag shown', [dev.version, dev.buildVersion, dev.marketingVersion], ['0.9.2', '3', '0.9.2-dev.3']);
 eq('notes carried', app.versions[1].localizedDescription, 'Notes for v1.0.0');
 
 console.log('\nlegacy fields mirror the newest version');

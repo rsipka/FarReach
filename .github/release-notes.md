@@ -1,13 +1,4 @@
-Columns in the file explorer; F5 no longer closes your sessions.
+FarReach Dev build 3, based on upstream v0.9.2 and the fork's current main.
 
-- File explorer: a Details view shows Name, Size, Modified, Owner,
-  Group and Access in columns. Click a heading to sort, right-click
-  the headings to choose columns. Asked for on Discord.
-- F5 (and Ctrl+R) reloaded the app and closed every open session.
-  It no longer does; the key still reaches the terminal, so F5 in
-  Midnight Commander and Ctrl+R history search work. Reported on
-  Discord.
-- Docs: ProxyCommand has been supported since 0.7.5, but the docs said
-  otherwise. The Jump Hosts page now shows how to use it.
-
-Full details: https://github.com/alexandrosnt/Reach/blob/main/CHANGELOG.md
+- New since dev.2: macOS login over VNC (Apple Remote Desktop), 1Password, the app's own right-click menu, the AI assistant asks before running commands, Linux packages install next to Reach (`farreach`).
+- iPhone and iPad: an unsigned IPA for LiveContainer. Add https://github.com/rsipka/FarReach/releases/latest/download/apps.json as a source in LiveContainer to get later builds as updates.
