@@ -123,6 +123,7 @@ jobs:
         run: |
           npm run check
           npm run i18n:check
+          npm run ios-source:test
           npm run build
 
   test:
