@@ -16,6 +16,7 @@
 	import ReportProblem from './ReportProblem.svelte';
 	import { getSettings, updateSetting, syncTraySettings } from '#lib/state/settings.svelte.js';
 	import { effectiveThreshold, MIN_PASTE_THRESHOLD } from '#lib/terminal/paste.js';
+	import { DEFAULT_WORD_SEPARATORS, rightClickMode } from '#lib/terminal/mouse.js';
 	import { t, changeLocale } from '#lib/state/i18n.svelte.js';
 
 	const settings = getSettings();
@@ -55,6 +56,12 @@
 		e.currentTarget.value = String(next);
 		updateSetting('multilinePasteThreshold', next);
 	}
+
+	let rightClickOptions = $derived([
+		{ label: t('settings.term_right_click_menu'), value: 'menu' },
+		{ label: t('settings.term_right_click_paste'), value: 'paste' },
+		{ label: t('settings.term_right_click_copy_paste'), value: 'copy-paste' }
+	]);
 
 	function onLastSessionChange(checked: boolean) {
 		updateSetting('openLastSession', checked);
@@ -160,6 +167,77 @@
 					value={settings.multilinePasteThreshold}
 					onchange={onPasteThresholdChange}
 				/>
+			</div>
+		</div>
+	{/if}
+
+	<!-- The mouse in the terminal; a phone has none. -->
+	{#if !isMobile()}
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('settings.term_right_click')}</span>
+				<span class="setting-description">{t('settings.term_right_click_desc')}</span>
+			</div>
+			<div class="setting-control">
+				<Dropdown
+					options={rightClickOptions}
+					selected={settings.terminalRightClick}
+					onchange={(v) => updateSetting('terminalRightClick', rightClickMode(v))}
+				/>
+			</div>
+		</div>
+
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('settings.term_copy_on_select')}</span>
+				<span class="setting-description">{t('settings.term_copy_on_select_desc')}</span>
+			</div>
+			<div class="setting-control">
+				<Toggle
+					hideLabel
+					checked={settings.terminalCopyOnSelect}
+					label={t('settings.term_copy_on_select')}
+					onchange={(v) => updateSetting('terminalCopyOnSelect', v)}
+				/>
+			</div>
+		</div>
+
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('settings.term_middle_click')}</span>
+				<span class="setting-description">{t('settings.term_middle_click_desc')}</span>
+			</div>
+			<div class="setting-control">
+				<Toggle
+					hideLabel
+					checked={settings.terminalMiddleClickPaste}
+					label={t('settings.term_middle_click')}
+					onchange={(v) => updateSetting('terminalMiddleClickPaste', v)}
+				/>
+			</div>
+		</div>
+
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('settings.term_word_separators')}</span>
+				<span class="setting-description">{t('settings.term_word_separators_desc')}</span>
+			</div>
+			<div class="setting-control separators">
+				<input
+					class="threshold-input separators-input"
+					type="text"
+					spellcheck="false"
+					autocomplete="off"
+					autocapitalize="off"
+					aria-label={t('settings.term_word_separators')}
+					value={settings.terminalWordSeparators}
+					oninput={(e) => updateSetting('terminalWordSeparators', e.currentTarget.value)}
+				/>
+				{#if settings.terminalWordSeparators !== DEFAULT_WORD_SEPARATORS}
+					<button class="reset-link" onclick={() => updateSetting('terminalWordSeparators', DEFAULT_WORD_SEPARATORS)}>
+						{t('settings.term_word_separators_reset')}
+					</button>
+				{/if}
 			</div>
 		</div>
 	{/if}
@@ -306,6 +384,33 @@
 		margin-left: 12px;
 		padding-left: 14px;
 		border-left: 2px solid var(--color-border);
+	}
+
+	.separators {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 4px;
+	}
+
+	.separators-input {
+		width: 100%;
+		font-family: var(--font-mono, monospace);
+		letter-spacing: 0.15em;
+	}
+
+	.reset-link {
+		padding: 0;
+		border: none;
+		background: none;
+		font-family: inherit;
+		font-size: 0.75rem;
+		color: var(--color-accent);
+		cursor: pointer;
+	}
+
+	.reset-link:hover {
+		text-decoration: underline;
 	}
 
 	.threshold-input:focus {

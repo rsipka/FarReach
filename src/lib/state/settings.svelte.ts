@@ -1,4 +1,5 @@
 import { DEFAULT_PASTE_THRESHOLD } from '#lib/terminal/paste.js';
+import { DEFAULT_RIGHT_CLICK, DEFAULT_WORD_SEPARATORS, rightClickMode, type RightClickMode } from '#lib/terminal/mouse.js';
 import { invoke } from '@tauri-apps/api/core';
 import * as settingsIpc from '#lib/ipc/settings.js';
 import type { AppSettings } from '#lib/ipc/settings.js';
@@ -66,6 +67,15 @@ export interface Settings {
 	warnOnMultilinePaste: boolean;
 	/** Warn once a paste reaches this many lines. See #lib/terminal/paste. */
 	multilinePasteThreshold: number;
+
+	/** What a right click in the terminal does. See #lib/terminal/mouse. */
+	terminalRightClick: RightClickMode;
+	/** Selecting text in the terminal copies it, as in PuTTY. */
+	terminalCopyOnSelect: boolean;
+	/** A middle click in the terminal pastes. */
+	terminalMiddleClickPaste: boolean;
+	/** The characters that end a word on a double click, besides the space. */
+	terminalWordSeparators: string;
 
 	setupComplete: boolean;
 	pendingTursoOrg: string;
@@ -147,6 +157,10 @@ const defaults: Settings = {
 	rdpFullscreenButtonAt: null,
 	warnOnMultilinePaste: true,
 	multilinePasteThreshold: DEFAULT_PASTE_THRESHOLD,
+	terminalRightClick: DEFAULT_RIGHT_CLICK,
+	terminalCopyOnSelect: false,
+	terminalMiddleClickPaste: true,
+	terminalWordSeparators: DEFAULT_WORD_SEPARATORS,
 	setupComplete: false,
 	pendingTursoOrg: '',
 	pendingTursoApiToken: '',
@@ -240,6 +254,14 @@ export function loadSettings(): void {
 			settings.rdpGraphicsPipeline = parsed.rdpGraphicsPipeline ?? defaults.rdpGraphicsPipeline;
 			settings.rdpFullscreenButton = parsed.rdpFullscreenButton ?? defaults.rdpFullscreenButton;
 			settings.rdpFullscreenButtonAt = parsed.rdpFullscreenButtonAt ?? defaults.rdpFullscreenButtonAt;
+			// These two were saved but never read back, so "don't ask again"
+			// lasted only until the next start.
+			settings.warnOnMultilinePaste = parsed.warnOnMultilinePaste ?? defaults.warnOnMultilinePaste;
+			settings.multilinePasteThreshold = parsed.multilinePasteThreshold ?? defaults.multilinePasteThreshold;
+			settings.terminalRightClick = rightClickMode(parsed.terminalRightClick);
+			settings.terminalCopyOnSelect = parsed.terminalCopyOnSelect ?? defaults.terminalCopyOnSelect;
+			settings.terminalMiddleClickPaste = parsed.terminalMiddleClickPaste ?? defaults.terminalMiddleClickPaste;
+			settings.terminalWordSeparators = parsed.terminalWordSeparators ?? defaults.terminalWordSeparators;
 			settings.pendingTursoOrg = parsed.pendingTursoOrg ?? defaults.pendingTursoOrg;
 			settings.launches = parsed.launches ?? defaults.launches;
 			settings.communityPromptDismissed =
