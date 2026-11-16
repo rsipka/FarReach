@@ -150,6 +150,7 @@ fn the_cli_path_is_not_kept_in_the_synced_vault() {
     let config = PasswordManagersConfig {
         enabled: true,
         passbolt: PassboltConfig { cli_path: Some("/usr/bin/passbolt".into()), ..Default::default() },
+        onepassword: OnePasswordConfig { cli_path: Some("/usr/bin/op".into()), ..Default::default() },
     };
     let json = serde_json::to_string(&config).unwrap();
     assert!(!json.contains("cli_path") && !json.contains("/usr/bin"), "{json}");
@@ -164,7 +165,7 @@ fn device_settings_round_trip() {
     let dir = std::env::temp_dir().join(format!("reach-pwm-device-{}", uuid::Uuid::new_v4()));
     let path = dir.join("pwmanager").join("device.json");
     assert_eq!(read_device_settings(&path), DeviceSettings::default(), "missing");
-    let settings = DeviceSettings { passbolt_cli_path: Some(missing_cli()) };
+    let settings = DeviceSettings { passbolt_cli_path: Some(missing_cli()), ..Default::default() };
     write_device_settings(&path, &settings).unwrap();
     assert_eq!(read_device_settings(&path), settings);
     write_device_settings(&path, &DeviceSettings::default()).unwrap();
@@ -213,6 +214,7 @@ fn stored_config_defaults() {
     let json = serde_json::to_value(PasswordManagersConfig {
         enabled: true,
         passbolt: PassboltConfig { credentials: CredentialsMode::CliConfig, mfa_mode: MfaMode::TotpSecret, ..Default::default() },
+        ..Default::default()
     })
     .unwrap();
     assert_eq!(json["passbolt"]["credentials"], "cli_config");
@@ -264,12 +266,13 @@ fn bad_input_is_refused_before_anything_is_stored() {
 #[test]
 fn the_view_says_which_secrets_exist_and_never_what_they_are() {
     let loaded = Loaded {
-        config: PasswordManagersConfig { enabled: true, passbolt: PassboltConfig::default() },
+        config: PasswordManagersConfig { enabled: true, passbolt: PassboltConfig::default(), ..Default::default() },
         passbolt_secrets: PassboltSecrets {
             private_key: Some(Zeroizing::new(KEY.into())),
             passphrase: Some(Zeroizing::new("hunter2-passphrase".into())),
             totp_secret: None,
         },
+        ..Default::default()
     };
     let json = serde_json::to_string(&PasswordManagersView::from(&loaded)).unwrap();
     assert!(json.contains(r#""has_private_key":true"#), "{json}");
@@ -391,8 +394,10 @@ fn the_view_shows_the_passphrase_mode() {
         config: PasswordManagersConfig {
             enabled: true,
             passbolt: PassboltConfig { passphrase_mode: Some(PassphraseMode::Ask), passphrase_remember_secs: 3600, ..Default::default() },
+            ..Default::default()
         },
         passbolt_secrets: PassboltSecrets::default(),
+        ..Default::default()
     };
     let json = serde_json::to_value(PasswordManagersView::from(&loaded)).unwrap();
     assert_eq!(json["passbolt"]["passphrase_mode"], "ask");
@@ -420,4 +425,50 @@ fn a_save_that_was_already_asking_deletes_no_stored_passphrase() {
         assert!(matches!(passphrase_effect(&set, stored), SecretChange::Set(_)));
     }
     assert_eq!(format!("{:?}", SecretChange::ClearIfWasStored), "ClearIfWasStored");
+}
+
+#[test]
+fn onepassword_settings_are_checked() {
+    assert_eq!(validate_account("  my.1password.com ").unwrap(), "my.1password.com");
+    assert_eq!(validate_account("").unwrap(), "");
+    for bad in ["--debug", "my account", "a\nb"] {
+        assert!(validate_account(bad).is_err(), "accepted {bad:?}");
+    }
+    assert!(validate_service_account_token("ops_abcdefghijklmnopqrstuvwxyz").is_ok());
+    for bad in ["abc", "ops_short", "ops_abcdefghijklmnop qrstuvwxyz"] {
+        assert!(validate_service_account_token(bad).is_err(), "accepted {bad:?}");
+    }
+}
+
+#[test]
+fn onepassword_is_off_and_kept_apart_by_default() {
+    // A window that sends no 1Password section saves 1Password's defaults.
+    let mut i = input(serde_json::json!({ "enabled": true, "passbolt": {} }));
+    let v = validate_input(&mut i, None).unwrap();
+    assert!(!v.config.onepassword.enabled);
+    assert!(matches!(v.service_account_token, SecretChange::Keep));
+
+    let mut i = input(serde_json::json!({
+        "enabled": true,
+        "passbolt": {},
+        "onepassword": { "enabled": true, "auth": "service_account", "account": "team.1password.com", "service_account_token": "ops_abcdefghijklmnopqrstuvwxyz" }
+    }));
+    let v = validate_input(&mut i, None).unwrap();
+    assert!(v.config.onepassword.enabled);
+    assert_eq!(v.config.onepassword.auth, OnePasswordAuth::ServiceAccount);
+    assert!(matches!(v.service_account_token, SecretChange::Set(_)));
+    // The token is never part of the stored configuration.
+    let json = serde_json::to_string(&v.config).unwrap();
+    assert!(!json.contains("ops_"), "{json}");
+    assert!(json.contains(r#""account":"team.1password.com""#), "{json}");
+
+    let mut i = input(serde_json::json!({ "enabled": true, "passbolt": {}, "onepassword": { "clear_service_account_token": true } }));
+    assert!(matches!(validate_input(&mut i, None).unwrap().service_account_token, SecretChange::Clear));
+}
+
+#[test]
+fn a_configuration_saved_before_onepassword_reads_with_it_off() {
+    let c = parse_config(r#"{"enabled":true,"passbolt":{"server_address":"https://pb.example.com"}}"#).unwrap();
+    assert!(!c.onepassword.enabled);
+    assert_eq!(c.onepassword.timeout_secs, DEFAULT_TIMEOUT_SECS);
 }

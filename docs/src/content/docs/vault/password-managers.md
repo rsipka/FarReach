@@ -1,11 +1,11 @@
 ---
-title: Password Managers (Passbolt)
-description: Let a session take its password from Passbolt instead of keeping a copy in Reach's vault.
+title: Password Managers (Passbolt, 1Password)
+description: Let a session take its password from Passbolt or 1Password instead of keeping a copy in Reach's vault.
 ---
 
 If your team already keeps its server passwords in a password manager, a session in Reach can point at the entry there instead of holding a copy of the password. Reach fetches the password when you connect, uses it for the login, and forgets it. Change the password in the manager and every session that points at it uses the new one the next time it connects.
 
-The first password manager Reach can read from is **[Passbolt](https://www.passbolt.com/)**, through Passbolt's own command-line client, **go-passbolt-cli**. The integration is built so that others (Bitwarden, 1Password, KeePassXC) can follow the same way.
+Reach can read from **[Passbolt](https://www.passbolt.com/)**, through Passbolt's own command-line client, **go-passbolt-cli**, and from **[1Password](https://1password.com/)**, through the **1Password CLI** (`op`). Bitwarden and KeePass are planned. Passbolt is described first; see [1Password](#1password) below for its setup.
 
 ## What you need
 
@@ -39,9 +39,24 @@ Open Settings with **Ctrl+,** (**Cmd+,** on Mac) and choose **Password managers*
    :::
 6. Press **Test connection**. Reach logs in (asking for the passphrase if it is not stored) and lists your entries, and says how many it can see — or why it could not.
 
-## Using a Passbolt entry in a session
+## 1Password
 
-In the session editor, every password field has a key button, **From password manager**. It opens a search over your Passbolt entries (name, username and URL); pick one and the field becomes a chip, *Passbolt · name of the entry*. Remove the chip with its × to type a password again.
+Reach reads 1Password through the official **1Password CLI** (`op`, version 2).
+
+1. Install the CLI: `brew install 1password-cli` on a Mac, or follow [1Password's guide](https://developer.1password.com/docs/cli/get-started/) on Linux and Windows. As with Passbolt, Reach runs only a program actually named `op` or `op.exe`, from this computer, that only you or the system can change. Its path, if you set one, is kept on this device only.
+2. In Settings → **Password managers**, switch on the master switch and, in the **1Password** card, **Use 1Password**.
+3. Choose how it signs in:
+   - **1Password app** (the default): in the 1Password app, turn on **Settings → Developer → Integrate with 1Password CLI**. When Reach needs an entry, the app asks you to approve (Touch ID, Windows Hello, or your system or account password). Reach stores nothing and asks for nothing itself; the approval lasts as long as the app keeps it. If the app is signed in to several accounts, enter the one to use under **Account** (its sign-in address, such as `my.1password.com`).
+   - **Service account**: paste a [service account](https://developer.1password.com/docs/service-accounts/) token (`ops_…`). It is kept in the settings vault like the Passbolt key and never shown again. A service account sees only the vaults it was given, never a Personal or Private vault.
+4. Press **Test connection**.
+
+The entry search lists items that have a password (logins, passwords, databases, servers, routers, email accounts). A session stores the item's vault id and item id; at connect time Reach runs `op read` for that item's password. The CLI starts from an almost empty environment: every `OP_*` variable is removed, so a Connect server or another session set in your shell is never used. A service account token goes to the CLI in its environment, never on the command line.
+
+SSH keys kept in 1Password already work without this: point the session at the 1Password SSH agent (*Agent* authentication).
+
+## Using a password manager entry in a session
+
+In the session editor, every password field has a key button, **From password manager**. It opens a search over your entries (name, username and URL); pick one and the field becomes a chip, such as *Passbolt · name of the entry* or *1Password · name of the entry*. Remove the chip with its × to type a password again.
 
 It works for:
 

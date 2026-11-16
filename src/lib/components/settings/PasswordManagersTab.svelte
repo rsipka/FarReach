@@ -38,6 +38,7 @@
 		pwmanagerTest,
 		REMEMBER_CHOICES,
 		REMEMBER_DEFAULT,
+		type OnePasswordAuth,
 		type PassboltCredentials,
 		type PassboltMfaMode,
 		type PassboltPassphraseMode,
@@ -51,6 +52,7 @@
 	import { isLocked } from '#lib/state/vault.svelte.js';
 
 	const RELEASES_URL = 'https://github.com/passbolt/go-passbolt-cli/releases';
+	const OP_GUIDE_URL = 'https://developer.1password.com/docs/cli/get-started/';
 	const TIMEOUT_MIN = 10;
 	const TIMEOUT_MAX = 300;
 	const TIMEOUT_DEFAULT = 60;
@@ -82,6 +84,36 @@
 	let pasteKey = $state(false);
 	let passphrase = $state('');
 	let totpSecret = $state('');
+
+	// 1Password: its own card, saved on its own.
+	let opEnabled = $state(false);
+	let opAuth = $state<OnePasswordAuth>('app');
+	let opAccount = $state('');
+	let opCliPath = $state('');
+	let opTimeoutStr = $state(String(TIMEOUT_DEFAULT));
+	let opToken = $state('');
+	let opTesting = $state(false);
+	let opTestResult = $state<TestResult | null>(null);
+	let opTestError = $state<string | null>(null);
+	let opSaveError = $state<string | null>(null);
+	let opStatus = $derived(pwManagerProviders().find((p) => p.id === 'onepassword') ?? null);
+	let opTimeoutSecs = $derived.by(() => {
+		const n = parseInt(opTimeoutStr, 10);
+		if (!Number.isFinite(n)) return TIMEOUT_DEFAULT;
+		return Math.min(TIMEOUT_MAX, Math.max(TIMEOUT_MIN, n));
+	});
+	let opDirty = $derived.by(() => {
+		if (!view) return false;
+		const o = view.onepassword;
+		return (
+			opToken.trim() !== '' ||
+			opEnabled !== o.enabled ||
+			opAuth !== o.auth ||
+			opAccount.trim() !== o.account ||
+			(opCliPath.trim() || null) !== (o.cli_path?.trim() || null) ||
+			opTimeoutSecs !== o.timeout_secs
+		);
+	});
 
 	let status = $derived(pwManagerProviders().find((p) => p.id === 'passbolt') ?? null);
 	let enabled = $derived(view?.enabled ?? false);
@@ -142,6 +174,10 @@
 				testResult = null;
 				testError = null;
 				forgetSecrets();
+				opToken = '';
+				opTestResult = null;
+				opTestError = null;
+				opSaveError = null;
 			} else {
 				void load();
 			}
@@ -157,6 +193,79 @@
 		timeoutStr = String(v.passbolt.timeout_secs || TIMEOUT_DEFAULT);
 		passphraseMode = v.passbolt.passphrase_mode;
 		rememberSecs = v.passbolt.passphrase_remember_secs;
+		fillOnePassword(v);
+	}
+
+	function fillOnePassword(v: PasswordManagersView): void {
+		opEnabled = v.onepassword.enabled;
+		opAuth = v.onepassword.auth;
+		opAccount = v.onepassword.account;
+		opCliPath = v.onepassword.cli_path ?? '';
+		opTimeoutStr = String(v.onepassword.timeout_secs || TIMEOUT_DEFAULT);
+		opToken = '';
+	}
+
+	/** Save the 1Password card: what Passbolt has stored goes back as it is, its unsaved edits stay in the form. */
+	async function saveOnePassword(change?: (input: PasswordManagersConfigInput) => void): Promise<boolean> {
+		if (!view || isLocked()) return false;
+		const input = configInputFromView(view);
+		input.onepassword = {
+			cli_path: opCliPath.trim() || null,
+			enabled: opEnabled,
+			auth: opAuth,
+			account: opAccount.trim(),
+			timeout_secs: opTimeoutSecs,
+			service_account_token: opAuth === 'service_account' && opToken.trim() ? opToken.trim() : null
+		};
+		change?.(input);
+		busy = true;
+		opSaveError = null;
+		try {
+			view = await pwmanagerSaveConfig(input);
+			fillOnePassword(view);
+			opTestResult = null;
+			opTestError = null;
+			await checkStatus();
+			return true;
+		} catch (e) {
+			opSaveError = String(e);
+			return false;
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function handleSaveOnePassword(): Promise<void> {
+		if (await saveOnePassword()) addToast(t('pwmanager.saved'), 'success');
+	}
+
+	async function removeOpToken(): Promise<void> {
+		if (await saveOnePassword((input) => (input.onepassword.clear_service_account_token = true))) {
+			addToast(t('pwmanager.secret_removed'), 'success');
+		}
+	}
+
+	async function testOnePassword(): Promise<void> {
+		if (opDirty && !(await saveOnePassword())) return;
+		opTesting = true;
+		opTestResult = null;
+		opTestError = null;
+		try {
+			opTestResult = await pwmanagerTest('onepassword');
+		} catch (e) {
+			opTestError = String(e);
+		} finally {
+			opTesting = false;
+		}
+	}
+
+	async function browseOpCli(): Promise<void> {
+		try {
+			const picked = await openDialog({ multiple: false, directory: false, title: t('pwmanager.op_cli') });
+			if (typeof picked === 'string') opCliPath = picked;
+		} catch {
+			// Cancelled.
+		}
 	}
 
 	/** Whether a passphrase is in memory now: it changes behind this page's back (asked, expired). */
@@ -249,6 +358,8 @@
 		const pasted = pasteKey ? privateKeyText.trim() : '';
 		return {
 			enabled,
+			// Saved from its own card; sent as stored.
+			onepassword: configInputFromView(view!).onepassword,
 			passbolt: {
 				cli_path: cliPath.trim() || null,
 				credentials,
@@ -600,6 +711,129 @@
 			</div>
 
 			<p class="note">{t('pwmanager.note')}</p>
+		</div>
+
+		<div class="section provider" class:dimmed={!enabled || !opEnabled}>
+			<h3 class="section-title">1Password</h3>
+
+			<div class="setting-row">
+				<div class="setting-info">
+					<span class="setting-label">{t('pwmanager.op_enable')}</span>
+					<span class="setting-description">{t('pwmanager.op_enable_desc')}</span>
+				</div>
+				<div class="setting-control">
+					<Toggle hideLabel checked={opEnabled} label={t('pwmanager.op_enable')} disabled={busy} onchange={(v) => (opEnabled = v)} />
+				</div>
+			</div>
+
+			<div class="setting-row">
+				<div class="setting-info">
+					<span class="setting-label">{t('pwmanager.op_cli')}</span>
+					{#if checking && !pwManagersLoaded()}
+						<span class="setting-description">{t('pwmanager.checking')}</span>
+					{:else if opStatus?.available}
+						<span class="setting-description">
+							{opStatus.version ? t('pwmanager.cli_found_version', { version: opStatus.version }) : t('pwmanager.cli_found')}
+						</span>
+					{:else}
+						<span class="setting-description warn">{opStatus?.detail || t('pwmanager.cli_missing')}</span>
+					{/if}
+				</div>
+				<Button variant="secondary" size="sm" onclick={() => void checkStatus()} disabled={checking}>
+					{checking ? t('pwmanager.checking') : t('pwmanager.check_again')}
+				</Button>
+			</div>
+
+			{#if pwManagersLoaded() && !opStatus?.available}
+				<div class="install">
+					<span class="setting-description">{t('pwmanager.op_install_hint')}</span>
+					<code class="cmd">brew install 1password-cli</code>
+					<span class="setting-description">{t('pwmanager.op_install_other')}</span>
+					<div>
+						<Button variant="ghost" size="sm" onclick={() => void openUrl(OP_GUIDE_URL)}>{t('pwmanager.op_open_guide')}</Button>
+					</div>
+				</div>
+			{/if}
+
+			<div class="field-row">
+				<div class="grow">
+					<Input label={t('pwmanager.cli_path')} bind:value={opCliPath} placeholder="op" disabled={busy} />
+				</div>
+				<Button variant="secondary" size="sm" onclick={browseOpCli} disabled={busy}>{t('pwmanager.browse')}</Button>
+			</div>
+			<p class="hint">{t('pwmanager.op_cli_path_hint')}</p>
+
+			<div class="group" role="radiogroup" aria-label={t('pwmanager.op_auth')}>
+				<span class="group-label">{t('pwmanager.op_auth')}</span>
+				<div class="segmented">
+					<button type="button" role="radio" aria-checked={opAuth === 'app'} class:active={opAuth === 'app'} disabled={busy} onclick={() => (opAuth = 'app')}>
+						{t('pwmanager.op_auth_app')}
+					</button>
+					<button type="button" role="radio" aria-checked={opAuth === 'service_account'} class:active={opAuth === 'service_account'} disabled={busy} onclick={() => (opAuth = 'service_account')}>
+						{t('pwmanager.op_auth_service')}
+					</button>
+				</div>
+				<p class="hint">{opAuth === 'app' ? t('pwmanager.op_auth_app_desc') : t('pwmanager.op_auth_service_desc')}</p>
+			</div>
+
+			{#if opAuth === 'app'}
+				<div>
+					<Input label={t('pwmanager.op_account')} bind:value={opAccount} placeholder="my.1password.com" disabled={busy} />
+					<p class="hint">{t('pwmanager.op_account_hint')}</p>
+				</div>
+			{:else}
+				<div class="secret">
+					<div class="secret-head">
+						<span class="secret-label">{t('pwmanager.op_token')}</span>
+						<span class="badge" class:saved={view.onepassword.has_service_account_token}>
+							{view.onepassword.has_service_account_token ? t('pwmanager.saved_state') : t('pwmanager.not_set')}
+						</span>
+						{#if view.onepassword.has_service_account_token}
+							<button type="button" class="link-btn danger" onclick={() => void removeOpToken()} disabled={busy}>{t('pwmanager.remove')}</button>
+						{/if}
+					</div>
+					<Input
+						label={view.onepassword.has_service_account_token ? t('pwmanager.op_token_replace') : t('pwmanager.op_token')}
+						type="password"
+						bind:value={opToken}
+						placeholder="ops_…"
+						disabled={busy}
+					/>
+				</div>
+			{/if}
+
+			<div class="timeout">
+				<Input label={t('pwmanager.timeout')} type="number" bind:value={opTimeoutStr} placeholder={String(TIMEOUT_DEFAULT)} disabled={busy} />
+			</div>
+			<p class="hint">{t('pwmanager.timeout_hint', { min: String(TIMEOUT_MIN), max: String(TIMEOUT_MAX) })}</p>
+
+			{#if opSaveError}
+				<div class="form-error" role="alert">{opSaveError}</div>
+			{/if}
+
+			{#if opTestResult || opTestError}
+				<div class="test" class:ok={opTestResult?.ok} role="status">
+					{#if opTestResult?.ok}
+						{t('pwmanager.test_ok', { count: String(opTestResult.entries) })}
+					{:else}
+						{opTestResult?.message || opTestError}
+					{/if}
+				</div>
+			{/if}
+
+			<div class="action-row">
+				{#if !enabled}
+					<span class="hint">{t('pwmanager.test_needs_enable')}</span>
+				{/if}
+				<Button variant="secondary" size="sm" onclick={() => void testOnePassword()} disabled={!enabled || !opEnabled || busy || opTesting}>
+					{opTesting ? t('pwmanager.testing') : t('pwmanager.test')}
+				</Button>
+				<Button variant="primary" size="sm" onclick={() => void handleSaveOnePassword()} disabled={!opDirty || busy}>
+					{busy ? t('pwmanager.saving') : t('pwmanager.save')}
+				</Button>
+			</div>
+
+			<p class="note">{t('pwmanager.op_note')}</p>
 		</div>
 	{/if}
 </div>

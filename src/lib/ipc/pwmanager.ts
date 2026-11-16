@@ -13,7 +13,7 @@ import { invoke } from '@tauri-apps/api/core';
 
 /** A pointer to an entry in a password manager. Not secret. */
 export interface SecretRef {
-	/** Provider id, e.g. "passbolt". */
+	/** Provider id: "passbolt", "onepassword". */
 	provider: string;
 	/** The provider's id for the entry (Passbolt: the resource UUID). */
 	entry_id: string;
@@ -79,9 +79,25 @@ export interface PassboltView {
 	passphrase_cached: boolean;
 }
 
+/** 1Password signs in through the desktop app (it asks the user) or with a stored service account token. */
+export type OnePasswordAuth = 'app' | 'service_account';
+
+export interface OnePasswordView {
+	/** The `op` binary; null = found on PATH. Stored on this device only. */
+	cli_path: string | null;
+	/** 1Password's own switch, under the master one. */
+	enabled: boolean;
+	auth: OnePasswordAuth;
+	/** Sign-in address, shorthand or ID, for an app signed in to several accounts; empty = the CLI's default. */
+	account: string;
+	timeout_secs: number;
+	has_service_account_token: boolean;
+}
+
 export interface PasswordManagersView {
 	enabled: boolean;
 	passbolt: PassboltView;
+	onepassword: OnePasswordView;
 }
 
 export interface PassboltConfigInput {
@@ -105,9 +121,21 @@ export interface PassboltConfigInput {
 	clear_totp_secret?: boolean;
 }
 
+export interface OnePasswordConfigInput {
+	cli_path: string | null;
+	enabled: boolean;
+	auth: OnePasswordAuth;
+	account: string;
+	timeout_secs: number;
+	/** Absent or null keeps what is stored. Starts with ops_. */
+	service_account_token?: string | null;
+	clear_service_account_token?: boolean;
+}
+
 export interface PasswordManagersConfigInput {
 	enabled: boolean;
 	passbolt: PassboltConfigInput;
+	onepassword: OnePasswordConfigInput;
 }
 
 export interface TestResult {
@@ -148,6 +176,7 @@ export function pwmanagerList(provider: string, query?: string | null, refresh?:
 /** The non-secret part of a view, as the input for a save that changes no secret. */
 export function configInputFromView(view: PasswordManagersView): PasswordManagersConfigInput {
 	const p = view.passbolt;
+	const o = view.onepassword;
 	return {
 		enabled: view.enabled,
 		passbolt: {
@@ -158,6 +187,13 @@ export function configInputFromView(view: PasswordManagersView): PasswordManager
 			timeout_secs: p.timeout_secs,
 			passphrase_mode: p.passphrase_mode,
 			passphrase_remember_secs: p.passphrase_remember_secs,
+		},
+		onepassword: {
+			cli_path: o.cli_path,
+			enabled: o.enabled,
+			auth: o.auth,
+			account: o.account,
+			timeout_secs: o.timeout_secs,
 		},
 	};
 }

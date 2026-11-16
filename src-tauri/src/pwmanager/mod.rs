@@ -59,6 +59,7 @@
 mod cache;
 pub(crate) mod cli;
 pub mod config;
+pub mod onepassword;
 pub mod passbolt;
 #[cfg(desktop)]
 mod process;
@@ -91,7 +92,7 @@ use config::PasswordManagersConfig;
 /// read and never taken from what is sent in.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SecretRef {
-    /// Which manager: `"passbolt"`.
+    /// Which manager: `"passbolt"`, `"onepassword"`.
     pub provider: String,
     /// The manager's own id for the entry (Passbolt: the resource UUID).
     pub entry_id: String,
@@ -190,26 +191,30 @@ pub struct TestResult {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ProviderId {
     Passbolt,
+    OnePassword,
 }
 
 impl ProviderId {
-    pub const ALL: &'static [ProviderId] = &[ProviderId::Passbolt];
+    pub const ALL: &'static [ProviderId] = &[ProviderId::Passbolt, ProviderId::OnePassword];
 
     pub fn as_str(self) -> &'static str {
         match self {
             ProviderId::Passbolt => "passbolt",
+            ProviderId::OnePassword => "onepassword",
         }
     }
 
     pub fn display_name(self) -> &'static str {
         match self {
             ProviderId::Passbolt => "Passbolt",
+            ProviderId::OnePassword => "1Password",
         }
     }
 
     pub fn parse(s: &str) -> Result<Self, String> {
         match s {
             "passbolt" => Ok(ProviderId::Passbolt),
+            "onepassword" => Ok(ProviderId::OnePassword),
             other => Err(format!("Unknown password manager '{}'", sanitize_display(other, 40))),
         }
     }
@@ -286,6 +291,7 @@ pub enum SecretKind {
 /// right after.
 pub(crate) enum Provider {
     Passbolt(passbolt::Passbolt),
+    OnePassword(onepassword::OnePassword),
 }
 
 impl Provider {
@@ -296,48 +302,60 @@ impl Provider {
                 loaded.passbolt_secrets,
                 loaded.config.enabled,
             )),
+            ProviderId::OnePassword => Provider::OnePassword(onepassword::OnePassword::new(
+                loaded.config.onepassword,
+                loaded.onepassword_secrets,
+                loaded.config.enabled,
+            )),
         }
     }
 
     async fn status(&self) -> ProviderStatus {
         match self {
             Provider::Passbolt(p) => p.status().await,
+            Provider::OnePassword(p) => p.status().await,
         }
     }
 
     fn passphrase_prompt(&self) -> Option<u32> {
         match self {
             Provider::Passbolt(p) => p.passphrase_prompt(),
+            Provider::OnePassword(p) => p.passphrase_prompt(),
         }
     }
 
     async fn list(&self, passphrase: Option<&unlock::Passphrase>) -> Result<Vec<EntrySummary>, Failure> {
         match self {
             Provider::Passbolt(p) => p.list(passphrase).await,
+            Provider::OnePassword(p) => p.list(passphrase).await,
         }
     }
 
     async fn resolve(&self, entry_id: &str, passphrase: Option<&unlock::Passphrase>) -> Result<Zeroizing<String>, Failure> {
         match self {
             Provider::Passbolt(p) => p.resolve(entry_id, passphrase).await,
+            Provider::OnePassword(p) => p.resolve(entry_id, passphrase).await,
         }
     }
 
     fn server_host(&self) -> Option<String> {
         match self {
             Provider::Passbolt(p) => p.server_host(),
+            Provider::OnePassword(p) => p.server_host(),
         }
     }
 
     fn id(&self) -> ProviderId {
         match self {
             Provider::Passbolt(_) => ProviderId::Passbolt,
+            Provider::OnePassword(_) => ProviderId::OnePassword,
         }
     }
 
     fn secret_kind(&self) -> SecretKind {
         match self {
             Provider::Passbolt(p) => p.secret_kind(),
+            Provider::OnePassword(p) => p.secret_kind(),
         }
     }
 
@@ -345,12 +363,14 @@ impl Provider {
         self.id().as_str().hash(&mut h);
         match self {
             Provider::Passbolt(p) => p.hash_account(h),
+            Provider::OnePassword(p) => p.hash_account(h),
         }
     }
 
     fn check_entry(&self, entry_id: &str, field: Option<&str>) -> Result<String, String> {
         match self {
             Provider::Passbolt(p) => p.check_entry(entry_id, field),
+            Provider::OnePassword(p) => p.check_entry(entry_id, field),
         }
     }
 
