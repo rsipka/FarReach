@@ -22,6 +22,8 @@ use crate::state::AppState;
 fn view(loaded: &config::Loaded) -> PasswordManagersView {
     let mut view = PasswordManagersView::from(loaded);
     view.passbolt.passphrase_cached = pwmanager::passphrase_cached(ProviderId::Passbolt, loaded);
+    view.bitwarden.password_cached = pwmanager::passphrase_cached(ProviderId::Bitwarden, loaded);
+    view.keepass.password_cached = pwmanager::passphrase_cached(ProviderId::Keepass, loaded);
     view
 }
 

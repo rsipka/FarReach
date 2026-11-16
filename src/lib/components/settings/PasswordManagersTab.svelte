@@ -53,6 +53,7 @@
 
 	const RELEASES_URL = 'https://github.com/passbolt/go-passbolt-cli/releases';
 	const OP_GUIDE_URL = 'https://developer.1password.com/docs/cli/get-started/';
+	const BW_GUIDE_URL = 'https://bitwarden.com/help/cli/';
 	const TIMEOUT_MIN = 10;
 	const TIMEOUT_MAX = 300;
 	const TIMEOUT_DEFAULT = 60;
@@ -112,6 +113,63 @@
 			opAccount.trim() !== o.account ||
 			(opCliPath.trim() || null) !== (o.cli_path?.trim() || null) ||
 			opTimeoutSecs !== o.timeout_secs
+		);
+	});
+
+	// Bitwarden: its own card, saved on its own. No secret is stored.
+	let bwEnabled = $state(false);
+	let bwCliPath = $state('');
+	let bwTimeoutStr = $state(String(TIMEOUT_DEFAULT));
+	let bwRememberSecs = $state<number>(REMEMBER_DEFAULT);
+	let bwTesting = $state(false);
+	let bwTestResult = $state<TestResult | null>(null);
+	let bwTestError = $state<string | null>(null);
+	let bwSaveError = $state<string | null>(null);
+	let bwStatus = $derived(pwManagerProviders().find((p) => p.id === 'bitwarden') ?? null);
+	let bwTimeoutSecs = $derived.by(() => {
+		const n = parseInt(bwTimeoutStr, 10);
+		if (!Number.isFinite(n)) return TIMEOUT_DEFAULT;
+		return Math.min(TIMEOUT_MAX, Math.max(TIMEOUT_MIN, n));
+	});
+	let bwRememberOptions = $derived(
+		(REMEMBER_CHOICES as readonly number[]).includes(bwRememberSecs)
+			? [...REMEMBER_CHOICES]
+			: [...REMEMBER_CHOICES, bwRememberSecs].sort((a, b) => a - b)
+	);
+	let bwDirty = $derived.by(() => {
+		if (!view) return false;
+		const b = view.bitwarden;
+		return (
+			bwEnabled !== b.enabled ||
+			(bwCliPath.trim() || null) !== (b.cli_path?.trim() || null) ||
+			bwTimeoutSecs !== b.timeout_secs ||
+			bwRememberSecs !== b.remember_secs
+		);
+	});
+
+	// KeePass: its own card, saved on its own. A file, not a CLI; no secret is stored.
+	let kpEnabled = $state(false);
+	let kpDatabase = $state('');
+	let kpKeyFile = $state('');
+	let kpRememberSecs = $state<number>(REMEMBER_DEFAULT);
+	let kpTesting = $state(false);
+	let kpTestResult = $state<TestResult | null>(null);
+	let kpTestError = $state<string | null>(null);
+	let kpSaveError = $state<string | null>(null);
+	let kpStatus = $derived(pwManagerProviders().find((p) => p.id === 'keepass') ?? null);
+	let kpRememberOptions = $derived(
+		(REMEMBER_CHOICES as readonly number[]).includes(kpRememberSecs)
+			? [...REMEMBER_CHOICES]
+			: [...REMEMBER_CHOICES, kpRememberSecs].sort((a, b) => a - b)
+	);
+	let kpDirty = $derived.by(() => {
+		if (!view) return false;
+		const k = view.keepass;
+		return (
+			kpEnabled !== k.enabled ||
+			(kpDatabase.trim() || null) !== (k.database_path?.trim() || null) ||
+			(kpKeyFile.trim() || null) !== (k.key_file_path?.trim() || null) ||
+			kpRememberSecs !== k.remember_secs
 		);
 	});
 
@@ -178,6 +236,12 @@
 				opTestResult = null;
 				opTestError = null;
 				opSaveError = null;
+				bwTestResult = null;
+				bwTestError = null;
+				bwSaveError = null;
+				kpTestResult = null;
+				kpTestError = null;
+				kpSaveError = null;
 			} else {
 				void load();
 			}
@@ -194,6 +258,145 @@
 		passphraseMode = v.passbolt.passphrase_mode;
 		rememberSecs = v.passbolt.passphrase_remember_secs;
 		fillOnePassword(v);
+		fillBitwarden(v);
+		fillKeepass(v);
+	}
+
+	function fillKeepass(v: PasswordManagersView): void {
+		kpEnabled = v.keepass.enabled;
+		kpDatabase = v.keepass.database_path ?? '';
+		kpKeyFile = v.keepass.key_file_path ?? '';
+		kpRememberSecs = v.keepass.remember_secs;
+	}
+
+	/** Save the KeePass card: the other managers go back as stored, their unsaved edits stay in their forms. */
+	async function saveKeepass(): Promise<boolean> {
+		if (!view || isLocked()) return false;
+		const input = configInputFromView(view);
+		input.keepass = {
+			database_path: kpDatabase.trim() || null,
+			key_file_path: kpKeyFile.trim() || null,
+			enabled: kpEnabled,
+			remember_secs: kpRememberSecs
+		};
+		busy = true;
+		kpSaveError = null;
+		try {
+			view = await pwmanagerSaveConfig(input);
+			fillKeepass(view);
+			kpTestResult = null;
+			kpTestError = null;
+			await checkStatus();
+			return true;
+		} catch (e) {
+			kpSaveError = String(e);
+			return false;
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function handleSaveKeepass(): Promise<void> {
+		if (await saveKeepass()) addToast(t('pwmanager.saved'), 'success');
+	}
+
+	async function testKeepass(): Promise<void> {
+		if (kpDirty && !(await saveKeepass())) return;
+		kpTesting = true;
+		kpTestResult = null;
+		kpTestError = null;
+		try {
+			kpTestResult = await pwmanagerTest('keepass');
+		} catch (e) {
+			kpTestError = String(e);
+		} finally {
+			kpTesting = false;
+			await refreshCached();
+		}
+	}
+
+	async function browseKeepass(which: 'database' | 'key_file'): Promise<void> {
+		try {
+			const picked = await openDialog({
+				multiple: false,
+				directory: false,
+				title: which === 'database' ? t('pwmanager.kp_database_pick') : t('pwmanager.kp_key_file_pick'),
+				filters:
+					which === 'database'
+						? [
+								{ name: t('pwmanager.kp_database_filter'), extensions: ['kdbx', 'kdb'] },
+								{ name: t('pwmanager.all_files'), extensions: ['*'] }
+							]
+						: undefined
+			});
+			if (typeof picked !== 'string') return;
+			if (which === 'database') kpDatabase = picked;
+			else kpKeyFile = picked;
+		} catch {
+			// Cancelled.
+		}
+	}
+
+	function fillBitwarden(v: PasswordManagersView): void {
+		bwEnabled = v.bitwarden.enabled;
+		bwCliPath = v.bitwarden.cli_path ?? '';
+		bwTimeoutStr = String(v.bitwarden.timeout_secs || TIMEOUT_DEFAULT);
+		bwRememberSecs = v.bitwarden.remember_secs;
+	}
+
+	/** Save the Bitwarden card: the other managers go back as stored, their unsaved edits stay in their forms. */
+	async function saveBitwarden(): Promise<boolean> {
+		if (!view || isLocked()) return false;
+		const input = configInputFromView(view);
+		input.bitwarden = {
+			cli_path: bwCliPath.trim() || null,
+			enabled: bwEnabled,
+			timeout_secs: bwTimeoutSecs,
+			remember_secs: bwRememberSecs
+		};
+		busy = true;
+		bwSaveError = null;
+		try {
+			view = await pwmanagerSaveConfig(input);
+			fillBitwarden(view);
+			bwTestResult = null;
+			bwTestError = null;
+			await checkStatus();
+			return true;
+		} catch (e) {
+			bwSaveError = String(e);
+			return false;
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function handleSaveBitwarden(): Promise<void> {
+		if (await saveBitwarden()) addToast(t('pwmanager.saved'), 'success');
+	}
+
+	async function testBitwarden(): Promise<void> {
+		if (bwDirty && !(await saveBitwarden())) return;
+		bwTesting = true;
+		bwTestResult = null;
+		bwTestError = null;
+		try {
+			bwTestResult = await pwmanagerTest('bitwarden');
+		} catch (e) {
+			bwTestError = String(e);
+		} finally {
+			bwTesting = false;
+			await refreshCached();
+		}
+	}
+
+	async function browseBwCli(): Promise<void> {
+		try {
+			const picked = await openDialog({ multiple: false, directory: false, title: t('pwmanager.bw_cli') });
+			if (typeof picked === 'string') bwCliPath = picked;
+		} catch {
+			// Cancelled.
+		}
 	}
 
 	function fillOnePassword(v: PasswordManagersView): void {
@@ -272,7 +475,14 @@
 	async function refreshCached(): Promise<void> {
 		try {
 			const fresh = await pwmanagerGetConfig();
-			if (view) view = { ...view, passbolt: { ...view.passbolt, passphrase_cached: fresh.passbolt.passphrase_cached } };
+			if (view) {
+				view = {
+					...view,
+					passbolt: { ...view.passbolt, passphrase_cached: fresh.passbolt.passphrase_cached },
+					bitwarden: { ...view.bitwarden, password_cached: fresh.bitwarden.password_cached },
+					keepass: { ...view.keepass, password_cached: fresh.keepass.password_cached }
+				};
+			}
 		} catch {
 			// Shown as it was.
 		}
@@ -360,6 +570,8 @@
 			enabled,
 			// Saved from its own card; sent as stored.
 			onepassword: configInputFromView(view!).onepassword,
+			bitwarden: configInputFromView(view!).bitwarden,
+			keepass: configInputFromView(view!).keepass,
 			passbolt: {
 				cli_path: cliPath.trim() || null,
 				credentials,
@@ -834,6 +1046,212 @@
 			</div>
 
 			<p class="note">{t('pwmanager.op_note')}</p>
+		</div>
+
+		<div class="section provider" class:dimmed={!enabled || !bwEnabled}>
+			<h3 class="section-title">Bitwarden</h3>
+
+			<div class="setting-row">
+				<div class="setting-info">
+					<span class="setting-label">{t('pwmanager.bw_enable')}</span>
+					<span class="setting-description">{t('pwmanager.bw_enable_desc')}</span>
+				</div>
+				<div class="setting-control">
+					<Toggle hideLabel checked={bwEnabled} label={t('pwmanager.bw_enable')} disabled={busy} onchange={(v) => (bwEnabled = v)} />
+				</div>
+			</div>
+
+			<div class="setting-row">
+				<div class="setting-info">
+					<span class="setting-label">{t('pwmanager.bw_cli')}</span>
+					{#if checking && !pwManagersLoaded()}
+						<span class="setting-description">{t('pwmanager.checking')}</span>
+					{:else if bwStatus?.available}
+						<span class="setting-description">
+							{bwStatus.version ? t('pwmanager.cli_found_version', { version: bwStatus.version }) : t('pwmanager.cli_found')}
+						</span>
+					{:else}
+						<span class="setting-description warn">{bwStatus?.detail || t('pwmanager.cli_missing')}</span>
+					{/if}
+				</div>
+				<Button variant="secondary" size="sm" onclick={() => void checkStatus()} disabled={checking}>
+					{checking ? t('pwmanager.checking') : t('pwmanager.check_again')}
+				</Button>
+			</div>
+
+			{#if pwManagersLoaded() && !bwStatus?.available}
+				<div class="install">
+					<span class="setting-description">{t('pwmanager.bw_install_hint')}</span>
+					<code class="cmd">brew install bitwarden-cli</code>
+					<span class="setting-description">{t('pwmanager.bw_install_other')}</span>
+					<div>
+						<Button variant="ghost" size="sm" onclick={() => void openUrl(BW_GUIDE_URL)}>{t('pwmanager.op_open_guide')}</Button>
+					</div>
+				</div>
+			{/if}
+
+			<div class="field-row">
+				<div class="grow">
+					<Input label={t('pwmanager.cli_path')} bind:value={bwCliPath} placeholder="bw" disabled={busy} />
+				</div>
+				<Button variant="secondary" size="sm" onclick={browseBwCli} disabled={busy}>{t('pwmanager.browse')}</Button>
+			</div>
+			<p class="hint">{t('pwmanager.bw_cli_path_hint')}</p>
+
+			<p class="hint">{t('pwmanager.bw_login_hint')}</p>
+
+			<div class="secret">
+				<label class="secret-label" for="pwm-bw-remember">{t('pwmanager.remember')}</label>
+				<div class="field-row">
+					<select id="pwm-bw-remember" class="select" bind:value={bwRememberSecs} disabled={busy}>
+						{#each bwRememberOptions as secs (secs)}
+							<option value={secs}>{rememberLabel(secs)}</option>
+						{/each}
+					</select>
+					<Button
+						variant="secondary"
+						size="sm"
+						onclick={() => void forgetNow()}
+						disabled={busy || forgetting || !view.bitwarden.password_cached}
+					>
+						{t('pwmanager.forget_now')}
+					</Button>
+				</div>
+				<p class="hint">
+					{view.bitwarden.password_cached ? t('pwmanager.bw_password_in_memory') : t('pwmanager.bw_password_not_in_memory')}
+				</p>
+			</div>
+
+			<div class="timeout">
+				<Input label={t('pwmanager.timeout')} type="number" bind:value={bwTimeoutStr} placeholder={String(TIMEOUT_DEFAULT)} disabled={busy} />
+			</div>
+			<p class="hint">{t('pwmanager.timeout_hint', { min: String(TIMEOUT_MIN), max: String(TIMEOUT_MAX) })}</p>
+
+			{#if bwSaveError}
+				<div class="form-error" role="alert">{bwSaveError}</div>
+			{/if}
+
+			{#if bwTestResult || bwTestError}
+				<div class="test" class:ok={bwTestResult?.ok} role="status">
+					{#if bwTestResult?.ok}
+						{t('pwmanager.test_ok', { count: String(bwTestResult.entries) })}
+					{:else}
+						{bwTestResult?.message || bwTestError}
+					{/if}
+				</div>
+			{/if}
+
+			<div class="action-row">
+				{#if !enabled}
+					<span class="hint">{t('pwmanager.test_needs_enable')}</span>
+				{/if}
+				<Button variant="secondary" size="sm" onclick={() => void testBitwarden()} disabled={!enabled || !bwEnabled || busy || bwTesting}>
+					{bwTesting ? t('pwmanager.testing') : t('pwmanager.test')}
+				</Button>
+				<Button variant="primary" size="sm" onclick={() => void handleSaveBitwarden()} disabled={!bwDirty || busy}>
+					{busy ? t('pwmanager.saving') : t('pwmanager.save')}
+				</Button>
+			</div>
+
+			<p class="note">{t('pwmanager.bw_note')}</p>
+		</div>
+
+		<div class="section provider" class:dimmed={!enabled || !kpEnabled}>
+			<h3 class="section-title">KeePass</h3>
+
+			<div class="setting-row">
+				<div class="setting-info">
+					<span class="setting-label">{t('pwmanager.kp_enable')}</span>
+					<span class="setting-description">{t('pwmanager.kp_enable_desc')}</span>
+				</div>
+				<div class="setting-control">
+					<Toggle hideLabel checked={kpEnabled} label={t('pwmanager.kp_enable')} disabled={busy} onchange={(v) => (kpEnabled = v)} />
+				</div>
+			</div>
+
+			<div class="setting-row">
+				<div class="setting-info">
+					<span class="setting-label">{t('pwmanager.kp_database')}</span>
+					{#if checking && !pwManagersLoaded()}
+						<span class="setting-description">{t('pwmanager.checking')}</span>
+					{:else if kpStatus?.available}
+						<span class="setting-description">{t('pwmanager.kp_database_found')}</span>
+					{:else if view.keepass.database_path}
+						<span class="setting-description warn">{kpStatus?.detail || t('pwmanager.kp_database_missing')}</span>
+					{:else}
+						<span class="setting-description">{t('pwmanager.kp_database_missing')}</span>
+					{/if}
+				</div>
+				<Button variant="secondary" size="sm" onclick={() => void checkStatus()} disabled={checking}>
+					{checking ? t('pwmanager.checking') : t('pwmanager.check_again')}
+				</Button>
+			</div>
+
+			<div class="field-row">
+				<div class="grow">
+					<Input label={t('pwmanager.kp_database')} bind:value={kpDatabase} placeholder="Passwords.kdbx" disabled={busy} />
+				</div>
+				<Button variant="secondary" size="sm" onclick={() => void browseKeepass('database')} disabled={busy}>{t('pwmanager.browse')}</Button>
+			</div>
+			<p class="hint">{t('pwmanager.kp_database_hint')}</p>
+
+			<div class="field-row">
+				<div class="grow">
+					<Input label={t('pwmanager.kp_key_file')} bind:value={kpKeyFile} disabled={busy} />
+				</div>
+				<Button variant="secondary" size="sm" onclick={() => void browseKeepass('key_file')} disabled={busy}>{t('pwmanager.browse')}</Button>
+			</div>
+			<p class="hint">{t('pwmanager.kp_key_file_hint')}</p>
+
+			<div class="secret">
+				<label class="secret-label" for="pwm-kp-remember">{t('pwmanager.remember')}</label>
+				<div class="field-row">
+					<select id="pwm-kp-remember" class="select" bind:value={kpRememberSecs} disabled={busy}>
+						{#each kpRememberOptions as secs (secs)}
+							<option value={secs}>{rememberLabel(secs)}</option>
+						{/each}
+					</select>
+					<Button
+						variant="secondary"
+						size="sm"
+						onclick={() => void forgetNow()}
+						disabled={busy || forgetting || !view.keepass.password_cached}
+					>
+						{t('pwmanager.forget_now')}
+					</Button>
+				</div>
+				<p class="hint">
+					{view.keepass.password_cached ? t('pwmanager.bw_password_in_memory') : t('pwmanager.bw_password_not_in_memory')}
+				</p>
+			</div>
+
+			{#if kpSaveError}
+				<div class="form-error" role="alert">{kpSaveError}</div>
+			{/if}
+
+			{#if kpTestResult || kpTestError}
+				<div class="test" class:ok={kpTestResult?.ok} role="status">
+					{#if kpTestResult?.ok}
+						{t('pwmanager.test_ok', { count: String(kpTestResult.entries) })}
+					{:else}
+						{kpTestResult?.message || kpTestError}
+					{/if}
+				</div>
+			{/if}
+
+			<div class="action-row">
+				{#if !enabled}
+					<span class="hint">{t('pwmanager.test_needs_enable')}</span>
+				{/if}
+				<Button variant="secondary" size="sm" onclick={() => void testKeepass()} disabled={!enabled || !kpEnabled || busy || kpTesting}>
+					{kpTesting ? t('pwmanager.testing') : t('pwmanager.test')}
+				</Button>
+				<Button variant="primary" size="sm" onclick={() => void handleSaveKeepass()} disabled={!kpDirty || busy}>
+					{busy ? t('pwmanager.saving') : t('pwmanager.save')}
+				</Button>
+			</div>
+
+			<p class="note">{t('pwmanager.kp_note')}</p>
 		</div>
 	{/if}
 </div>

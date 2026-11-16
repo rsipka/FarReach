@@ -61,6 +61,8 @@ hickory-resolver = { version = "0.26", features = ["dnssec-ring"] }
 # Locking key material into RAM (VirtualLock / mlock); see src/vault/shield.rs.
 memsec = { version = "0.7", default-features = false, features = ["use_os"] }
 zeroize = { version = "1", features = ["derive"] }
+# KeePass .kdbx databases, read in process (src/pwmanager/keepass.rs).
+keepass = "0.17"
 base64 = "0.23"
 chacha20poly1305 = { version = "0.11", features = ["zeroize"] }
 hkdf = "0.13"
@@ -399,3 +401,5 @@ smb = { path = "vendor/smb" }
 [dev-dependencies]
 # Tests keep keychain entries in memory, never in the OS keychain.
 keyring-core = { version = "1", features = ["sample"] }
+# Tests write a small .kdbx to read back.
+keepass = { version = "0.17", features = ["save_kdbx4"] }
