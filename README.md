@@ -65,7 +65,7 @@ See the [changelog](CHANGELOG.md) for details. Most of these are offered back to
 
 - **Encrypted vault** for sessions, passwords and keys (XChaCha20-Poly1305, Argon2id), with optional encrypted cloud sync.
 - **Master password**, plus unlock with Windows Hello, Touch ID, Android biometrics or a FIDO2 security key. Auto-lock when idle or when your computer locks.
-- **Password managers**: point a session at a Passbolt entry instead of keeping a copy.
+- **Password managers**: point a session at a Passbolt, 1Password or Bitwarden entry instead of keeping a copy.
 - **Backups** of your sessions and settings, optionally password-protected.
 - **Zero-trust defaults**: anything that opens a door, like session sharing or the MCP server, stays off until you switch it on.
 

@@ -151,6 +151,7 @@ fn the_cli_path_is_not_kept_in_the_synced_vault() {
         enabled: true,
         passbolt: PassboltConfig { cli_path: Some("/usr/bin/passbolt".into()), ..Default::default() },
         onepassword: OnePasswordConfig { cli_path: Some("/usr/bin/op".into()), ..Default::default() },
+        bitwarden: BitwardenConfig { cli_path: Some("/usr/bin/bw".into()), ..Default::default() },
     };
     let json = serde_json::to_string(&config).unwrap();
     assert!(!json.contains("cli_path") && !json.contains("/usr/bin"), "{json}");
@@ -471,4 +472,34 @@ fn a_configuration_saved_before_onepassword_reads_with_it_off() {
     let c = parse_config(r#"{"enabled":true,"passbolt":{"server_address":"https://pb.example.com"}}"#).unwrap();
     assert!(!c.onepassword.enabled);
     assert_eq!(c.onepassword.timeout_secs, DEFAULT_TIMEOUT_SECS);
+}
+
+#[test]
+fn bitwarden_is_off_by_default_and_stores_no_secret() {
+    let mut i = input(serde_json::json!({ "enabled": true, "passbolt": {} }));
+    let v = validate_input(&mut i, None).unwrap();
+    assert!(!v.config.bitwarden.enabled);
+    assert_eq!(v.config.bitwarden.remember_secs, DEFAULT_REMEMBER_SECS);
+
+    let mut i = input(serde_json::json!({
+        "enabled": true,
+        "passbolt": {},
+        "bitwarden": { "enabled": true, "timeout_secs": 5, "remember_secs": 999999, "cli_path": "relative/bw" }
+    }));
+    assert!(validate_input(&mut i, None).unwrap_err().contains("absolute"));
+    let mut i = input(serde_json::json!({
+        "enabled": true,
+        "passbolt": {},
+        "bitwarden": { "enabled": true, "timeout_secs": 5, "remember_secs": 999999 }
+    }));
+    let v = validate_input(&mut i, None).unwrap();
+    assert!(v.config.bitwarden.enabled);
+    assert_eq!(v.config.bitwarden.timeout_secs, MIN_TIMEOUT_SECS);
+    assert_eq!(v.config.bitwarden.remember_secs, MAX_REMEMBER_SECS);
+    // The CLI path is this device's, never in the synced configuration.
+    let c = BitwardenConfig { cli_path: Some("/usr/bin/bw".into()), enabled: true, ..Default::default() };
+    assert!(!serde_json::to_string(&c).unwrap().contains("cli_path"));
+
+    let c = parse_config(r#"{"enabled":true,"passbolt":{}}"#).unwrap();
+    assert!(!c.bitwarden.enabled);
 }

@@ -56,6 +56,7 @@
 //!    parsed into metadata only, errors are cleaned.
 //! 6. **User docs**: `docs/src/content/docs/vault/password-managers.md`.
 
+pub mod bitwarden;
 mod cache;
 pub(crate) mod cli;
 pub mod config;
@@ -92,7 +93,7 @@ use config::PasswordManagersConfig;
 /// read and never taken from what is sent in.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SecretRef {
-    /// Which manager: `"passbolt"`, `"onepassword"`.
+    /// Which manager: `"passbolt"`, `"onepassword"`, `"bitwarden"`.
     pub provider: String,
     /// The manager's own id for the entry (Passbolt: the resource UUID).
     pub entry_id: String,
@@ -192,15 +193,17 @@ pub struct TestResult {
 pub enum ProviderId {
     Passbolt,
     OnePassword,
+    Bitwarden,
 }
 
 impl ProviderId {
-    pub const ALL: &'static [ProviderId] = &[ProviderId::Passbolt, ProviderId::OnePassword];
+    pub const ALL: &'static [ProviderId] = &[ProviderId::Passbolt, ProviderId::OnePassword, ProviderId::Bitwarden];
 
     pub fn as_str(self) -> &'static str {
         match self {
             ProviderId::Passbolt => "passbolt",
             ProviderId::OnePassword => "onepassword",
+            ProviderId::Bitwarden => "bitwarden",
         }
     }
 
@@ -208,6 +211,7 @@ impl ProviderId {
         match self {
             ProviderId::Passbolt => "Passbolt",
             ProviderId::OnePassword => "1Password",
+            ProviderId::Bitwarden => "Bitwarden",
         }
     }
 
@@ -215,6 +219,7 @@ impl ProviderId {
         match s {
             "passbolt" => Ok(ProviderId::Passbolt),
             "onepassword" => Ok(ProviderId::OnePassword),
+            "bitwarden" => Ok(ProviderId::Bitwarden),
             other => Err(format!("Unknown password manager '{}'", sanitize_display(other, 40))),
         }
     }
@@ -292,6 +297,7 @@ pub enum SecretKind {
 pub(crate) enum Provider {
     Passbolt(passbolt::Passbolt),
     OnePassword(onepassword::OnePassword),
+    Bitwarden(bitwarden::Bitwarden),
 }
 
 impl Provider {
@@ -307,6 +313,9 @@ impl Provider {
                 loaded.onepassword_secrets,
                 loaded.config.enabled,
             )),
+            ProviderId::Bitwarden => {
+                Provider::Bitwarden(bitwarden::Bitwarden::new(loaded.config.bitwarden, loaded.config.enabled))
+            }
         }
     }
 
@@ -314,6 +323,7 @@ impl Provider {
         match self {
             Provider::Passbolt(p) => p.status().await,
             Provider::OnePassword(p) => p.status().await,
+            Provider::Bitwarden(p) => p.status().await,
         }
     }
 
@@ -321,6 +331,7 @@ impl Provider {
         match self {
             Provider::Passbolt(p) => p.passphrase_prompt(),
             Provider::OnePassword(p) => p.passphrase_prompt(),
+            Provider::Bitwarden(p) => p.passphrase_prompt(),
         }
     }
 
@@ -328,6 +339,7 @@ impl Provider {
         match self {
             Provider::Passbolt(p) => p.list(passphrase).await,
             Provider::OnePassword(p) => p.list(passphrase).await,
+            Provider::Bitwarden(p) => p.list(passphrase).await,
         }
     }
 
@@ -335,6 +347,7 @@ impl Provider {
         match self {
             Provider::Passbolt(p) => p.resolve(entry_id, passphrase).await,
             Provider::OnePassword(p) => p.resolve(entry_id, passphrase).await,
+            Provider::Bitwarden(p) => p.resolve(entry_id, passphrase).await,
         }
     }
 
@@ -342,6 +355,7 @@ impl Provider {
         match self {
             Provider::Passbolt(p) => p.server_host(),
             Provider::OnePassword(p) => p.server_host(),
+            Provider::Bitwarden(p) => p.server_host(),
         }
     }
 
@@ -349,6 +363,7 @@ impl Provider {
         match self {
             Provider::Passbolt(_) => ProviderId::Passbolt,
             Provider::OnePassword(_) => ProviderId::OnePassword,
+            Provider::Bitwarden(_) => ProviderId::Bitwarden,
         }
     }
 
@@ -356,6 +371,7 @@ impl Provider {
         match self {
             Provider::Passbolt(p) => p.secret_kind(),
             Provider::OnePassword(p) => p.secret_kind(),
+            Provider::Bitwarden(p) => p.secret_kind(),
         }
     }
 
@@ -364,6 +380,7 @@ impl Provider {
         match self {
             Provider::Passbolt(p) => p.hash_account(h),
             Provider::OnePassword(p) => p.hash_account(h),
+            Provider::Bitwarden(p) => p.hash_account(h),
         }
     }
 
@@ -371,6 +388,7 @@ impl Provider {
         match self {
             Provider::Passbolt(p) => p.check_entry(entry_id, field),
             Provider::OnePassword(p) => p.check_entry(entry_id, field),
+            Provider::Bitwarden(p) => p.check_entry(entry_id, field),
         }
     }
 
@@ -426,6 +444,7 @@ pub fn name_operation(name: &str) {
 /// locking or going to sleep, quitting.
 pub fn forget_passphrase() {
     unlock::global().cache.forget();
+    bitwarden::sessions::forget();
     prompt::cancel_all();
 }
 
