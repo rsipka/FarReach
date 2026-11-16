@@ -245,7 +245,7 @@
 		if (isWindows()) {
 			if (entry.isDirectory) return false;
 			void dragoutStart(connectionId, [
-				{ name: entry.name, path: entry.path, size: entry.size }
+				{ name: safeLocalName(entry.name), path: entry.path, size: entry.size }
 			]).catch((err) => addToast(String(err), 'error'));
 			return true;
 		}

@@ -715,7 +715,9 @@ impl GitStore {
         use tokio::io::AsyncWriteExt;
         let mut cmd = tokio::process::Command::new("git");
         cmd.arg("--git-dir").arg(&self.target.work_dir).args(args);
-        cmd.env("GIT_TERMINAL_PROMPT", "0")
+        // Only transports that move data: never `ext::`, which runs a command.
+        cmd.env("GIT_ALLOW_PROTOCOL", "https:http:ssh:git:file")
+            .env("GIT_TERMINAL_PROMPT", "0")
             .env("GCM_INTERACTIVE", "never")
             .env("GIT_AUTHOR_NAME", "Reach")
             .env("GIT_AUTHOR_EMAIL", "sync@reach.invalid")

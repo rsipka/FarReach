@@ -168,7 +168,7 @@ impl PluginManager {
             .map_err(|e| format!("Failed to inject host API: {}", e))?;
 
         // Load and execute the entry file
-        let entry_path = plugin_dir.join(&manifest.entry);
+        let entry_path = entry_file(&plugin_dir, &manifest.entry)?;
         let entry_code = std::fs::read_to_string(&entry_path)
             .map_err(|e| format!("Cannot read {}: {}", manifest.entry, e))?;
 
@@ -473,5 +473,36 @@ fn get_ui_from_lua(lua: &Lua, plugin_id: &str) -> Option<PluginUiState> {
         })
     } else {
         None
+    }
+}
+
+/// The plugin's entry file. The name comes from the plugin's own manifest,
+/// so it has to be a plain path inside the plugin's folder.
+fn entry_file(plugin_dir: &std::path::Path, entry: &str) -> Result<std::path::PathBuf, String> {
+    use std::path::Component;
+    let relative = std::path::Path::new(entry);
+    let plain = !entry.is_empty()
+        && !entry.contains(':')
+        && relative.components().all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
+    if !plain {
+        return Err(format!("The plugin's entry file {entry:?} is outside the plugin folder"));
+    }
+    Ok(plugin_dir.join(relative))
+}
+
+#[cfg(test)]
+mod entry_tests {
+    use super::entry_file;
+    use std::path::Path;
+
+    #[test]
+    fn an_entry_file_stays_in_the_plugin_folder() {
+        let dir = Path::new("plugins").join("demo");
+        assert_eq!(entry_file(&dir, "main.lua"), Ok(dir.join("main.lua")));
+        assert_eq!(entry_file(&dir, "src/main.lua"), Ok(dir.join("src/main.lua")));
+        assert!(entry_file(&dir, "../other/main.lua").is_err());
+        assert!(entry_file(&dir, "/etc/passwd").is_err());
+        assert!(entry_file(&dir, "C:\\x.lua").is_err());
+        assert!(entry_file(&dir, "").is_err());
     }
 }

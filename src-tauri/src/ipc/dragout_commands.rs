@@ -46,7 +46,9 @@ pub async fn dragout_start(
                 let handle = handle.clone();
                 let path = file.path.clone();
                 PromisedFile {
-                    name: file.name,
+                    // The name comes from the server. Explorer reads `\` in
+                    // it as a folder, so only a plain file name goes through.
+                    name: plain_file_name(&file.name),
                     size: file.size,
                     // Called by the drop target after the drop, never before.
                     open: Box::new(move || {
@@ -79,5 +81,36 @@ pub async fn dragout_start(
     {
         let _ = (app, state, connection_id, files);
         Err("Promise drag is only implemented on Windows so far".into())
+    }
+}
+
+/// A name that can only be a file in the folder it is dropped on: no path
+/// separators, drive marks, wildcards or control characters, and never
+/// empty, `.` or `..`.
+#[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
+fn plain_file_name(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| if c.is_control() || matches!(c, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c })
+        .collect();
+    let cleaned = cleaned.trim_end_matches(['.', ' ']).to_string();
+    if cleaned.is_empty() || cleaned.chars().all(|c| c == '.') {
+        "file".to_string()
+    } else {
+        cleaned
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::plain_file_name;
+
+    #[test]
+    fn a_dragged_name_cannot_carry_a_path() {
+        assert_eq!(plain_file_name("report.pdf"), "report.pdf");
+        assert_eq!(plain_file_name("..\\..\\Startup\\run.bat"), ".._.._Startup_run.bat");
+        assert_eq!(plain_file_name("a/b:c"), "a_b_c");
+        assert_eq!(plain_file_name(".."), "file");
+        assert_eq!(plain_file_name(""), "file");
     }
 }

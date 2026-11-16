@@ -61,8 +61,8 @@ pub async fn download_file(
         handle,
         &format!(
             "stat -c%s {} 2>/dev/null || stat -f%z {} 2>/dev/null",
-            shell_escape(remote_path),
-            shell_escape(remote_path)
+            shell_path(remote_path),
+            shell_path(remote_path)
         ),
     )
     .await?;
@@ -93,7 +93,7 @@ pub async fn download_file(
         guard.channel_open_session().await
             .map_err(|e| SshError::ChannelError(format!("{}", e)))?
     };
-    channel.exec(true, format!("base64 {}", shell_escape(remote_path))).await
+    channel.exec(true, format!("base64 {}", shell_path(remote_path))).await
         .map_err(|e| SshError::ChannelError(format!("{}", e)))?;
 
     // Create/truncate the local file. The parent has to exist first: a
@@ -656,6 +656,17 @@ fn shell_escape(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
+/// A path as an argument to a command that does not take `--` everywhere
+/// (BSD `stat`, busybox `base64`): one that starts with `-` is given as
+/// `./-name`, so it is never read as an option.
+fn shell_path(path: &str) -> String {
+    if path.starts_with('-') {
+        shell_escape(&format!("./{path}"))
+    } else {
+        shell_escape(path)
+    }
+}
+
 /// Read a remote file straight into a channel, without touching local disk.
 ///
 /// Used by the promise drag: the drop target pulls bytes through an `IStream`
@@ -682,7 +693,7 @@ pub async fn stream_file(
             guard.channel_open_session().await.map_err(channel_error)?
         };
         channel
-            .exec(true, format!("base64 {}", shell_escape(remote_path)))
+            .exec(true, format!("base64 {}", shell_path(remote_path)))
             .await
             .map_err(channel_error)?;
         receive_base64(&mut channel, &mut SinkWriter(&sink), DOWNLOAD_IDLE_LIMIT, |_| {}).await
@@ -716,6 +727,13 @@ mod tests {
     use russh::ChannelMsg;
     use std::collections::VecDeque;
     use std::time::Duration;
+
+    #[test]
+    fn a_path_is_never_read_as_an_option() {
+        assert_eq!(shell_path("/tmp/a b"), "'/tmp/a b'");
+        assert_eq!(shell_path("-rf"), "'./-rf'");
+        assert_eq!(shell_path("it's"), "'it'\\''s'");
+    }
 
     /// A channel that sends these messages, then closes.
     struct Sends(VecDeque<ChannelMsg>);

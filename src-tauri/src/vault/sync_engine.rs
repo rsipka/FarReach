@@ -169,6 +169,14 @@ impl Backend {
             if remote.is_empty() {
                 return Err(VaultError::SyncError("The Git repository address is empty".into()));
             }
+            // Git would read a leading `-` as an option, and a `name::`
+            // prefix (`ext::`, `fd::`) as a helper to run.
+            let helper = remote
+                .split_once("::")
+                .is_some_and(|(name, _)| !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || "+.-".contains(c)));
+            if remote.starts_with('-') || helper {
+                return Err(VaultError::SyncError("That Git repository address is not valid".into()));
+            }
             if branch.starts_with('-') || branch.contains("..") || branch.contains(char::is_whitespace) {
                 return Err(VaultError::SyncError("That Git branch name is not valid".into()));
             }

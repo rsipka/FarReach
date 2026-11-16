@@ -8,6 +8,8 @@
 pub mod protocol;
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -50,9 +52,16 @@ enum Command {
     Close,
 }
 
+struct Connection {
+    commands: mpsc::UnboundedSender<Command>,
+    /// Set when a newer connection took this one's id: its events now
+    /// belong to that one, so this one ends without reporting anything.
+    replaced: Arc<AtomicBool>,
+}
+
 #[derive(Default)]
 pub struct TelnetManager {
-    connections: HashMap<String, mpsc::UnboundedSender<Command>>,
+    connections: HashMap<String, Connection>,
 }
 
 impl TelnetManager {
@@ -64,10 +73,13 @@ impl TelnetManager {
     pub fn start(&mut self, app: tauri::AppHandle, params: TelnetConnectParams, stream: TcpStream) {
         let (tx, rx) = mpsc::unbounded_channel();
         // A connection made again under the same id replaces the old one.
-        if let Some(old) = self.connections.insert(params.id.clone(), tx) {
-            let _ = old.send(Command::Close);
+        let replaced = Arc::new(AtomicBool::new(false));
+        let connection = Connection { commands: tx, replaced: replaced.clone() };
+        if let Some(old) = self.connections.insert(params.id.clone(), connection) {
+            old.replaced.store(true, Ordering::SeqCst);
+            let _ = old.commands.send(Command::Close);
         }
-        tauri::async_runtime::spawn(run(app, params, stream, rx));
+        tauri::async_runtime::spawn(run(app, params, stream, rx, replaced));
     }
 
     pub fn send(&self, id: &str, data: Vec<u8>) -> Result<(), String> {
@@ -79,8 +91,8 @@ impl TelnetManager {
     }
 
     pub fn close(&mut self, id: &str) {
-        if let Some(tx) = self.connections.remove(id) {
-            let _ = tx.send(Command::Close);
+        if let Some(connection) = self.connections.remove(id) {
+            let _ = connection.commands.send(Command::Close);
         }
     }
 
@@ -88,6 +100,7 @@ impl TelnetManager {
         self.connections
             .get(id)
             .ok_or_else(|| format!("Telnet connection not found: {id}"))?
+            .commands
             .send(cmd)
             .map_err(|_| "The Telnet connection is closed".to_string())
     }
@@ -114,6 +127,7 @@ async fn run(
     params: TelnetConnectParams,
     stream: TcpStream,
     mut commands: mpsc::UnboundedReceiver<Command>,
+    replaced: Arc<AtomicBool>,
 ) {
     let id = params.id.clone();
     let data_event = format!("telnet-data-{id}");
@@ -184,12 +198,19 @@ async fn run(
         }
     }
 
-    if let Some(tail) = decoder.flush() {
-        let _ = app.emit(&data_event, tail);
+    let replaced = replaced.load(Ordering::SeqCst);
+    if !replaced {
+        if let Some(tail) = decoder.flush() {
+            let _ = app.emit(&data_event, tail);
+        }
     }
     if let Some(e) = &error {
         tracing::info!("Telnet {id}: connection ended: {e}");
     }
     let _ = writer.shutdown().await;
-    let _ = app.emit(&exit_event, serde_json::json!({ "error": error }));
+    // A connection made again under this id listens for the same event
+    // name: the end of the old one is not its end.
+    if !replaced {
+        let _ = app.emit(&exit_event, serde_json::json!({ "error": error }));
+    }
 }
