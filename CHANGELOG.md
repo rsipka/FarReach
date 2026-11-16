@@ -22,6 +22,7 @@ All notable changes to FarReach are documented here. FarReach is a fork of [Reac
 - **Czech translation** — FarReach is available in Czech.
 - **iOS** — Early iOS support: phone code paths cover iOS as well as Android, and CI builds an unsigned IPA.
 - **CI runs only what a change touches** — A README or other Markdown edit no longer starts the full build: build checks, the iOS build and CodeQL each look at the changed files first. Frontend changes are checked once on Linux, Rust changes run the desktop and Android tests, docs/ builds the docs site, and the iOS build runs for Rust, config or dependency changes. A single *Build check result* check always reports, so it can be the required one.
+- **Fewer false CodeQL alerts** — Test modules with fixed keys, salts and passwords in the vault, export, folder sync, MCP and recipe code moved to their own `*_tests.rs` files, which code scanning already skips. No change to the app.
 - **Editing a session works again** — In the session editor every click and keystroke was undone at once: the editor kept filling its fields from the saved session again, in a loop. It now fills them only when it opens. Opening or closing the *Documentation* section no longer saves the session and closes the editor, and toggles and dropdowns can no longer submit a form they sit in.
 
 ## Unreleased
