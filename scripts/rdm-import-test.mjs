@@ -365,6 +365,8 @@ section('notes and custom fields');
 	const rtf = String.raw`{\rtf1\ansi\ansicpg1250\deff0{\fonttbl{\f0\fnil\fcharset238 Segoe UI;}}{\colortbl ;\red0\green0\blue0;}{\*\generator Riched20 10.0.19041}\viewkind4\uc1\pard\f0\fs18 Restart p\'f8es \u268?esk\'e9 menu\par Druh\'fd \b \'f8\'e1dek\b0\par}`;
 	check('RTF notes: text and lines, Czech letters from code page 1250', plainNotes(rtf) === 'Restart přes České menu\nDruhý řádek', JSON.stringify(plainNotes(rtf)));
 	check('plain notes are left as they are', plainNotes('  a < b\n\n\n\nc ') === 'a < b\n\nc');
+	check('HTML notes: nested script and tags leave no markup', !/<|script/.test(plainNotes('<p>x</p><scr<script>x</script>ipt>alert(1)</script><<b>b>y')), JSON.stringify(plainNotes('<p>x</p><scr<script>x</script>ipt>alert(1)</script><<b>b>y')));
+	check('HTML notes: lines and lists', plainNotes('<p>a</p><ul><li>b</li></ul><script>z</script>') === 'a\n- b', JSON.stringify(plainNotes('<p>a</p><ul><li>b</li></ul><script>z</script>')));
 }
 
 section('helpers');

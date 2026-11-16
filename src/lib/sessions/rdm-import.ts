@@ -425,14 +425,13 @@ export function plainNotes(raw: string): string {
 			.replace(/\n[ \t]+/g, '\n');
 	} else if (/<\/?[a-zA-Z][^>]*>/.test(s)) {
 		s = decodeEntities(
-			s
-				.replace(/\n/g, ' ')
-				.replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '')
-				.replace(/<br\s*\/?>/gi, '\n')
-				.replace(/<li[^>]*>/gi, '\n- ')
-				.replace(/<\/(p|div|h[1-6]|li|tr|ul|ol)>/gi, '\n')
-				.replace(/<[^>]+>/g, '')
-				.replace(/&nbsp;/g, ' ')
+			stripAll(
+				stripAll(s.replace(/\n/g, ' '), /<(script|style)[^>]*>[\s\S]*?<\/\1>/gi)
+					.replace(/<br\s*\/?>/gi, '\n')
+					.replace(/<li[^>]*>/gi, '\n- ')
+					.replace(/<\/(p|div|h[1-6]|li|tr|ul|ol)>/gi, '\n'),
+				/<[^>]+>/g
+			).replace(/&nbsp;/g, ' ')
 		)
 			.replace(/[ \t]+\n/g, '\n')
 			.replace(/\n[ \t]+/g, '\n')
@@ -440,6 +439,18 @@ export function plainNotes(raw: string): string {
 			.replace(/\n+- /g, '\n- ');
 	}
 	return s.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * Remove every match of `re` until none is left, so markup that only forms
+ * once an inner piece is removed (`<scr<script>ipt>`) goes as well.
+ */
+function stripAll(s: string, re: RegExp): string {
+	for (let prev = ''; prev !== s; ) {
+		prev = s;
+		s = s.replace(re, '');
+	}
+	return s;
 }
 
 /** RTF's \'xx escapes: bytes in the document's code page (1250 for Czech). */
