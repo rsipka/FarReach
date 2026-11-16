@@ -16,9 +16,10 @@
 	import { themeState } from '#lib/state/theme.svelte.js';
 	import { getSettings, updateSetting } from '#lib/state/settings.svelte.js';
 	import { countPasteLines, shouldWarnOnPaste } from '#lib/terminal/paste.js';
+	import { rightClickAction, wordSeparator, MIDDLE_CLICK_PASTE_MS } from '#lib/terminal/mouse.js';
 	import { shouldRearmIme, nudgeCaret, REARM_SETTLE_MS } from '#lib/terminal/ime.js';
 	import { installWebkitInputFix } from '#lib/terminal/webkit-input-fix.js';
-	import { isMobile, isWebKit } from '#lib/platform.js';
+	import { isMac, isMobile, isWebKit } from '#lib/platform.js';
 	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import { invoke } from '@tauri-apps/api/core';
 	import { trieMatch, registerTerminalInput, unregisterTerminalInput, type TerminalInput } from '#lib/state/snippets.svelte.js';
@@ -33,6 +34,7 @@
 	import Modal from '#lib/components/shared/Modal.svelte';
 	import MobileKeyBar, { type BarKey } from '#lib/components/shared/MobileKeyBar.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
+	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
 
 	interface Props {
 		ptyId: string;
@@ -175,15 +177,46 @@
 	let dontAskAgain = $state(false);
 	let pasteLineCount = $derived(pastePreview ? countPasteLines(pastePreview) : 0);
 
-	/** Copy the current selection to the OS clipboard via the Tauri plugin. */
-	async function copySelection(term: Terminal): Promise<void> {
-		if (!term.hasSelection()) return;
+	/** Copy the current selection to the OS clipboard via the Tauri plugin.
+	 *  A copy the user asked for lets go of the selection; one made by
+	 *  selecting (copy on select) keeps it on screen. */
+	async function copySelection(term: Terminal, keep = false): Promise<void> {
+		// An empty selection (a double click on a blank) is not worth the
+		// clipboard's contents.
+		const text = term.hasSelection() ? term.getSelection() : '';
+		if (!text) return;
 		try {
-			await clipboardWriteText(term.getSelection());
+			await clipboardWriteText(text);
 		} catch (e) {
 			console.error('Clipboard write failed:', e);
 		}
-		term.clearSelection();
+		if (!keep) term.clearSelection();
+	}
+
+	// The right-click menu, when that is what a right click opens
+	// (#lib/terminal/mouse).
+	let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
+
+	function openMenu(term: Terminal, x: number, y: number): void {
+		const mod = isMac() ? '⌘' : 'Ctrl+';
+		// Escape closes the menu; it is not for the shell as well.
+		term.blur();
+		menu = {
+			x,
+			y,
+			items: [
+				{ label: t('textmenu.copy'), hint: `${mod}C`, disabled: !term.hasSelection(), action: () => void copySelection(term) },
+				{ label: t('textmenu.paste'), hint: `${mod}V`, action: () => void pasteFromClipboard(term) },
+				{ label: '', separator: true },
+				{ label: t('textmenu.select_all'), action: () => term.selectAll() },
+				{ label: t('terminal.menu_clear'), action: () => term.clear() }
+			]
+		};
+	}
+
+	function closeMenu(): void {
+		menu = null;
+		terminal?.focus();
 	}
 
 	/** Read the OS clipboard via the Tauri plugin and paste — single-line goes
@@ -303,6 +336,11 @@
 	let unlistenMenuPaste: UnlistenFn | undefined;
 	let unlistenMoved: UnlistenFn | undefined;
 	let unlistenResized: UnlistenFn | undefined;
+	let unlistenSelectEnd: (() => void) | undefined;
+	// The last middle click, and whether a paste has answered it.
+	let middleClickAt = -Infinity;
+	let middlePasted = false;
+	let middleBlocked = false;
 	let disposeWebkitInputFix: (() => void) | undefined;
 	/** True between compositionstart and compositionend — see #lib/terminal/ime. */
 	let composing = false;
@@ -378,6 +416,7 @@
 			cursorBlink: true,
 			cursorStyle: 'bar',
 			scrollback: 10000,
+			wordSeparator: wordSeparator(appSettings.terminalWordSeparators),
 			allowProposedApi: true,
 			theme: { ...themeState.current.terminal }
 		});
@@ -829,18 +868,65 @@
 				onTitleChange?.(title);
 			});
 
-			// Right-click copies the current selection, or pastes when there's
-			// no selection. (Selection no longer auto-copies — see below.)
+			// A right click opens a menu, pastes, or copies the selection:
+			// the user's choice in Settings (#lib/terminal/mouse).
 			const termEl = containerEl!;
 			function onContextMenu(e: MouseEvent) {
 				e.preventDefault();
-				if (term.hasSelection()) {
-					void copySelection(term);
-				} else {
-					void pasteFromClipboard(term);
-				}
+				const action = rightClickAction({
+					mode: getSettings().terminalRightClick,
+					hasSelection: term.hasSelection(),
+					mouseTracking: term.modes.mouseTrackingMode !== 'none',
+					shift: e.shiftKey,
+					ctrl: e.ctrlKey
+				});
+				if (action === 'menu') openMenu(term, e.clientX, e.clientY);
+				else if (action === 'copy') void copySelection(term);
+				else if (action === 'paste') void pasteFromClipboard(term);
 			}
 			termEl.addEventListener('contextmenu', onContextMenu);
+
+			// Copy on select, for those who want it: when the button that
+			// made or changed a selection is let go, which may be outside
+			// the terminal. The selection stays on screen.
+			function onSelectEnd() {
+				window.removeEventListener('mouseup', onSelectEnd, true);
+				// xterm settles the selection in its own mouseup handler.
+				setTimeout(() => {
+					if (getSettings().terminalCopyOnSelect) void copySelection(term, true);
+				});
+			}
+			function onSelectStart(e: MouseEvent) {
+				if (e.button !== 0) return;
+				window.removeEventListener('mouseup', onSelectEnd, true);
+				window.addEventListener('mouseup', onSelectEnd, true);
+			}
+			termEl.addEventListener('mousedown', onSelectStart, true);
+			unlistenSelectEnd = () => window.removeEventListener('mouseup', onSelectEnd, true);
+
+			// A middle click pastes. On Linux the webview does it itself, with
+			// the selection (X11's primary), as a paste event on xterm's
+			// textarea, which onNativePaste below takes. Where no such event
+			// comes (Windows, macOS, a Wayland session without a primary
+			// selection) the clipboard is pasted instead. A program that
+			// tracks the mouse gets the click; Shift takes it back.
+			function onMiddleDown(e: MouseEvent) {
+				if (e.button !== 1) return;
+				middleClickAt = performance.now();
+				middlePasted = false;
+				middleBlocked =
+					!getSettings().terminalMiddleClickPaste || (term.modes.mouseTrackingMode !== 'none' && !e.shiftKey);
+				// Windows would start its scroll-anywhere mode.
+				if (!isWebKit()) e.preventDefault();
+			}
+			function onMiddleClick(e: MouseEvent) {
+				if (e.button !== 1 || middleBlocked) return;
+				setTimeout(() => {
+					if (!middlePasted) void pasteFromClipboard(term);
+				}, 60);
+			}
+			termEl.addEventListener('mousedown', onMiddleDown, true);
+			termEl.addEventListener('auxclick', onMiddleClick);
 
 			// The moments the user typed, for what may be broadcast (isTyped).
 			for (const type of ['keydown', 'keypress', 'beforeinput', 'input', 'compositionend']) {
@@ -857,6 +943,13 @@
 				const text = e.clipboardData?.getData('text/plain') ?? '';
 				e.preventDefault();
 				e.stopImmediatePropagation();
+				// The webview's own middle-click paste (Linux): only when the
+				// setting allows it and the click was not the program's, and
+				// never doubled by the fallback above.
+				if (performance.now() - middleClickAt < MIDDLE_CLICK_PASTE_MS) {
+					if (middlePasted || middleBlocked) return;
+					middlePasted = true;
+				}
 				pasteText(term, text);
 			}
 			term.textarea?.addEventListener('paste', onNativePaste, { capture: true });
@@ -931,9 +1024,10 @@
 				void pasteFromClipboard(term);
 			}).then((fn) => { unlistenMenuPaste = fn; });
 
-			// Note: selection deliberately does NOT auto-copy. Copy is explicit
-			// via Ctrl+C (with a selection) or right-click — so drag-selecting
-			// never clobbers the clipboard. (xterm has no copy-on-select here.)
+			// Note: selection does not copy unless "copy on select" is on in
+			// Settings, so drag-selecting never clobbers the clipboard by
+			// surprise. Copy is otherwise explicit: Ctrl+C with a selection,
+			// or the right-click menu.
 
 			terminal = term;
 			fitAddon = fit;
@@ -975,6 +1069,7 @@
 			unlistenMenuPaste?.();
 			unlistenMoved?.();
 			unlistenResized?.();
+			unlistenSelectEnd?.();
 			disposeWebkitInputFix?.();
 			disposeWebkitInputFix = undefined;
 			clearTimeout(rearmTimer);
@@ -1014,6 +1109,12 @@
 		term.options.fontSize = size;
 		term.clearTextureAtlas();
 		safeFitAndResize(term, fit, el);
+	});
+
+	// Where a double click's word ends, as Settings has it.
+	$effect(() => {
+		const separator = wordSeparator(appSettings.terminalWordSeparators);
+		if (terminal && terminal.options.wordSeparator !== separator) terminal.options.wordSeparator = separator;
 	});
 
 	// Auto-focus xterm AND re-fit when this tab becomes active (Ctrl+Tab, click, sidebar switch).
@@ -1087,6 +1188,10 @@
 		</div>
 	{/if}
 </div>
+
+{#if menu}
+	<DbMenu x={menu.x} y={menu.y} items={menu.items} onclose={closeMenu} />
+{/if}
 
 <Modal
 	open={pastePreview !== null}
