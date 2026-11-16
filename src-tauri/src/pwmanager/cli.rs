@@ -168,8 +168,16 @@ pub(crate) fn group_holds_only(gid: u32, me: u32) -> bool {
     }
 }
 
+/// Android: no user groups to share a folder with, and `getpwent` only
+/// exists from API 26 (the Android build links against 24). Never needed
+/// there, since no CLI is run on Android.
+#[cfg(target_os = "android")]
+fn group_members(_gid: u32) -> Option<Vec<u32>> {
+    None
+}
+
 /// The uids in group `gid`, or `None` if the system cannot say.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "android")))]
 fn group_members(gid: u32) -> Option<Vec<u32>> {
     use std::ffi::CStr;
     use std::sync::Mutex;
