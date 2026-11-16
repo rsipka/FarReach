@@ -522,8 +522,17 @@ fn a_cli_others_can_change_is_refused() {
     std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
     assert!(resolve_binary(Some(bin.to_str().unwrap())).is_ok());
 
+    // Group writable: refused unless the file's group holds only this user
+    // and root (a user-private group, macOS's admin on a one-user Mac).
     std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o775)).unwrap();
-    assert!(resolve_binary(Some(bin.to_str().unwrap())).unwrap_err().contains("other users"), "group writable");
+    let gid = std::os::unix::fs::MetadataExt::gid(&std::fs::metadata(&bin).unwrap());
+    // SAFETY: no preconditions.
+    let me = unsafe { libc::geteuid() };
+    if crate::pwmanager::cli::group_holds_only(gid, me) {
+        assert!(resolve_binary(Some(bin.to_str().unwrap())).is_ok(), "group of just this user and root");
+    } else {
+        assert!(resolve_binary(Some(bin.to_str().unwrap())).unwrap_err().contains("other users"), "group writable");
+    }
     std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o757)).unwrap();
     assert!(resolve_binary(Some(bin.to_str().unwrap())).is_err(), "world writable");
     std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();

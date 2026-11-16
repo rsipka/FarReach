@@ -27,6 +27,7 @@ All notable changes to FarReach are documented here. FarReach is a fork of [Reac
 - **Editing a session works again** — In the session editor every click and keystroke was undone at once: the editor kept filling its fields from the saved session again, in a loop. It now fills them only when it opens. Opening or closing the *Documentation* section no longer saves the session and closes the editor, and toggles and dropdowns can no longer submit a form they sit in.
 
 ## Unreleased
+- **Password manager CLIs in a group-writable folder** — Reach refused `op` (and `passbolt`) in a folder its group can write to, such as Homebrew's `/usr/local/bin` on an Intel Mac (group `admin`) or `~/.local/bin` with a personal group on Linux. Such a folder is now accepted when the only members of its group are you and root; a folder anyone else can write to is still refused.
 - **Right-click shows the app's menu, not the browser's** — Right-clicking where Reach had no menu of its own showed the webview's: Back, Reload and Inspect Element, and Reload closed every terminal, file list and tab. That menu no longer opens. Text fields and the SQL, YAML and file editors get Undo, Cut, Copy, Paste and Select all; selected text elsewhere gets Copy; empty space gets nothing. The menus for sessions, tabs, files, databases and containers, and the terminal's copy or paste on right-click, are unchanged. In a development build, Shift+right-click still opens the webview's menu for Inspect Element.
 
 ## Unreleased
