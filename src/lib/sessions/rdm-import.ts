@@ -286,6 +286,9 @@ function classify(entry: Obj): EntryClass {
 		case 'ssh':
 			return { kind: 'ssh' };
 		case 'vnc':
+		// Apple Remote Desktop: a Mac's screen over VNC, with its macOS login.
+		case 'appleremotedesktop':
+		case 'ard':
 			return { kind: 'vnc' };
 		case 'telnet':
 			return { kind: 'telnet' };
@@ -310,7 +313,7 @@ function classify(entry: Obj): EntryClass {
 	if (/^\d+$/.test(type) || type === '') {
 		// A numeric enum: fall back on which settings block the entry carries.
 		if (isObj(field(entry, 'RDP'))) return { kind: 'rdp' };
-		if (isObj(field(entry, 'VNC'))) return { kind: 'vnc' };
+		if (isObj(field(entry, 'VNC')) || isObj(field(entry, 'ARD'))) return { kind: 'vnc' };
 		const terminal = field(entry, 'Terminal');
 		if (isObj(terminal) && pick(terminal, ['Host'])) return { kind: 'ssh' };
 		if (isObj(field(entry, 'Credentials'))) return { ignore: true };
@@ -380,19 +383,19 @@ export function splitGroup(group: string): string[] {
 const HOST_PATHS: Record<RdmKind, string[]> = {
 	ssh: ['Terminal.Host', 'Putty.Host', 'Host', 'Url', 'HostName'],
 	rdp: ['Url', 'RDP.Host', 'Host', 'HostName'],
-	vnc: ['VNC.Host', 'Url', 'Host', 'HostName'],
+	vnc: ['VNC.Host', 'ARD.Host', 'Url', 'Host', 'HostName'],
 	telnet: ['Terminal.Host', 'Telnet.Host', 'Putty.Host', 'Host', 'Url', 'HostName']
 };
 const PORT_PATHS: Record<RdmKind, string[]> = {
 	ssh: ['Terminal.HostPort', 'Terminal.Port', 'Putty.Port', 'HostPort', 'Port'],
 	rdp: ['RDP.Port', 'RDP.HostPort', 'HostPort', 'Port'],
-	vnc: ['VNC.Port', 'VNC.HostPort', 'HostPort', 'Port'],
+	vnc: ['VNC.Port', 'VNC.HostPort', 'ARD.Port', 'ARD.HostPort', 'HostPort', 'Port'],
 	telnet: ['Terminal.HostPort', 'Terminal.Port', 'Telnet.Port', 'Telnet.HostPort', 'Putty.Port', 'HostPort', 'Port']
 };
 const USER_PATHS: Record<RdmKind, string[]> = {
 	ssh: ['Terminal.Username', 'Terminal.UserName', 'Putty.Username', 'UserName', 'Username'],
 	rdp: ['RDP.UserName', 'RDP.Username', 'UserName', 'Username'],
-	vnc: ['VNC.Username', 'VNC.UserName', 'UserName', 'Username'],
+	vnc: ['VNC.Username', 'VNC.UserName', 'ARD.Username', 'ARD.UserName', 'UserName', 'Username'],
 	telnet: ['Terminal.Username', 'Terminal.UserName', 'Telnet.Username', 'Telnet.UserName', 'Putty.Username', 'UserName', 'Username']
 };
 const CREDENTIAL_USER_PATHS = ['Credentials.UserName', 'Credentials.Username', 'UserName', 'Username'];

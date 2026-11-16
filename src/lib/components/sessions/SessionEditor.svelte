@@ -32,9 +32,10 @@
 	 * jump hosts, proxies and login shells are all SSH ideas. Switching moves
 	 * the port between the two defaults only if it still is one.
 	 *
-	 * VNC has less still: a password and no user name. What it has instead
-	 * is the way in: VNC is not encrypted, so it can go through an SSH
-	 * session saved here.
+	 * VNC has less still: a password, and a user name only for a Mac, which
+	 * logs in with a macOS account instead of a VNC password. What it has
+	 * instead is the way in: VNC is not encrypted, so it can go through an
+	 * SSH session saved here.
 	 */
 	let kind = $state<SessionKind>('ssh');
 	let domain = $state('');
@@ -160,6 +161,8 @@
 		if (portStr === DEFAULT_PORT[kind] || portStr.trim() === '') portStr = DEFAULT_PORT[next];
 		if (next !== 'ssh' && username === 'root') username = '';
 		if (next === 'ssh' && username === '') username = 'root';
+		// A VNC user name means a Mac's own login: not one carried over.
+		if (next === 'vnc') username = '';
 		kind = next;
 	}
 	/** 'Manager' is a password from a password manager: saved as a Password login with a reference. */
@@ -428,7 +431,7 @@
 					name: name.trim(),
 					host: kind === 'wsl' ? (host.trim() || 'wsl') : host.trim(),
 					port,
-					username: filled ? editSession.username : vnc ? '' : username.trim(),
+					username: filled ? editSession.username : username.trim(),
 					auth_method: filled ? editSession.auth_method : authMethod,
 					folder_id: folderIdStr || null,
 					tags,
@@ -455,7 +458,7 @@
 					name: name.trim(),
 					host: kind === 'wsl' ? (host.trim() || 'wsl') : host.trim(),
 					port,
-					username: vnc ? '' : username.trim(),
+					username: username.trim(),
 					authMethod: authMethod,
 					folderId: folderIdStr || null,
 					tags,
@@ -667,8 +670,12 @@
 			</div>
 		{:else if kind === 'vnc'}
 			<div class="shell-field">
+				<Input label={t('session.vnc_mac_username')} bind:value={username} placeholder={t('session.vnc_mac_username_placeholder')} disabled={saving} />
+				<p class="shell-hint">{t('session.vnc_mac_username_hint')}</p>
+			</div>
+			<div class="shell-field">
 				<SecretRefField approvable label={t('session.password_optional')} bind:value={password} bind:secretRef={passwordRef} placeholder={t('session.stored_encrypted')} disabled={saving} />
-				<p class="shell-hint">{t('session.vnc_password_hint')}</p>
+				<p class="shell-hint">{username.trim() ? t('session.vnc_mac_password_hint') : t('session.vnc_password_hint')}</p>
 			</div>
 			<div class="shell-field">
 				<label class="via-label" for="vnc-via">{t('session.vnc_via')}</label>

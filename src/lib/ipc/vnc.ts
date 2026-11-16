@@ -12,7 +12,9 @@ export interface VncConnectParams {
 	id: string;
 	host: string;
 	port: number;
-	/** The VNC password; empty for a server that asks for none. */
+	/** A macOS user name: a Mac is then logged in to with that account. Empty for a VNC password. */
+	username?: string;
+	/** The VNC password, or with `username` the macOS password; empty for a server that asks for none. */
 	password: string;
 	/** A password-manager entry, resolved by the backend at connect; wins over `password`. */
 	passwordRef?: SecretRef | null;

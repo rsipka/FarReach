@@ -158,6 +158,15 @@ tauri-plugin-reach-unlock = { path = "plugins/reach-unlock" }
 vnc-rs = "0.6"
 # Tight-encoded VNC rectangles are JPEG. Already in the tree through `image`.
 zune-jpeg = "0.5"
+# Logging in to a Mac (src/vnc/apple.rs): Apple's Diffie-Hellman login
+# (MD5, AES-128) and its RSA + SRP one (RSA, SHA-512, HMAC). All already in
+# the tree through other crates.
+num-bigint = "0.4"
+md-5 = "0.11"
+aes = "0.8"
+rsa = "0.9"
+hmac = "0.13"
+subtle = "2"
 
 # Remote desktop. IronRDP is pure Rust end to end — the connector, CredSSP,
 # TLS via rustls, the codecs — so it builds on all four targets, Android
