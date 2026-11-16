@@ -547,6 +547,15 @@ pub async fn drag_preview_icon(app: tauri::AppHandle) -> Result<String, String> 
     Ok(path.to_string_lossy().into_owned())
 }
 
+/// Where copies fetched for dragging out of the window are kept: a folder
+/// only this user can open, emptied at the next start.
+#[tauri::command]
+pub async fn drag_cache_dir() -> Result<String, String> {
+    crate::private_tmp_dir("drag")
+        .map(|dir| dir.to_string_lossy().into_owned())
+        .map_err(|e| format!("No folder for dragged files: {e}"))
+}
+
 /// The folder the connection's terminal is in, for the explorer to go to
 /// (#162). `None` when the server cannot say (no /proc).
 #[tauri::command]

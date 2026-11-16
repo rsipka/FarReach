@@ -127,6 +127,19 @@ pub fn app_data_dir() -> PathBuf {
     })
 }
 
+/// A folder for short-lived files: copies fetched to be dragged out, files
+/// pasted from a remote desktop. It sits under the app's own data folder and
+/// is owner-only, not in the system temp folder, which on Linux every user of
+/// the machine shares: there another user could read the files, or create the
+/// folder first and plant links in it.
+pub fn private_tmp_dir(name: &str) -> std::io::Result<PathBuf> {
+    let base = app_data_dir().join("tmp");
+    vault::private_fs::private_dir(&base)?;
+    let dir = base.join(name);
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
 #[tauri::command]
 fn set_close_to_tray(state: tauri::State<'_, AppState>, enabled: bool) {
     state.close_to_tray.store(enabled, Ordering::Relaxed);
@@ -508,6 +521,7 @@ pub fn run() {
             sftp_transfer_cancel,
             sftp_terminal_cwd,
             drag_preview_icon,
+            drag_cache_dir,
             dragout_start,
             webview_refocus,
             report::report_prepare,
@@ -932,6 +946,7 @@ pub fn run() {
             sftp_transfer_cancel,
             sftp_terminal_cwd,
             drag_preview_icon,
+            drag_cache_dir,
             dragout_start,
             webview_refocus,
             report::report_prepare,
@@ -1258,6 +1273,10 @@ pub fn run() {
             let _ = ANDROID_APP.set(app.handle().clone());
             let data_dir = app_data_dir();
             let _ = std::fs::create_dir_all(&data_dir);
+            // The same for where those copies are kept now (`private_tmp_dir`),
+            // and for files pasted from a remote desktop that a crash left.
+            // Only one FarReach runs at a time, so nothing here is in use.
+            let _ = std::fs::remove_dir_all(data_dir.join("tmp"));
             tracing::info!("App data dir: {:?}", data_dir);
             app.manage(AppState::new());
 

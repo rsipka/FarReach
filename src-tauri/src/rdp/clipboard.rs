@@ -51,6 +51,8 @@ const FETCH_CHUNK: u32 = 1024 * 1024;
 /// announces file sizes before a byte moves; a copy larger than this is left
 /// on the remote clipboard rather than downloaded on the chance of a paste.
 const MAX_FETCH_TOTAL: u64 = 2 * 1024 * 1024 * 1024;
+/// The most a session keeps of what the remote copied, all copies together.
+const MAX_SESSION_FETCH_TOTAL: u64 = 8 * 1024 * 1024 * 1024;
 
 /// What the session thread hands the worker. Each is one IronRDP callback,
 /// or one request from the app.
@@ -84,7 +86,15 @@ impl ClipboardHandle {
 /// Start the worker for one session. Returns the app's handle and the
 /// factory IronRDP builds its backend from.
 pub fn spawn(id: &str, input: RdpInputSender, app: AppHandle) -> std::io::Result<(ClipboardHandle, Factory)> {
-    let temp_dir = std::env::temp_dir().join("reach-rdp-clipboard").join(id);
+    // Under the app's own private folder, not the system temp folder that
+    // every user of a Linux machine shares (see `private_tmp_dir`).
+    let temp_dir = match crate::private_tmp_dir("rdp-clipboard") {
+        Ok(base) => base.join(id),
+        Err(e) => {
+            tracing::warn!("RDP {id}: no private folder for clipboard files: {e}");
+            crate::app_data_dir().join("tmp").join("rdp-clipboard").join(id)
+        }
+    };
     if let Err(e) = fs::create_dir_all(&temp_dir) {
         tracing::warn!("RDP {id}: no clipboard temp dir at {}: {e}", temp_dir.display());
     }
@@ -103,6 +113,7 @@ pub fn spawn(id: &str, input: RdpInputSender, app: AppHandle) -> std::io::Result
         pending: None,
         fetch: None,
         fetches: 0,
+        fetched_total: 0,
         next_stream: 1,
     };
     std::thread::Builder::new()
@@ -386,6 +397,8 @@ struct Worker {
     fetch: Option<Fetch>,
     /// Incoming copies so far, to give each its own directory.
     fetches: u32,
+    /// Bytes of incoming copies accepted this session.
+    fetched_total: u64,
     next_stream: u32,
 }
 
@@ -580,6 +593,17 @@ impl Worker {
             tracing::info!("RDP {}: remote copied {total} bytes of files; too large to fetch unasked", self.id);
             return;
         }
+        // Each copy is fetched without asking and kept until the session
+        // ends, so a server that keeps copying could otherwise fill the disk.
+        if self.fetched_total.saturating_add(total) > MAX_SESSION_FETCH_TOTAL {
+            tracing::warn!(
+                "RDP {}: remote copied {total} more bytes of files, past the {} bytes kept per session; not fetched",
+                self.id,
+                MAX_SESSION_FETCH_TOTAL
+            );
+            return;
+        }
+        self.fetched_total += total;
         self.fetches += 1;
         let root = self.temp_dir.join(self.fetches.to_string());
         if let Err(e) = fs::create_dir_all(&root) {

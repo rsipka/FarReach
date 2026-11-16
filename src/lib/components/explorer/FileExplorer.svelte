@@ -31,7 +31,7 @@
 	import { startDrag } from '@crabnebula/tauri-plugin-drag';
 	import { dragoutStart } from '#lib/ipc/dragout.js';
 	import { isWindows } from '#lib/platform.js';
-	import { tempDir, join } from '@tauri-apps/api/path';
+	import { join } from '@tauri-apps/api/path';
 	import { invoke } from '@tauri-apps/api/core';
 	import { openEditor } from '#lib/state/editor.svelte.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
@@ -199,10 +199,12 @@
 		const visible = showsProgress(entry.size);
 
 		try {
-			const base = await tempDir();
+			// A folder only this user can open, not the system temp folder,
+			// which other users of a Linux machine share.
+			const base = await invoke<string>('drag_cache_dir');
 			// Its own folder, because the copy must keep the file's real name
 			// and two remote files can share one.
-			const localPath = await join(base, 'farreach-drag', key, safeLocalName(entry.name));
+			const localPath = await join(base, key, safeLocalName(entry.name));
 			const done = await runTransfer({
 				kind: 'downloading',
 				connectionId: conn,
