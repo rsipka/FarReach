@@ -41,6 +41,13 @@ pub const CONFIG_KEY: &str = "password_managers";
 pub const PASSBOLT_PRIVATE_KEY: &str = "pwmanager.passbolt.private_key";
 pub const PASSBOLT_PASSPHRASE: &str = "pwmanager.passbolt.passphrase";
 pub const PASSBOLT_TOTP_SECRET: &str = "pwmanager.passbolt.totp_secret";
+/// The settings-vault key of the 1Password service account token.
+pub const ONEPASSWORD_SERVICE_ACCOUNT_TOKEN: &str = "pwmanager.onepassword.service_account_token";
+/// The longest 1Password account name (sign-in address, shorthand or ID).
+const MAX_ACCOUNT_CHARS: usize = 256;
+/// The longest service account token Reach takes. Tokens are about a
+/// kilobyte; the cap keeps one inside a Windows environment variable.
+pub const MAX_SERVICE_ACCOUNT_TOKEN_BYTES: usize = 16 * 1024;
 
 /// Settings keys only this module may read or write. The generic settings
 /// commands refuse them, so a secret cannot be read back through those.
@@ -189,12 +196,79 @@ impl PassboltConfig {
     }
 }
 
+/// How the 1Password CLI signs in.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OnePasswordAuth {
+    /// Through the 1Password desktop app ("Integrate with 1Password CLI"):
+    /// the app asks the user to approve (Touch ID, Windows Hello, the system
+    /// password or the account password). Reach stores and asks nothing.
+    #[default]
+    App,
+    /// A service account token stored by Reach. Sees only the vaults the
+    /// service account was given, never a Personal or Private vault.
+    ServiceAccount,
+}
+
+/// The 1Password settings that are not secret.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct OnePasswordConfig {
+    /// The `op` binary. Empty: found on PATH. Kept on this device only, as
+    /// Passbolt's is.
+    #[serde(skip)]
+    pub cli_path: Option<String>,
+    /// This manager's own switch, under the master one: off, nothing runs
+    /// `op`.
+    pub enabled: bool,
+    pub auth: OnePasswordAuth,
+    /// The account to use when the app is signed in to several: its sign-in
+    /// address (`my.1password.com`), shorthand or ID. Empty: the CLI's
+    /// default. Not used with a service account.
+    pub account: String,
+    pub timeout_secs: u32,
+}
+
+impl Default for OnePasswordConfig {
+    fn default() -> Self {
+        Self {
+            cli_path: None,
+            enabled: false,
+            auth: OnePasswordAuth::App,
+            account: String::new(),
+            timeout_secs: DEFAULT_TIMEOUT_SECS,
+        }
+    }
+}
+
+impl OnePasswordConfig {
+    pub fn timeout_secs(&self) -> u32 {
+        clamp_timeout(self.timeout_secs)
+    }
+}
+
+/// The 1Password secret, read from the vault for one call and wiped when
+/// dropped.
+#[derive(Clone, Default)]
+pub struct OnePasswordSecrets {
+    pub service_account_token: Option<Zeroizing<String>>,
+}
+
+impl fmt::Debug for OnePasswordSecrets {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("OnePasswordSecrets")
+            .field("has_service_account_token", &self.service_account_token.is_some())
+            .finish()
+    }
+}
+
 /// Everything Settings → Password managers stores, minus the secrets.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(default)]
 pub struct PasswordManagersConfig {
     pub enabled: bool,
     pub passbolt: PassboltConfig,
+    pub onepassword: OnePasswordConfig,
 }
 
 /// The Passbolt secrets, read from the vault for one call and wiped when
@@ -221,6 +295,7 @@ impl fmt::Debug for PassboltSecrets {
 pub struct Loaded {
     pub config: PasswordManagersConfig,
     pub passbolt_secrets: PassboltSecrets,
+    pub onepassword_secrets: OnePasswordSecrets,
 }
 
 /// What `pwmanager_get_config` and `pwmanager_save_config` return. No
@@ -229,6 +304,17 @@ pub struct Loaded {
 pub struct PasswordManagersView {
     pub enabled: bool,
     pub passbolt: PassboltView,
+    pub onepassword: OnePasswordView,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct OnePasswordView {
+    pub cli_path: Option<String>,
+    pub enabled: bool,
+    pub auth: OnePasswordAuth,
+    pub account: String,
+    pub timeout_secs: u32,
+    pub has_service_account_token: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -267,6 +353,14 @@ impl From<&Loaded> for PasswordManagersView {
                 passphrase_remember_secs: p.remember_secs(),
                 passphrase_cached: false,
             },
+            onepassword: OnePasswordView {
+                cli_path: l.config.onepassword.cli_path.clone(),
+                enabled: l.config.onepassword.enabled,
+                auth: l.config.onepassword.auth,
+                account: l.config.onepassword.account.clone(),
+                timeout_secs: l.config.onepassword.timeout_secs(),
+                has_service_account_token: l.onepassword_secrets.service_account_token.is_some(),
+            },
         }
     }
 }
@@ -278,6 +372,30 @@ pub struct PasswordManagersConfigInput {
     #[zeroize(skip)]
     pub enabled: bool,
     pub passbolt: PassboltConfigInput,
+    /// Left out (an older window): 1Password's defaults, off.
+    #[serde(default)]
+    pub onepassword: OnePasswordConfigInput,
+}
+
+#[derive(Deserialize, Zeroize, ZeroizeOnDrop, Default)]
+pub struct OnePasswordConfigInput {
+    #[serde(default)]
+    pub cli_path: Option<String>,
+    #[serde(default)]
+    #[zeroize(skip)]
+    pub enabled: bool,
+    #[serde(default)]
+    #[zeroize(skip)]
+    pub auth: OnePasswordAuth,
+    #[serde(default)]
+    pub account: String,
+    #[serde(default)]
+    pub timeout_secs: Option<u32>,
+    /// A new token; absent or empty keeps the stored one.
+    #[serde(default)]
+    pub service_account_token: Option<String>,
+    #[serde(default)]
+    pub clear_service_account_token: bool,
 }
 
 #[derive(Deserialize, Zeroize, ZeroizeOnDrop)]
@@ -361,6 +479,7 @@ pub struct ValidatedSave {
     pub private_key: SecretChange,
     pub passphrase: SecretChange,
     pub totp_secret: SecretChange,
+    pub service_account_token: SecretChange,
 }
 
 pub fn clamp_timeout(secs: u32) -> u32 {
@@ -539,6 +658,15 @@ pub fn validate_input(
     input: &mut PasswordManagersConfigInput,
     current_cli_path: Option<&str>,
 ) -> Result<ValidatedSave, String> {
+    let device = DeviceSettings { passbolt_cli_path: current_cli_path.map(str::to_string), ..Default::default() };
+    validate_input_with(input, &device)
+}
+
+/// [`validate_input`], with every CLI path this device has stored now.
+pub fn validate_input_with(input: &mut PasswordManagersConfigInput, device: &DeviceSettings) -> Result<ValidatedSave, String> {
+    let current_cli_path = device.passbolt_cli_path.as_deref();
+    let (onepassword, service_account_token) =
+        validate_onepassword(&mut input.onepassword, input.enabled, device.onepassword_cli_path.as_deref())?;
     let p = &mut input.passbolt;
     let new_cli_path = p.cli_path.as_deref().map(str::trim).filter(|s| !s.is_empty());
     let check_cli_file = input.enabled && new_cli_path != current_cli_path.map(str::trim).filter(|s| !s.is_empty());
@@ -553,6 +681,7 @@ pub fn validate_input(
             passphrase_mode: p.passphrase_mode,
             passphrase_remember_secs: clamp_remember(p.passphrase_remember_secs.unwrap_or(DEFAULT_REMEMBER_SECS)),
         },
+        onepassword,
     };
 
     let private_key = if p.clear_private_key {
@@ -596,7 +725,58 @@ pub fn validate_input(
         SecretChange::Keep
     };
 
-    Ok(ValidatedSave { config, private_key, passphrase, totp_secret })
+    Ok(ValidatedSave { config, private_key, passphrase, totp_secret, service_account_token })
+}
+
+/// The 1Password account name: a sign-in address, shorthand or ID, as the
+/// CLI's `--account` takes it. Empty is allowed (the CLI's default).
+pub fn validate_account(raw: &str) -> Result<String, String> {
+    let s = raw.trim();
+    if s.chars().count() > MAX_ACCOUNT_CHARS {
+        return Err("The 1Password account is too long".into());
+    }
+    if s.starts_with('-') || s.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return Err("The 1Password account should be its sign-in address (my.1password.com), shorthand or ID".into());
+    }
+    Ok(s.to_string())
+}
+
+/// A 1Password service account token, as 1Password shows it once when the
+/// service account is made: `ops_` and a long base64url text.
+pub fn validate_service_account_token(raw: &str) -> Result<Zeroizing<String>, String> {
+    let s = Zeroizing::new(raw.trim().to_string());
+    if !s.starts_with("ops_") || s.len() < 20 {
+        return Err("That is not a 1Password service account token (it starts with ops_)".into());
+    }
+    if s.len() > MAX_SERVICE_ACCOUNT_TOKEN_BYTES || s.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return Err("The service account token is not valid".into());
+    }
+    Ok(s)
+}
+
+fn validate_onepassword(
+    o: &mut OnePasswordConfigInput,
+    master_enabled: bool,
+    current_cli_path: Option<&str>,
+) -> Result<(OnePasswordConfig, SecretChange), String> {
+    let new_cli_path = o.cli_path.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    let check_cli_file =
+        master_enabled && o.enabled && new_cli_path != current_cli_path.map(str::trim).filter(|s| !s.is_empty());
+    let config = OnePasswordConfig {
+        cli_path: validate_cli_path_for(&super::onepassword::SPEC, o.cli_path.as_deref(), check_cli_file)?,
+        enabled: o.enabled,
+        auth: o.auth,
+        account: validate_account(&o.account)?,
+        timeout_secs: clamp_timeout(o.timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS)),
+    };
+    let token = if o.clear_service_account_token {
+        SecretChange::Clear
+    } else if let Some(t) = o.service_account_token.take().map(Zeroizing::new).filter(|t| !t.trim().is_empty()) {
+        SecretChange::Set(validate_service_account_token(&t)?)
+    } else {
+        SecretChange::Keep
+    };
+    Ok((config, token))
 }
 
 // ---------------------------------------------------------------------------
@@ -613,6 +793,7 @@ pub fn device_settings_path() -> PathBuf {
 #[serde(default)]
 pub struct DeviceSettings {
     pub passbolt_cli_path: Option<String>,
+    pub onepassword_cli_path: Option<String>,
 }
 
 /// The device settings in `path`. Missing or unreadable: none (find the CLI
@@ -641,11 +822,6 @@ pub fn write_device_settings(path: &Path, settings: &DeviceSettings) -> Result<(
     })
 }
 
-/// The CLI path this device has stored, if any.
-pub fn device_cli_path() -> Option<String> {
-    read_device_settings(&device_settings_path()).passbolt_cli_path.filter(|s| !s.trim().is_empty())
-}
-
 // ---------------------------------------------------------------------------
 // The vault.
 
@@ -660,7 +836,10 @@ pub async fn load(state: &AppState) -> Result<Loaded, String> {
         .await
         .and_then(|raw| parse_config(&raw))
         .unwrap_or_default();
-    config.passbolt.cli_path = device_cli_path();
+    let device = read_device_settings(&device_settings_path());
+    let device_path = |p: Option<String>| p.filter(|s| !s.trim().is_empty());
+    config.passbolt.cli_path = device_path(device.passbolt_cli_path);
+    config.onepassword.cli_path = device_path(device.onepassword_cli_path);
     let secret = |v: Option<String>| v.map(Zeroizing::new).filter(|s| !s.is_empty());
     let passbolt_secrets = PassboltSecrets {
         private_key: secret(read_setting_by_key(&manager, PASSBOLT_PRIVATE_KEY).await),
@@ -668,7 +847,10 @@ pub async fn load(state: &AppState) -> Result<Loaded, String> {
         totp_secret: secret(read_setting_by_key(&manager, PASSBOLT_TOTP_SECRET).await),
     };
     config.passbolt.settle_passphrase_mode(passbolt_secrets.passphrase.is_some());
-    Ok(Loaded { config, passbolt_secrets })
+    let onepassword_secrets = OnePasswordSecrets {
+        service_account_token: secret(read_setting_by_key(&manager, ONEPASSWORD_SERVICE_ACCOUNT_TOKEN).await),
+    };
+    Ok(Loaded { config, passbolt_secrets, onepassword_secrets })
 }
 
 /// The stored configuration JSON. Unreadable means "as shipped": off.
@@ -677,6 +859,7 @@ pub fn parse_config(raw: &str) -> Option<PasswordManagersConfig> {
         Ok(mut c) => {
             c.passbolt.timeout_secs = clamp_timeout(c.passbolt.timeout_secs);
             c.passbolt.passphrase_remember_secs = clamp_remember(c.passbolt.passphrase_remember_secs);
+            c.onepassword.timeout_secs = clamp_timeout(c.onepassword.timeout_secs);
             Some(c)
         }
         Err(e) => {
@@ -727,12 +910,17 @@ pub async fn save(state: &AppState, save: &ValidatedSave) -> Result<(), String> 
     apply_secret(&mut manager, PASSBOLT_PRIVATE_KEY, &save.private_key).await?;
     apply_secret(&mut manager, PASSBOLT_PASSPHRASE, passphrase_effect(&save.passphrase, stored_mode)).await?;
     apply_secret(&mut manager, PASSBOLT_TOTP_SECRET, &save.totp_secret).await?;
+    apply_secret(&mut manager, ONEPASSWORD_SERVICE_ACCOUNT_TOKEN, &save.service_account_token).await?;
     write_setting_by_key(&mut manager, CONFIG_KEY, &json).await?;
     drop(manager);
     let path = device_settings_path();
     let mut device = read_device_settings(&path);
-    if device.passbolt_cli_path != save.config.passbolt.cli_path {
-        device.passbolt_cli_path = save.config.passbolt.cli_path.clone();
+    let wanted = DeviceSettings {
+        passbolt_cli_path: save.config.passbolt.cli_path.clone(),
+        onepassword_cli_path: save.config.onepassword.cli_path.clone(),
+    };
+    if device != wanted {
+        device = wanted;
         write_device_settings(&path, &device)?;
     }
     tracing::info!(
@@ -742,6 +930,12 @@ pub async fn save(state: &AppState, save: &ValidatedSave) -> Result<(), String> 
         save.config.passbolt.mfa_mode,
         save.config.passbolt.passphrase_mode(),
         save.config.passbolt.remember_secs()
+    );
+    tracing::info!(
+        "pwmanager: 1password enabled={} auth={:?} account_set={}",
+        save.config.onepassword.enabled,
+        save.config.onepassword.auth,
+        !save.config.onepassword.account.is_empty()
     );
     Ok(())
 }

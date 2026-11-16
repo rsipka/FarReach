@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import Modal from '#lib/components/shared/Modal.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
 	import KeyPicker from './KeyPicker.svelte';
@@ -208,8 +209,20 @@
 		!saving
 	);
 
-	// Populate fields when editing, reset when creating
+	// Populate fields when editing, reset when creating.
+	//
+	// Only opening the editor, or a different session (or none, for a new
+	// one), may fill the form again, so the filling runs untracked. Tracked,
+	// it read state it had just written (docsOpen from notes and
+	// customFields), ran itself again and again until Svelte gave up, and
+	// each run put the fields back: every click in the editor was undone.
 	$effect(() => {
+		const session = editSession;
+		if (!open) return;
+		untrack(() => fillForm(session));
+	});
+
+	function fillForm(editSession: SessionConfig | undefined): void {
 		if (editSession) {
 			kind = sessionKind(editSession);
 			domain = editSession.domain ?? '';
@@ -308,7 +321,7 @@
 			proxyPasswordRef = null;
 		}
 		error = undefined;
-	});
+	}
 
 	async function handleSave(): Promise<void> {
 		if (!canSave) return;

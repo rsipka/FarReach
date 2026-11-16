@@ -43,8 +43,8 @@ pub async fn pwmanager_save_config(
     state: State<'_, AppState>,
     mut config: PasswordManagersConfigInput,
 ) -> Result<PasswordManagersView, String> {
-    let current_cli_path = config::device_cli_path();
-    let save = config::validate_input(&mut config, current_cli_path.as_deref())?;
+    let device = config::read_device_settings(&config::device_settings_path());
+    let save = config::validate_input_with(&mut config, &device)?;
     drop(config);
     config::save(&state, &save).await?;
     drop(save);

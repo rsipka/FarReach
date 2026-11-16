@@ -11,6 +11,14 @@ export const REPO_URL = 'https://github.com/rsipka/FarReach';
 export const UPSTREAM_URL = 'https://github.com/alexandrosnt/Reach';
 
 /**
+ * Whether to show the "Join the community" parts: the launch prompt and the
+ * Discord row in Settings > General. The Discord is upstream's, and FarReach
+ * has no community of its own yet, so they are hidden. Set this to true to
+ * bring them all back; nothing else was removed.
+ */
+export const SHOW_COMMUNITY = false;
+
+/**
  * Keys where "Reach" is not the product name, or where it means the
  * original project (its community and sponsors), so they are left alone.
  */

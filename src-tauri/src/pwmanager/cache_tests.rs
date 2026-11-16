@@ -145,11 +145,13 @@ fn the_key_follows_the_account_settings() {
                 server_address: server.into(),
                 ..Default::default()
             },
+            ..Default::default()
         },
         passbolt_secrets: PassboltSecrets {
             private_key: key.map(|k| Zeroizing::new(k.into())),
             ..Default::default()
         },
+        ..Default::default()
     };
     let k = |l: &Loaded| CacheKey::new(ProviderId::Passbolt, l);
     let base = loaded("https://a.example.com", Some("KEY A"), None);
