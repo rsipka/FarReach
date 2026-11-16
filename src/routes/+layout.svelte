@@ -5,6 +5,7 @@
 	import AppShell from '#lib/components/layout/AppShell.svelte';
 	import WelcomeScreen from '#lib/components/setup/WelcomeScreen.svelte';
 	import CommunityPrompt from '#lib/components/shared/CommunityPrompt.svelte';
+	import { SHOW_COMMUNITY } from '#lib/brand.js';
 	import LockScreen from '#lib/components/shared/LockScreen.svelte';
 	import CommandPalette from '#lib/components/shared/CommandPalette.svelte';
 	import AppContextMenu from '#lib/components/shared/AppContextMenu.svelte';
@@ -161,7 +162,9 @@
 	     is setting the app up, and must never meet this on top of that. -->
 	{#if settings.setupComplete}
 		<CommandPalette />
-		<CommunityPrompt />
+		{#if SHOW_COMMUNITY}
+			<CommunityPrompt />
+		{/if}
 		<PasswordPrompt />
 		<AskHost />
 		<LockScreen />

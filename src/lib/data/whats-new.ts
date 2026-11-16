@@ -16,6 +16,8 @@
  * it is, and highlighting three arbitrary corners is noise.
  */
 
+import { SHOW_COMMUNITY } from '#lib/brand.js';
+
 /** Where a feature lives, so the right control can carry the indicator. */
 export type FeatureSurface =
 	| { kind: 'sidebar'; section: string }
@@ -36,7 +38,10 @@ export const NEW_FEATURES: NewFeature[] = [
 	{ id: 'vault', since: '0.5.4', surface: { kind: 'sidebar', section: 'vault' } },
 	{ id: 'recipes', since: '0.5.2', surface: { kind: 'sidebar', section: 'recipes' } },
 	{ id: 'mcp', since: '0.5.2', surface: { kind: 'settings', tab: 'mcp' } },
-	{ id: 'community', since: '0.5.2', surface: { kind: 'settings', tab: 'general' } },
+	// Hidden with the rest of the community parts (SHOW_COMMUNITY in brand.ts).
+	...(SHOW_COMMUNITY
+		? [{ id: 'community', since: '0.5.2', surface: { kind: 'settings', tab: 'general' } } as NewFeature]
+		: []),
 	{ id: 'sharing', since: '0.5.2', surface: { kind: 'settings', tab: 'sharing' } }
 ];
 

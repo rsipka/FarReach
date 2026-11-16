@@ -9,6 +9,7 @@
 	import Dropdown from '#lib/components/shared/Dropdown.svelte';
 	import DiscordIcon from '#lib/components/shared/DiscordIcon.svelte';
 	import { COMMUNITY } from '#lib/data/community.js';
+	import { SHOW_COMMUNITY } from '#lib/brand.js';
 	import LanguageSelect from '#lib/components/shared/LanguageSelect.svelte';
 	import Toggle from '#lib/components/shared/Toggle.svelte';
 	import X11ServerSetting from './X11ServerSetting.svelte';
@@ -198,54 +199,56 @@
 		<X11ServerSetting />
 	{/if}
 
-	<!-- The permanent route to the community. The launch prompt can be
-	     dismissed forever; this is what makes that safe to do. -->
-	<div class="setting-row">
-		<div class="setting-info">
-			<span class="setting-label">{t('settings.community')}</span>
-			<span class="setting-description">{t('settings.community_desc')}</span>
-		</div>
-		<div class="setting-control">
-			<!-- One control, two ways out of it: the body opens the invite, the
-			     glyph on the right copies it. A second button beside the first
-			     read as two half-width controls where every other row has one. -->
-			<button
-				class="discord-link"
-				title={COMMUNITY.discordInvite}
-				onclick={() => openUrl(COMMUNITY.discordInvite)}
-			>
-				<DiscordIcon size={14} />
-				<span>{t('settings.open_discord')}</span>
-				<span class="ext"><FaIcon icon={faUpRightFromSquare} size={10} /></span>
-				<!-- Nested interactive content is invalid inside a <button>, so the
-				     copy affordance is a span with the keyboard behaviour written
-				     out: Enter and Space, and a tab stop of its own. -->
-				<span
-					class="copy"
-					role="button"
-					tabindex="0"
-					title={t('common.copy')}
-					aria-label={t('common.copy')}
-					onclick={async (e) => {
-						// Without this the click reaches the parent and the browser
-						// opens as well as the clipboard being written.
-						e.stopPropagation();
-						await navigator.clipboard.writeText(COMMUNITY.discordInvite);
-						addToast(t('vault.copied_toast'), 'success');
-					}}
-					onkeydown={async (e) => {
-						if (e.key !== 'Enter' && e.key !== ' ') return;
-						e.preventDefault();
-						e.stopPropagation();
-						await navigator.clipboard.writeText(COMMUNITY.discordInvite);
-						addToast(t('vault.copied_toast'), 'success');
-					}}
+	{#if SHOW_COMMUNITY}
+		<!-- The permanent route to the community. The launch prompt can be
+		     dismissed forever; this is what makes that safe to do. -->
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('settings.community')}</span>
+				<span class="setting-description">{t('settings.community_desc')}</span>
+			</div>
+			<div class="setting-control">
+				<!-- One control, two ways out of it: the body opens the invite, the
+				     glyph on the right copies it. A second button beside the first
+				     read as two half-width controls where every other row has one. -->
+				<button
+					class="discord-link"
+					title={COMMUNITY.discordInvite}
+					onclick={() => openUrl(COMMUNITY.discordInvite)}
 				>
-					<FaIcon icon={faCopy} size={12} />
-				</span>
-			</button>
+					<DiscordIcon size={14} />
+					<span>{t('settings.open_discord')}</span>
+					<span class="ext"><FaIcon icon={faUpRightFromSquare} size={10} /></span>
+					<!-- Nested interactive content is invalid inside a <button>, so the
+					     copy affordance is a span with the keyboard behaviour written
+					     out: Enter and Space, and a tab stop of its own. -->
+					<span
+						class="copy"
+						role="button"
+						tabindex="0"
+						title={t('common.copy')}
+						aria-label={t('common.copy')}
+						onclick={async (e) => {
+							// Without this the click reaches the parent and the browser
+							// opens as well as the clipboard being written.
+							e.stopPropagation();
+							await navigator.clipboard.writeText(COMMUNITY.discordInvite);
+							addToast(t('vault.copied_toast'), 'success');
+						}}
+						onkeydown={async (e) => {
+							if (e.key !== 'Enter' && e.key !== ' ') return;
+							e.preventDefault();
+							e.stopPropagation();
+							await navigator.clipboard.writeText(COMMUNITY.discordInvite);
+							addToast(t('vault.copied_toast'), 'success');
+						}}
+					>
+						<FaIcon icon={faCopy} size={12} />
+					</span>
+				</button>
+			</div>
 		</div>
-	</div>
+	{/if}
 
 	<div class="setting-row">
 		<div class="setting-info">

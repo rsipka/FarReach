@@ -3,6 +3,7 @@
 All notable changes to FarReach are documented here. FarReach is a fork of [Reach](https://github.com/alexandrosnt/Reach); the entries from v0.9.1 down are Reach's own.
 
 ## FarReach (unreleased, based on Reach v0.9.1)
+- **Join the community hidden for now** — The launch prompt inviting you to the Discord, the Discord row in Settings > General and its "new" badge are hidden, since that Discord is Reach's. They are switched off by one flag (`SHOW_COMMUNITY` in `src/lib/brand.ts`), not removed.
 - **FarReach** — The fork has its own name, links and updates (from [rsipka/FarReach](https://github.com/rsipka/FarReach/releases)). Its app id is `com.farreach.client`, with its own data folder and keychain entries, so it installs and runs next to Reach. It starts empty: restore a Reach backup or use the same sync location to bring your data over.
 - **Import from Remote Desktop Manager** — *Import from Remote Desktop Manager* in the sessions menu reads an RDM export (`.rdm`/`.xml` or `.json`), as a file or pasted. RDP, SSH (including PuTTY over SSH), VNC and Telnet entries become sessions, RDM groups become folders, and SSH gateways become jump hosts. Logins become saved credentials, inherited ones included, and RDM's notes and custom fields come along. Hosts already in the vault are skipped.
 - **Saved credentials** — A login can be kept once in a vault and used by many sessions, set on a folder for the sessions inside it, or picked for a jump host. Change it once and every session that uses it follows.
