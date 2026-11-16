@@ -1013,6 +1013,15 @@ impl VaultManager {
         !Self::opens_with(&stored, "")
     }
 
+    /// Whether `password` is the identity's current password.
+    pub async fn check_password(&self, password: &str) -> bool {
+        let path = self.app_dir.join("vault_identity.json");
+        let Ok(data) = tokio::fs::read_to_string(&path).await else {
+            return false;
+        };
+        serde_json::from_str::<StoredIdentity>(&data).is_ok_and(|stored| Self::opens_with(&stored, password))
+    }
+
     /// Whether `password` opens the key sealed in `stored`.
     fn opens_with(stored: &StoredIdentity, password: &str) -> bool {
         let (Ok(salt), Ok(encrypted_key), Ok(nonce)) = (

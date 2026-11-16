@@ -1,7 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 
-export async function setMasterPassword(password: string): Promise<void> {
-  return invoke('credential_set_master_password', { password });
+/** `currentPassword` is required once a password is set: it is checked first. */
+export async function setMasterPassword(password: string, currentPassword?: string): Promise<void> {
+  return invoke('credential_set_master_password', { password, currentPassword: currentPassword ?? null });
 }
 
 export async function verifyMasterPassword(password: string): Promise<boolean> {

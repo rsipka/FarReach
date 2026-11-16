@@ -49,6 +49,9 @@ impl RdpdrBackendFactory for FolderDriveFactory {
     }
 }
 
+/// The most one read answers with. Servers ask for far less.
+const MAX_READ: u64 = 8 * 1024 * 1024;
+
 /// One open file or directory, by the id the server uses for it.
 struct Open {
     path: PathBuf,
@@ -94,7 +97,37 @@ impl FolderDrive {
 /// `wire` is `\dir\file` from the server, with `\` separators and possibly
 /// a leading one. Every component must be a plain name: no `..`, nothing
 /// empty, no drive or root of its own.
+///
+/// A link inside the folder is followed only while it stays inside: one
+/// that points elsewhere would hand the server what was never shared.
 fn resolve_below(root: &Path, wire: &str) -> Option<PathBuf> {
+    let path = named_below(root, wire)?;
+    stays_below(root, &path).then_some(path)
+}
+
+/// Whether `path`, with every link in it followed, is still under `root`.
+/// A path that does not exist yet is judged by the nearest part that does.
+fn stays_below(root: &Path, path: &Path) -> bool {
+    let Ok(real_root) = root.canonicalize() else {
+        // No folder, so nothing in it to follow.
+        return true;
+    };
+    let mut probe = path;
+    loop {
+        match probe.canonicalize() {
+            Ok(real) => return real.starts_with(&real_root),
+            // There, but it leads nowhere: a link whose target is missing.
+            Err(_) if probe.symlink_metadata().is_ok() => return false,
+            Err(_) => match probe.parent() {
+                Some(parent) if parent.starts_with(root) => probe = parent,
+                _ => return true,
+            },
+        }
+    }
+}
+
+/// The path the names in `wire` spell out under `root`, links not followed.
+fn named_below(root: &Path, wire: &str) -> Option<PathBuf> {
     let mut path = root.to_path_buf();
     for part in wire.split(['\\', '/']) {
         if part.is_empty() || part == "." {
@@ -367,7 +400,11 @@ impl FolderDrive {
         let Some(file) = self.open.get_mut(&req.device_io_request.file_id).and_then(|o| o.file.as_mut()) else {
             return reply(req.device_io_request, NtStatus::NO_SUCH_FILE, Vec::new());
         };
-        let mut buf = vec![0u8; req.length as usize];
+        // The length is the server's wish: never set aside more than the file
+        // has left, or than one answer may carry.
+        let left = file.metadata().map_or(0, |m| m.len().saturating_sub(req.offset));
+        let length = u64::from(req.length).min(left).min(MAX_READ);
+        let mut buf = vec![0u8; length as usize];
         let result = file.seek(SeekFrom::Start(req.offset)).and_then(|_| {
             let mut filled = 0;
             while filled < buf.len() {
@@ -639,6 +676,29 @@ mod tests {
         assert_eq!(resolve_below(root, "\\..\\secret"), None);
         assert_eq!(resolve_below(root, "a\\..\\..\\x"), None);
         assert_eq!(resolve_below(root, "C:\\x"), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_out_of_the_folder_is_not_followed() {
+        let base = std::env::temp_dir().join(format!("reach-drive-link-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let (share, outside) = (base.join("share"), base.join("outside"));
+        fs::create_dir_all(share.join("sub")).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(outside.join("secret.txt"), b"secret").unwrap();
+        std::os::unix::fs::symlink(&outside, share.join("out")).unwrap();
+        std::os::unix::fs::symlink(share.join("sub"), share.join("in")).unwrap();
+        std::os::unix::fs::symlink(base.join("missing"), share.join("dangling")).unwrap();
+
+        assert_eq!(resolve_below(&share, "\\out\\secret.txt"), None);
+        assert_eq!(resolve_below(&share, "\\out\\new.txt"), None);
+        assert_eq!(resolve_below(&share, "\\dangling"), None);
+        // A link that stays inside works, and so does a file not made yet.
+        assert_eq!(resolve_below(&share, "\\in\\new.txt"), Some(share.join("in").join("new.txt")));
+        assert_eq!(resolve_below(&share, "\\sub\\new\\deeper.txt"), Some(share.join("sub").join("new").join("deeper.txt")));
+
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]

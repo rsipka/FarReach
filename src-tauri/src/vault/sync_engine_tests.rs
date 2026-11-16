@@ -495,6 +495,9 @@ fn backends_are_read_from_their_urls() {
     assert!(g.work_dir.starts_with("/app/sync-git"));
     assert!(Backend::parse("git:http://example.com/r.git", "tok", app).is_err(), "a token in the clear");
     assert!(Backend::parse("git:x#--upload-pack=evil", "", app).is_err());
+    assert!(Backend::parse("git:--upload-pack=evil", "", app).is_err(), "an option, not an address");
+    assert!(Backend::parse("git:ext::sh -c evil", "", app).is_err(), "a helper that runs a command");
+    assert!(Backend::parse("git:ssh://git@[::1]/r.git", "", app).is_ok(), "an IPv6 host is not a helper");
 
     assert!(Backend::parse("folder:relative/path", "", app).is_err());
     assert!(matches!(Backend::parse("libsql://db.turso.io", "t", app), Ok(Backend::Turso { .. })));
