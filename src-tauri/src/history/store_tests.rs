@@ -1,6 +1,8 @@
 use super::*;
+#[cfg(desktop)]
 use crate::history::capture::Event;
 
+#[cfg(desktop)]
 fn tempdir(name: &str) -> std::path::PathBuf {
     let d = std::env::temp_dir().join(format!("reach-history-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
@@ -8,18 +10,23 @@ fn tempdir(name: &str) -> std::path::PathBuf {
     d
 }
 
+#[cfg(desktop)]
 async fn open(dir: &std::path::Path) -> Store {
     Store::open(&dir.join("h.db"), [9u8; 32]).await.unwrap()
 }
 
+#[cfg(desktop)]
 fn meta(host: &str) -> RunMeta {
     RunMeta { session_id: Some("s1".into()), name: "web".into(), protocol: "ssh".into(), host: host.into(), user: "radek".into() }
 }
 
+#[cfg(desktop)]
 fn cmd(at: i64, text: &str) -> Event {
     Event::Command { at, text: text.into(), cwd: None, redacted: false }
 }
 
+// The file needs page encryption, built for the desktop only.
+#[cfg(desktop)]
 #[tokio::test]
 async fn search_commands_and_output_then_forget() {
     let dir = tempdir("t1");
@@ -58,6 +65,8 @@ async fn search_commands_and_output_then_forget() {
     assert!(s.search(&Query { text: "nginx".into(), ..Default::default() }).await.unwrap().is_empty());
 }
 
+// The file needs page encryption, built for the desktop only.
+#[cfg(desktop)]
 #[tokio::test]
 async fn file_is_encrypted_and_needs_its_key() {
     let dir = tempdir("t2");
@@ -75,6 +84,8 @@ async fn file_is_encrypted_and_needs_its_key() {
     assert_eq!(s.search(&Query { text: "marker".into(), ..Default::default() }).await.unwrap().len(), 1);
 }
 
+// The file needs page encryption, built for the desktop only.
+#[cfg(desktop)]
 #[tokio::test]
 async fn prune_drops_old_rows() {
     let dir = tempdir("t3");
