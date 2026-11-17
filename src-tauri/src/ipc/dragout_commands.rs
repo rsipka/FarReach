@@ -35,15 +35,15 @@ pub async fn dragout_start(
     {
         use crate::dragout::windows::{drag_promised_files, PromisedFile};
 
-        let handle = {
+        let fs = {
             let manager = state.ssh_manager.lock().await;
-            manager.get_handle(&connection_id).map_err(|e| e.to_string())?
+            manager.get_fs(&connection_id).map_err(|e| e.to_string())?
         };
 
         let promised: Vec<PromisedFile> = files
             .into_iter()
             .map(|file| {
-                let handle = handle.clone();
+                let fs = fs.clone();
                 let path = file.path.clone();
                 PromisedFile {
                     // The name comes from the server. Explorer reads `\` in
@@ -55,11 +55,11 @@ pub async fn dragout_start(
                         // Bounded, so a slow write on the far end stops us
                         // reading rather than filling memory.
                         let (tx, rx) = std::sync::mpsc::sync_channel::<Result<Vec<u8>, String>>(64);
-                        let handle = handle.clone();
+                        let fs = fs.clone();
                         let path = path.clone();
                         tauri::async_runtime::spawn(async move {
                             if let Err(e) =
-                                crate::sftp::transfer::stream_file(&handle, &path, tx).await
+                                crate::sftp::transfer::stream_file(&fs, &path, tx).await
                             {
                                 tracing::warn!("drag transfer of {} ended: {}", path, e);
                             }

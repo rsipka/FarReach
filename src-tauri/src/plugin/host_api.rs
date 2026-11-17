@@ -186,13 +186,13 @@ fn inject_sftp_api(
             lua.create_async_function(|lua, (conn_id, path): (String, String)| async move {
                 let state: UserDataRef<PluginAppState> =
                     lua.named_registry_value("__plugin_app_state")?;
-                let handle = {
+                let fs = {
                     let manager = state.ssh_manager.lock().await;
                     manager
-                        .get_handle(&conn_id)
+                        .get_fs(&conn_id)
                         .map_err(|e| mlua::Error::external(e.to_string()))?
                 };
-                let entries = crate::sftp::browser::list_directory(&handle, &path)
+                let entries = crate::sftp::browser::list_directory(&fs, &path)
                     .await
                     .map_err(|e| mlua::Error::external(e.to_string()))?;
                 let table = lua.create_table()?;
@@ -215,13 +215,13 @@ fn inject_sftp_api(
             lua.create_async_function(|lua, (conn_id, path): (String, String)| async move {
                 let state: UserDataRef<PluginAppState> =
                     lua.named_registry_value("__plugin_app_state")?;
-                let handle = {
+                let fs = {
                     let manager = state.ssh_manager.lock().await;
                     manager
-                        .get_handle(&conn_id)
+                        .get_fs(&conn_id)
                         .map_err(|e| mlua::Error::external(e.to_string()))?
                 };
-                let content = crate::sftp::browser::read_text_file(&handle, &path)
+                let content = crate::sftp::browser::read_text_file(&fs, &path)
                     .await
                     .map_err(|e| mlua::Error::external(e.to_string()))?;
                 Ok(content)
@@ -236,13 +236,13 @@ fn inject_sftp_api(
                 |lua, (conn_id, path, content): (String, String, String)| async move {
                     let state: UserDataRef<PluginAppState> =
                         lua.named_registry_value("__plugin_app_state")?;
-                    let handle = {
+                    let fs = {
                         let manager = state.ssh_manager.lock().await;
                         manager
-                            .get_handle(&conn_id)
+                            .get_fs(&conn_id)
                             .map_err(|e| mlua::Error::external(e.to_string()))?
                     };
-                    crate::sftp::browser::write_text_file(&handle, &path, &content)
+                    crate::sftp::browser::write_text_file(&fs, &path, &content)
                         .await
                         .map_err(|e| mlua::Error::external(e.to_string()))?;
                     Ok(())
