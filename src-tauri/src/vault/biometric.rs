@@ -50,7 +50,7 @@ pub const FIDO2: &str = "fido2";
 pub const ANDROID_KEY_ALIAS: &str = "reach-vault-fingerprint";
 
 /// The keychain service Touch ID's sealing keys live under, one per seal.
-const TOUCH_ID_SERVICE: &str = "farreach-vault-touch-id";
+const TOUCH_ID_SERVICE: &str = "reachercm-vault-touch-id";
 
 /// The platform biometric this build offers, if any.
 pub fn platform_method() -> Option<&'static str> {
@@ -215,7 +215,7 @@ impl Unlockers {
                 Ok(seal)
             }
             Some(TOUCH_ID) => {
-                touch::verify("turn on Touch ID for your FarReach vault")?;
+                touch::verify("turn on Touch ID for your Reacher CM vault")?;
                 let key: Zeroizing<[u8; 32]> = Zeroizing::new(rand::random());
                 let seal = self.seal_with(&key, TOUCH_ID, "Touch ID", secret)?;
                 super::manager::keychain_entry_in(TOUCH_ID_SERVICE, &seal.id)
@@ -244,7 +244,7 @@ impl Unlockers {
                 self.open_with(&key, seal)
             }
             TOUCH_ID => {
-                touch::verify("unlock your FarReach vault")?;
+                touch::verify("unlock your Reacher CM vault")?;
                 let stored = super::manager::keychain_entry_in(TOUCH_ID_SERVICE, &seal.id)
                     .and_then(|e| e.get_password().map_err(|e| super::error::VaultError::KeychainError(e.to_string())))
                     .map_err(|e| e.to_string())?;
@@ -401,7 +401,7 @@ mod hello {
     };
     use zeroize::Zeroizing;
 
-    const CREDENTIAL_NAME: &str = "FarReach vault";
+    const CREDENTIAL_NAME: &str = "Reacher CM vault";
 
     pub fn available() -> bool {
         KeyCredentialManager::IsSupportedAsync()

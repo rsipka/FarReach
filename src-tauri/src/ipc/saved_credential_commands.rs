@@ -692,7 +692,7 @@ mod tests {
             cred("typed", serde_json::json!({ "type": "Key", "key_id": "locked", "passphrase": "hunter2" })),
             cred("manager", serde_json::json!({ "type": "Key", "key_id": "locked", "passphrase_ref": { "provider": "passbolt", "entry_id": "e" } })),
             cred("gone", serde_json::json!({ "type": "Key", "key_id": "not here" })),
-            cred("no file", serde_json::json!({ "type": "Key", "path": "/nonexistent/farreach-test-key" })),
+            cred("no file", serde_json::json!({ "type": "Key", "path": "/nonexistent/reachercm-test-key" })),
         ];
         let keys = locked_keys(&creds, &stored);
         assert_eq!(keys.len(), 1);

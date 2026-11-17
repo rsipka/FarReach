@@ -14,8 +14,8 @@
 
 use serde::{Deserialize, Serialize};
 
-const FEED: &str = "https://raw.githubusercontent.com/rsipka/FarReach/update-feed/latest.json";
-const RELEASES: &str = "https://github.com/rsipka/FarReach/releases";
+const FEED: &str = "https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/latest.json";
+const RELEASES: &str = "https://github.com/rsipka/ReacherCM/releases";
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
 pub struct AppUpdate {
@@ -50,7 +50,7 @@ fn decide(current: &str, feed: &str, arch: &str) -> Option<AppUpdate> {
         return None;
     }
     let url = match apk_arch(arch) {
-        Some(a) => format!("{RELEASES}/download/v{latest}/FarReach_{latest}_android_{a}.apk"),
+        Some(a) => format!("{RELEASES}/download/v{latest}/ReacherCM_{latest}_android_{a}.apk"),
         None => format!("{RELEASES}/tag/v{latest}"),
     };
     Some(AppUpdate { version: latest.to_string(), url, notes: feed.notes })
@@ -92,9 +92,9 @@ mod tests {
     fn offers_a_newer_version_with_the_phones_apk() {
         let u = decide("0.7.2", FEED_073, "aarch64").unwrap();
         assert_eq!(u.version, "0.7.3");
-        assert_eq!(u.url, "https://github.com/rsipka/FarReach/releases/download/v0.7.3/FarReach_0.7.3_android_arm64.apk");
+        assert_eq!(u.url, "https://github.com/rsipka/ReacherCM/releases/download/v0.7.3/ReacherCM_0.7.3_android_arm64.apk");
         assert_eq!(u.notes.as_deref(), Some("VNC and logs"));
-        assert!(decide("0.7.2", FEED_073, "arm").unwrap().url.ends_with("FarReach_0.7.3_android_armv7.apk"));
+        assert!(decide("0.7.2", FEED_073, "arm").unwrap().url.ends_with("ReacherCM_0.7.3_android_armv7.apk"));
     }
 
     #[test]
@@ -109,7 +109,7 @@ mod tests {
     #[test]
     fn a_cpu_without_an_apk_gets_the_release_page() {
         let u = decide("0.7.2", FEED_073, "x86_64").unwrap();
-        assert_eq!(u.url, "https://github.com/rsipka/FarReach/releases/tag/v0.7.3");
+        assert_eq!(u.url, "https://github.com/rsipka/ReacherCM/releases/tag/v0.7.3");
     }
 
     /// Whatever the feed says, the link stays on Reach's own releases.
@@ -125,7 +125,7 @@ mod tests {
         ] {
             let feed = serde_json::json!({ "version": v }).to_string();
             if let Some(u) = decide("0.7.2", &feed, "aarch64") {
-                assert!(u.url.starts_with("https://github.com/rsipka/FarReach/releases/download/v9.9.9/"), "{v}: {}", u.url);
+                assert!(u.url.starts_with("https://github.com/rsipka/ReacherCM/releases/download/v9.9.9/"), "{v}: {}", u.url);
             }
         }
         assert_eq!(decide("0.7.2", "not json", "aarch64"), None);

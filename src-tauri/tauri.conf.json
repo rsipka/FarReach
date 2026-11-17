@@ -1,9 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-config-schema/schema.json",
-  "productName": "FarReach",
-  "mainBinaryName": "farreach",
+  "productName": "ReacherCM",
+  "mainBinaryName": "reachercm",
   "version": "0.9.2-dev.4",
-  "identifier": "com.farreach.client",
+  "identifier": "com.reachercm.client",
   "build": {
     "frontendDist": "../build",
     "devUrl": "http://localhost:1420",
@@ -14,7 +14,7 @@
     "withGlobalTauri": false,
     "windows": [
       {
-        "title": "FarReach",
+        "title": "Reacher CM",
         "width": 1280,
         "height": 800,
         "minWidth": 900,
@@ -45,7 +45,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://raw.githubusercontent.com/rsipka/FarReach/update-feed/latest.json"
+        "https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/latest.json"
       ],
       "pubkey": "",
       "requireSignedVersion": true
@@ -53,9 +53,9 @@
   },
   "bundle": {
     "active": true,
-    "publisher": "FarReach",
+    "publisher": "Reacher CM",
     "license": "MIT",
-    "copyright": "Copyright (c) 2026 Alexander Nt. and FarReach contributors",
+    "copyright": "Copyright (c) 2026 Alexander Nt. and Reacher CM contributors",
     "targets": "all",
     "createUpdaterArtifacts": "v1Compatible",
     "icon": [
@@ -79,19 +79,19 @@
     "linux": {
       "appimage": {
         "files": {
-          "/usr/share/metainfo/com.farreach.client.metainfo.xml": "linux/com.farreach.client.metainfo.xml"
+          "/usr/share/metainfo/com.reachercm.client.metainfo.xml": "linux/com.reachercm.client.metainfo.xml"
         }
       },
       "deb": {
         "depends": ["libwebkit2gtk-4.1-0", "libappindicator3-1"],
         "files": {
-          "/usr/share/metainfo/com.farreach.client.metainfo.xml": "linux/com.farreach.client.metainfo.xml"
+          "/usr/share/metainfo/com.reachercm.client.metainfo.xml": "linux/com.reachercm.client.metainfo.xml"
         }
       },
       "rpm": {
         "depends": ["webkit2gtk4.1", "libappindicator-gtk3"],
         "files": {
-          "/usr/share/metainfo/com.farreach.client.metainfo.xml": "linux/com.farreach.client.metainfo.xml"
+          "/usr/share/metainfo/com.reachercm.client.metainfo.xml": "linux/com.reachercm.client.metainfo.xml"
         }
       }
     }

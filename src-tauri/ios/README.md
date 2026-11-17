@@ -122,11 +122,11 @@ tab, or it runs on every pull request; the IPA is the run's
 ### Updates through a LiveContainer source
 
 Each tagged release, dev pre-releases included, also attaches
-`FarReach_<version>_ios_arm64_unsigned.ipa` and `apps.json`, an AltStore-style
+`ReacherCM_<version>_ios_arm64_unsigned.ipa` and `apps.json`, an AltStore-style
 source listing that IPA (and up to nine older ones). Add
 
 ```
-https://raw.githubusercontent.com/rsipka/FarReach/update-feed/apps.json
+https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/apps.json
 ```
 
 in LiveContainer's Sources tab (or open

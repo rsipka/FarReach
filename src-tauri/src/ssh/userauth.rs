@@ -451,7 +451,7 @@ fn sign(key: &PrivateKey, hash: Option<HashAlg>, data: &[u8]) -> Result<Vec<u8>,
 
 /// Stored key passphrases for UseKeychain, in the system's credential store.
 mod keychain {
-    const SERVICE: &str = "FarReach SSH key passphrase";
+    const SERVICE: &str = "Reacher CM SSH key passphrase";
 
     pub fn get(id: &str) -> Option<String> {
         crate::vault::manager::keychain_entry_in(SERVICE, id).ok()?.get_password().ok()

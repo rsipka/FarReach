@@ -33,7 +33,7 @@ pub async fn credential_set_master_password(
         }
         // An unlocked vault is not proof of knowing the password: by default
         // it opens from the OS keychain at launch. Whoever sits at an open
-        // FarReach must not be able to replace the password with their own.
+        // Reacher CM must not be able to replace the password with their own.
         if manager.has_password().await {
             let current = current_password.unwrap_or_default();
             if !manager.check_password(&current).await {

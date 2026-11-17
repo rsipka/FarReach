@@ -1,8 +1,8 @@
-# FarReach releases
+# Reacher CM releases
 
 `release.yml` builds a release for every tag that starts with `v`:
 
-- `vX.Y.Z-dev.N` makes **FarReach Dev**, published as a GitHub pre-release.
+- `vX.Y.Z-dev.N` makes **Reacher CM Dev**, published as a GitHub pre-release.
 - `vX.Y.Z` makes a stable release, published as the latest release. Only a
   stable release signs the apt and dnf repositories (secrets
   `APT_GPG_PRIVATE_KEY`, `APT_GPG_PASSPHRASE`) and rebuilds the docs site.
@@ -13,7 +13,7 @@
    (twice), `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` and
    `src-tauri/tauri.conf.json`, and add a `<release version="X.Y.Z-dev.N"
    type="development">` entry at the top of `<releases>` in
-   `src-tauri/linux/com.farreach.client.metainfo.xml` (a Rust test checks it).
+   `src-tauri/linux/com.reachercm.client.metainfo.xml` (a Rust test checks it).
 2. In `src-tauri/tauri.conf.json` set `bundle.windows.wix.version` to
    `X.Y.Z.N` and `bundle.android.versionCode` to
    `X*10000000 + Y*100000 + Z*1000 + N` (0.9.2-dev.4 is `902004`). Windows and
@@ -37,9 +37,9 @@ it. The last step of a release replaces the `update-feed` branch with one
 commit holding that release's `latest.json` and `apps.json`:
 
 - Desktop updater and the Android update check:
-  `https://raw.githubusercontent.com/rsipka/FarReach/update-feed/latest.json`
+  `https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/latest.json`
 - LiveContainer source:
-  `https://raw.githubusercontent.com/rsipka/FarReach/update-feed/apps.json`
+  `https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/apps.json`
 
 So every install, dev or stable, is offered the newest release of either
 kind. Builds from before this feed (up to 0.9.2-dev.3) still read
@@ -63,7 +63,7 @@ Add these under **Settings → Secrets and variables → Actions** in the fork.
 | `TAURI_SIGNING_PUBLIC_KEY` | Contents of the updater key's `.pub` file. |
 
 Keep backups of the Tauri and Android signing keys. Future builds need the
-same keys to update existing installs. FarReach uses its own application ID
+same keys to update existing installs. Reacher CM uses its own application ID
 and can be installed alongside upstream Reach.
 
 To create a new Android keystore, run the following with a JDK installed.

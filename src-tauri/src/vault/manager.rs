@@ -3686,7 +3686,7 @@ fn decrypt_with_password(kek: &Kek, ciphertext: &[u8], nonce: &[u8]) -> Result<V
 // keychain_entry_in: there is no app around to reach the Android Keystore.
 #[cfg(any(not(target_os = "android"), test))]
 fn keychain_entry(user_uuid: &str) -> Result<keyring_core::Entry, VaultError> {
-    keychain_entry_in("farreach-vault", user_uuid)
+    keychain_entry_in("reachercm-vault", user_uuid)
 }
 
 /// An entry under `service` in the same OS credential store.

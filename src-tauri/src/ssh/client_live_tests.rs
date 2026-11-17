@@ -203,7 +203,7 @@ async fn live_config_login() {
     check("PasswordAuthentication no", run(&h2, p2, "plain", "Host t\n  PreferredAuthentications password\n  PasswordAuthentication no\n".into(), AuthParams::from_password("plain-test-pw".into())).await, Err(()));
     let enc = k("k_enc");
     check("encrypted key, BatchMode, no passphrase", run(&h1, p1, "reach", format!("Host t\n  IdentityFile {enc}\n  IdentitiesOnly yes\n  BatchMode yes\n"), AuthParams::default()).await, Err(()));
-    crate::vault::manager::keychain_entry_in("FarReach SSH key passphrase", &enc).unwrap().set_password("enc-pass-123").unwrap();
+    crate::vault::manager::keychain_entry_in("Reacher CM SSH key passphrase", &enc).unwrap().set_password("enc-pass-123").unwrap();
     check("encrypted key, passphrase from UseKeychain", run(&h1, p1, "reach", format!("Host t\n  IdentityFile {enc}\n  IdentitiesOnly yes\n  UseKeychain yes\n"), AuthParams::default()).await, Ok(AuthBy::Key));
     check("PubkeyAuthentication no", run(&h1, p1, "reach", format!("Host t\n  IdentityFile {}\n  PubkeyAuthentication no\n  PreferredAuthentications publickey\n", k("k_good")), AuthParams::default()).await, Err(()));
 
