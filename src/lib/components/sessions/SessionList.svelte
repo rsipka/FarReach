@@ -766,6 +766,7 @@
 		);
 		tab.sessionId = session.id;
 		tab.terminalTheme = session.terminal_theme ?? null;
+		tab.monitoring = session.monitoring ?? null;
 		tab.historyMode = session.history ?? null;
 		addToast(t('session.connected_toast', { name: session.name }), 'success');
 	}
@@ -1023,6 +1024,7 @@
 			tab.sshConnectParams = connectParams;
 			tab.sessionId = session.id;
 			tab.terminalTheme = session.terminal_theme ?? null;
+			tab.monitoring = session.monitoring ?? null;
 			tab.historyMode = session.history ?? null;
 			addToast(t('session.connected_toast', { name: session.name }), 'success');
 			connectSession = undefined;

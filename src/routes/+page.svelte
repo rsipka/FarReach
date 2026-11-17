@@ -17,7 +17,7 @@
 	import MonitoringBar from '#lib/components/terminal/MonitoringBar.svelte';
 	import RemoteTerminal from '#lib/components/share/RemoteTerminal.svelte';
 	import * as share from '#lib/state/share.svelte.js';
-	import { monitorBarShown } from '#lib/state/monitor-bar.svelte.js';
+	import { monitorBarShown, monitoringWanted } from '#lib/state/monitor-bar.svelte.js';
 	import AnsiblePage from '#lib/components/ansible/AnsiblePage.svelte';
 	import TofuPage from '#lib/components/tofu/TofuPage.svelte';
 	import DbPage from '#lib/components/db/DbPage.svelte';
@@ -207,10 +207,29 @@
 		}
 	});
 
-	// Start monitoring for new SSH connections (poll-based)
+	function stopMonitoring(connId: string) {
+		monitoredConnections.delete(connId);
+		monitoringStop(connId).catch((err) => {
+			console.error(`Failed to stop monitoring for ${connId}:`, err);
+		});
+		const interval = pollIntervals.get(connId);
+		if (interval) {
+			clearInterval(interval);
+			pollIntervals.delete(connId);
+		}
+		removeStats(connId);
+	}
+
+	// Start monitoring for new SSH connections (poll-based), unless their
+	// session or Settings turned it off; stop it when it is turned off.
 	$effect(() => {
 		for (const tab of tabs) {
-			if (tab.type === 'ssh' && tab.connectionId && !monitoredConnections.has(tab.connectionId)) {
+			if (tab.type !== 'ssh' || !tab.connectionId) continue;
+			if (!monitoringWanted(tab)) {
+				if (monitoredConnections.has(tab.connectionId)) stopMonitoring(tab.connectionId);
+				continue;
+			}
+			if (!monitoredConnections.has(tab.connectionId)) {
 				const connId = tab.connectionId;
 				monitoredConnections.add(connId);
 
@@ -237,7 +256,8 @@
 
 	// WSL monitoring: only poll while the WSL tab is in view to let the WSL VM go idle
 	$effect(() => {
-		const isWslInView = activePage === 'terminal' && activeTab?.wslDistro !== undefined && activeTab?.connectionId;
+		const isWslInView =
+			activePage === 'terminal' && activeTab?.wslDistro !== undefined && activeTab?.connectionId && monitoringWanted(activeTab);
 		if (isWslInView) {
 			const connId = activeTab!.connectionId!;
 			const distro = activeTab!.wslDistro!;
@@ -304,21 +324,7 @@
 		}
 
 		for (const connId of monitoredConnections) {
-			if (!activeConnectionIds.has(connId)) {
-				monitoredConnections.delete(connId);
-
-				monitoringStop(connId).catch((err) => {
-					console.error(`Failed to stop monitoring for ${connId}:`, err);
-				});
-
-				const interval = pollIntervals.get(connId);
-				if (interval) {
-					clearInterval(interval);
-					pollIntervals.delete(connId);
-				}
-
-				removeStats(connId);
-			}
+			if (!activeConnectionIds.has(connId)) stopMonitoring(connId);
 		}
 	});
 </script>
@@ -414,6 +420,7 @@
 						connectionId={activeTab?.connectionId}
 						sshUser={activeTab?.title?.split('@')[0]}
 						sessionId={activeTab?.type === 'ssh' ? activeTab?.connectionId : activeTab?.id}
+						monitoringOff={!monitoringWanted(activeTab)}
 					/>
 				{/if}
 			{/if}
