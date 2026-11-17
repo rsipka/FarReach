@@ -753,6 +753,7 @@ pub async fn session_create(
     notes: Option<String>,
     custom_fields: Option<Vec<crate::state::CustomField>>,
     terminal_theme: Option<String>,
+    monitoring: Option<bool>,
     history: Option<String>,
 ) -> Result<SessionConfig, String> {
     let mut manager = state.vault_manager.lock().await;
@@ -814,6 +815,7 @@ pub async fn session_create(
         notes,
         custom_fields,
         terminal_theme,
+        monitoring,
         history,
         credential_ref_approvals: Default::default(),
     };
@@ -2354,5 +2356,14 @@ mod documentation_tests {
         let mut blank = session(serde_json::json!({ "terminal_theme": " " }));
         blank.tidy_documentation();
         assert!(blank.terminal_theme.is_none());
+    }
+
+    #[test]
+    fn a_monitoring_override_is_kept_and_unset_left_out() {
+        let off = serde_json::to_value(session(serde_json::json!({ "monitoring": false }))).unwrap();
+        assert_eq!(off["monitoring"], false);
+        let on = serde_json::to_value(session(serde_json::json!({ "monitoring": true }))).unwrap();
+        assert_eq!(on["monitoring"], true);
+        assert!(serde_json::to_value(session(serde_json::json!({}))).unwrap().get("monitoring").is_none());
     }
 }
