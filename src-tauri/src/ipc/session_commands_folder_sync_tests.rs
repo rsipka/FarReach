@@ -42,8 +42,8 @@ async fn a_shared_vaults_folders_reach_the_other_member() {
     // As Reach before 0.8.2 left them: both folders on the device, one
     // naming the shared vault.
     let local = ensure_folders_vault(&mut a).await.unwrap();
-    let old = Folder { id: "old".into(), name: "Servers".into(), parent_id: None, vault_id: Some(team.clone()), credential_id: None };
-    let mine = Folder { id: "mine".into(), name: "Home".into(), parent_id: None, vault_id: None, credential_id: None };
+    let old = Folder { id: "old".into(), name: "Servers".into(), parent_id: None, vault_id: Some(team.clone()), credential_id: None, tmux: None };
+    let mine = Folder { id: "mine".into(), name: "Home".into(), parent_id: None, vault_id: None, credential_id: None, tmux: None };
     for f in [&old, &mine] {
         a.create_secret_with_id(&local, &f.id, &f.name, SecretCategory::Folder, put(f)).await.unwrap();
     }

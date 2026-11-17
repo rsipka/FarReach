@@ -503,6 +503,7 @@ pub fn run() {
             ssh_resize,
             ssh_list_connections,
             ssh_detect_os,
+            ssh_tmux_kill,
             inspect_key_file,
             // SSH Config commands
             sshconfig_scan,
@@ -554,6 +555,7 @@ pub fn run() {
             session_list_folders,
             session_create_folder,
             session_set_folder_credential,
+            session_set_folder_tmux,
             saved_credential_list,
             credential_keys_unlock,
             credential_keys_unlock_enabled,
@@ -941,6 +943,7 @@ pub fn run() {
             ssh_resize,
             ssh_list_connections,
             ssh_detect_os,
+            ssh_tmux_kill,
             inspect_key_file,
             // SSH Config commands
             sshconfig_scan,
@@ -992,6 +995,7 @@ pub fn run() {
             session_list_folders,
             session_create_folder,
             session_set_folder_credential,
+            session_set_folder_tmux,
             saved_credential_list,
             credential_keys_unlock,
             credential_keys_unlock_enabled,

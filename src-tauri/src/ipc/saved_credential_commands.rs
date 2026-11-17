@@ -723,6 +723,7 @@ mod tests {
             parent_id: parent.map(Into::into),
             vault_id: vault.map(Into::into),
             credential_id: cred.map(Into::into),
+            tmux: None,
         }
     }
 

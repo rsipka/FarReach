@@ -82,6 +82,18 @@ export interface SessionConfig {
   /** What its tabs record into the session history; unset: the default
    *  from Settings. */
   history?: HistoryMode | null;
+  /** Start its terminals in tmux on the server; unset: as its folder says
+   *  (see #lib/terminal/tmux). */
+  tmux?: TmuxSetting | null;
+}
+
+/** A session's own tmux choice. */
+export interface TmuxSetting {
+  /** `attach`: attach to the named tmux session, or create it; `inherit`:
+   *  as the folder says (kept to hold a name). */
+  mode: 'off' | 'attach' | 'inherit';
+  /** The tmux session's name; unset: made from the session's name. */
+  name?: string | null;
 }
 
 /** One named value of a session's documentation. */
@@ -150,6 +162,8 @@ export interface Folder {
   vault_id: string | null;
   /** A saved credential the sessions inside log in with. */
   credential_id?: string | null;
+  /** Start the sessions inside in tmux, unless they or a nearer folder say otherwise. */
+  tmux?: boolean | null;
 }
 
 export async function sessionList(): Promise<SessionConfig[]> {
@@ -188,6 +202,7 @@ export async function sessionCreate(params: {
   terminalTheme?: string | null;
   monitoring?: boolean | null;
   history?: HistoryMode | null;
+  tmux?: TmuxSetting | null;
 }): Promise<SessionConfig> {
   return invoke<SessionConfig>('session_create', {
     name: params.name,
@@ -216,6 +231,7 @@ export async function sessionCreate(params: {
     terminalTheme: params.terminalTheme || null,
     monitoring: params.monitoring ?? null,
     history: params.history || null,
+    tmux: params.tmux ?? null,
   });
 }
 
@@ -335,6 +351,11 @@ export async function sessionCreateFolder(name: string, parentId: string | null,
 
 export async function sessionUpdateFolderParent(folderId: string, parentId: string | null): Promise<Folder> {
   return invoke<Folder>('session_update_folder_parent', { folderId, parentId });
+}
+
+/** Turn tmux on or off for a folder's sessions; null: as the folder above says. */
+export async function sessionSetFolderTmux(folderId: string, tmux: boolean | null): Promise<Folder> {
+  return invoke<Folder>('session_set_folder_tmux', { folderId, tmux });
 }
 
 /** Set or clear the saved credential a folder's sessions log in with. */

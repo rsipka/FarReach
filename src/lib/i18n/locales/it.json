@@ -2941,5 +2941,22 @@
   "history.settings_stored_locked": "Mostrata quando il vault è sbloccato.",
   "history.forget_all": "Dimentica tutto",
   "history.forget_all_confirm": "Clicca di nuovo per dimenticare tutto",
-  "history.forgot_all": "Cronologia delle sessioni eliminata."
+  "history.forgot_all": "Cronologia delle sessioni eliminata.",
+  "tmux.session_label": "tmux sul server",
+  "tmux.session_folder_on": "Come la cartella (attivo)",
+  "tmux.session_folder_off": "Come la cartella (disattivo)",
+  "tmux.mode_attach": "Collegati o crea",
+  "tmux.mode_off": "Disattivo",
+  "tmux.name_label": "Nome della sessione tmux",
+  "tmux.session_hint": "Il terminale si avvia dentro questa sessione tmux sul server: il lavoro continua se la connessione cade o la scheda viene chiusa, e la connessione successiva vi ritorna. Un server senza tmux apre una shell normale.",
+  "tmux.name_invalid": "Il nome della sessione tmux può contenere solo lettere, cifre, - e _ (al massimo 64 caratteri).",
+  "tmux.folder_menu": "tmux per le sessioni contenute",
+  "tmux.folder_inherit": "Come la cartella superiore",
+  "tmux.folder_on": "Attivo",
+  "tmux.folder_off": "Disattivo",
+  "tmux.kill": "Termina sessione tmux",
+  "tmux.kill_confirm": "Terminare la sessione tmux «{{name}}» sul server? Tutto ciò che vi è in esecuzione si ferma, anche in altre schede e su altri computer collegati.",
+  "tmux.kill_failed": "Impossibile terminare la sessione tmux: {{error}}",
+  "tmux.quit_note": "{{count}} di queste sono in tmux, che resta attivo sul server: riconnettiti per tornarci.",
+  "tmux.auto_reconnecting": "Ancora attivo in tmux. Riconnessione automatica."
 }

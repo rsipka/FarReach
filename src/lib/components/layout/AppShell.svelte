@@ -67,6 +67,8 @@
 	// --- Active-session guards for window close / app quit + update relaunch ---
 	let closeOpen = $state(false);
 	let closeCount = $state(0);
+	/** Of those, the tabs whose work lives on in tmux on their server. */
+	let closeTmuxCount = $state(0);
 	let closeMode = $state<'window' | 'quit'>('window');
 	let updateOpen = $state(false);
 	let updateCount = $state(0);
@@ -114,6 +116,7 @@
 		}
 		closeMode = mode;
 		closeCount = count;
+		closeTmuxCount = getTabs().filter((tab) => tab.type === 'ssh' && tab.link !== 'down' && !!tab.sshConnectParams?.tmux).length;
 		closeOpen = true;
 	}
 
@@ -251,6 +254,7 @@
 		open={closeOpen}
 		variant="close"
 		count={closeCount}
+		tmuxCount={closeTmuxCount}
 		onconfirm={confirmClose}
 		oncancel={cancelClose}
 	/>

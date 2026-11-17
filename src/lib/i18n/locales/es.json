@@ -2941,5 +2941,22 @@
   "history.settings_stored_locked": "Se muestra con la bóveda desbloqueada.",
   "history.forget_all": "Olvidar todo",
   "history.forget_all_confirm": "Haz clic de nuevo para olvidar todo",
-  "history.forgot_all": "Historial de sesiones borrado."
+  "history.forgot_all": "Historial de sesiones borrado.",
+  "tmux.session_label": "tmux en el servidor",
+  "tmux.session_folder_on": "Como diga la carpeta (activado)",
+  "tmux.session_folder_off": "Como diga la carpeta (desactivado)",
+  "tmux.mode_attach": "Unirse o crear",
+  "tmux.mode_off": "Desactivado",
+  "tmux.name_label": "Nombre de la sesión tmux",
+  "tmux.session_hint": "El terminal se inicia dentro de esta sesión tmux en el servidor, así que tu trabajo sigue en marcha si se cae la conexión o se cierra la pestaña, y la siguiente conexión vuelve a ella. Un servidor sin tmux abre un shell normal.",
+  "tmux.name_invalid": "El nombre de la sesión tmux solo puede usar letras, dígitos, - y _ (64 caracteres como máximo).",
+  "tmux.folder_menu": "tmux para las sesiones de dentro",
+  "tmux.folder_inherit": "Como la carpeta superior",
+  "tmux.folder_on": "Activado",
+  "tmux.folder_off": "Desactivado",
+  "tmux.kill": "Terminar sesión tmux",
+  "tmux.kill_confirm": "¿Terminar la sesión tmux «{{name}}» en el servidor? Todo lo que se ejecuta en ella se detiene, también en otras pestañas y en otros equipos conectados a ella.",
+  "tmux.kill_failed": "No se pudo terminar la sesión tmux: {{error}}",
+  "tmux.quit_note": "{{count}} de ellas se ejecutan en tmux, que sigue en el servidor: vuelve a conectar para retomarlas.",
+  "tmux.auto_reconnecting": "Sigue en marcha en tmux. Reconectando automáticamente."
 }

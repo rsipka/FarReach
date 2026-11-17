@@ -38,7 +38,7 @@ export async function openContainerShell(route: Route, engine: Engine, container
 	const from = getTabs().find((t) => t.connectionId === route.connectionId);
 	if (!from?.sshConnectParams) throw new Error('That terminal tab is no longer connected');
 	const id = crypto.randomUUID();
-	const params = { ...from.sshConnectParams, id, shell: command, injectColors: false };
+	const params = { ...from.sshConnectParams, id, shell: command, injectColors: false, tmux: null };
 	await sshConnect(params);
 	const tab = createTab('ssh', `${containerName} · ${from.title}`, id, from.sessionName, from.detectedOs);
 	tab.sshConnectParams = params;

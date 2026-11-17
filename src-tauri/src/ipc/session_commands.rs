@@ -755,6 +755,7 @@ pub async fn session_create(
     terminal_theme: Option<String>,
     monitoring: Option<bool>,
     history: Option<String>,
+    tmux: Option<crate::ssh::tmux::TmuxSetting>,
 ) -> Result<SessionConfig, String> {
     let mut manager = state.vault_manager.lock().await;
     let kind = kind.unwrap_or_default();
@@ -817,6 +818,7 @@ pub async fn session_create(
         terminal_theme,
         monitoring,
         history,
+        tmux,
         credential_ref_approvals: Default::default(),
     };
     session.tidy_documentation();
@@ -1099,6 +1101,7 @@ async fn create_folder(
         parent_id,
         vault_id,
         credential_id: None,
+        tmux: None,
     };
 
     let json = serde_json::to_string(&folder).map_err(|e| e.to_string())?;
@@ -1456,6 +1459,37 @@ pub async fn session_set_folder_credential(
         .await
         .map_err(|e| e.to_string())?;
     tracing::info!("Folder {} now uses credential {:?}", folder.id, folder.credential_id);
+    Ok(folder)
+}
+
+/// Turn tmux on or off for a folder's sessions (`None`: as the folder
+/// above says).
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn session_set_folder_tmux(
+    state: State<'_, AppState>,
+    folder_id: String,
+    tmux: Option<bool>,
+) -> Result<Folder, String> {
+    let manager = state.vault_manager.lock().await;
+    if manager.is_locked() {
+        return Err("Vault is locked".to_string());
+    }
+    let mut folder = read_folders(&manager)
+        .await?
+        .into_iter()
+        .find(|f| f.id == folder_id)
+        .ok_or_else(|| format!("Folder not found: {folder_id}"))?;
+    folder.tmux = tmux;
+    let vault_id = find_folder_vault(&manager, &folder.id)
+        .await
+        .ok_or_else(|| format!("Folder not found: {}", folder.id))?;
+    let json = serde_json::to_vec(&folder).map_err(|e| e.to_string())?;
+    manager
+        .update_secret(&vault_id, &folder.id, SecretBox::new(Box::new(json)))
+        .await
+        .map_err(|e| e.to_string())?;
+    tracing::info!("Folder {} tmux: {:?}", folder.id, folder.tmux);
     Ok(folder)
 }
 

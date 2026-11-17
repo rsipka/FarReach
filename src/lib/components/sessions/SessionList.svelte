@@ -36,7 +36,7 @@
 	import Button from '#lib/components/shared/Button.svelte';
 	import UntrustedRefsDialog from '#lib/components/pwmanager/UntrustedRefsDialog.svelte';
 	import { sessionUntrustedSecretRefs, sessionApproveSecretRefs, untrustedRefsFromError, type UntrustedRefs } from '#lib/ipc/sessions.js';
-	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetFolderCredential, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
+	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetFolderCredential, sessionSetFolderTmux, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
 	import { sshConnect, sshDisconnect, sshDetectOs, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
@@ -54,6 +54,7 @@
 	import { positionMenu } from '#lib/utils/positionMenu.js';
 	import { buildFolderTree, canMoveFolder, folderPath, type FolderTreeNode } from '#lib/sessions/folder-tree.js';
 	import { vaultState, checkState, initIdentity, importIdentity, ALL_VAULTS, loadVaultFilter, type VaultFilter } from '#lib/state/vault.svelte.js';
+	import { tmuxFor } from '#lib/terminal/tmux.js';
 
 	let showQuickConnect = $state(false);
 	let showRdpConnect = $state(false);
@@ -170,7 +171,8 @@
 				void sessionGet(r.sessionId)
 					.then((s) => {
 						setActivePage('terminal');
-						return handleConnect(r.shell ? { ...s, shell: r.shell } : s);
+						// A container's shell is never wrapped in tmux.
+						return handleConnect(r.shell ? { ...s, shell: r.shell, tmux: { mode: 'off' } } : s);
 					})
 					.catch((err) => addToast(String(err), 'error'));
 			}
@@ -635,6 +637,17 @@
 		}
 	}
 
+	/** Turn tmux on or off for a folder's sessions; null: as the folder above says. */
+	async function setFolderTmux(folder: Folder, value: boolean | null): Promise<void> {
+		closeContextMenu();
+		try {
+			await sessionSetFolderTmux(folder.id, value);
+			await loadSessions();
+		} catch (err) {
+			addToast(String(err), 'error');
+		}
+	}
+
 	async function loadSessions(): Promise<void> {
 		try {
 			[sessions, folders] = await Promise.all([sessionList(), sessionListFolders()]);
@@ -991,6 +1004,7 @@
 				cols: 80,
 				rows: 24,
 				shell: session.shell ?? undefined,
+				tmux: tmuxFor(session, folders),
 				injectColors: getSettings().typeShellSetup,
 				sessionLog: sessionLogConfig(),
 				showLoginMessage: getSettings().showLoginMessage,
@@ -1535,6 +1549,13 @@
 					<button class="context-item context-folder-item" class:context-current={!contextMenu.folder.credential_id} onclick={() => { if (contextMenu?.folder) void setFolderCredential(contextMenu.folder, null); }} type="button">{t('credential.folder_none')}</button>
 					{#each credentialsFor(savedCredentials, contextMenu.folder.vault_id) as c (c.id)}
 						<button class="context-item context-folder-item" class:context-current={contextMenu.folder.credential_id === c.id} onclick={() => { if (contextMenu?.folder) void setFolderCredential(contextMenu.folder, c.id); }} type="button">{c.name} ({c.username})</button>
+					{/each}
+				</div>
+				<div class="context-sep"></div>
+				<div class="context-label">{t('tmux.folder_menu')}</div>
+				<div class="context-folders">
+					{#each [[null, 'tmux.folder_inherit'], [true, 'tmux.folder_on'], [false, 'tmux.folder_off']] as const as [value, label] (label)}
+						<button class="context-item context-folder-item" class:context-current={(contextMenu.folder.tmux ?? null) === value} onclick={() => { if (contextMenu?.folder) void setFolderTmux(contextMenu.folder, value); }} type="button">{t(label)}</button>
 					{/each}
 				</div>
 				<div class="context-sep"></div>

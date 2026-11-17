@@ -2941,5 +2941,22 @@
   "history.settings_stored_locked": "Shown when the vault is unlocked.",
   "history.forget_all": "Forget all",
   "history.forget_all_confirm": "Click again to forget all",
-  "history.forgot_all": "Session history deleted."
+  "history.forgot_all": "Session history deleted.",
+  "tmux.session_label": "tmux on the server",
+  "tmux.session_folder_on": "As the folder says (on)",
+  "tmux.session_folder_off": "As the folder says (off)",
+  "tmux.mode_attach": "Attach or create",
+  "tmux.mode_off": "Off",
+  "tmux.name_label": "tmux session name",
+  "tmux.session_hint": "The terminal starts inside this tmux session on the server, so your work keeps running when the connection drops or the tab closes, and the next connect goes back to it. A server without tmux opens a normal shell.",
+  "tmux.name_invalid": "The tmux session name can only use letters, digits, - and _ (at most 64 characters).",
+  "tmux.folder_menu": "tmux for sessions inside",
+  "tmux.folder_inherit": "As the folder above",
+  "tmux.folder_on": "On",
+  "tmux.folder_off": "Off",
+  "tmux.kill": "End tmux session",
+  "tmux.kill_confirm": "End the tmux session \"{{name}}\" on the server? Everything running in it stops, also in other tabs and on other computers attached to it.",
+  "tmux.kill_failed": "Could not end the tmux session: {{error}}",
+  "tmux.quit_note": "{{count}} of them run in tmux, which keeps running on the server: connect again to get back to it.",
+  "tmux.auto_reconnecting": "Still running in tmux. Reconnecting by itself."
 }

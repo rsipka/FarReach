@@ -2941,5 +2941,22 @@
   "history.settings_stored_locked": "Wird angezeigt, wenn der Tresor entsperrt ist.",
   "history.forget_all": "Alles vergessen",
   "history.forget_all_confirm": "Erneut klicken, um alles zu vergessen",
-  "history.forgot_all": "Sitzungsverlauf gelöscht."
+  "history.forgot_all": "Sitzungsverlauf gelöscht.",
+  "tmux.session_label": "tmux auf dem Server",
+  "tmux.session_folder_on": "Wie im Ordner (an)",
+  "tmux.session_folder_off": "Wie im Ordner (aus)",
+  "tmux.mode_attach": "Verbinden oder erstellen",
+  "tmux.mode_off": "Aus",
+  "tmux.name_label": "Name der tmux-Sitzung",
+  "tmux.session_hint": "Das Terminal startet in dieser tmux-Sitzung auf dem Server. Ihre Arbeit läuft weiter, wenn die Verbindung abbricht oder der Tab geschlossen wird, und die nächste Verbindung kehrt dorthin zurück. Ohne tmux auf dem Server öffnet sich eine normale Shell.",
+  "tmux.name_invalid": "Der Name der tmux-Sitzung darf nur Buchstaben, Ziffern, - und _ enthalten (höchstens 64 Zeichen).",
+  "tmux.folder_menu": "tmux für Sitzungen darin",
+  "tmux.folder_inherit": "Wie im übergeordneten Ordner",
+  "tmux.folder_on": "An",
+  "tmux.folder_off": "Aus",
+  "tmux.kill": "tmux-Sitzung beenden",
+  "tmux.kill_confirm": "Die tmux-Sitzung „{{name}}“ auf dem Server beenden? Alles, was darin läuft, wird beendet, auch in anderen Tabs und auf anderen damit verbundenen Computern.",
+  "tmux.kill_failed": "Die tmux-Sitzung konnte nicht beendet werden: {{error}}",
+  "tmux.quit_note": "{{count}} davon laufen in tmux und laufen auf dem Server weiter: Verbinden Sie sich erneut, um dorthin zurückzukehren.",
+  "tmux.auto_reconnecting": "Läuft in tmux weiter. Verbindet sich automatisch neu."
 }
