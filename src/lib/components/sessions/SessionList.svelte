@@ -1006,6 +1006,14 @@
 			};
 			await sshConnect(connectParams);
 
+			// Cancelled while the handshake was in flight: the backend had no
+			// connection to drop yet, so this one is unwanted. Close it instead
+			// of opening a tab. (Idea from the ReachQ fork by CPTProgrammer.)
+			if (connectingId !== id) {
+				sshDisconnect(id).catch(() => {});
+				return;
+			}
+
 			const tab = createTab('ssh', `${session.username}@${session.host}`, id, session.name, session.detected_os);
 			tab.sshConnectParams = connectParams;
 			tab.sessionId = session.id;
@@ -1034,6 +1042,10 @@
 				}).catch(() => {});
 			}
 		} catch (err) {
+			// Cancelled while connecting: the prompt is gone, so the failure
+			// is nobody's business, and it must not switch the next prompt to
+			// the password fallback or ask to approve entries.
+			if (connectingId !== id) return;
 			// The session's password manager entries are not approved (it
 			// changed since the list was read): ask, below, then try again.
 			untrusted = untrustedRefsFromError(err);
@@ -1054,7 +1066,9 @@
 				fallbackPassword = '';
 			}
 		} finally {
-			connecting = false;
+			// A cancelled attempt finishing late must not mark a newer one,
+			// still in flight, as done.
+			if (connectingId === id) connecting = false;
 		}
 		if (untrusted) {
 			if (await askToApprove(untrusted)) await doConnect();
@@ -1594,10 +1608,13 @@
 />
 
 {#if showConnectPrompt && connectSession}
+	<!-- No click-outside dismissal, as in Modal: a drag that selects text in
+	     the password field and ends past the box closed the prompt. Cancel and
+	     Escape still close it. -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="prompt-overlay" onkeydown={(e) => { if (e.key === 'Escape') cancelConnect(); }} onclick={cancelConnect}>
+	<div class="prompt-overlay" onkeydown={(e) => { if (e.key === 'Escape') cancelConnect(); }}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="prompt-box" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+		<div class="prompt-box" onkeydown={() => {}}>
 			<div class="prompt-header">
 				<span class="prompt-title">{t('session.connect_to', { name: connectSession.name })}</span>
 				<span class="prompt-detail">{connectSession.username}@{connectSession.host}:{connectSession.port}</span>
