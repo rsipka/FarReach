@@ -10,7 +10,8 @@
 	import Disclosure from '#lib/components/shared/Disclosure.svelte';
 	import TerminalThemeList from '#lib/components/terminal/TerminalThemeList.svelte';
 	import { findTerminalTheme, terminalPalette } from '#lib/state/terminal-themes.svelte.js';
-	import { setSessionTerminalTheme } from '#lib/state/tabs.svelte.js';
+	import { setSessionTerminalTheme, setSessionMonitoring } from '#lib/state/tabs.svelte.js';
+	import { getSettings } from '#lib/state/settings.svelte.js';
 	import SecretRefField from '#lib/components/pwmanager/SecretRefField.svelte';
 	import type { EntrySummary, SecretRef } from '#lib/ipc/pwmanager.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -194,6 +195,8 @@
 	});
 	/** The terminal theme its tabs use; empty: the default from Settings. */
 	let terminalTheme = $state('');
+	/** Server monitoring for its tabs: '' the default from Settings. */
+	let monitoringChoice = $state<'' | 'on' | 'off'>('');
 	let colorsOpen = $state(false);
 	let colorsSummary = $derived(
 		findTerminalTheme(terminalTheme)?.name ?? (terminalTheme ? t('termtheme.missing') : t('termtheme.session_default'))
@@ -264,6 +267,7 @@
 			customFields = (editSession.custom_fields ?? []).map((f) => ({ ...f, hidden: !!f.hidden, shown: false }));
 			docsOpen = !!notes.trim() || customFields.length > 0;
 			terminalTheme = editSession.terminal_theme ?? '';
+			monitoringChoice = editSession.monitoring == null ? '' : editSession.monitoring ? 'on' : 'off';
 			colorsOpen = false;
 			if (editSession.jump_chain && editSession.jump_chain.length > 0) {
 				jumpEnabled = true;
@@ -324,6 +328,7 @@
 			customFields = [];
 			docsOpen = false;
 			terminalTheme = '';
+			monitoringChoice = '';
 			colorsOpen = false;
 			jumpEnabled = false;
 			jumpHops = [];
@@ -389,6 +394,8 @@
 		const notesToSave = notes.trim() ? notes : null;
 		// Remote desktops paint their own screen: no terminal colours.
 		const themeToSave = kind === 'rdp' || kind === 'vnc' ? null : terminalTheme || null;
+		// Only SSH and WSL sessions have a server to monitor.
+		const monitoringToSave = (kind === 'ssh' || kind === 'wsl') && monitoringChoice ? monitoringChoice === 'on' : null;
 		const fieldsToSave: CustomField[] = customFields
 			.filter((f) => f.name.trim() || f.value.trim())
 			.map((f) => (f.hidden ? { name: f.name.trim(), value: f.value, hidden: true } : { name: f.name.trim(), value: f.value }));
@@ -468,9 +475,11 @@
 					notes: notesToSave,
 					custom_fields: fieldsToSave.length ? fieldsToSave : null,
 					terminal_theme: themeToSave,
+					monitoring: monitoringToSave,
 				});
-				// Its open tabs take the new colours at once.
+				// Its open tabs take the new colours (and monitoring choice) at once.
 				setSessionTerminalTheme(editSession.id, themeToSave);
+				setSessionMonitoring(editSession.id, monitoringToSave);
 			} else {
 				await sessionCreate({
 					name: name.trim(),
@@ -496,7 +505,8 @@
 					credentialId: credential,
 					notes: notesToSave,
 					customFields: fieldsToSave,
-					terminalTheme: themeToSave
+					terminalTheme: themeToSave,
+					monitoring: monitoringToSave
 				});
 			}
 			onsave?.();
@@ -986,6 +996,17 @@
 				/>
 				<p class="colors-hint">{t('termtheme.session_hint')}</p>
 			</Disclosure>
+		{/if}
+
+		{#if kind === 'ssh' || kind === 'wsl'}
+			<div class="folder-section">
+				<span class="folder-label">{t('session.monitoring')}</span>
+				<select class="folder-select" bind:value={monitoringChoice} disabled={saving}>
+					<option value="">{getSettings().serverMonitoring ? t('session.monitoring_default_on') : t('session.monitoring_default_off')}</option>
+					<option value="on">{t('session.monitoring_on')}</option>
+					<option value="off">{t('session.monitoring_off')}</option>
+				</select>
+			</div>
 		{/if}
 
 		<Disclosure title={t('session.docs')} summary={docsSummary} bind:open={docsOpen}>

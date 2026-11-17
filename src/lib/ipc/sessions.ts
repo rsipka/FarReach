@@ -75,6 +75,9 @@ export interface SessionConfig {
   /** The terminal colours its tabs use, by terminal theme id; unset: the
    *  default from Settings (see #lib/state/terminal-themes). */
   terminal_theme?: string | null;
+  /** Server monitoring for its tabs, on or off; unset: the default from
+   *  Settings. */
+  monitoring?: boolean | null;
 }
 
 /** One named value of a session's documentation. */
@@ -179,6 +182,7 @@ export async function sessionCreate(params: {
   notes?: string | null;
   customFields?: CustomField[] | null;
   terminalTheme?: string | null;
+  monitoring?: boolean | null;
 }): Promise<SessionConfig> {
   return invoke<SessionConfig>('session_create', {
     name: params.name,
@@ -205,6 +209,7 @@ export async function sessionCreate(params: {
     notes: params.notes?.trim() ? params.notes : null,
     customFields: params.customFields?.length ? params.customFields : null,
     terminalTheme: params.terminalTheme || null,
+    monitoring: params.monitoring ?? null,
   });
 }
 
