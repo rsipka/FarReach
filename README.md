@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/rsipka/ReacherCM/releases">Download</a> · <a href="https://github.com/rsipka/ReacherCM/issues">Report a Bug</a> · <a href="https://reachssh.com/">Reach documentation</a> · <a href="https://github.com/alexandrosnt/Reach">Upstream Reach</a>
+  <a href="https://rsipka.github.io/ReacherCM/">Website</a> · <a href="https://github.com/rsipka/ReacherCM/releases">Download</a> · <a href="https://github.com/rsipka/ReacherCM/issues">Report a Bug</a> · <a href="https://reachssh.com/">Reach documentation</a> · <a href="https://github.com/alexandrosnt/Reach">Upstream Reach</a>
 </p>
 
 > **Reacher CM is built on Reach** by [Alexander Nt.](https://github.com/alexandrosnt) and the
@@ -29,7 +29,7 @@
 
 PuTTY hasn't changed in decades, MobaXterm is Windows-only, and Termius charges a subscription for the basics. Reach, which Reacher CM is built on, is an SSH client built from scratch: native Rust networking, a fast UI, encrypted storage, and the same app on Windows, macOS, Linux and Android. No Electron, no subscription, no account.
 
-Reacher CM adds what people moving from Remote Desktop Manager and similar tools miss most: importing from RDM, saved credentials shared by many sessions, session notes, Telnet, broadcast input, and sync through a folder, SFTP, Git or an SMB share.
+Reacher CM adds what people moving from Remote Desktop Manager and similar tools miss most: importing from RDM, saved credentials shared by many sessions, session notes, Telnet, broadcast input, and sync through a folder, SFTP, Git, an SMB share or an S3 bucket.
 
 ## Added in Reacher CM
 
@@ -39,7 +39,8 @@ Reacher CM adds what people moving from Remote Desktop Manager and similar tools
 - **Telnet sessions** for switches, routers and console servers, with automatic login.
 - **Broadcast input**: type into several terminals at once.
 - **Favorites** on the start screen, and an option to open sessions with a double click.
-- **Local-first sync**: every vault works offline and syncs in the background, through Turso, a folder, SFTP, Git or an SMB share without mounting it. Conflicting edits are kept as copies, not lost.
+- **Local-first sync**: every vault works offline and syncs in the background, through Turso, a folder, SFTP, Git, an SMB share without mounting it, or an S3 bucket (Amazon, MinIO, Backblaze B2, Wasabi, R2). Conflicting edits are kept as copies, not lost.
+- **Update checks you can switch off**, with a *Check now* button for when you want one.
 - **Czech translation**, and early **iOS** builds.
 
 See the [changelog](CHANGELOG.md) for details.
@@ -103,7 +104,7 @@ Get Reacher CM from its [releases page](https://github.com/rsipka/ReacherCM/rele
 - Android: `.apk`
 - iPhone and iPad: unsigned `.ipa` for [LiveContainer](https://github.com/LiveContainer/LiveContainer) or sideloading. Add the source `https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/apps.json` in LiveContainer's Sources tab and each release shows up as an update.
 
-Reacher CM updates itself from those releases. Reach itself is also on Scoop and in apt/dnf repositories; Reacher CM is not.
+Reacher CM updates itself from those releases. On Ubuntu, Debian, Fedora and RHEL it can also come from its signed apt and dnf repositories (stable releases only); setup is on the [website](https://rsipka.github.io/ReacherCM/#linux).
 
 ## Built with
 

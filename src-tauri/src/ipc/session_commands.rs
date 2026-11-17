@@ -743,6 +743,7 @@ pub async fn session_create(
     kind: Option<crate::state::SessionKind>,
     domain: Option<String>,
     detected_os: Option<String>,
+    os_manual: Option<bool>,
     share_path: Option<String>,
     via_session_id: Option<String>,
     try_agent_keys: Option<bool>,
@@ -753,6 +754,7 @@ pub async fn session_create(
     notes: Option<String>,
     custom_fields: Option<Vec<crate::state::CustomField>>,
     terminal_theme: Option<String>,
+    monitoring: Option<bool>,
     history: Option<String>,
 ) -> Result<SessionConfig, String> {
     let mut manager = state.vault_manager.lock().await;
@@ -799,6 +801,7 @@ pub async fn session_create(
         detected_os: detected_os
             .filter(|os| !os.is_empty())
             .or_else(|| (kind == crate::state::SessionKind::Rdp).then(|| "windows".to_string())),
+        os_manual: os_manual.unwrap_or(false),
         vault_id: if storage_vault_id != ensure_sessions_vault(&mut manager).await.unwrap_or_default() {
             Some(storage_vault_id.clone())
         } else {
@@ -814,6 +817,7 @@ pub async fn session_create(
         notes,
         custom_fields,
         terminal_theme,
+        monitoring,
         history,
         credential_ref_approvals: Default::default(),
     };
@@ -2379,5 +2383,22 @@ mod documentation_tests {
         let mut blank = session(serde_json::json!({ "terminal_theme": " " }));
         blank.tidy_documentation();
         assert!(blank.terminal_theme.is_none());
+    }
+
+    #[test]
+    fn a_hand_picked_os_is_marked_and_automatic_left_out() {
+        let picked = serde_json::to_value(session(serde_json::json!({ "detected_os": "debian", "os_manual": true }))).unwrap();
+        assert_eq!(picked["os_manual"], true);
+        let found = serde_json::to_value(session(serde_json::json!({ "detected_os": "debian" }))).unwrap();
+        assert!(found.get("os_manual").is_none());
+    }
+
+    #[test]
+    fn a_monitoring_override_is_kept_and_unset_left_out() {
+        let off = serde_json::to_value(session(serde_json::json!({ "monitoring": false }))).unwrap();
+        assert_eq!(off["monitoring"], false);
+        let on = serde_json::to_value(session(serde_json::json!({ "monitoring": true }))).unwrap();
+        assert_eq!(on["monitoring"], true);
+        assert!(serde_json::to_value(session(serde_json::json!({}))).unwrap().get("monitoring").is_none());
     }
 }

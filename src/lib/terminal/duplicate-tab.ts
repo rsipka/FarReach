@@ -61,5 +61,6 @@ export async function duplicateTab(id: string): Promise<void> {
 function keepSession(tab: Tab, from: Tab): void {
 	tab.sessionId = from.sessionId;
 	tab.terminalTheme = from.terminalTheme;
+	tab.monitoring = from.monitoring;
 	tab.historyMode = from.historyMode;
 }

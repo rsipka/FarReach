@@ -3,6 +3,8 @@
 	import Modal from '#lib/components/shared/Modal.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
 	import KeyPicker from './KeyPicker.svelte';
+	import DistroIcon from './DistroIcon.svelte';
+	import { osChoices } from '#lib/data/distro-icons.js';
 	import Input from '#lib/components/shared/Input.svelte';
 	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField } from '#lib/ipc/sessions.js';
 	import { isWindows } from '#lib/platform.js';
@@ -10,7 +12,8 @@
 	import Disclosure from '#lib/components/shared/Disclosure.svelte';
 	import TerminalThemeList from '#lib/components/terminal/TerminalThemeList.svelte';
 	import { findTerminalTheme, terminalPalette } from '#lib/state/terminal-themes.svelte.js';
-	import { setSessionTerminalTheme } from '#lib/state/tabs.svelte.js';
+	import { setSessionTerminalTheme, setSessionMonitoring } from '#lib/state/tabs.svelte.js';
+	import { getSettings } from '#lib/state/settings.svelte.js';
 	import SecretRefField from '#lib/components/pwmanager/SecretRefField.svelte';
 	import type { EntrySummary, SecretRef } from '#lib/ipc/pwmanager.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -45,6 +48,15 @@
 	let domain = $state('');
 	/** RDP only: the protocol cannot say what the machine is (xrdp claims to be Windows), so the user does. */
 	let os = $state<'windows' | 'linux'>('windows');
+	// The OS found on the last connect is kept for good; Clear forgets it, so
+	// the next connect looks again. (From the ReachQ fork by CPTProgrammer.)
+	let osCleared = $state(false);
+	// An icon picked by hand ('' = found on connect for SSH, none otherwise).
+	// A picked one is kept: connecting never replaces it.
+	let osChoice = $state('');
+	const osOptions = osChoices();
+	let autoOs = $derived(editSession && !editSession.os_manual && kind === sessionKind(editSession) && !osCleared ? (editSession.detected_os ?? '') : '');
+	let osTitle = (id: string) => (id === 'unknown' ? t('session.os_none') : (osOptions.find((o) => o.id === id)?.title ?? id));
 	let sharePath = $state('');
 	/** VNC only: the saved SSH session to go through, or '' for direct. */
 	let viaSessionId = $state('');
@@ -195,6 +207,8 @@
 	});
 	/** The terminal theme its tabs use; empty: the default from Settings. */
 	let terminalTheme = $state('');
+	/** Server monitoring for its tabs: '' the default from Settings. */
+	let monitoringChoice = $state<'' | 'on' | 'off'>('');
 	/** What its tabs record into the session history; empty: the default from Settings. */
 	let historyChoice = $state<'' | HistoryMode>('');
 	let colorsOpen = $state(false);
@@ -238,6 +252,8 @@
 	});
 
 	function fillForm(editSession: SessionConfig | undefined): void {
+		osCleared = false;
+		osChoice = editSession?.os_manual ? (editSession.detected_os ?? '') : '';
 		if (editSession) {
 			kind = sessionKind(editSession);
 			domain = editSession.domain ?? '';
@@ -267,6 +283,7 @@
 			customFields = (editSession.custom_fields ?? []).map((f) => ({ ...f, hidden: !!f.hidden, shown: false }));
 			docsOpen = !!notes.trim() || customFields.length > 0;
 			terminalTheme = editSession.terminal_theme ?? '';
+			monitoringChoice = editSession.monitoring == null ? '' : editSession.monitoring ? 'on' : 'off';
 			historyChoice = editSession.history ?? '';
 			colorsOpen = false;
 			if (editSession.jump_chain && editSession.jump_chain.length > 0) {
@@ -328,6 +345,7 @@
 			customFields = [];
 			docsOpen = false;
 			terminalTheme = '';
+			monitoringChoice = '';
 			historyChoice = '';
 			colorsOpen = false;
 			jumpEnabled = false;
@@ -394,6 +412,8 @@
 		const notesToSave = notes.trim() ? notes : null;
 		// Remote desktops paint their own screen: no terminal colours.
 		const themeToSave = kind === 'rdp' || kind === 'vnc' ? null : terminalTheme || null;
+		// Only SSH and WSL sessions have a server to monitor.
+		const monitoringToSave = (kind === 'ssh' || kind === 'wsl') && monitoringChoice ? monitoringChoice === 'on' : null;
 		const historyToSave = kind === 'rdp' || kind === 'vnc' ? null : historyChoice || null;
 		const fieldsToSave: CustomField[] = customFields
 			.filter((f) => f.name.trim() || f.value.trim())
@@ -462,7 +482,11 @@
 					kind,
 					domain: filled ? (editSession.domain ?? null) : rdp ? (domain.trim() || null) : null,
 					// A session that changed protocol changed machine type too.
-					detected_os: rdp ? os : (kind === sessionKind(editSession) ? editSession.detected_os : null),
+					// Picked by hand: kept. Automatic: what the last connect
+					// found, unless cleared, switched from a picked one, or
+					// the protocol changed (so did the machine type).
+					detected_os: rdp ? os : osChoice ? osChoice : autoOs || null,
+					os_manual: !rdp && !!osChoice,
 					share_path: rdp ? (sharePath.trim() || null) : null,
 					via_session_id: via,
 					try_agent_keys: !desktop && authType === 'Key' && tryAgentKeys ? true : null,
@@ -474,10 +498,12 @@
 					notes: notesToSave,
 					custom_fields: fieldsToSave.length ? fieldsToSave : null,
 					terminal_theme: themeToSave,
+					monitoring: monitoringToSave,
 					history: historyToSave,
 				});
-				// Its open tabs take the new colours at once.
+				// Its open tabs take the new colours (and monitoring choice) at once.
 				setSessionTerminalTheme(editSession.id, themeToSave);
+				setSessionMonitoring(editSession.id, monitoringToSave);
 			} else {
 				await sessionCreate({
 					name: name.trim(),
@@ -493,7 +519,8 @@
 					shell: desktop ? null : (shell.trim() || null),
 					kind,
 					domain: rdp ? domain : null,
-					detectedOs: rdp ? os : null,
+					detectedOs: rdp ? os : (osChoice || null),
+					osManual: !rdp && !!osChoice,
 					sharePath: rdp ? sharePath : null,
 					viaSessionId: via,
 					tryAgentKeys: !desktop && authType === 'Key' && tryAgentKeys,
@@ -504,6 +531,7 @@
 					notes: notesToSave,
 					customFields: fieldsToSave,
 					terminalTheme: themeToSave,
+					monitoring: monitoringToSave,
 					history: historyToSave
 				});
 			}
@@ -971,6 +999,37 @@
 
 		<Input label={t('session.tags')} bind:value={tagsStr} placeholder={kind === 'rdp' ? 'office, windows' : 'production, web, linux'} disabled={saving} />
 
+		{#if kind === 'ssh' || kind === 'telnet' || kind === 'vnc'}
+			<div class="folder-section">
+				<span class="folder-label">{t('session.os_icon')}</span>
+				<div class="os-row">
+					<span class="os-preview"><DistroIcon osId={osChoice || autoOs} size={16} /></span>
+					<select class="folder-select os-select" bind:value={osChoice} disabled={saving}>
+						{#if kind === 'ssh'}
+							<option value="">{autoOs ? t('session.os_auto_detected', { os: osTitle(autoOs) }) : t('session.os_auto')}</option>
+							<option value="unknown">{t('session.os_none')}</option>
+						{:else}
+							<option value="">{t('session.os_none')}</option>
+						{/if}
+						{#if osChoice && osChoice !== 'unknown' && !osOptions.some((o) => o.id === osChoice)}
+							<option value={osChoice}>{osChoice}</option>
+						{/if}
+						{#each osOptions as o (o.id)}
+							<option value={o.id}>{o.title}</option>
+						{/each}
+					</select>
+					{#if kind === 'ssh' && !osChoice && autoOs}
+						<Button variant="secondary" size="sm" onclick={() => (osCleared = true)} disabled={saving}>
+							{t('session.os_clear')}
+						</Button>
+					{/if}
+				</div>
+				{#if kind === 'ssh' && !osChoice && osCleared}
+					<span class="os-cleared">{t('session.os_cleared')}</span>
+				{/if}
+			</div>
+		{/if}
+
 		{#if folders.length > 0}
 			<div class="folder-section">
 				<span class="folder-label">{t('session.folder')}</span>
@@ -1001,6 +1060,17 @@
 					<option value="off">{t('history.mode_off')}</option>
 					<option value="commands">{t('history.mode_commands')}</option>
 					<option value="output">{t('history.mode_output')}</option>
+				</select>
+			</div>
+		{/if}
+
+		{#if kind === 'ssh' || kind === 'wsl'}
+			<div class="folder-section">
+				<span class="folder-label">{t('session.monitoring')}</span>
+				<select class="folder-select" bind:value={monitoringChoice} disabled={saving}>
+					<option value="">{getSettings().serverMonitoring ? t('session.monitoring_default_on') : t('session.monitoring_default_off')}</option>
+					<option value="on">{t('session.monitoring_on')}</option>
+					<option value="off">{t('session.monitoring_off')}</option>
 				</select>
 			</div>
 		{/if}
@@ -1105,6 +1175,29 @@
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
+	}
+
+	.os-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.os-preview {
+		display: inline-flex;
+		width: 16px;
+		justify-content: center;
+		flex-shrink: 0;
+	}
+
+	.os-select {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.os-cleared {
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
 	}
 
 	.folder-label {

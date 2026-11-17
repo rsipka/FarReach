@@ -93,6 +93,10 @@ pub struct SessionConfig {
     pub tags: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detected_os: Option<String>,
+    /// `detected_os` was picked by hand in the session editor, so connecting
+    /// never replaces it. False: found on connect (SSH) or not set.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub os_manual: bool,
     /// Which vault this session belongs to (None = private __sessions__ vault)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vault_id: Option<String>,
@@ -138,6 +142,11 @@ pub struct SessionConfig {
     /// chosen in Settings. Kept on the session, so it syncs with it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal_theme: Option<String>,
+    /// Server monitoring (CPU, memory, disk, users in the bar under the
+    /// terminal) for this session's tabs: on or off; unset: the default
+    /// chosen in Settings. Kept on the session, so it syncs with it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub monitoring: Option<bool>,
     /// What this session's tabs record into the session history: `off`,
     /// `commands` or `output`; unset: the default chosen in Settings.
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -55,7 +55,8 @@
 	import { untrack } from 'svelte';
 	import { positionMenu } from '#lib/utils/positionMenu.js';
 	import { buildFolderTree, canMoveFolder, folderPath, type FolderTreeNode } from '#lib/sessions/folder-tree.js';
-	import { vaultState, checkState, initIdentity, importIdentity, ALL_VAULTS, loadVaultFilter, type VaultFilter } from '#lib/state/vault.svelte.js';
+	import { canScanLinkCode, scanLinkCode } from '#lib/state/link-scan.js';
+	import { vaultState, checkState, initIdentity, importIdentity, linkDevice, ALL_VAULTS, loadVaultFilter, type VaultFilter } from '#lib/state/vault.svelte.js';
 
 	let showQuickConnect = $state(false);
 	let showRdpConnect = $state(false);
@@ -669,6 +670,7 @@
 	let initError = $state('');
 	let importKey = $state('');
 	let importing = $state(false);
+	let linkCode = $state('');
 
 	// Connect prompt state
 	let connectSession = $state<SessionConfig | undefined>();
@@ -835,6 +837,7 @@
 		);
 		tab.sessionId = session.id;
 		tab.terminalTheme = session.terminal_theme ?? null;
+		tab.monitoring = session.monitoring ?? null;
 		tab.historyMode = session.history ?? null;
 		addToast(t('session.connected_toast', { name: session.name }), 'success');
 	}
@@ -1092,6 +1095,7 @@
 			tab.sshConnectParams = connectParams;
 			tab.sessionId = session.id;
 			tab.terminalTheme = session.terminal_theme ?? null;
+			tab.monitoring = session.monitoring ?? null;
 			tab.historyMode = session.history ?? null;
 			addToast(t('session.connected_toast', { name: session.name }), 'success');
 			connectSession = undefined;
@@ -1099,7 +1103,7 @@
 			fallbackPassword = '';
 
 			// Detect OS in background and persist to session
-			if (!session.detected_os) {
+			if (!session.detected_os && !session.os_manual) {
 				sshDetectOs(id).then(async (osId) => {
 					if (osId) {
 						updateTabOs(id, osId);
@@ -1241,6 +1245,35 @@
 		}
 	}
 
+	// First run on another device: open the vaults the first one syncs
+	async function handleLink(): Promise<void> {
+		importing = true;
+		initError = '';
+		try {
+			await linkDevice(linkCode.trim());
+			linkCode = '';
+			await loadSessions();
+			addToast(t('sync.joined_toast'), 'success');
+		} catch (err) {
+			initError = String(err);
+		} finally {
+			importing = false;
+		}
+	}
+
+	async function handleScanLink(): Promise<void> {
+		initError = '';
+		try {
+			const code = await scanLinkCode();
+			if (code) {
+				linkCode = code;
+				await handleLink();
+			}
+		} catch (err) {
+			initError = String(err);
+		}
+	}
+
 	// Reset - delete existing data and start fresh
 	async function handleReset(): Promise<void> {
 		// Delete identity file and vaults to start fresh
@@ -1345,9 +1378,26 @@
 			{#if initError}
 				<p class="init-error">{initError}</p>
 			{/if}
-			<button class="init-btn" onclick={handleInitialize} disabled={initializing}>
+			<button class="init-btn" onclick={handleInitialize} disabled={initializing || importing}>
 				{#if initializing}{t('session.initializing')}{:else}{t('session.initialize')}{/if}
 			</button>
+			<!-- Or join the vaults another device already syncs -->
+			<p class="init-desc">{t('session.link_device_hint')}</p>
+			<input
+				class="import-input"
+				type="password"
+				placeholder={t('session.paste_link_code')}
+				bind:value={linkCode}
+				disabled={importing || initializing}
+			/>
+			<div class="recovery-buttons">
+				{#if canScanLinkCode()}
+					<button class="reset-btn" onclick={handleScanLink} disabled={importing || initializing}>{t('sync.scan_qr')}</button>
+				{/if}
+				<button class="reset-btn" onclick={handleLink} disabled={importing || initializing || !linkCode.trim()}>
+					{#if importing}{t('sync.joining')}{:else}{t('sync.join')}{/if}
+				</button>
+			</div>
 		</div>
 	{:else if keychainError}
 		<!-- Keychain error: data exists but can't access key -->

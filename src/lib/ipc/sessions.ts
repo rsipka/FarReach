@@ -42,6 +42,8 @@ export interface SessionConfig {
   folder_id: string | null;
   tags: string[];
   detected_os?: string | null;
+  /** detected_os was picked by hand, so connecting never replaces it. */
+  os_manual?: boolean;
   vault_id?: string | null; // Which vault this session belongs to
   jump_chain?: JumpHostConfig[] | null; // ProxyJump chain
   proxy?: ProxySessionConfig | null; // Proxy config (SOCKS5/Tor, HTTP)
@@ -76,6 +78,9 @@ export interface SessionConfig {
   /** The terminal colours its tabs use, by terminal theme id; unset: the
    *  default from Settings (see #lib/state/terminal-themes). */
   terminal_theme?: string | null;
+  /** Server monitoring for its tabs, on or off; unset: the default from
+   *  Settings. */
+  monitoring?: boolean | null;
   /** What its tabs record into the session history; unset: the default
    *  from Settings. */
   history?: HistoryMode | null;
@@ -173,6 +178,7 @@ export async function sessionCreate(params: {
   domain?: string | null;
   /** For RDP: what the machine is, since the protocol cannot say. */
   detectedOs?: string | null;
+  osManual?: boolean;
   sharePath?: string | null;
   viaSessionId?: string | null;
   tryAgentKeys?: boolean | null;
@@ -183,6 +189,7 @@ export async function sessionCreate(params: {
   notes?: string | null;
   customFields?: CustomField[] | null;
   terminalTheme?: string | null;
+  monitoring?: boolean | null;
   history?: HistoryMode | null;
 }): Promise<SessionConfig> {
   return invoke<SessionConfig>('session_create', {
@@ -200,6 +207,7 @@ export async function sessionCreate(params: {
     kind: params.kind ?? 'ssh',
     domain: params.domain?.trim() ? params.domain.trim() : null,
     detectedOs: params.detectedOs ?? null,
+    osManual: params.osManual || null,
     sharePath: params.sharePath?.trim() ? params.sharePath.trim() : null,
     viaSessionId: params.viaSessionId || null,
     tryAgentKeys: params.tryAgentKeys || null,
@@ -210,6 +218,7 @@ export async function sessionCreate(params: {
     notes: params.notes?.trim() ? params.notes : null,
     customFields: params.customFields?.length ? params.customFields : null,
     terminalTheme: params.terminalTheme || null,
+    monitoring: params.monitoring ?? null,
     history: params.history || null,
   });
 }

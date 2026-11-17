@@ -25,6 +25,12 @@ export interface Settings {
 	/** A session that ends on its own (exit typed, the shell finished) closes
 	 *  its tab rather than offering Reconnect. A dropped connection still does. */
 	closeTabOnExit: boolean;
+	/** Server monitoring (CPU, memory, disk, users under an SSH or WSL
+	 *  terminal), unless the session chooses otherwise. */
+	serverMonitoring: boolean;
+	/** Look for a new release at launch and every 45 minutes. Off: only
+	 *  Settings > General > Check now asks, so nothing goes out on its own. */
+	checkForUpdates: boolean;
 	fontFamily: string;
 	defaultShell: string;
 	openLastSession: boolean;
@@ -161,6 +167,8 @@ const defaults: Settings = {
 	compactLayout: false,
 	doubleClickToOpen: false,
 	closeTabOnExit: false,
+	serverMonitoring: true,
+	checkForUpdates: true,
 	fontFamily: 'monospace',
 	defaultShell: '/bin/bash',
 	openLastSession: false,
@@ -268,6 +276,8 @@ export function loadSettings(): void {
 			settings.compactLayout = parsed.compactLayout ?? defaults.compactLayout;
 			settings.doubleClickToOpen = parsed.doubleClickToOpen ?? defaults.doubleClickToOpen;
 			settings.closeTabOnExit = parsed.closeTabOnExit ?? defaults.closeTabOnExit;
+			settings.serverMonitoring = parsed.serverMonitoring ?? defaults.serverMonitoring;
+			settings.checkForUpdates = parsed.checkForUpdates ?? defaults.checkForUpdates;
 			settings.fontFamily = parsed.fontFamily ?? defaults.fontFamily;
 			settings.defaultShell = parsed.defaultShell ?? defaults.defaultShell;
 			settings.openLastSession = parsed.openLastSession ?? defaults.openLastSession;

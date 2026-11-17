@@ -49,6 +49,9 @@ export interface Tab {
 	sessionId?: string;
 	/** That session's terminal theme id; unset: the default from Settings. */
 	terminalTheme?: string | null;
+	/** That session's server monitoring choice; unset: the default from
+	 *  Settings (see monitoringWanted). */
+	monitoring?: boolean | null;
 	/** That session's history choice; unset: the default from Settings. */
 	historyMode?: HistoryMode | null;
 }
@@ -422,6 +425,13 @@ export function placeAfter(tabId: string, refId: string): void {
  * A session's terminal theme changed: its open tabs take the new colours at
  * once. Only the theme; the rest of a tab stays as it was opened.
  */
+/** A session's monitoring choice changed: its open tabs follow at once. */
+export function setSessionMonitoring(sessionId: string, monitoring: boolean | null | undefined): void {
+	for (const tab of tabs) {
+		if (tab.sessionId === sessionId) tab.monitoring = monitoring ?? null;
+	}
+}
+
 export function setSessionTerminalTheme(sessionId: string, themeId: string | null | undefined): void {
 	for (const tab of tabs) {
 		if (tab.sessionId === sessionId) tab.terminalTheme = themeId ?? null;
