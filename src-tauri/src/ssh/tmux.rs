@@ -165,7 +165,8 @@ mod tests {
     }
 
     /// Runs the script with a fake tmux on PATH: what it was asked to do.
-    #[cfg(unix)]
+    /// Not on Android, whose shell is not at /bin/sh.
+    #[cfg(all(unix, not(target_os = "android")))]
     fn run_with_fake_tmux(attached: bool, have_tmux: bool) -> String {
         use std::process::Command;
         let dir = std::env::temp_dir().join(format!("reacher-tmux-test-{}-{attached}-{have_tmux}", std::process::id()));
@@ -177,7 +178,7 @@ mod tests {
             std::fs::write(
                 &fake,
                 format!(
-                    "#!/bin/sh\ncase \"$1\" in -TRGB) exit 0;; list-clients) {clients}; exit 0;; esac\necho \"$@\" >> {}\n",
+                    "#!/bin/sh\ncase \"$*\" in '-TRGB -V') exit 0;; list-clients*) {clients}; exit 0;; esac\necho \"$@\" >> {}\n",
                     log.display()
                 ),
             )
@@ -205,19 +206,19 @@ mod tests {
         format!("{}{}", logged, String::from_utf8_lossy(&out.stdout))
     }
 
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "android")))]
     #[test]
     fn the_script_attaches_or_creates() {
         assert_eq!(run_with_fake_tmux(false, true).trim(), "-TRGB new-session -A -s w say -l");
     }
 
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "android")))]
     #[test]
     fn the_script_joins_as_a_group_when_someone_is_attached() {
         assert_eq!(run_with_fake_tmux(true, true).trim(), "-TRGB new-session -t =w ; set-option destroy-unattached on");
     }
 
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "android")))]
     #[test]
     fn without_tmux_the_script_says_so_and_runs_the_shell() {
         let out = run_with_fake_tmux(false, false);
