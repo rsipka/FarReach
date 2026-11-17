@@ -70,7 +70,7 @@ const TERMINAL_KEYS: &[&str] = &[
 ];
 
 /// iTerm2-Color-Schemes' scheme files. Settings downloads one from here when
-/// someone asks for a scheme by name that FarReach does not bundle (see
+/// someone asks for a scheme by name that the app does not bundle (see
 /// scripts/gen-terminal-schemes.py), so it is their own download.
 const ITERM_SCHEMES_BASE: &str =
     "https://raw.githubusercontent.com/mbadolato/iTerm2-Color-Schemes/master/schemes/";

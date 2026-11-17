@@ -69,10 +69,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          if gh release download --repo "$GITHUB_REPOSITORY" --pattern rpm-repodata.tar.gz --pattern farreach-packages.asc --dir repo-dl 2>/dev/null; then
+          if gh release download --repo "$GITHUB_REPOSITORY" --pattern rpm-repodata.tar.gz --pattern reachercm-packages.asc --dir repo-dl 2>/dev/null; then
             mkdir -p docs/dist/rpm
             tar -xzf repo-dl/rpm-repodata.tar.gz -C docs/dist/rpm
-            cp repo-dl/farreach-packages.asc docs/dist/farreach-packages.asc
+            cp repo-dl/reachercm-packages.asc docs/dist/reachercm-packages.asc
           else
             echo "The latest release has no dnf repository yet."
           fi

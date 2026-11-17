@@ -46,7 +46,7 @@ export function clearChat(): void {
 }
 
 function buildSystemPrompt(context?: { connectionId?: string; host?: string; username?: string; os?: string; terminalOutput?: string }): string {
-	let prompt = 'You are a helpful assistant embedded in FarReach, an SSH & remote server management tool. Provide concise, technical answers about Linux/Unix administration, SSH, networking, and shell scripting. When suggesting commands, use fenced code blocks so the user can run them directly.';
+	let prompt = 'You are a helpful assistant embedded in Reacher CM, an SSH & remote server management tool. Provide concise, technical answers about Linux/Unix administration, SSH, networking, and shell scripting. When suggesting commands, use fenced code blocks so the user can run them directly.';
 	if (context?.host || context?.username || context?.os) {
 		prompt += '\n\nCurrent session context:';
 		if (context.host) prompt += `\n- Host: ${context.host}`;

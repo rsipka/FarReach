@@ -143,7 +143,7 @@ export async function loadCustomTerminalThemes(): Promise<void> {
 }
 
 async function store(next: CustomTerminalTheme[]): Promise<void> {
-	if (!terminalThemes.loaded) throw new Error('Unlock FarReach first');
+	if (!terminalThemes.loaded) throw new Error('Unlock the vault first');
 	await settingsIpc.set(STORE_KEY, JSON.stringify(next));
 	terminalThemes.custom = next;
 }

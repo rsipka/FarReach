@@ -2836,7 +2836,7 @@
   "termtheme.edit": "Modifier",
   "termtheme.delete": "Supprimer",
   "termtheme.import": "Importer un fichier...",
-  "termtheme.locked": "Déverrouillez FarReach pour créer, importer ou télécharger vos propres thèmes.",
+  "termtheme.locked": "Déverrouillez Reach pour créer, importer ou télécharger vos propres thèmes.",
   "termtheme.more_title": "Plus de schémas depuis iTerm2-Color-Schemes",
   "termtheme.more_hint": "{{count}} autres schémas, téléchargés depuis GitHub seulement quand vous en choisissez un. Les licences de leurs auteurs s'appliquent ; voir",
   "termtheme.more_search": "Rechercher par nom, p. ex. Homebrew",

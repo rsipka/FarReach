@@ -2836,7 +2836,7 @@
   "termtheme.edit": "Edit",
   "termtheme.delete": "Delete",
   "termtheme.import": "Import file...",
-  "termtheme.locked": "Unlock FarReach to make, import or download your own themes.",
+  "termtheme.locked": "Unlock Reach to make, import or download your own themes.",
   "termtheme.more_title": "More schemes from iTerm2-Color-Schemes",
   "termtheme.more_hint": "{{count}} more schemes, downloaded from GitHub only when you pick one. Their authors' licences apply; see",
   "termtheme.more_search": "Search by name, e.g. Homebrew",

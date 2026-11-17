@@ -2836,7 +2836,7 @@
   "termtheme.edit": "Modifica",
   "termtheme.delete": "Elimina",
   "termtheme.import": "Importa file...",
-  "termtheme.locked": "Sblocca FarReach per creare, importare o scaricare i tuoi temi.",
+  "termtheme.locked": "Sblocca Reach per creare, importare o scaricare i tuoi temi.",
   "termtheme.more_title": "Altri schemi da iTerm2-Color-Schemes",
   "termtheme.more_hint": "Altri {{count}} schemi, scaricati da GitHub solo quando ne scegli uno. Valgono le licenze dei loro autori; vedi",
   "termtheme.more_search": "Cerca per nome, es. Homebrew",

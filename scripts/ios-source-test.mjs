@@ -39,22 +39,22 @@ const rel = (tag, published, assets, extra = {}) => ({
 const ipa = (name, size) => ({ name, size, browser_download_url: `https://x/untagged-1/${name}` });
 
 const releases = [
-	rel('v1.1.0', null, [ipa('FarReach_1.1.0_ios.ipa', 300), { name: 'latest.json', size: 1 }], { draft: true }),
-	rel('v1.0.0', '2026-11-20T10:00:00Z', [ipa('FarReach_1.0.0_ios.ipa', 200)]),
-	rel('v1.0.1-beta', '2026-11-25T10:00:00Z', [ipa('FarReach_1.0.1-beta_ios.ipa', 250)], { prerelease: true }),
-	rel('v0.9.2', '2026-11-10T10:00:00Z', [{ name: 'FarReach_0.9.2_amd64.deb', size: 5 }]),
-	rel('v0.9.9', '2026-11-18T10:00:00Z', [ipa('FarReach_0.9.9_ios.ipa', 150)]),
+	rel('v1.1.0', null, [ipa('ReacherCM_1.1.0_ios.ipa', 300), { name: 'latest.json', size: 1 }], { draft: true }),
+	rel('v1.0.0', '2026-11-20T10:00:00Z', [ipa('ReacherCM_1.0.0_ios.ipa', 200)]),
+	rel('v1.0.1-beta', '2026-11-25T10:00:00Z', [ipa('ReacherCM_1.0.1-beta_ios.ipa', 250)], { prerelease: true }),
+	rel('v0.9.2', '2026-11-10T10:00:00Z', [{ name: 'ReacherCM_0.9.2_amd64.deb', size: 5 }]),
+	rel('v0.9.9', '2026-11-18T10:00:00Z', [ipa('ReacherCM_0.9.9_ios.ipa', 150)]),
 	rel('v0.0.1', null, [ipa('old.ipa', 1)], { draft: true }),
 ];
 const now = new Date('2026-12-01T12:00:00Z');
-const src = buildSource({ releases, tag: 'v1.1.0', repo: 'rsipka/FarReach', now, privacy: { NSLocalNetworkUsageDescription: 'x' } });
+const src = buildSource({ releases, tag: 'v1.1.0', repo: 'rsipka/ReacherCM', now, privacy: { NSLocalNetworkUsageDescription: 'x' } });
 const app = src.apps[0];
 
 console.log('\nversions');
 eq('newest first, then by publish date; pre-releases in, other drafts and IPA-less releases out',
 	app.versions.map((v) => v.marketingVersion), ['1.1.0', '1.0.1-beta', '1.0.0', '0.9.9']);
 eq('download URL by tag, not the draft asset URL', app.versions[0].downloadURL,
-	'https://github.com/rsipka/FarReach/releases/download/v1.1.0/FarReach_1.1.0_ios.ipa');
+	'https://github.com/rsipka/ReacherCM/releases/download/v1.1.0/ReacherCM_1.1.0_ios.ipa');
 eq('size in bytes from the asset', app.versions.map((v) => v.size), [300, 250, 200, 150]);
 eq('the release being made is dated now', app.versions[0].date, '2026-12-01T12:00:00.000Z');
 eq('older ones keep their publish date', app.versions[2].date, '2026-11-20T10:00:00.000Z');
@@ -69,7 +69,7 @@ eq('downloadURL', app.downloadURL, app.versions[0].downloadURL);
 eq('size', app.size, 300);
 
 console.log('\nsource');
-eq('bundle id', app.bundleIdentifier, 'com.farreach.client');
+eq('bundle id', app.bundleIdentifier, 'com.reachercm.client');
 eq('privacy passed through', app.appPermissions, { entitlements: [], privacy: { NSLocalNetworkUsageDescription: 'x' } });
 throws('a release with no IPA is refused', () => buildSource({ releases, tag: 'v0.9.2', repo: 'a/b' }));
 

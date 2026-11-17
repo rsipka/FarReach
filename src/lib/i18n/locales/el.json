@@ -2836,7 +2836,7 @@
   "termtheme.edit": "Επεξεργασία",
   "termtheme.delete": "Διαγραφή",
   "termtheme.import": "Εισαγωγή αρχείου...",
-  "termtheme.locked": "Ξεκλειδώστε το FarReach για να δημιουργήσετε, εισαγάγετε ή κατεβάσετε δικά σας θέματα.",
+  "termtheme.locked": "Ξεκλειδώστε το Reach για να δημιουργήσετε, εισαγάγετε ή κατεβάσετε δικά σας θέματα.",
   "termtheme.more_title": "Περισσότερα σχήματα από το iTerm2-Color-Schemes",
   "termtheme.more_hint": "Άλλα {{count}} σχήματα, που κατεβαίνουν από το GitHub μόνο όταν επιλέξετε ένα. Ισχύουν οι άδειες των δημιουργών τους· δείτε",
   "termtheme.more_search": "Αναζήτηση με όνομα, π.χ. Homebrew",

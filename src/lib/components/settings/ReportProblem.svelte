@@ -85,7 +85,7 @@
 				'---',
 				system,
 				...(problems.length ? ['', 'Recent warnings and errors (cleaned):', '```', ...problems, '```'] : []),
-				...(attach ? ['', '_Log: drag reach-report.log from the folder FarReach opened into this box._'] : [])
+				...(attach ? ['', '_Log: drag reach-report.log from the folder Reacher CM opened into this box._'] : [])
 			].join('\n');
 			return `${NEW_ISSUE}?body=${encodeURIComponent(body)}`;
 		};

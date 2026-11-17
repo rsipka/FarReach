@@ -1,35 +1,37 @@
 <p align="center">
-  <img src="src-tauri/icons/128x128.png" alt="FarReach" width="80" />
+  <img src="src-tauri/icons/128x128.png" alt="Reacher CM" width="80" />
 </p>
 
-<h1 align="center">FarReach</h1>
+<h1 align="center">Reacher CM</h1>
 
 <p align="center">
-  A fork of <a href="https://github.com/alexandrosnt/Reach">Reach</a>, the modern, cross-platform SSH client and remote management tool.
+  A personal fork of <a href="https://github.com/alexandrosnt/Reach">Reach</a>, the modern, cross-platform SSH client and remote management tool, with additional features.
 </p>
 
 <p align="center">
-  <a href="https://github.com/rsipka/FarReach/releases">Download</a> · <a href="https://github.com/rsipka/FarReach/issues">Report a Bug</a> · <a href="https://reachssh.com/">Reach documentation</a> · <a href="https://github.com/alexandrosnt/Reach">Upstream Reach</a>
+  <a href="https://github.com/rsipka/ReacherCM/releases">Download</a> · <a href="https://github.com/rsipka/ReacherCM/issues">Report a Bug</a> · <a href="https://reachssh.com/">Reach documentation</a> · <a href="https://github.com/alexandrosnt/Reach">Upstream Reach</a>
 </p>
 
-> **FarReach is built on Reach** by [Alexander Nt.](https://github.com/alexandrosnt) and the
+> **Reacher CM is built on Reach** by [Alexander Nt.](https://github.com/alexandrosnt) and the
 > [Reach contributors](https://github.com/alexandrosnt/Reach/graphs/contributors). Almost everything
-> here is their work. FarReach adds features that are tested here first and offered back to Reach
-> as pull requests; most of them are meant to land upstream. If you don't need what FarReach adds,
-> use [Reach](https://github.com/alexandrosnt/Reach) itself.
+> here is their work. Reacher CM is a personal fork that adds features of its own on top. If you don't
+> need what Reacher CM adds, use [Reach](https://github.com/alexandrosnt/Reach) itself.
 >
-> FarReach has its own app id, data folder and keychain entries, so it installs and runs next to
+> **AI-assisted:** most of the code Reacher CM adds is written with AI coding tools
+> ([Claude Code](https://claude.com/claude-code)), reviewed and tested by the maintainer.
+>
+> Reacher CM has its own app id, data folder and keychain entries, so it installs and runs next to
 > Reach. It starts empty: restore a Reach backup or point it at your sync location to bring data over.
 
 ---
 
-## Why FarReach?
+## Why Reacher CM?
 
-PuTTY hasn't changed in decades, MobaXterm is Windows-only, and Termius charges a subscription for the basics. Reach, which FarReach is built on, is an SSH client built from scratch: native Rust networking, a fast UI, encrypted storage, and the same app on Windows, macOS, Linux and Android. No Electron, no subscription, no account.
+PuTTY hasn't changed in decades, MobaXterm is Windows-only, and Termius charges a subscription for the basics. Reach, which Reacher CM is built on, is an SSH client built from scratch: native Rust networking, a fast UI, encrypted storage, and the same app on Windows, macOS, Linux and Android. No Electron, no subscription, no account.
 
-FarReach adds what people moving from Remote Desktop Manager and similar tools miss most: importing from RDM, saved credentials shared by many sessions, session notes, Telnet, broadcast input, and sync through a folder, SFTP, Git or an SMB share.
+Reacher CM adds what people moving from Remote Desktop Manager and similar tools miss most: importing from RDM, saved credentials shared by many sessions, session notes, Telnet, broadcast input, and sync through a folder, SFTP, Git or an SMB share.
 
-## Added in FarReach
+## Added in Reacher CM
 
 - **Import from Remote Desktop Manager**: RDP, SSH, VNC and Telnet entries, folders, logins and notes from an RDM export.
 - **Saved credentials**: one login kept once in a vault and used by many sessions, by every session in a folder, or by a jump host.
@@ -40,7 +42,7 @@ FarReach adds what people moving from Remote Desktop Manager and similar tools m
 - **Local-first sync**: every vault works offline and syncs in the background, through Turso, a folder, SFTP, Git or an SMB share without mounting it. Conflicting edits are kept as copies, not lost.
 - **Czech translation**, and early **iOS** builds.
 
-See the [changelog](CHANGELOG.md) for details. Most of these are offered back to Reach.
+See the [changelog](CHANGELOG.md) for details.
 
 ## Features
 
@@ -93,19 +95,19 @@ Each tool is off on a fresh install. Switching one off hides it without deleting
 
 ## Download
 
-Get FarReach from its [releases page](https://github.com/rsipka/FarReach/releases):
+Get Reacher CM from its [releases page](https://github.com/rsipka/ReacherCM/releases):
 
 - Windows: `.exe`, `.msi`
 - macOS: `.dmg`, Apple silicon and Intel
 - Linux: `.AppImage`, `.deb`, `.rpm`
 - Android: `.apk`
-- iPhone and iPad: unsigned `.ipa` for [LiveContainer](https://github.com/LiveContainer/LiveContainer) or sideloading. Add the source `https://raw.githubusercontent.com/rsipka/FarReach/update-feed/apps.json` in LiveContainer's Sources tab and each release shows up as an update.
+- iPhone and iPad: unsigned `.ipa` for [LiveContainer](https://github.com/LiveContainer/LiveContainer) or sideloading. Add the source `https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/apps.json` in LiveContainer's Sources tab and each release shows up as an update.
 
-FarReach updates itself from those releases. Reach itself is also on Scoop and in apt/dnf repositories; FarReach is not.
+Reacher CM updates itself from those releases. Reach itself is also on Scoop and in apt/dnf repositories; Reacher CM is not.
 
 ## Built with
 
-[Tauri 2](https://v2.tauri.app), Rust and Svelte 5. The SSH stack is pure Rust ([russh](https://github.com/warp-tech/russh)), with no OpenSSH dependency, and the UI uses the system webview instead of a bundled Chromium, so FarReach stays small and light.
+[Tauri 2](https://v2.tauri.app), Rust and Svelte 5. The SSH stack is pure Rust ([russh](https://github.com/warp-tech/russh)), with no OpenSSH dependency, and the UI uses the system webview instead of a bundled Chromium, so Reacher CM stays small and light.
 
 | | |
 |---|---|
@@ -119,8 +121,8 @@ FarReach updates itself from those releases. Reach itself is also on Scoop and i
 You'll need [Rust](https://rustup.rs), [Node.js 22+](https://nodejs.org) and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS.
 
 ```bash
-git clone https://github.com/rsipka/FarReach.git
-cd FarReach
+git clone https://github.com/rsipka/ReacherCM.git
+cd ReacherCM
 npm install
 npm run tauri dev     # run it
 npm run tauri build   # package it
@@ -129,7 +131,7 @@ npm run tauri build   # package it
 ## Community
 
 - **[Reach Discord](https://discord.gg/CSbEybvDVV)**: the upstream Reach community.
-- **[FarReach issues](https://github.com/rsipka/FarReach/issues)**: bugs in FarReach and in the features it adds.
+- **[Reacher CM issues](https://github.com/rsipka/ReacherCM/issues)**: bugs in Reacher CM and in the features it adds.
 - **[Reach issues](https://github.com/alexandrosnt/Reach/issues)**: bugs that Reach has too belong upstream. For a larger change, open an issue there first.
 - **[Changelog](CHANGELOG.md)**: what changed in each release.
 
@@ -137,11 +139,11 @@ Pull requests, translations and recipes for the [registry](https://github.com/al
 
 ## Support Reach
 
-FarReach exists because of Reach. Reach is free and MIT licensed, and it stays that way: nothing is or ever will be paywalled. It's built in spare time with no budget, which is why the installers aren't code-signed yet. If Reach saves you time, **[GitHub Sponsors](https://github.com/sponsors/alexandrosnt)** helps pay for a signing certificate, test hardware, and more evenings spent on Reach. A good bug report or telling a colleague helps just as much.
+Reacher CM exists because of Reach. Reach is free and MIT licensed, and it stays that way: nothing is or ever will be paywalled. It's built in spare time with no budget, which is why the installers aren't code-signed yet. If Reach saves you time, **[GitHub Sponsors](https://github.com/sponsors/alexandrosnt)** helps pay for a signing certificate, test hardware, and more evenings spent on Reach. A good bug report or telling a colleague helps just as much.
 
 ## Contributors
 
-Thank you to everyone who has sent code to Reach, which FarReach is built on. The picture is drawn from the repository's own contributor list, so a merged pull request puts you in it (it can take a few days to show).
+Thank you to everyone who has sent code to Reach, which Reacher CM is built on. The picture is drawn from the repository's own contributor list, so a merged pull request puts you in it (it can take a few days to show).
 
 <a href="https://github.com/alexandrosnt/Reach/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=alexandrosnt/Reach&max=100" alt="Contributors to Reach" />

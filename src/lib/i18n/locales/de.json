@@ -2836,7 +2836,7 @@
   "termtheme.edit": "Bearbeiten",
   "termtheme.delete": "Löschen",
   "termtheme.import": "Datei importieren...",
-  "termtheme.locked": "Entsperren Sie FarReach, um eigene Designs zu erstellen, zu importieren oder herunterzuladen.",
+  "termtheme.locked": "Entsperren Sie Reach, um eigene Designs zu erstellen, zu importieren oder herunterzuladen.",
   "termtheme.more_title": "Weitere Schemata aus iTerm2-Color-Schemes",
   "termtheme.more_hint": "{{count}} weitere Schemata, erst bei Auswahl von GitHub geladen. Es gelten die Lizenzen ihrer Autoren, siehe",
   "termtheme.more_search": "Nach Namen suchen, z. B. Homebrew",

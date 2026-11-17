@@ -1,18 +1,18 @@
 /**
- * FarReach fork branding, kept in one place.
+ * Reacher CM fork branding, kept in one place.
  *
- * FarReach is a fork of Reach (https://github.com/alexandrosnt/Reach). The
+ * Reacher CM is a fork of Reach (https://github.com/alexandrosnt/Reach). The
  * locale files stay word for word as upstream's, so merging upstream stays
  * easy; the product name in them is swapped when a locale loads instead.
  */
 
-export const APP_NAME = 'FarReach';
-export const REPO_URL = 'https://github.com/rsipka/FarReach';
+export const APP_NAME = 'Reacher CM';
+export const REPO_URL = 'https://github.com/rsipka/ReacherCM';
 export const UPSTREAM_URL = 'https://github.com/alexandrosnt/Reach';
 
 /**
  * Whether to show the "Join the community" parts: the launch prompt and the
- * Discord row in Settings > General. The Discord is upstream's, and FarReach
+ * Discord row in Settings > General. The Discord is upstream's, and Reacher CM
  * has no community of its own yet, so they are hidden. Set this to true to
  * bring them all back; nothing else was removed.
  */
