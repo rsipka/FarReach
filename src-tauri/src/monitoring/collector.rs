@@ -118,6 +118,18 @@ async fn monitoring_loop(
     tracing::info!("Monitoring loop starting for {}", connection_id);
 
     loop {
+        // The connection is gone (network drop, server restart): stop here
+        // instead of failing every few seconds until the tab is closed, and
+        // forget its last numbers so nothing shows them as current. A
+        // reconnect gets a new id and its own loop. (Idea from the ReachQ
+        // fork by CPTProgrammer, which cleaned up on the shell's exit.)
+        if handle.lock().await.is_closed() {
+            tracing::info!("Monitoring for {} stopped: connection closed", connection_id);
+            let state = app_handle.state::<AppState>();
+            state.monitoring.write().await.remove(&connection_id);
+            break;
+        }
+
         // Take first CPU + network snapshot
         let cpu1 = read_cpu_snapshot(&handle).await.unwrap_or_default();
         let net1 = read_net_snapshot(&handle).await.unwrap_or_default();
