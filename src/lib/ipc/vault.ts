@@ -150,6 +150,11 @@ export async function exportDeviceLink(): Promise<string> {
 	return invoke<string>('vault_export_device_link');
 }
 
+/** `text` as a QR code, in SVG. */
+export async function qrSvg(text: string): Promise<string> {
+	return invoke<string>('qr_svg', { text });
+}
+
 /** Replace this device's identity with the one in a link code and open the
  * vaults it syncs. */
 export async function linkDevice(code: string): Promise<string> {

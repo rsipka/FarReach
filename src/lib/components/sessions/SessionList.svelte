@@ -53,6 +53,7 @@
 	import { untrack } from 'svelte';
 	import { positionMenu } from '#lib/utils/positionMenu.js';
 	import { buildFolderTree, canMoveFolder, folderPath, type FolderTreeNode } from '#lib/sessions/folder-tree.js';
+	import { canScanLinkCode, scanLinkCode } from '#lib/state/link-scan.js';
 	import { vaultState, checkState, initIdentity, importIdentity, linkDevice, ALL_VAULTS, loadVaultFilter, type VaultFilter } from '#lib/state/vault.svelte.js';
 
 	let showQuickConnect = $state(false);
@@ -1187,6 +1188,19 @@
 		}
 	}
 
+	async function handleScanLink(): Promise<void> {
+		initError = '';
+		try {
+			const code = await scanLinkCode();
+			if (code) {
+				linkCode = code;
+				await handleLink();
+			}
+		} catch (err) {
+			initError = String(err);
+		}
+	}
+
 	// Reset - delete existing data and start fresh
 	async function handleReset(): Promise<void> {
 		// Delete identity file and vaults to start fresh
@@ -1303,9 +1317,14 @@
 				bind:value={linkCode}
 				disabled={importing || initializing}
 			/>
-			<button class="reset-btn" onclick={handleLink} disabled={importing || initializing || !linkCode.trim()}>
-				{#if importing}{t('sync.joining')}{:else}{t('sync.join')}{/if}
-			</button>
+			<div class="recovery-buttons">
+				{#if canScanLinkCode()}
+					<button class="reset-btn" onclick={handleScanLink} disabled={importing || initializing}>{t('sync.scan_qr')}</button>
+				{/if}
+				<button class="reset-btn" onclick={handleLink} disabled={importing || initializing || !linkCode.trim()}>
+					{#if importing}{t('sync.joining')}{:else}{t('sync.join')}{/if}
+				</button>
+			</div>
 		</div>
 	{:else if keychainError}
 		<!-- Keychain error: data exists but can't access key -->

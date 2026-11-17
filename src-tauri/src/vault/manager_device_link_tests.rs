@@ -70,3 +70,19 @@ async fn a_damaged_code_changes_nothing() {
     assert_eq!(b.user_uuid, Some(uuid));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A code with a Turso URL and token still fits a QR code a phone reads.
+#[tokio::test]
+async fn a_link_code_fits_in_a_qr_code() {
+    let dir = tmp_dir("qr");
+    let mut a = VaultManager::new(dir.clone());
+    a.init_identity("pass").await.unwrap();
+    // A Turso database token is a JWT of about this size.
+    a.personal_sync_url = Some("libsql://reach-personal-1a2b3c4d-someone.aws-eu-west-1.turso.io".into());
+    a.personal_sync_token = Some("e".repeat(420));
+    a.save_identity_current().await.unwrap();
+    let code = a.export_device_link().await.unwrap();
+    let qr = qrcode::QrCode::with_error_correction_level(code.as_bytes(), qrcode::EcLevel::L).unwrap();
+    assert!(matches!(qr.version(), qrcode::Version::Normal(v) if v <= 30), "{:?} for {} bytes", qr.version(), code.len());
+    let _ = std::fs::remove_dir_all(&dir);
+}

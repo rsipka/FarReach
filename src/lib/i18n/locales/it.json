@@ -799,6 +799,8 @@
   "sync.joined_toast": "Fatto. Questo dispositivo ora apre le stesse casseforti.",
   "sync.personal_db_exists": "Questa organizzazione Turso contiene già una cassaforte personale di un altro dispositivo ({names}). Si può aprire solo con l'identità di quel dispositivo: lì apri Impostazioni > Sincronizzazione > Collega un altro dispositivo e incolla il codice qui in Unisciti da un altro dispositivo. Fai di nuovo clic su Salva per creare comunque una cassaforte separata.",
   "sync.reusing_database": "Uso del database personale esistente...",
+  "sync.scan_qr": "Scansiona codice QR",
+  "sync.link_qr_hint": "Sull'altro dispositivo tocca Scansiona codice QR (nella prima schermata o in Unisciti da un altro dispositivo), oppure incolla il codice qui sotto.",
   "sync.accept": "Accetta Invito",
   "sync.saving_credentials": "Salvataggio credenziali Turso...",
   "sync.creating_database": "Creazione database personale...",

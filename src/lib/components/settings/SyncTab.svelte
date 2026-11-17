@@ -5,7 +5,8 @@
 	import SyncBackendSection from './SyncBackendSection.svelte';
 	import { getSettings, saveSettings, exportIdentity, linkDevice } from '#lib/state/vault.svelte.js';
 	import type { AppSettings } from '#lib/ipc/vault.js';
-	import { createTursoDatabase, createTursoDatabaseToken, setPersonalSync, acceptInvite, exportDeviceLink, listTursoPersonalDatabases } from '#lib/ipc/vault.js';
+	import { createTursoDatabase, createTursoDatabaseToken, setPersonalSync, acceptInvite, exportDeviceLink, listTursoPersonalDatabases, qrSvg } from '#lib/ipc/vault.js';
+	import { canScanLinkCode, scanLinkCode } from '#lib/state/link-scan.js';
 	import { vaultState } from '#lib/state/vault.svelte.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -31,6 +32,7 @@
 
 	// Link another device / join from one
 	let linkCode = $state('');
+	let linkQr = $state('');
 	let joinCode = $state('');
 	let joinArmed = $state(false);
 	let joining = $state(false);
@@ -163,6 +165,20 @@
 		error = '';
 		try {
 			linkCode = await exportDeviceLink();
+			linkQr = await qrSvg(linkCode).catch(() => '');
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		}
+	}
+
+	async function handleScan() {
+		error = '';
+		try {
+			const code = await scanLinkCode();
+			if (code) {
+				joinCode = code;
+				joinArmed = false;
+			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		}
@@ -272,11 +288,16 @@
 			{#if linkCode}
 				<div class="export-box">
 					<p class="export-warning">{t('sync.link_code_warning')}</p>
+					{#if linkQr}
+						<p class="section-desc">{t('sync.link_qr_hint')}</p>
+						<!-- SVG drawn by the backend from the code -->
+						<div class="link-qr">{@html linkQr}</div>
+					{/if}
 					<div class="export-key">
 						<code>{linkCode}</code>
 						<button class="copy-btn" onclick={() => copyToClipboard(linkCode)}>{t('sync.copy')}</button>
 					</div>
-					<Button variant="ghost" size="sm" onclick={() => (linkCode = '')}>
+					<Button variant="ghost" size="sm" onclick={() => { linkCode = ''; linkQr = ''; }}>
 						{t('common.close')}
 					</Button>
 				</div>
@@ -298,6 +319,11 @@
 				<p class="export-warning">{t('sync.join_confirm')}</p>
 			{/if}
 			<div class="action-row">
+				{#if canScanLinkCode()}
+					<Button variant="secondary" size="sm" onclick={handleScan} disabled={joining}>
+						{t('sync.scan_qr')}
+					</Button>
+				{/if}
 				<Button variant={joinArmed ? 'danger' : 'secondary'} size="sm" onclick={handleJoin} disabled={joining || !joinCode.trim()}>
 					{joining ? t('sync.joining') : joinArmed ? t('sync.join_confirm_button') : t('sync.join')}
 				</Button>
@@ -491,6 +517,20 @@
 		font-size: 0.75rem;
 		color: var(--color-danger);
 		padding: 4px 0;
+	}
+
+	.link-qr {
+		align-self: center;
+		width: min(320px, 100%);
+		padding: 8px;
+		background: #ffffff;
+		border-radius: 8px;
+	}
+
+	.link-qr :global(svg) {
+		display: block;
+		width: 100%;
+		height: auto;
 	}
 
 	.export-box {

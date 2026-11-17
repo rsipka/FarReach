@@ -799,6 +799,8 @@
   "sync.joined_toast": "Unido. Este dispositivo abre ahora los mismos almacenes.",
   "sync.personal_db_exists": "Esta organización de Turso ya contiene un almacén personal de otro dispositivo ({names}). Solo puede abrirse con la identidad de ese dispositivo: allí abre Ajustes > Sincronización > Vincular otro dispositivo y pega el código aquí en Unirse desde otro dispositivo. Pulsa Guardar de nuevo para crear un almacén separado de todos modos.",
   "sync.reusing_database": "Usando tu base de datos personal existente...",
+  "sync.scan_qr": "Escanear código QR",
+  "sync.link_qr_hint": "En el otro dispositivo, toca Escanear código QR (en su primera pantalla o en Unirse desde otro dispositivo), o pega el código de abajo.",
   "sync.accept": "Aceptar invitación",
   "sync.saving_credentials": "Guardando credenciales de Turso...",
   "sync.creating_database": "Creando base de datos personal...",

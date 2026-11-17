@@ -799,6 +799,8 @@
   "sync.joined_toast": "Verbunden. Dieses Gerät öffnet jetzt dieselben Tresore.",
   "sync.personal_db_exists": "Diese Turso-Organisation enthält bereits einen persönlichen Tresor eines anderen Geräts ({names}). Er lässt sich nur mit der Identität dieses Geräts öffnen: Öffne dort Einstellungen > Sync > Weiteres Gerät verknüpfen und füge den Code hier unter Mit anderem Gerät verbinden ein. Klicke erneut auf Speichern, um trotzdem einen separaten Tresor anzulegen.",
   "sync.reusing_database": "Vorhandene persönliche Datenbank wird verwendet...",
+  "sync.scan_qr": "QR-Code scannen",
+  "sync.link_qr_hint": "Tippe auf dem anderen Gerät auf QR-Code scannen (auf dem ersten Bildschirm oder unter Mit anderem Gerät verbinden) oder füge den Code unten ein.",
   "sync.accept": "Einladung annehmen",
   "sync.saving_credentials": "Turso-Anmeldedaten werden gespeichert...",
   "sync.creating_database": "Persönliche Datenbank wird erstellt...",

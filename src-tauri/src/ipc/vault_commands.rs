@@ -509,6 +509,19 @@ pub async fn vault_export_device_link(state: State<'_, AppState>) -> Result<Stri
     manager.export_device_link().await.map_err(|e| e.to_string())
 }
 
+/// `text` as a QR code, in SVG, for another device's camera.
+#[tauri::command]
+pub fn qr_svg(text: String) -> Result<String, String> {
+    let code = qrcode::QrCode::with_error_correction_level(text.as_bytes(), qrcode::EcLevel::L).map_err(|e| e.to_string())?;
+    Ok(code
+        .render::<qrcode::render::svg::Color>()
+        .min_dimensions(256, 256)
+        .quiet_zone(true)
+        .dark_color(qrcode::render::svg::Color("#000000"))
+        .light_color(qrcode::render::svg::Color("#ffffff"))
+        .build())
+}
+
 /// Replace this device's identity with the one in a link code from another
 /// device, and open the vaults that one syncs.
 #[tauri::command(rename_all = "snake_case")]
