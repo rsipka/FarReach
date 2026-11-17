@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Toggle from '#lib/components/shared/Toggle.svelte';
+	import TerminalThemeSettings from './TerminalThemeSettings.svelte';
 	import { themeState, applyTheme, loadInstalledThemes, DARK, LIGHT } from '#lib/state/theme.svelte.js';
 	import { onMount } from 'svelte';
 	import { themeFetchRegistry, themeInstall, themeUninstall, type ThemeEntry } from '#lib/ipc/theme.js';
@@ -302,6 +303,8 @@
 			{/if}
 		{/if}
 	</div>
+
+	<TerminalThemeSettings />
 
 	<div class="setting-row">
 		<div class="setting-info">

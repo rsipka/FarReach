@@ -739,6 +739,7 @@ pub fn run() {
             theme_list_installed,
             theme_uninstall,
             theme_default_registry_url,
+            terminal_scheme_download,
             // Editor commands
             editor_open_file,
             editor_get_pending_file,
@@ -1157,6 +1158,7 @@ pub fn run() {
             theme_list_installed,
             theme_uninstall,
             theme_default_registry_url,
+            terminal_scheme_download,
             // Editor commands
             editor_open_file,
             editor_get_pending_file,

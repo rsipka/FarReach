@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { applyTheme, themeState, loadInstalledThemes, DARK, LIGHT } from '#lib/state/theme.svelte.js';
+	import { loadCustomTerminalThemes } from '#lib/state/terminal-themes.svelte.js';
 	import type { Snippet } from 'svelte';
 	import '../app.css';
 	import AppShell from '#lib/components/layout/AppShell.svelte';
@@ -94,6 +95,8 @@
 	$effect(() => {
 		if (!vaultState.locked) {
 			loadSnippets();
+			// Custom terminal themes live in the settings vault, which syncs.
+			loadCustomTerminalThemes();
 		}
 	});
 

@@ -729,6 +729,8 @@
 		setActivePage('terminal');
 		const auth = session.auth_method;
 		const tab = createTab('telnet', session.host, undefined, session.name, session.detected_os ?? null);
+		tab.sessionId = session.id;
+		tab.terminalTheme = session.terminal_theme ?? null;
 		tab.telnetConnectParams = {
 			host: session.host,
 			port: session.port,
@@ -749,7 +751,7 @@
 		}
 		setActivePage('terminal');
 		const connectionId = `wsl-${crypto.randomUUID()}`;
-		createTab(
+		const tab = createTab(
 			'local',
 			distro ? `${distro} · WSL` : 'WSL',
 			connectionId,
@@ -758,6 +760,8 @@
 			{ program: 'wsl.exe', args },
 			distro ?? ''
 		);
+		tab.sessionId = session.id;
+		tab.terminalTheme = session.terminal_theme ?? null;
 		addToast(t('session.connected_toast', { name: session.name }), 'success');
 	}
 
@@ -1004,6 +1008,8 @@
 
 			const tab = createTab('ssh', `${session.username}@${session.host}`, id, session.name, session.detected_os);
 			tab.sshConnectParams = connectParams;
+			tab.sessionId = session.id;
+			tab.terminalTheme = session.terminal_theme ?? null;
 			addToast(t('session.connected_toast', { name: session.name }), 'success');
 			connectSession = undefined;
 			passwordFallback = false;

@@ -43,6 +43,10 @@ export interface Tab {
 	/** An SSH or Telnet tab whose connection dropped, or is being made again: shown on
 	 *  the tab, so a dead session is seen from any tab, not only its own. */
 	link?: 'down' | 'reconnecting';
+	/** The saved session this tab was opened from, if any. */
+	sessionId?: string;
+	/** That session's terminal theme id; unset: the default from Settings. */
+	terminalTheme?: string | null;
 }
 
 let tabs = $state<Tab[]>([]);
@@ -408,4 +412,14 @@ export function placeAfter(tabId: string, refId: string): void {
 	if (!ref || !tab) return;
 	tab.groupId = ref.groupId;
 	moveTab(tabId, tabs.findIndex((t) => t.id === refId) + 1);
+}
+
+/**
+ * A session's terminal theme changed: its open tabs take the new colours at
+ * once. Only the theme; the rest of a tab stays as it was opened.
+ */
+export function setSessionTerminalTheme(sessionId: string, themeId: string | null | undefined): void {
+	for (const tab of tabs) {
+		if (tab.sessionId === sessionId) tab.terminalTheme = themeId ?? null;
+	}
 }

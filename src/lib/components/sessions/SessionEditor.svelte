@@ -8,6 +8,9 @@
 	import { isWindows } from '#lib/platform.js';
 	import SshOptionsSection from './SshOptionsSection.svelte';
 	import Disclosure from '#lib/components/shared/Disclosure.svelte';
+	import TerminalThemeList from '#lib/components/terminal/TerminalThemeList.svelte';
+	import { findTerminalTheme, terminalPalette } from '#lib/state/terminal-themes.svelte.js';
+	import { setSessionTerminalTheme } from '#lib/state/tabs.svelte.js';
 	import SecretRefField from '#lib/components/pwmanager/SecretRefField.svelte';
 	import type { EntrySummary, SecretRef } from '#lib/ipc/pwmanager.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -189,6 +192,12 @@
 		const parts = [notes.trim() ? t('session.docs_has_notes') : '', fields ? t('session.docs_field_count', { count: String(fields) }) : ''].filter(Boolean);
 		return parts.length ? parts.join(' · ') : t('session.docs_empty');
 	});
+	/** The terminal theme its tabs use; empty: the default from Settings. */
+	let terminalTheme = $state('');
+	let colorsOpen = $state(false);
+	let colorsSummary = $derived(
+		findTerminalTheme(terminalTheme)?.name ?? (terminalTheme ? t('termtheme.missing') : t('termtheme.session_default'))
+	);
 	let jumpEnabled = $state(false);
 	let jumpHops = $state<Array<{host: string; port: string; username: string; authType: 'Password' | 'Key' | 'Agent' | 'Manager'; password: string; keyPath: string; keyPassphrase: string; passwordRef: SecretRef | null; keyPassphraseRef: SecretRef | null; credentialId: string; read: JumpHostConfig | null}>>([]);
 	let proxyEnabled = $state(false);
@@ -254,6 +263,8 @@
 			notes = editSession.notes ?? '';
 			customFields = (editSession.custom_fields ?? []).map((f) => ({ ...f, hidden: !!f.hidden, shown: false }));
 			docsOpen = !!notes.trim() || customFields.length > 0;
+			terminalTheme = editSession.terminal_theme ?? '';
+			colorsOpen = false;
 			if (editSession.jump_chain && editSession.jump_chain.length > 0) {
 				jumpEnabled = true;
 				jumpHops = editSession.jump_chain.map(j => ({
@@ -312,6 +323,8 @@
 			notes = '';
 			customFields = [];
 			docsOpen = false;
+			terminalTheme = '';
+			colorsOpen = false;
 			jumpEnabled = false;
 			jumpHops = [];
 			proxyEnabled = false;
@@ -374,6 +387,8 @@
 				: { type: 'Agent' };
 		const tags = tagsStr.split(',').map(t => t.trim()).filter(Boolean);
 		const notesToSave = notes.trim() ? notes : null;
+		// Remote desktops paint their own screen: no terminal colours.
+		const themeToSave = kind === 'rdp' || kind === 'vnc' ? null : terminalTheme || null;
 		const fieldsToSave: CustomField[] = customFields
 			.filter((f) => f.name.trim() || f.value.trim())
 			.map((f) => (f.hidden ? { name: f.name.trim(), value: f.value, hidden: true } : { name: f.name.trim(), value: f.value }));
@@ -452,7 +467,10 @@
 					credential: null,
 					notes: notesToSave,
 					custom_fields: fieldsToSave.length ? fieldsToSave : null,
+					terminal_theme: themeToSave,
 				});
+				// Its open tabs take the new colours at once.
+				setSessionTerminalTheme(editSession.id, themeToSave);
 			} else {
 				await sessionCreate({
 					name: name.trim(),
@@ -477,7 +495,8 @@
 					telnet: telnet ? { ...telnetOptions } : null,
 					credentialId: credential,
 					notes: notesToSave,
-					customFields: fieldsToSave
+					customFields: fieldsToSave,
+					terminalTheme: themeToSave
 				});
 			}
 			onsave?.();
@@ -956,6 +975,19 @@
 			</div>
 		{/if}
 
+		{#if kind !== 'rdp' && kind !== 'vnc'}
+			<Disclosure title={t('termtheme.session_title')} summary={colorsSummary} bind:open={colorsOpen}>
+				<TerminalThemeList
+					selected={terminalTheme}
+					onselect={(id) => (terminalTheme = id)}
+					noneLabel={t('termtheme.session_default')}
+					nonePalette={terminalPalette(null)}
+					disabled={saving}
+				/>
+				<p class="colors-hint">{t('termtheme.session_hint')}</p>
+			</Disclosure>
+		{/if}
+
 		<Disclosure title={t('session.docs')} summary={docsSummary} bind:open={docsOpen}>
 			<div class="docs">
 				<div class="shell-field">
@@ -1105,6 +1137,12 @@
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
+	}
+
+	.colors-hint {
+		margin: 6px 0 0;
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
 	}
 
 	.notes-input,

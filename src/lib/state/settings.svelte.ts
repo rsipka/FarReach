@@ -10,6 +10,9 @@ export interface Settings {
 	theme: 'dark' | 'light' | 'system';
 	/** Id of an installed theme. Overrides `theme` when set. */
 	themeId?: string;
+	/** The terminal colours, by terminal theme id (#lib/state/terminal-themes);
+	 *  empty: the app theme's own. A session can name its own instead. */
+	terminalThemeId: string;
 	fontSize: number;
 	/** The whole interface's size on a desktop, as a browser's zoom: 1 is 100%.
 	 *  See #lib/state/ui-zoom. */
@@ -137,6 +140,7 @@ const STORAGE_KEY = 'reach-settings';
 const defaults: Settings = {
 	theme: 'dark',
 	themeId: undefined,
+	terminalThemeId: '',
 	fontSize: 14,
 	uiZoom: 1,
 	compactLayout: false,
@@ -237,6 +241,7 @@ export function loadSettings(): void {
 			// next save leaves it out, so save once now to take it off the disk.
 			if (parsed.pendingTursoApiToken) queueMicrotask(saveSettings);
 			settings.theme = parsed.theme ?? defaults.theme;
+			settings.terminalThemeId = parsed.terminalThemeId ?? defaults.terminalThemeId;
 			settings.fontSize = parsed.fontSize ?? defaults.fontSize;
 			settings.uiZoom = parsed.uiZoom ?? defaults.uiZoom;
 			settings.compactLayout = parsed.compactLayout ?? defaults.compactLayout;

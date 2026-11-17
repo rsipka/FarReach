@@ -752,6 +752,7 @@ pub async fn session_create(
     telnet: Option<crate::telnet::protocol::TelnetOptions>,
     notes: Option<String>,
     custom_fields: Option<Vec<crate::state::CustomField>>,
+    terminal_theme: Option<String>,
 ) -> Result<SessionConfig, String> {
     let mut manager = state.vault_manager.lock().await;
     let kind = kind.unwrap_or_default();
@@ -811,6 +812,7 @@ pub async fn session_create(
         credential: None,
         notes,
         custom_fields,
+        terminal_theme,
         credential_ref_approvals: Default::default(),
     };
     session.tidy_documentation();
@@ -2339,5 +2341,16 @@ mod documentation_tests {
         let mut empty = session(serde_json::json!({ "custom_fields": [{ "name": "", "value": " " }] }));
         empty.tidy_documentation();
         assert!(empty.custom_fields.is_none());
+    }
+
+    #[test]
+    fn a_terminal_theme_is_kept_and_a_blank_one_dropped() {
+        let s = session(serde_json::json!({ "terminal_theme": "scheme:Solarized Dark" }));
+        let stored = serde_json::to_value(&s).unwrap();
+        assert_eq!(stored["terminal_theme"], "scheme:Solarized Dark");
+        assert!(serde_json::to_value(session(serde_json::json!({}))).unwrap().get("terminal_theme").is_none());
+        let mut blank = session(serde_json::json!({ "terminal_theme": " " }));
+        blank.tidy_documentation();
+        assert!(blank.terminal_theme.is_none());
     }
 }
