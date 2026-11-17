@@ -16,10 +16,11 @@ const CREDENTIALS_VAULT_NAME: &str = "__credentials__";
 /// e.g. via OS keychain auto-unlock) — previously it attempted an unlock
 /// with the new password, which always failed (issue #25).
 #[tauri::command]
-#[tracing::instrument(skip(password, state))]
+#[tracing::instrument(skip(password, current_password, state))]
 pub async fn credential_set_master_password(
     state: State<'_, AppState>,
     password: String,
+    current_password: Option<String>,
 ) -> Result<(), String> {
     let mut manager = state.vault_manager.lock().await;
 
@@ -29,6 +30,15 @@ pub async fn credential_set_master_password(
                 "Vault is locked. Unlock it with your current method first, then set a new password."
                     .into(),
             );
+        }
+        // An unlocked vault is not proof of knowing the password: by default
+        // it opens from the OS keychain at launch. Whoever sits at an open
+        // FarReach must not be able to replace the password with their own.
+        if manager.has_password().await {
+            let current = current_password.unwrap_or_default();
+            if !manager.check_password(&current).await {
+                return Err("The current password is not correct.".into());
+            }
         }
         manager
             .change_password(&password)

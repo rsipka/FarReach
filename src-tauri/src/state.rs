@@ -133,6 +133,14 @@ pub struct SessionConfig {
     /// in the order the user put them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_fields: Option<Vec<CustomField>>,
+    /// Approvals of the password manager entries a saved credential brings
+    /// to this session, by slot (`password`, `jump:0:passphrase`). An entry
+    /// in a credential is approved per session and person like one of the
+    /// session's own, but the credential's login is not stored in the
+    /// session, so its approvals are kept here. Signed like the others;
+    /// see `ipc::saved_credential_commands`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub credential_ref_approvals: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 /// One named value of a session's documentation.

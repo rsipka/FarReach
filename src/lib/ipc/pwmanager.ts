@@ -13,7 +13,7 @@ import { invoke } from '@tauri-apps/api/core';
 
 /** A pointer to an entry in a password manager. Not secret. */
 export interface SecretRef {
-	/** Provider id: "passbolt", "onepassword". */
+	/** Provider id: "passbolt", "onepassword", "bitwarden", "keepass". */
 	provider: string;
 	/** The provider's id for the entry (Passbolt: the resource UUID). */
 	entry_id: string;
@@ -94,10 +94,31 @@ export interface OnePasswordView {
 	has_service_account_token: boolean;
 }
 
+export interface BitwardenView {
+	cli_path: string | null;
+	enabled: boolean;
+	timeout_secs: number;
+	remember_secs: number;
+	/** A typed master password is kept in memory right now. */
+	password_cached: boolean;
+}
+
+export interface KeepassView {
+	/** The .kdbx file on this device. */
+	database_path: string | null;
+	key_file_path: string | null;
+	enabled: boolean;
+	remember_secs: number;
+	/** A typed master password is kept in memory right now. */
+	password_cached: boolean;
+}
+
 export interface PasswordManagersView {
 	enabled: boolean;
 	passbolt: PassboltView;
 	onepassword: OnePasswordView;
+	bitwarden: BitwardenView;
+	keepass: KeepassView;
 }
 
 export interface PassboltConfigInput {
@@ -132,10 +153,26 @@ export interface OnePasswordConfigInput {
 	clear_service_account_token?: boolean;
 }
 
+export interface BitwardenConfigInput {
+	cli_path: string | null;
+	enabled: boolean;
+	timeout_secs: number;
+	remember_secs: number;
+}
+
+export interface KeepassConfigInput {
+	database_path: string | null;
+	key_file_path: string | null;
+	enabled: boolean;
+	remember_secs: number;
+}
+
 export interface PasswordManagersConfigInput {
 	enabled: boolean;
 	passbolt: PassboltConfigInput;
 	onepassword: OnePasswordConfigInput;
+	bitwarden: BitwardenConfigInput;
+	keepass: KeepassConfigInput;
 }
 
 export interface TestResult {
@@ -177,6 +214,8 @@ export function pwmanagerList(provider: string, query?: string | null, refresh?:
 export function configInputFromView(view: PasswordManagersView): PasswordManagersConfigInput {
 	const p = view.passbolt;
 	const o = view.onepassword;
+	const b = view.bitwarden;
+	const k = view.keepass;
 	return {
 		enabled: view.enabled,
 		passbolt: {
@@ -194,6 +233,18 @@ export function configInputFromView(view: PasswordManagersView): PasswordManager
 			auth: o.auth,
 			account: o.account,
 			timeout_secs: o.timeout_secs,
+		},
+		bitwarden: {
+			cli_path: b.cli_path,
+			enabled: b.enabled,
+			timeout_secs: b.timeout_secs,
+			remember_secs: b.remember_secs,
+		},
+		keepass: {
+			database_path: k.database_path,
+			key_file_path: k.key_file_path,
+			enabled: k.enabled,
+			remember_secs: k.remember_secs,
 		},
 	};
 }

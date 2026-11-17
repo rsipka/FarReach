@@ -2073,6 +2073,45 @@ struct KnownHosts {
     entries: HashMap<String, String>,
 }
 
+/// Held while the store is read, changed and written back, so two
+/// connections accepting a host at the same time cannot overwrite each other.
+static KNOWN_HOSTS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// The accepted host identities. A missing file is an empty store. A file
+/// that does not parse is moved aside (`known_hosts.json.damaged`) instead of
+/// being read as empty and then overwritten, so it can still be looked at.
+fn load_known_hosts(path: &std::path::Path) -> KnownHosts {
+    let raw = match std::fs::read_to_string(path) {
+        Ok(raw) => raw,
+        Err(_) => return KnownHosts::default(),
+    };
+    match serde_json::from_str(&raw) {
+        Ok(known) => known,
+        Err(e) => {
+            let aside = path.with_extension("json.damaged");
+            tracing::error!(
+                "{} could not be read ({e}); keeping it as {} and starting an empty list of known hosts",
+                path.display(),
+                aside.display()
+            );
+            let _ = std::fs::rename(path, &aside);
+            KnownHosts::default()
+        }
+    }
+}
+
+/// Add one accepted host to the store. The file is read again here, under
+/// the lock: the copy read before the user was asked may be minutes old, and
+/// writing that back would drop every host accepted in the meantime. Written
+/// beside the file and renamed over it, so a crash never leaves half a file.
+fn remember_host(path: &std::path::Path, host_id: &str, fingerprint: &str) -> std::io::Result<()> {
+    let _guard = KNOWN_HOSTS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut known = load_known_hosts(path);
+    known.entries.insert(host_id.to_string(), fingerprint.to_string());
+    let raw = serde_json::to_string_pretty(&known).map_err(std::io::Error::other)?;
+    crate::vault::private_fs::write(path, raw.as_bytes())
+}
+
 impl russh::client::Handler for SshClientHandler {
     type Error = russh::Error;
 
@@ -2279,10 +2318,7 @@ pub(crate) async fn verify_host_identity_with(
         let _ = std::fs::create_dir_all(parent);
     }
 
-    let mut known: KnownHosts = match std::fs::read_to_string(&path) {
-        Ok(raw) => serde_json::from_str(&raw).unwrap_or_default(),
-        Err(_) => KnownHosts::default(),
-    };
+    let known = load_known_hosts(&path);
 
     if known.entries.get(host_id).map(String::as_str) == Some(fingerprint) {
         return true;
@@ -2318,9 +2354,8 @@ pub(crate) async fn verify_host_identity_with(
     };
 
     if accepted {
-        known.entries.insert(host_id.to_string(), fingerprint.to_string());
-        if let Ok(raw) = serde_json::to_string_pretty(&known) {
-            let _ = std::fs::write(&path, raw);
+        if let Err(e) = remember_host(&path, host_id, fingerprint) {
+            tracing::warn!("Could not save the host identity for {}: {}", host_id, e);
         }
         tracing::info!("Host identity accepted by user for {}", host_id);
     } else {
@@ -2813,6 +2848,39 @@ async fn ssh_session_task(
 #[cfg(test)]
 mod shell_tests {
     use super::*;
+
+    fn known_hosts_scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("reach-known-hosts-{name}-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join("known_hosts.json")
+    }
+
+    /// Two hosts accepted one after the other both stay, even though each
+    /// connection read the store before the other was written.
+    #[test]
+    fn a_host_accepted_meanwhile_is_not_overwritten() {
+        let path = known_hosts_scratch("both");
+        assert!(load_known_hosts(&path).entries.is_empty());
+        remember_host(&path, "a.example:22", "SHA256:aaa").unwrap();
+        remember_host(&path, "b.example:3389", "SHA256:bbb").unwrap();
+        let known = load_known_hosts(&path);
+        assert_eq!(known.entries.get("a.example:22").map(String::as_str), Some("SHA256:aaa"));
+        assert_eq!(known.entries.get("b.example:3389").map(String::as_str), Some("SHA256:bbb"));
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    /// A store that does not parse is kept aside, not replaced by the next
+    /// accepted host.
+    #[test]
+    fn a_damaged_store_is_kept_aside() {
+        let path = known_hosts_scratch("damaged");
+        std::fs::write(&path, r#"{"entries": {"a.example:22": "SHA2"#).unwrap();
+        remember_host(&path, "b.example:22", "SHA256:bbb").unwrap();
+        let aside = path.with_extension("json.damaged");
+        assert!(std::fs::read_to_string(&aside).unwrap().contains("a.example:22"));
+        assert_eq!(load_known_hosts(&path).entries.len(), 1);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
 
     #[test]
     fn family_defaults_to_posix_when_unset() {

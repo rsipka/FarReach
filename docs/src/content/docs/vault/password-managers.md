@@ -1,11 +1,11 @@
 ---
-title: Password Managers (Passbolt, 1Password)
-description: Let a session take its password from Passbolt or 1Password instead of keeping a copy in Reach's vault.
+title: Password Managers (Passbolt, 1Password, Bitwarden, KeePass)
+description: Let a session take its password from Passbolt, 1Password, Bitwarden or a KeePass database instead of keeping a copy in Reach's vault.
 ---
 
 If your team already keeps its server passwords in a password manager, a session in Reach can point at the entry there instead of holding a copy of the password. Reach fetches the password when you connect, uses it for the login, and forgets it. Change the password in the manager and every session that points at it uses the new one the next time it connects.
 
-Reach can read from **[Passbolt](https://www.passbolt.com/)**, through Passbolt's own command-line client, **go-passbolt-cli**, and from **[1Password](https://1password.com/)**, through the **1Password CLI** (`op`). Bitwarden and KeePass are planned. Passbolt is described first; see [1Password](#1password) below for its setup.
+Reach can read from **[Passbolt](https://www.passbolt.com/)**, through Passbolt's own command-line client, **go-passbolt-cli**, and from **[1Password](https://1password.com/)**, through the **1Password CLI** (`op`), and from **[Bitwarden](https://bitwarden.com/)** (or a self-hosted Vaultwarden), through the **Bitwarden CLI** (`bw`). **[KeePass](https://keepass.info/)** databases (`.kdbx`) are read directly, with no other program. Passbolt is described first; see [1Password](#1password), [Bitwarden](#bitwarden) and [KeePass](#keepass) below for their setup.
 
 ## What you need
 
@@ -54,6 +54,34 @@ The entry search lists items that have a password (logins, passwords, databases,
 
 SSH keys kept in 1Password already work without this: point the session at the 1Password SSH agent (*Agent* authentication).
 
+## Bitwarden
+
+Reach reads Bitwarden, and servers that speak its protocol such as Vaultwarden, through the official **Bitwarden CLI** (`bw`).
+
+1. Install the CLI: `brew install bitwarden-cli` on a Mac, `npm install -g @bitwarden/cli`, or a download from [Bitwarden's CLI page](https://bitwarden.com/help/cli/). As with the others, Reach runs only a program actually named `bw` or `bw.exe`, from this computer, that only you or the system can change. On Windows that means the native `bw.exe` (winget, Chocolatey, Scoop or the download), not npm's `bw.cmd`.
+2. Sign in once, in a terminal: `bw login`. For a self-hosted server run `bw config server https://vault.example.com` first. Two-step login, an API key or SSO all happen here, between you and `bw`; Reach is not involved and stores nothing.
+3. In Settings → **Password managers**, switch on the master switch and, in the **Bitwarden** card, **Use Bitwarden**. Choose how long a typed master password is remembered.
+4. Press **Test connection**. Reach asks for your master password, unlocks the vault and says how many logins it can see.
+
+When a connection needs an entry, Reach asks for your **master password** in its window (unless it is still remembered), hands it to `bw unlock` in the CLI's environment, and keeps the session key `bw` answers with in memory, encrypted, for as long as the master password is remembered. Neither is ever written to disk. **Forget now**, a change of settings, locking Reach's vault, and the computer locking or going to sleep all forget both.
+
+Before it reads, Reach runs `bw sync`, so a password changed elsewhere is the one used (at most once a minute when connecting; if the server cannot be reached, the copy on this computer is used). A session stores the item's id; at connect time Reach runs `bw get password` for it. The entry search lists logins only.
+
+Two things differ from the other managers. `bw` has no way to list names without the rest: `bw list items` prints every item whole, so the passwords pass through Reach's memory on their way to being discarded (the buffer is wiped; only names, usernames and addresses are kept). And the vault `bw login` leaves on this computer belongs to the `bw` CLI: `bw lock` or `bw logout` in a terminal is honoured, and Reach will ask again or tell you to sign in.
+
+## KeePass
+
+Reach reads KeePass databases itself: `.kdbx` files as written by KeePass 2, KeePassXC, KeePassDX, Strongbox and others (KDBX 3 and 4, and the old `.kdb`). Nothing else needs to be installed.
+
+1. In Settings → **Password managers**, switch on the master switch and, in the **KeePass** card, **Use KeePass**.
+2. Choose the **database file**. If the database also needs a **key file**, choose that too. Both paths are kept on this device only and are not synced, so each computer points at its own copy. The files must be on this computer, not on a network share (a folder synced by Dropbox, Syncthing or the like is fine).
+3. Choose how long a typed master password is remembered.
+4. Press **Test connection**. Reach asks for the master password, opens the database and says how many entries it can see.
+
+When a connection needs an entry, Reach asks for the database's **master password** in its window (unless it is still remembered), reads the file, takes the one password out and closes it again. The master password is kept only in memory, encrypted, for the time you chose, and is forgotten by **Forget now**, a change of settings, locking Reach's vault, and the computer locking or going to sleep. The file is read anew on every connect, so a password changed in KeePass is used the next time.
+
+Reach only ever reads the database; it never writes it, so it does not get in the way of KeePass having the same file open. The entry search lists entries that have a password, with their group, and leaves out the recycle bin. Databases opened with a key file alone (no password), a hardware key (YubiKey challenge-response) or Windows account protection are not supported.
+
 ## Using a password manager entry in a session
 
 In the session editor, every password field has a key button, **From password manager**. It opens a search over your entries (name, username and URL); pick one and the field becomes a chip, such as *Passbolt · name of the entry* or *1Password · name of the entry*. Remove the chip with its × to type a password again.
@@ -65,6 +93,7 @@ It works for:
 - the proxy password
 - RDP and VNC passwords
 - database connections, both the database password and a session the connection goes through
+- saved credentials: the password or key passphrase of a credential, for every session, folder and jump host that uses it
 
 A session that points at an entry connects without asking for a password. Reconnecting fetches the password again, so a password changed in Passbolt in the meantime is picked up.
 
@@ -91,6 +120,10 @@ The same goes for a session reached through another one:
 
 - **A VNC session that goes through an SSH session** is confirmed for that SSH session as it is, too. If someone changes the SSH session's host, port, user, jump hosts, proxy or ssh_config settings, or deletes it, the VNC session asks again before it sends your password, and the question names the SSH session and where it goes.
 - **A database connection that goes through a saved session** is confirmed when you save it: saving signs the session as it is then. If that session is later pointed somewhere else, the connection is refused with *The session this connection goes through has changed since you saved it*; open the connection in the database editor and save it again to confirm. *Test connection* in the editor, and connecting without saving, use the session as it is at that moment, since you are choosing it right then.
+
+### Entries in a saved credential
+
+A saved credential can point at an entry too, and a credential in a shared vault can be edited by everyone who can write to that vault. So the credential itself carries no confirmation: each session that uses it asks you once, the first time you connect with it, and remembers your answer for that session only. It asks again when the credential is pointed at another entry or given another username, or when the session changes where it connects. Your confirmation never counts for a teammate, who is asked for themselves.
 
 ## Several devices, several Reach versions
 

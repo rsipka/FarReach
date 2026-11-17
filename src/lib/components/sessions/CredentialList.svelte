@@ -8,6 +8,9 @@
 	import Button from '#lib/components/shared/Button.svelte';
 	import Input from '#lib/components/shared/Input.svelte';
 	import KeyPicker from './KeyPicker.svelte';
+	import SecretRefField from '#lib/components/pwmanager/SecretRefField.svelte';
+	import type { SecretRef } from '#lib/ipc/pwmanager.js';
+	import { providerName } from '#lib/state/pwmanager.svelte.js';
 	import FaIcon from '#lib/components/shared/FaIcon.svelte';
 	import { faPlus } from '@fortawesome/free-solid-svg-icons';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -68,6 +71,13 @@
 		return folders.filter((f) => f.credential_id === id);
 	}
 
+	/** The password manager a credential's secret comes from, if it names an entry. */
+	function managerOf(c: SavedCredential): string {
+		const a = c.auth_method;
+		const r = a.type === 'Password' ? a.password_ref : a.type === 'Key' ? a.passphrase_ref : null;
+		return r ? providerName(r.provider) : '';
+	}
+
 	function vaultName(c: SavedCredential): string {
 		return c.vault_id ? (vaultState.vaults.get(c.vault_id)?.name ?? t('vault.private')) : t('vault.private');
 	}
@@ -84,6 +94,9 @@
 	let keyPath = $state('');
 	let keyId = $state('');
 	let passphrase = $state('');
+	// A password manager entry in place of the typed password or passphrase.
+	let passwordRef = $state<SecretRef | null>(null);
+	let passphraseRef = $state<SecretRef | null>(null);
 	let saving = $state(false);
 	let editorError = $state<string | undefined>();
 
@@ -98,6 +111,8 @@
 		keyPath = a?.path ?? '';
 		keyId = a?.key_id ?? '';
 		passphrase = a?.passphrase ?? '';
+		passwordRef = (a?.type === 'Password' && a.password_ref) || null;
+		passphraseRef = (a?.type === 'Key' && a.passphrase_ref) || null;
 		editorError = undefined;
 		editorOpen = true;
 	}
@@ -108,9 +123,15 @@
 		if (!canSave) return;
 		const authMethod: AuthMethod =
 			authType === 'Password'
-				? { type: 'Password', password: password || undefined }
+				? { type: 'Password', password: passwordRef ? undefined : password || undefined, password_ref: passwordRef ?? undefined }
 				: authType === 'Key'
-					? { type: 'Key', path: keyId ? undefined : keyPath.trim() || undefined, key_id: keyId || undefined, passphrase: keyId ? undefined : passphrase || undefined }
+					? {
+							type: 'Key',
+							path: keyId ? undefined : keyPath.trim() || undefined,
+							key_id: keyId || undefined,
+							passphrase: keyId || passphraseRef ? undefined : passphrase || undefined,
+							passphrase_ref: keyId ? undefined : (passphraseRef ?? undefined)
+						}
 					: { type: 'Agent' };
 		saving = true;
 		editorError = undefined;
@@ -176,7 +197,7 @@
 					<button class="cred-main" onclick={() => openEditor(c)} title={t('common.edit')}>
 						<span class="cred-name">{c.name}</span>
 						<span class="cred-detail">
-							{c.domain ? `${c.domain}\\` : ''}{c.username} · {t(`credential.auth_${c.auth_method.type.toLowerCase()}`)}
+							{c.domain ? `${c.domain}\\` : ''}{c.username} · {t(`credential.auth_${c.auth_method.type.toLowerCase()}`)}{managerOf(c) ? ` · ${managerOf(c)}` : ''}
 							{#if vaultFilter === ALL_VAULTS} · {vaultName(c)}{/if}
 						</span>
 						<span class="cred-usage">{t('credential.used_by', { count: String(used) })}</span>
@@ -200,11 +221,13 @@
 			{/each}
 		</div>
 		{#if authType === 'Password'}
-			<Input label={t('session.password_optional')} type="password" bind:value={password} placeholder={t('session.stored_encrypted')} disabled={saving} />
+			<SecretRefField label={t('session.password_optional')} bind:value={password} bind:secretRef={passwordRef} placeholder={t('session.stored_encrypted')} disabled={saving} onpick={(e) => { if (!username.trim() && e.username) username = e.username; }} />
+			{#if passwordRef}<p class="cred-hint">{t('credential.entry_hint')}</p>{/if}
 		{:else if authType === 'Key'}
 			<KeyPicker bind:path={keyPath} bind:keyId disabled={saving} />
 			{#if !keyId}
-				<Input label={t('session.passphrase_optional')} type="password" bind:value={passphrase} placeholder={t('session.stored_encrypted')} disabled={saving} />
+				<SecretRefField label={t('session.passphrase_optional')} bind:value={passphrase} bind:secretRef={passphraseRef} placeholder={t('session.stored_encrypted')} disabled={saving} />
+				{#if passphraseRef}<p class="cred-hint">{t('credential.entry_hint')}</p>{/if}
 			{/if}
 		{/if}
 		<Input label={t('credential.domain')} bind:value={domain} placeholder="CORP" disabled={saving} />

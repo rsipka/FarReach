@@ -46,3 +46,13 @@ release and update process.
 
 Out of scope: problems in servers or services Reach connects to, and issues
 that need an attacker to already control your device or your unlocked vault.
+
+## Plugins, recipes and themes come from Reach's registries
+
+FarReach lists plugins, recipes and themes from the registries of the original
+project (`alexandrosnt/reach-plugins-registry`, `reach-recipes-registry` and
+the theme registry), and downloads the Windows X server from Reach's releases.
+Each download is checked against a SHA-256 in the registry, so what you get is
+what Reach's maintainer approved. FarReach's maintainer does not review these
+entries. A recipe is a shell script that runs on your server, and a plugin can
+be given permission to run commands there, so read what you install.

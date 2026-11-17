@@ -13,10 +13,11 @@
 //! that the settings page is hidden.
 //!
 //! Each manager is one [`PasswordManager`] implementation and one
-//! [`ProviderId`] arm; dispatch is a `match`, not a trait object. The first is
-//! Passbolt, driven through its official command-line client (see
-//! [`passbolt`]). Desktop only: on Android and iOS there is no CLI to run, and
-//! the provider says so in its status.
+//! [`ProviderId`] arm; dispatch is a `match`, not a trait object. Passbolt,
+//! 1Password and Bitwarden are driven through their official command-line
+//! clients (see [`passbolt`], [`onepassword`], [`bitwarden`]): desktop only,
+//! since on Android and iOS there is no CLI to run, and each says so in its
+//! status. KeePass databases are read in process (see [`keepass`]).
 //!
 //! The manager's own login may need a passphrase the user chose not to
 //! store. Then it is asked for in the window when a call needs it, and kept
@@ -56,9 +57,11 @@
 //!    parsed into metadata only, errors are cleaned.
 //! 6. **User docs**: `docs/src/content/docs/vault/password-managers.md`.
 
+pub mod bitwarden;
 mod cache;
 pub(crate) mod cli;
 pub mod config;
+pub mod keepass;
 pub mod onepassword;
 pub mod passbolt;
 #[cfg(desktop)]
@@ -92,7 +95,7 @@ use config::PasswordManagersConfig;
 /// read and never taken from what is sent in.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SecretRef {
-    /// Which manager: `"passbolt"`, `"onepassword"`.
+    /// Which manager: `"passbolt"`, `"onepassword"`, `"bitwarden"`, `"keepass"`.
     pub provider: String,
     /// The manager's own id for the entry (Passbolt: the resource UUID).
     pub entry_id: String,
@@ -192,15 +195,20 @@ pub struct TestResult {
 pub enum ProviderId {
     Passbolt,
     OnePassword,
+    Bitwarden,
+    Keepass,
 }
 
 impl ProviderId {
-    pub const ALL: &'static [ProviderId] = &[ProviderId::Passbolt, ProviderId::OnePassword];
+    pub const ALL: &'static [ProviderId] =
+        &[ProviderId::Passbolt, ProviderId::OnePassword, ProviderId::Bitwarden, ProviderId::Keepass];
 
     pub fn as_str(self) -> &'static str {
         match self {
             ProviderId::Passbolt => "passbolt",
             ProviderId::OnePassword => "onepassword",
+            ProviderId::Bitwarden => "bitwarden",
+            ProviderId::Keepass => "keepass",
         }
     }
 
@@ -208,6 +216,8 @@ impl ProviderId {
         match self {
             ProviderId::Passbolt => "Passbolt",
             ProviderId::OnePassword => "1Password",
+            ProviderId::Bitwarden => "Bitwarden",
+            ProviderId::Keepass => "KeePass",
         }
     }
 
@@ -215,6 +225,8 @@ impl ProviderId {
         match s {
             "passbolt" => Ok(ProviderId::Passbolt),
             "onepassword" => Ok(ProviderId::OnePassword),
+            "bitwarden" => Ok(ProviderId::Bitwarden),
+            "keepass" => Ok(ProviderId::Keepass),
             other => Err(format!("Unknown password manager '{}'", sanitize_display(other, 40))),
         }
     }
@@ -292,6 +304,8 @@ pub enum SecretKind {
 pub(crate) enum Provider {
     Passbolt(passbolt::Passbolt),
     OnePassword(onepassword::OnePassword),
+    Bitwarden(bitwarden::Bitwarden),
+    Keepass(keepass::Keepass),
 }
 
 impl Provider {
@@ -307,6 +321,10 @@ impl Provider {
                 loaded.onepassword_secrets,
                 loaded.config.enabled,
             )),
+            ProviderId::Bitwarden => {
+                Provider::Bitwarden(bitwarden::Bitwarden::new(loaded.config.bitwarden, loaded.config.enabled))
+            }
+            ProviderId::Keepass => Provider::Keepass(keepass::Keepass::new(loaded.config.keepass, loaded.config.enabled)),
         }
     }
 
@@ -314,6 +332,8 @@ impl Provider {
         match self {
             Provider::Passbolt(p) => p.status().await,
             Provider::OnePassword(p) => p.status().await,
+            Provider::Bitwarden(p) => p.status().await,
+            Provider::Keepass(p) => p.status().await,
         }
     }
 
@@ -321,6 +341,8 @@ impl Provider {
         match self {
             Provider::Passbolt(p) => p.passphrase_prompt(),
             Provider::OnePassword(p) => p.passphrase_prompt(),
+            Provider::Bitwarden(p) => p.passphrase_prompt(),
+            Provider::Keepass(p) => p.passphrase_prompt(),
         }
     }
 
@@ -328,6 +350,8 @@ impl Provider {
         match self {
             Provider::Passbolt(p) => p.list(passphrase).await,
             Provider::OnePassword(p) => p.list(passphrase).await,
+            Provider::Bitwarden(p) => p.list(passphrase).await,
+            Provider::Keepass(p) => p.list(passphrase).await,
         }
     }
 
@@ -335,6 +359,8 @@ impl Provider {
         match self {
             Provider::Passbolt(p) => p.resolve(entry_id, passphrase).await,
             Provider::OnePassword(p) => p.resolve(entry_id, passphrase).await,
+            Provider::Bitwarden(p) => p.resolve(entry_id, passphrase).await,
+            Provider::Keepass(p) => p.resolve(entry_id, passphrase).await,
         }
     }
 
@@ -342,6 +368,8 @@ impl Provider {
         match self {
             Provider::Passbolt(p) => p.server_host(),
             Provider::OnePassword(p) => p.server_host(),
+            Provider::Bitwarden(p) => p.server_host(),
+            Provider::Keepass(p) => p.server_host(),
         }
     }
 
@@ -349,6 +377,8 @@ impl Provider {
         match self {
             Provider::Passbolt(_) => ProviderId::Passbolt,
             Provider::OnePassword(_) => ProviderId::OnePassword,
+            Provider::Bitwarden(_) => ProviderId::Bitwarden,
+            Provider::Keepass(_) => ProviderId::Keepass,
         }
     }
 
@@ -356,6 +386,8 @@ impl Provider {
         match self {
             Provider::Passbolt(p) => p.secret_kind(),
             Provider::OnePassword(p) => p.secret_kind(),
+            Provider::Bitwarden(p) => p.secret_kind(),
+            Provider::Keepass(p) => p.secret_kind(),
         }
     }
 
@@ -364,6 +396,8 @@ impl Provider {
         match self {
             Provider::Passbolt(p) => p.hash_account(h),
             Provider::OnePassword(p) => p.hash_account(h),
+            Provider::Bitwarden(p) => p.hash_account(h),
+            Provider::Keepass(p) => p.hash_account(h),
         }
     }
 
@@ -371,6 +405,8 @@ impl Provider {
         match self {
             Provider::Passbolt(p) => p.check_entry(entry_id, field),
             Provider::OnePassword(p) => p.check_entry(entry_id, field),
+            Provider::Bitwarden(p) => p.check_entry(entry_id, field),
+            Provider::Keepass(p) => p.check_entry(entry_id, field),
         }
     }
 
@@ -426,6 +462,7 @@ pub fn name_operation(name: &str) {
 /// locking or going to sleep, quitting.
 pub fn forget_passphrase() {
     unlock::global().cache.forget();
+    bitwarden::sessions::forget();
     prompt::cancel_all();
 }
 

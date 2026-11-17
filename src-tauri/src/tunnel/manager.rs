@@ -26,6 +26,9 @@ pub enum TunnelError {
     NotImplemented(String),
 }
 
+/// How long to wait before accepting again after an accept failed.
+const ACCEPT_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(200);
+
 /// An active tunnel task with a shutdown channel.
 struct ActiveTunnel {
     shutdown_tx: mpsc::Sender<()>,
@@ -167,8 +170,12 @@ impl TunnelManager {
         let ssh_handle = handle.clone();
 
         let task = tokio::spawn(async move {
+            // The connections in flight belong to this task: when the tunnel
+            // stops they stop with it, instead of carrying on unseen.
+            let mut relays = tokio::task::JoinSet::new();
             loop {
                 tokio::select! {
+                    Some(_) = relays.join_next(), if !relays.is_empty() => {}
                     accept_result = listener.accept() => {
                         match accept_result {
                             Ok((tcp_stream, peer_addr)) => {
@@ -179,7 +186,7 @@ impl TunnelManager {
                                 let handle_clone = ssh_handle.clone();
                                 let rhost = remote_host.clone();
                                 let tid = tunnel_id.clone();
-                                tokio::spawn(async move {
+                                relays.spawn(async move {
                                     if let Err(e) = relay_connection(
                                         tcp_stream,
                                         &handle_clone,
@@ -200,6 +207,9 @@ impl TunnelManager {
                                     "Tunnel {}: accept error: {}",
                                     tunnel_id, e
                                 );
+                                // One that keeps failing (no file handles
+                                // left, say) must not spin.
+                                tokio::time::sleep(ACCEPT_RETRY_DELAY).await;
                             }
                         }
                     }

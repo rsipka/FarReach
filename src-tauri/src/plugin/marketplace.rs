@@ -28,6 +28,8 @@ fn download_client() -> &'static reqwest::Client {
 /// Hard cap on a downloaded plugin archive. Plugins are tiny (KB to a few MB);
 /// anything larger is almost certainly a misconfigured registry entry.
 const MAX_DOWNLOAD_BYTES: usize = 16 * 1024 * 1024;
+/// What one plugin archive may unpack to in total.
+const MAX_UNPACKED_BYTES: usize = 64 * 1024 * 1024;
 
 /// One entry in the marketplace registry JSON file.
 ///
@@ -192,6 +194,7 @@ fn extract_zip_safely(bytes: &[u8], dest: &Path) -> Result<(), String> {
     let mut archive =
         zip::ZipArchive::new(reader).map_err(|e| format!("Bad zip: {}", e))?;
 
+    let mut unpacked = 0usize;
     for i in 0..archive.len() {
         let mut file = archive
             .by_index(i)
@@ -246,9 +249,20 @@ fn extract_zip_safely(bytes: &[u8], dest: &Path) -> Result<(), String> {
 
         let mut out = std::fs::File::create(&target)
             .map_err(|e| format!("Cannot create file {:?}: {}", target, e))?;
-        let mut buf = Vec::with_capacity(file.size() as usize);
-        file.read_to_end(&mut buf)
+        // The size in the archive's index is the archive's own claim: read
+        // up to the limit and no further, whatever it says.
+        let mut buf = Vec::new();
+        (&mut file)
+            .take(MAX_DOWNLOAD_BYTES as u64 + 1)
+            .read_to_end(&mut buf)
             .map_err(|e| format!("Cannot read entry: {}", e))?;
+        unpacked += buf.len();
+        if buf.len() > MAX_DOWNLOAD_BYTES || unpacked > MAX_UNPACKED_BYTES {
+            return Err(format!(
+                "Archive unpacks to more than {} bytes, refusing to extract",
+                MAX_UNPACKED_BYTES
+            ));
+        }
         std::io::Write::write_all(&mut out, &buf)
             .map_err(|e| format!("Cannot write file: {}", e))?;
     }

@@ -30,6 +30,7 @@
 	let loading = $state(true);
 
 	let showPasswordForm = $state(false);
+	let currentPassword = $state('');
 	let newPassword = $state('');
 	let confirmPassword = $state('');
 	let error = $state('');
@@ -105,6 +106,7 @@
 
 	function openPasswordForm() {
 		showPasswordForm = true;
+		currentPassword = '';
 		newPassword = '';
 		confirmPassword = '';
 		error = '';
@@ -112,6 +114,7 @@
 
 	function cancelPasswordForm() {
 		showPasswordForm = false;
+		currentPassword = '';
 		newPassword = '';
 		confirmPassword = '';
 		error = '';
@@ -132,9 +135,10 @@
 
 		saving = true;
 		try {
-			await setMasterPassword(newPassword);
+			await setMasterPassword(newPassword, hasPassword ? currentPassword : undefined);
 			hasPassword = true;
 			showPasswordForm = false;
+			currentPassword = '';
 			newPassword = '';
 			confirmPassword = '';
 		} catch (e) {
@@ -356,6 +360,16 @@
 
 	{#if showPasswordForm}
 		<div class="password-form">
+			{#if hasPassword}
+				<div class="form-field">
+					<Input
+						label={t('security.current_password')}
+						type="password"
+						bind:value={currentPassword}
+					/>
+				</div>
+			{/if}
+
 			<div class="form-field">
 				<Input
 					label={t('security.new_password')}
