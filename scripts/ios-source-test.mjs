@@ -51,15 +51,17 @@ const src = buildSource({ releases, tag: 'v1.1.0', repo: 'rsipka/FarReach', now,
 const app = src.apps[0];
 
 console.log('\nversions');
-eq('newest first, then by publish date; no prereleases, other drafts or IPA-less releases',
-	app.versions.map((v) => v.version), ['1.1.0', '1.0.0', '0.9.9']);
+eq('newest first, then by publish date; pre-releases in, other drafts and IPA-less releases out',
+	app.versions.map((v) => v.marketingVersion), ['1.1.0', '1.0.1-beta', '1.0.0', '0.9.9']);
 eq('download URL by tag, not the draft asset URL', app.versions[0].downloadURL,
 	'https://github.com/rsipka/FarReach/releases/download/v1.1.0/FarReach_1.1.0_ios.ipa');
-eq('size in bytes from the asset', app.versions.map((v) => v.size), [300, 200, 150]);
+eq('size in bytes from the asset', app.versions.map((v) => v.size), [300, 250, 200, 150]);
 eq('the release being made is dated now', app.versions[0].date, '2026-12-01T12:00:00.000Z');
-eq('older ones keep their publish date', app.versions[1].date, '2026-11-20T10:00:00.000Z');
-eq('buildVersion matches version', app.versions[0].buildVersion, '1.1.0');
-eq('notes carried', app.versions[1].localizedDescription, 'Notes for v1.0.0');
+eq('older ones keep their publish date', app.versions[2].date, '2026-11-20T10:00:00.000Z');
+eq('stable build number', app.versions[0].buildVersion, '1000');
+const dev = buildSource({ releases: [rel('v0.9.2-dev.3', null, [ipa('d.ipa', 9)], { draft: true })], tag: 'v0.9.2-dev.3', repo: 'a/b', now }).apps[0].versions[0];
+eq('a dev tag: numeric version, dev number as build, full tag shown', [dev.version, dev.buildVersion, dev.marketingVersion], ['0.9.2', '3', '0.9.2-dev.3']);
+eq('notes carried', app.versions[2].localizedDescription, 'Notes for v1.0.0');
 
 console.log('\nlegacy fields mirror the newest version');
 eq('version', app.version, '1.1.0');

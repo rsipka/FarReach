@@ -14,7 +14,7 @@
 
 use serde::{Deserialize, Serialize};
 
-const FEED: &str = "https://github.com/rsipka/FarReach/releases/latest/download/latest.json";
+const FEED: &str = "https://raw.githubusercontent.com/rsipka/FarReach/update-feed/latest.json";
 const RELEASES: &str = "https://github.com/rsipka/FarReach/releases";
 
 #[derive(Debug, Serialize, PartialEq, Eq)]

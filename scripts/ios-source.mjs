@@ -2,9 +2,10 @@
  * Builds apps.json, the AltStore-style source LiveContainer (and SideStore,
  * AltStore Classic) reads to offer FarReach's unsigned IPA and its updates.
  *
- * release.yml runs it for each tagged release and attaches the result to
- * that release, so the source is always served from one stable address:
- *   https://github.com/<owner>/<repo>/releases/latest/download/apps.json
+ * release.yml runs it for each tagged release, attaches the result to that
+ * release and copies it to the update-feed branch, so the source is always
+ * served from one address, dev pre-releases included:
+ *   https://raw.githubusercontent.com/<owner>/<repo>/update-feed/apps.json
  *
  * Versions come from the repository's releases that carry an IPA, newest
  * first; the release being made (still a draft) is put first.
@@ -27,8 +28,14 @@ export const MIN_OS = '15.0';
 
 const IPA = /\.ipa$/i;
 
-/** The version an app reports (CFBundleShortVersionString) for a tag. */
-export const versionOf = (tag) => tag.replace(/^v/i, '');
+/** The version an app reports (CFBundleShortVersionString) for a tag: v0.9.2-dev.3 → 0.9.2. */
+export const versionOf = (tag) => tag.replace(/^v/i, '').replace(/-.*$/, '');
+
+/**
+ * The CFBundleVersion release.yml gives the IPA: the dev number of a dev
+ * tag, 1000 for a stable one (so it sorts after that version's dev builds).
+ */
+export const buildOf = (tag) => tag.match(/-dev\.(\d+)$/)?.[1] ?? '1000';
 
 /** NS…UsageDescription strings from an Info.plist fragment, for appPermissions.privacy. */
 export function privacyFrom(plist) {
@@ -60,7 +67,8 @@ export function buildSource({ releases, tag, repo, privacy = {}, now = new Date(
 	const raw = `https://raw.githubusercontent.com/${repo}/main`;
 
 	const picked = releases
-		.filter((r) => r.tag_name === tag || (!r.draft && !r.prerelease))
+		// Dev builds are pre-releases and are listed too; drafts are not.
+		.filter((r) => r.tag_name === tag || !r.draft)
 		.map((r) => ({ r, ipa: (r.assets ?? []).find((a) => IPA.test(a.name)) }))
 		.filter(({ ipa }) => ipa);
 
@@ -76,8 +84,9 @@ export function buildSource({ releases, tag, repo, privacy = {}, now = new Date(
 		const date = r.tag_name === tag ? now : new Date(r.published_at ?? r.created_at);
 		return {
 			version,
-			// Tauri writes the same version into CFBundleVersion.
-			buildVersion: version,
+			buildVersion: buildOf(r.tag_name),
+			// What is shown: the whole tag, e.g. 0.9.2-dev.3.
+			marketingVersion: r.tag_name.replace(/^v/i, ''),
 			date: date.toISOString(),
 			localizedDescription: notesOf(r.body),
 			// Built by tag, not the asset's own URL: a draft's asset URL
