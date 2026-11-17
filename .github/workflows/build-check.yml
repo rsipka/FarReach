@@ -1,23 +1,42 @@
 name: Build check
 
-# Builds and tests on every desktop platform without releasing anything, so a
-# change (a dependency update above all) is known to build on macOS and Linux
-# before it is merged, not when a release tag is pushed.
+# Builds and tests without releasing anything, in two tiers.
+#
+# Fast (every pull request push, every push to main): the frontend, and the
+# Rust tests and clippy on Linux. A few minutes, and no macOS runner, of
+# which a free account gets only five at a time.
+#
+# Full: adds Windows and macOS (with the Intel Mac build), the Android tests
+# on an emulator and the APK. It runs every night on main when main changed,
+# on Dependabot pull requests (dependency updates are what most often break
+# one platform), on a pull request labelled full-ci, and when started by
+# hand. Run it (Actions > Build check > Run workflow) before tagging a release.
+#
+# To go back to the full tier on every pull request, set the repository
+# variable CI_FULL_ON_PR to true (Settings > Secrets and variables > Actions >
+# Variables). ios-build.yml and webkit-input.yml follow the same rules.
 on:
   pull_request:
     branches: [main]
+    # labeled: adding full-ci starts the full tier on the pull request.
+    types: [opened, synchronize, reopened, labeled]
   # Also on main itself: a pull request can only restore build caches saved
   # on its own branch or on main, so this is what lets a new one start warm.
   push:
     branches: [main]
+  schedule:
+    # 01:17 UTC, about 2 AM in Prague.
+    - cron: '17 1 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 # A newer push to the same pull request makes the older run pointless.
+# Another label than full-ci gets a group of its own, so it neither cancels
+# the run in progress nor starts any job (see the changes job).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'full-ci' && format('-{0}', github.run_id) || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -33,6 +52,7 @@ jobs:
   # check to make required (a skipped job counts as passed, a check that
   # never starts would leave the pull request waiting forever).
   changes:
+    if: github.event.action != 'labeled' || github.event.label.name == 'full-ci'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -41,14 +61,17 @@ jobs:
       frontend: ${{ steps.pick.outputs.frontend }}
       rust: ${{ steps.pick.outputs.rust }}
       mobile: ${{ steps.pick.outputs.mobile }}
+      full: ${{ steps.pick.outputs.full }}
+      platforms: ${{ steps.pick.outputs.platforms }}
     steps:
-      # A pull request's files come from the API; a push needs the history.
+      # A pull request's files come from the API; a push needs the history,
+      # the nightly run the date of main's last commit.
       - uses: actions/checkout@v7
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event_name == 'schedule'
 
       - uses: dorny/paths-filter@v4
         id: filter
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
         with:
           # Markdown never builds into the app.
           predicate-quantifier: some-with-excludes
@@ -83,19 +106,42 @@ jobs:
               - 'package-lock.json'
               - '!**/*.md'
 
-      # Started by hand, everything runs.
+      # Started by hand or at night, everything runs in the full tier; the
+      # night run skips itself when main has had no commit for a day.
       - id: pick
         env:
-          ALL: ${{ github.event_name == 'workflow_dispatch' }}
+          EVENT: ${{ github.event_name }}
           FRONTEND: ${{ steps.filter.outputs.frontend }}
           RUST: ${{ steps.filter.outputs.rust }}
           MOBILE: ${{ steps.filter.outputs.mobile }}
+          FULL_ON_PR: ${{ vars.CI_FULL_ON_PR == 'true' }}
+          LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          DEPENDABOT: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
         run: |
+          all=false full=false
+          case "$EVENT" in
+            workflow_dispatch) all=true ;;
+            schedule)
+              age=$(( $(date +%s) - $(git log -1 --format=%ct) ))
+              if [ "$age" -lt 90000 ]; then all=true; else echo "main unchanged for a day"; fi ;;
+            pull_request)
+              if [ "$FULL_ON_PR" = true ] || [ "$LABELLED" = true ] || [ "$DEPENDABOT" = true ]; then full=true; fi ;;
+          esac
+          [ "$all" = true ] && full=true
+          if [ "$EVENT" = schedule ] && [ "$all" = false ]; then
+            FRONTEND=false RUST=false MOBILE=false
+          fi
           for area in FRONTEND RUST MOBILE; do
             value="${!area}"
-            [ "$ALL" = true ] && value=true
+            [ "$all" = true ] && value=true
             echo "${area,,}=${value:-false}" | tee -a "$GITHUB_OUTPUT"
           done
+          echo "full=$full" | tee -a "$GITHUB_OUTPUT"
+          if [ "$full" = true ]; then
+            echo 'platforms=["macos-latest", "ubuntu-22.04", "windows-latest"]'
+          else
+            echo 'platforms=["ubuntu-22.04"]'
+          fi | tee -a "$GITHUB_OUTPUT"
 
   # Type check, translations and the production build. The frontend is the
   # same on every platform, so once on Linux is enough.
@@ -129,7 +175,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-22.04, windows-latest]
+        # Linux only in the fast tier.
+        platform: ${{ fromJSON(needs.changes.outputs.platforms) }}
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -193,7 +240,7 @@ jobs:
   # as zlib that the app links against come from the device.
   android:
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
+    if: needs.changes.outputs.rust == 'true' && needs.changes.outputs.full == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -266,7 +313,7 @@ jobs:
   # the real one. The test job above builds the Rust side only.
   android-apk:
     needs: changes
-    if: needs.changes.outputs.mobile == 'true'
+    if: needs.changes.outputs.mobile == 'true' && needs.changes.outputs.full == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -368,7 +415,8 @@ jobs:
   # when every job above passed or was skipped, and fails otherwise.
   result:
     name: Build check result
-    if: always()
+    # Not for a label other than full-ci: that event checks nothing.
+    if: always() && (github.event.action != 'labeled' || github.event.label.name == 'full-ci')
     needs: [changes, frontend, test, android, android-apk]
     runs-on: ubuntu-latest
     steps:
