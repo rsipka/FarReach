@@ -20,6 +20,7 @@
 	import { t } from '#lib/state/i18n.svelte.js';
 	import * as share from '#lib/state/share.svelte.js';
 	import { installWebkitInputFix } from '#lib/terminal/webkit-input-fix.js';
+	import { cssFontFamily } from '#lib/utils/font.js';
 
 	let container: HTMLDivElement | undefined = $state();
 	let term: Terminal | undefined;
@@ -32,7 +33,7 @@
 		if (!container) return;
 		const settings = getSettings();
 		term = new Terminal({
-			fontFamily: settings.fontFamily || 'monospace',
+			fontFamily: cssFontFamily(settings.fontFamily),
 			fontSize: settings.fontSize ?? 14,
 			cursorBlink: false,
 			cursorStyle: 'bar',
