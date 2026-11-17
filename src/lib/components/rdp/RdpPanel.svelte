@@ -57,7 +57,7 @@
 	import { untrustedRefsFromError } from '#lib/ipc/sessions.js';
 	import { getSettings, updateSetting } from '#lib/state/settings.svelte.js';
 	import { isMobile } from '#lib/platform.js';
-	import { setTabLink } from '#lib/state/tabs.svelte.js';
+	import { setTabLink, closeTab } from '#lib/state/tabs.svelte.js';
 	import MobileKeyBar, { type BarKey } from '#lib/components/shared/MobileKeyBar.svelte';
 
 	interface Props {
@@ -789,6 +789,12 @@
 				message = '';
 				resizeNotBefore = Date.now() + SETTLE_MS;
 			} else if (s.state === 'closed') {
+				// Logged off (or disconnected from Windows' menu) after the
+				// desktop was up: the tab goes, if Settings say so.
+				if (s.clean && phase === 'connected' && getSettings().closeTabOnExit) {
+					closeTab(id);
+					return;
+				}
 				phase = 'closed';
 				message = s.reason;
 				// Nothing to release on a desktop that has gone; just forget.

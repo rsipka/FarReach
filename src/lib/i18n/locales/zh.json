@@ -687,7 +687,7 @@
   "settings.double_click_open": "双击打开会话",
   "settings.double_click_open_desc": "单击在列表中选中会话，双击才连接。按 Enter 仍会连接。",
   "settings.close_tab_on_exit": "会话结束时关闭标签页",
-  "settings.close_tab_on_exit_desc": "当 shell 自行结束（输入 exit）时，关闭其标签页，而不是提供“重新连接”。连接中断时仍会提供。",
+  "settings.close_tab_on_exit_desc": "当 shell 自行结束（输入 exit）时，关闭其标签页，而不是提供“重新连接”。注销 RDP 桌面时也是如此。连接中断时仍会提供。",
   "settings.terminal_font": "终端字体",
   "settings.shell_colors": "向 shell 输入颜色设置",
   "settings.shell_colors_desc": "默认关闭。服务器会为 Reach 的 xterm-256color 终端自行为提示符和 ls 着色，与 PuTTY 相同。开启后，Reach 会在登录后输入一段简短的颜色和提示符设置；它不会进入 bash 和 zsh 的历史记录，但少数 shell（BusyBox、部分 zsh 配置）仍可能记录。",

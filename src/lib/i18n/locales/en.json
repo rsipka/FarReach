@@ -687,7 +687,7 @@
   "settings.double_click_open": "Open sessions with a double click",
   "settings.double_click_open_desc": "A single click picks a session in the list; a double click connects. Enter still connects.",
   "settings.close_tab_on_exit": "Close the tab when a session ends",
-  "settings.close_tab_on_exit_desc": "When the shell ends on its own (you type exit), its tab closes instead of offering Reconnect. A dropped connection still offers it.",
+  "settings.close_tab_on_exit_desc": "When the shell ends on its own (you type exit), its tab closes instead of offering Reconnect. So does an RDP desktop you log off from. A dropped connection still offers it.",
   "settings.terminal_font": "Terminal font",
   "settings.shell_colors": "Type a colour setup into the shell",
   "settings.shell_colors_desc": "Off by default. Servers colour their own prompt and ls for Reach's xterm-256color terminal, as they do for PuTTY. When on, Reach types a short colour and prompt setup after login; it keeps it out of bash and zsh history, but a few shells (BusyBox, some zsh setups) may still record it.",

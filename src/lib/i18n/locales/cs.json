@@ -2765,7 +2765,7 @@
   "settings.double_click_open": "Otevírat relace dvojklikem",
   "settings.double_click_open_desc": "Jedním kliknutím relaci v seznamu vyberete, dvojklikem se připojíte. Enter se připojí i nadále.",
   "settings.close_tab_on_exit": "Zavřít kartu po skončení relace",
-  "settings.close_tab_on_exit_desc": "Když shell skončí sám (napíšete exit), karta se zavře místo nabídky Znovu připojit. Při výpadku spojení se nabídka zobrazí i nadále.",
+  "settings.close_tab_on_exit_desc": "Když shell skončí sám (napíšete exit), karta se zavře místo nabídky Znovu připojit. Stejně tak plocha RDP, ze které se odhlásíte. Při výpadku spojení se nabídka zobrazí i nadále.",
   "session.double_click_connect_to": "Dvojklikem se připojíte k {{name}}",
   "sync.status_title": "Stav synchronizace",
   "sync.status_desc": "Každý trezor je uložen v tomto zařízení a funguje i offline. Změny se odešlou, jakmile bude backend dostupný.",
