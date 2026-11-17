@@ -46,14 +46,21 @@ export function folderTmux(folderId: string | null | undefined, folders: Folder[
 	return null;
 }
 
-/** Whether a session starts in tmux, and as what; null: it does not. */
+/** Whether a session starts in tmux, and as what; null: it does not. SSH
+ *  sessions, and WSL ones (which never ask: there is no list to ask from
+ *  before the shell starts). */
 export function tmuxFor(session: Pick<SessionConfig, 'name' | 'kind' | 'folder_id' | 'tmux'>, folders: Folder[]): TmuxStart | null {
-	if (session.kind && session.kind !== 'ssh') return null;
+	const kind = session.kind ?? 'ssh';
+	if (kind !== 'ssh' && kind !== 'wsl') return null;
 	const own: TmuxSetting | null | undefined = session.tmux;
-	const on = own?.mode === 'attach' ? true : own?.mode === 'off' ? false : folderTmux(session.folder_id, folders) === true;
+	const mode = own?.mode;
+	const on = mode === 'attach' || mode === 'ask' ? true : mode === 'off' ? false : folderTmux(session.folder_id, folders) === true;
 	if (!on) return null;
 	const name = own?.name?.trim();
-	return { name: name && validTmuxName(name) ? name : defaultTmuxName(session.name) };
+	const start: TmuxStart = { name: name && validTmuxName(name) ? name : defaultTmuxName(session.name) };
+	if (mode === 'ask' && kind === 'ssh') start.ask = true;
+	if (own?.mouse) start.mouse = true;
+	return start;
 }
 
 /**

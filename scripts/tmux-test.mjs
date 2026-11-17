@@ -14,6 +14,7 @@ import {
 	needsUser,
 	AUTO_RECONNECT_FOR_MS
 } from '../src/lib/terminal/tmux.ts';
+import { osc52Text, MAX_OSC52_BASE64 } from '../src/lib/terminal/osc52.ts';
 
 let failures = 0;
 const check = (name, cond, extra = '') => {
@@ -53,8 +54,12 @@ check('a bad own name falls back to the default', tmuxFor(s({ tmux: { mode: 'att
 check('the folder turns it on', tmuxFor(s({ folder_id: 'mid' }), folders)?.name === 'reacher-web');
 check('inherit keeps a name of its own', tmuxFor(s({ folder_id: 'mid', tmux: { mode: 'inherit', name: 'x' } }), folders)?.name === 'x');
 check('off on the session beats the folder', tmuxFor(s({ folder_id: 'mid', tmux: { mode: 'off' } }), folders) === null);
-check('a mode from a newer version follows the folder', tmuxFor(s({ folder_id: 'off', tmux: { mode: 'ask' } }), folders) === null);
-check('never for other kinds', tmuxFor(s({ kind: 'telnet', tmux: { mode: 'attach' } }), folders) === null);
+check('a mode from a newer version follows the folder', tmuxFor(s({ folder_id: 'off', tmux: { mode: 'pick-later' } }), folders) === null);
+check('never for Telnet', tmuxFor(s({ kind: 'telnet', tmux: { mode: 'attach' } }), folders) === null);
+check('ask on SSH asks', tmuxFor(s({ tmux: { mode: 'ask' } }), folders)?.ask === true);
+check('WSL runs tmux, never asks', (() => { const w = tmuxFor(s({ kind: 'wsl', tmux: { mode: 'ask' } }), folders); return w !== null && !w.ask; })());
+check('mouse is passed on', tmuxFor(s({ tmux: { mode: 'attach', mouse: true } }), folders)?.mouse === true);
+check('no mouse unless asked', tmuxFor(s({ tmux: { mode: 'attach' } }), folders)?.mouse === undefined);
 check('an old save without a kind is SSH', tmuxFor({ name: 'Web', folder_id: null, tmux: { mode: 'attach' } }, folders) !== null);
 
 section('reconnect');
@@ -63,6 +68,17 @@ check('2, 5, 10, 30 seconds, then every minute',
 check('it stops after ten minutes', autoReconnectDelay(5, AUTO_RECONNECT_FOR_MS) === null);
 check('a refused login needs the user', needsUser('Authentication failed') && needsUser('Password required for password auth'));
 check('a network error does not', !needsUser('Connection timed out') && !needsUser('No route to host'));
+
+section('OSC 52');
+const b64 = (txt) => Buffer.from(txt, 'utf8').toString('base64');
+check('copies text', osc52Text(`c;${b64('hello')}`) === 'hello');
+check('any selection letter, or none', osc52Text(`p;${b64('x')}`) === 'x' && osc52Text(`;${b64('x')}`) === 'x');
+check('UTF-8 survives', osc52Text(`c;${b64('příliš žluťoučký 🙂')}`) === 'příliš žluťoučký 🙂');
+check('a query is never answered', osc52Text('c;?') === null);
+check('a clear does nothing', osc52Text('c;') === null);
+check('not base64: nothing', osc52Text('c;%%%') === null && osc52Text('no-semicolon') === null);
+check('too long: nothing', osc52Text('c;' + 'A'.repeat(MAX_OSC52_BASE64 + 4)) === null);
+check('broken UTF-8: nothing', osc52Text('c;' + Buffer.from([0xff, 0xfe]).toString('base64')) === null);
 
 console.log(failures ? `\n${failures} failed` : '\nAll passed');
 process.exit(failures ? 1 : 0);

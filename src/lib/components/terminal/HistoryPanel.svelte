@@ -10,6 +10,7 @@
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { closeHistoryPanel, historyPanel } from '#lib/state/history.svelte.js';
 	import { getTerminalInput } from '#lib/state/snippets.svelte.js';
+	import { getTabs } from '#lib/state/tabs.svelte.js';
 	import { historyForget, historySearch, historyTranscript, type HistoryHit } from '#lib/ipc/history.js';
 	import { writeText as clipboardWriteText } from '@tauri-apps/plugin-clipboard-manager';
 
@@ -26,6 +27,9 @@
 
 	let opened = $derived(historyPanel());
 	let sessionId = $derived(opened?.sessionId ?? null);
+	/** Opened from a tab running in tmux: its output is tmux's screen
+	 *  redraws, so lines there can be cut or repeated. */
+	let inTmux = $derived(!!getTabs().find((x) => x.id === opened?.tabId)?.sshConnectParams?.tmux);
 
 	// Each opening starts from what it was opened with.
 	$effect(() => {
@@ -166,6 +170,9 @@
 					<option value="output">{t('history.kind_output')}</option>
 				</select>
 			</div>
+			{#if inTmux}
+				<p class="tmux-note">{t('tmux.history_note')}</p>
+			{/if}
 			{#if error}
 				<p class="error">{error}</p>
 			{:else if !busy && hits.length === 0}
@@ -340,5 +347,11 @@
 
 	.error {
 		color: var(--color-danger);
+	}
+
+	.tmux-note {
+		margin: 0 0 8px;
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
 	}
 </style>

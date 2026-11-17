@@ -20,7 +20,7 @@
 		/** `unlock`: a credential key's passphrase asked ahead of any login
 		 *  (Settings → Security). `host` holds the credentials' names, `title`
 		 *  the key, and `instructions` is "retry" after a wrong passphrase. */
-		kind: 'password' | 'passphrase' | 'unlock' | 'keyboard' | 'confirm';
+		kind: 'password' | 'passphrase' | 'unlock' | 'keyboard' | 'confirm' | 'tmux';
 		title: string;
 		instructions: string;
 		fields: { text: string; echo: boolean }[];
@@ -31,8 +31,35 @@
 	let answers = $state<string[]>([]);
 
 	$effect(() => {
-		answers = current ? current.fields.map(() => '') : [];
+		// tmux: one answer, the name of a new session, filled in.
+		answers = current ? (current.kind === 'tmux' ? [current.title] : current.fields.map(() => '')) : [];
 	});
+
+	/** tmux: the server's sessions, as `name\twindows\tattached\tactivity`. */
+	let tmuxSessions = $derived(
+		current?.kind === 'tmux'
+			? current.fields.map((f) => {
+					const [name, windows, attached, activity] = f.text.split('\t');
+					return { name, windows: Number(windows) || 0, attached: Number(attached) || 0, activity: Number(activity) || 0 };
+				})
+			: []
+	);
+	/** The picker's answer for "no tmux" (ssh::tmux::NO_TMUX_ANSWER). */
+	const NO_TMUX = '\u0001none';
+
+	async function pick(answer: string): Promise<void> {
+		answers = [answer];
+		await respond(true);
+	}
+
+	function ago(unixSeconds: number): string {
+		const mins = Math.max(0, Math.round((Date.now() / 1000 - unixSeconds) / 60));
+		if (mins < 1) return t('tmux.used_now');
+		if (mins < 60) return t('tmux.used_minutes', { count: String(mins) });
+		const hours = Math.round(mins / 60);
+		if (hours < 48) return t('tmux.used_hours', { count: String(hours) });
+		return t('tmux.used_days', { count: String(Math.round(hours / 24)) });
+	}
 
 	/** A notice with no answer while a login waits ("Confirm user presence for key …"). */
 	interface AuthNotice {
@@ -87,6 +114,8 @@
 	let detail = $derived(
 		!current || current.kind === 'keyboard'
 			? ''
+			: current.kind === 'tmux'
+				? (current.fields.length ? t('tmux.pick_detail') : t('tmux.pick_none'))
 			: current.kind === 'unlock'
 				? t('authprompt.unlock_detail', { key: current.title, credentials: current.host })
 				: current.title
@@ -108,7 +137,27 @@
 			{#if instructions}
 				<p class="msg pre">{instructions}</p>
 			{/if}
-			{#if current.kind !== 'confirm'}
+			{#if current.kind === 'tmux'}
+				{#if tmuxSessions.length}
+					<div class="tmux-list">
+						{#each tmuxSessions as s (s.name)}
+							<button type="button" class="tmux-row" onclick={() => pick(s.name)}>
+								<span class="tmux-name">{s.name}</span>
+								<span class="tmux-meta">
+									{t('tmux.windows', { count: String(s.windows) })}
+									{#if s.attached > 0}· {t('tmux.attached', { count: String(s.attached) })}{/if}
+									· {ago(s.activity)}
+								</span>
+							</button>
+						{/each}
+					</div>
+				{/if}
+				<label class="field">
+					<span class="label">{t('tmux.new_session')}</span>
+					<!-- svelte-ignore a11y_autofocus -->
+					<input class="input" type="text" bind:value={answers[0]} autocomplete="off" autocapitalize="off" spellcheck="false" autofocus={!tmuxSessions.length} />
+				</label>
+			{:else if current.kind !== 'confirm'}
 				{#each current.fields as f, i (i)}
 					<label class="field">
 						<span class="label">{current.kind === 'keyboard' ? f.text : t(`authprompt.field_${current.kind}`)}</span>
@@ -131,11 +180,14 @@
 		</form>
 
 		{#snippet actions()}
+			{#if current.kind === 'tmux'}
+				<Button variant="secondary" onclick={() => pick(NO_TMUX)}>{t('tmux.no_tmux')}</Button>
+			{/if}
 			<Button variant="secondary" onclick={() => respond(false)}>
 				{current.kind === 'confirm' ? t('authprompt.no') : t('common.cancel')}
 			</Button>
 			<Button variant="primary" onclick={() => respond(true)}>
-				{current.kind === 'confirm' ? t('authprompt.yes') : t('authprompt.continue')}
+				{current.kind === 'confirm' ? t('authprompt.yes') : current.kind === 'tmux' ? t('tmux.start_new') : t('authprompt.continue')}
 			</Button>
 		{/snippet}
 	</Modal>
@@ -188,6 +240,45 @@
 	.input:focus {
 		outline: none;
 		border-color: var(--color-accent);
+	}
+
+	.tmux-list {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		max-height: 260px;
+		overflow-y: auto;
+	}
+
+	.tmux-row {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 2px;
+		padding: 8px 10px;
+		text-align: left;
+		font: inherit;
+		color: var(--color-text-primary);
+		background: var(--color-bg-primary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-btn);
+		cursor: pointer;
+	}
+
+	.tmux-row:hover,
+	.tmux-row:focus-visible {
+		border-color: var(--color-accent);
+		outline: none;
+	}
+
+	.tmux-name {
+		font-family: var(--font-mono, monospace);
+		font-size: 0.8125rem;
+	}
+
+	.tmux-meta {
+		font-size: 0.6875rem;
+		color: var(--color-text-secondary);
 	}
 
 	.hint {

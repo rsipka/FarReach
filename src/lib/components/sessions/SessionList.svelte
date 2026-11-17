@@ -41,7 +41,7 @@
 	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetFolderCredential, sessionSetFolderTmux, sessionBulkUndo, type BulkResult, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
-	import { sshConnect, sshDisconnect, sshDetectOs, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
+	import { sshConnect, sshDisconnect, sshDetectOs, sshTmuxChosen, tmuxStartScript, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
 	// Passwords are now stored encrypted in vault, not in memory cache
 	import { createTab, updateTabOs } from '#lib/state/tabs.svelte.js';
 	import { getSettings, sessionLogConfig } from '#lib/state/settings.svelte.js';
@@ -832,11 +832,21 @@
 	}
 
 	/** Launch a local WSL session as a terminal tab */
-	function openWsl(session: SessionConfig): void {
+	async function openWsl(session: SessionConfig): Promise<void> {
 		const distro = session.wsl_distro?.trim();
 		const args = distro ? ['-d', distro] : [];
 		if (session.username?.trim()) {
 			args.push('-u', session.username.trim());
+		}
+		// In tmux inside the distribution: it outlives the tab and the app.
+		const tmux = tmuxFor(session, folders);
+		if (tmux) {
+			try {
+				args.push('-e', 'sh', '-c', await tmuxStartScript(tmux));
+			} catch (err) {
+				addToast(String(err), 'error');
+				return;
+			}
 		}
 		setActivePage('terminal');
 		const connectionId = `wsl-${crypto.randomUUID()}`;
@@ -935,7 +945,7 @@
 			return;
 		}
 		if (sessionKind(session) === 'wsl') {
-			openWsl(session);
+			void openWsl(session);
 			return;
 		}
 		if (sessionKind(session) === 'telnet') {
@@ -1097,6 +1107,12 @@
 				} : undefined,
 			};
 			await sshConnect(connectParams);
+			// Asked which tmux session: the tab keeps the answer, so a
+			// reconnect goes straight back to it rather than asking again.
+			if (connectParams.tmux?.ask) {
+				const chosen = await sshTmuxChosen(id).catch(() => undefined);
+				connectParams.tmux = chosen === null ? null : { ...connectParams.tmux, name: chosen ?? connectParams.tmux.name, ask: false };
+			}
 
 			// Cancelled while the handshake was in flight: the backend had no
 			// connection to drop yet, so this one is unwanted. Close it instead

@@ -209,14 +209,25 @@ pub async fn ssh_connect(
         // shell (which becomes the shell of a new tmux window). Nothing is
         // typed into it: the init would land in a tmux window, again on
         // every reattach.
+        // Ask mode: the shell stays as it is until the picker answers, once
+        // logged in (see `ssh::tmux::Ask`).
+        let tmux_ask = tmux.as_ref().filter(|t| t.ask).map(|t| crate::ssh::tmux::Ask {
+            id: id.clone(),
+            start: t.clone(),
+            shell: shell.clone(),
+            app: app.clone(),
+            host: host.clone(),
+            port,
+        });
         let shell = match &tmux {
-            Some(t) => Some(crate::ssh::tmux::start_command(t, shell.as_deref())?),
-            None => shell,
+            Some(t) if !t.ask => Some(crate::ssh::tmux::start_command(t, shell.as_deref())?),
+            _ => shell,
         };
         let login = crate::ssh::client::LoginOptions {
             inject_colors: inject_colors.unwrap_or(false) && tmux.is_none(),
             show_login_message: show_login_message.unwrap_or(true),
             log: session_log,
+            tmux_ask,
         };
         tracing::info!(
             "ssh_connect IPC: id={}, host={}, port={}, user={}, auth_method='{}', has_key_path={}, has_password={}, has_passphrase={}, has_password_ref={}, has_passphrase_ref={}, has_proxy={}, has_jump={}",
@@ -584,6 +595,35 @@ mod detect_os_tests {
         assert_eq!(os_from_uname("FreeBSD\n").as_deref(), Some("freebsd"));
         assert_eq!(os_from_uname("  \n"), None);
     }
+}
+
+/// The tmux start script for a WSL tab, which runs it with
+/// `wsl.exe -e sh -c <script>` (see `ssh::tmux::start_script`).
+#[tauri::command]
+pub fn tmux_start_script(start: crate::ssh::tmux::TmuxStart) -> Result<String, String> {
+    crate::ssh::tmux::start_script(&start, None)
+}
+
+/// What the tmux picker chose while connection `connection_id` opened,
+/// once: `{ "name": "main" }`, `{ "name": null }` for no tmux, or null
+/// when nothing was asked.
+#[tauri::command]
+pub fn ssh_tmux_chosen(connection_id: String) -> Option<serde_json::Value> {
+    crate::ssh::tmux::take_chosen(&connection_id).map(|name| serde_json::json!({ "name": name }))
+}
+
+/// The server's tmux sessions, for a tab's "Switch tmux session".
+#[tauri::command]
+pub async fn ssh_tmux_list(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+) -> Result<Vec<crate::ssh::tmux::Listed>, String> {
+    let handle = {
+        let manager = state.ssh_manager.lock().await;
+        manager.get_handle(&connection_id).map_err(|e| e.to_string())?
+    };
+    let out = crate::ssh::client::exec_on_connection(&handle, crate::ssh::tmux::LIST_COMMAND).await.map_err(|e| e.to_string())?;
+    Ok(crate::ssh::tmux::parse_list(&out))
 }
 
 /// Ends a tab's tmux session for good (the tab's own connection runs it),
