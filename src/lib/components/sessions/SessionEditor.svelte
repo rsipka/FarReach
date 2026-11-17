@@ -3,6 +3,7 @@
 	import Modal from '#lib/components/shared/Modal.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
 	import KeyPicker from './KeyPicker.svelte';
+	import DistroIcon from './DistroIcon.svelte';
 	import Input from '#lib/components/shared/Input.svelte';
 	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField } from '#lib/ipc/sessions.js';
 	import { isWindows } from '#lib/platform.js';
@@ -46,6 +47,9 @@
 	let domain = $state('');
 	/** RDP only: the protocol cannot say what the machine is (xrdp claims to be Windows), so the user does. */
 	let os = $state<'windows' | 'linux'>('windows');
+	// The OS found on the last connect is kept for good; Clear forgets it, so
+	// the next connect looks again. (From the ReachQ fork by CPTProgrammer.)
+	let osCleared = $state(false);
 	let sharePath = $state('');
 	/** VNC only: the saved SSH session to go through, or '' for direct. */
 	let viaSessionId = $state('');
@@ -241,6 +245,7 @@
 	});
 
 	function fillForm(editSession: SessionConfig | undefined): void {
+		osCleared = false;
 		if (editSession) {
 			kind = sessionKind(editSession);
 			domain = editSession.domain ?? '';
@@ -469,7 +474,7 @@
 					kind,
 					domain: filled ? (editSession.domain ?? null) : rdp ? (domain.trim() || null) : null,
 					// A session that changed protocol changed machine type too.
-					detected_os: rdp ? os : (kind === sessionKind(editSession) ? editSession.detected_os : null),
+					detected_os: rdp ? os : (kind === sessionKind(editSession) && !osCleared ? editSession.detected_os : null),
 					share_path: rdp ? (sharePath.trim() || null) : null,
 					via_session_id: via,
 					try_agent_keys: !desktop && authType === 'Key' && tryAgentKeys ? true : null,
@@ -981,6 +986,23 @@
 
 		<Input label={t('session.tags')} bind:value={tagsStr} placeholder={kind === 'rdp' ? 'office, windows' : 'production, web, linux'} disabled={saving} />
 
+		{#if editSession?.detected_os && kind === 'ssh' && sessionKind(editSession) === 'ssh'}
+			<div class="folder-section">
+				<span class="folder-label">{t('session.detected_os')}</span>
+				{#if osCleared}
+					<span class="os-cleared">{t('session.os_cleared')}</span>
+				{:else}
+					<div class="os-row">
+						<DistroIcon osId={editSession.detected_os} size={16} />
+						<span class="os-id">{editSession.detected_os === 'unknown' ? t('session.os_unknown') : editSession.detected_os}</span>
+						<Button variant="secondary" size="sm" onclick={() => (osCleared = true)} disabled={saving}>
+							{t('session.os_clear')}
+						</Button>
+					</div>
+				{/if}
+			</div>
+		{/if}
+
 		{#if folders.length > 0}
 			<div class="folder-section">
 				<span class="folder-label">{t('session.folder')}</span>
@@ -1126,6 +1148,23 @@
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
+	}
+
+	.os-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.os-id {
+		flex: 1;
+		font-size: 0.8125rem;
+		color: var(--color-text-primary);
+	}
+
+	.os-cleared {
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
 	}
 
 	.folder-label {

@@ -249,9 +249,11 @@ export const icons: Record<string, DistroIconData> = {
 	},
 };
 
-/** Look up icon data for an os-release ID string. Falls back to generic Linux. */
+/** Look up icon data for an os-release ID string. Falls back to generic
+ *  Linux for an ID we have no logo for; "unknown" (nothing answered the
+ *  probes: a switch, a restricted shell) gets none. */
 export function getDistroIcon(osId: string | undefined | null): DistroIconData | undefined {
-	if (!osId) return undefined;
+	if (!osId || osId === 'unknown') return undefined;
 	const slug = osIdToSlug[osId.toLowerCase()];
 	if (slug) return icons[slug];
 	return icons['Linux'];

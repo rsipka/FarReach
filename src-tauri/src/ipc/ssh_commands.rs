@@ -1,5 +1,5 @@
 use crate::state::AppState;
-use crate::ssh::client::{AuthParams, ConnectionInfo, JumpHostParams, KeySource, SshManager, exec_on_connection};
+use crate::ssh::client::{AuthParams, ConnectionInfo, JumpHostParams, KeySource, SshManager, exec_on_connection_with_exit_code_timeout};
 use crate::plugin::hooks;
 
 /// Parameters for a jump host received from the frontend.
@@ -476,9 +476,17 @@ pub async fn ssh_list_connections(
     Ok(manager.list_connections())
 }
 
-/// Detect the remote operating system by parsing /etc/os-release.
-/// Returns a lowercase distro ID (e.g. "debian", "ubuntu", "alpine")
-/// or a fallback from uname -s (e.g. "darwin", "freebsd").
+/// OS probes answer at once or not at all.
+const OS_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Detect the remote operating system. Probes, in order:
+/// 1. `/etc/os-release` (Linux; MSYS2/Cygwin on Windows ship one too)
+/// 2. `uname -s` (macOS, BSDs; Git Bash on Windows answers `MINGW64_NT-10.0`)
+/// 3. `cmd /c ver` (Windows, whatever its default shell)
+/// Returns a lowercase distro ID (e.g. "debian", "ubuntu", "alpine"),
+/// "windows", or "unknown" when nothing answered: a router or a restricted
+/// shell is not Linux, and guessing so put a penguin on it for good.
+/// (Ported from the ReachQ fork by CPTProgrammer.)
 #[tauri::command]
 pub async fn ssh_detect_os(
     state: tauri::State<'_, AppState>,
@@ -489,28 +497,82 @@ pub async fn ssh_detect_os(
         manager.get_handle(&connection_id).map_err(|e| e.to_string())?
     };
 
-    // Try /etc/os-release first (standard on modern Linux)
-    if let Ok(output) = exec_on_connection(&handle, "cat /etc/os-release 2>/dev/null").await {
-        for line in output.lines() {
-            // Match the ID= line (not ID_LIKE=)
-            if let Some(rest) = line.strip_prefix("ID=") {
-                let id = rest.trim().trim_matches('"').to_lowercase();
-                if !id.is_empty() {
-                    return Ok(id);
-                }
-            }
-        }
+    // Exit codes matter: cmd.exe on Windows answers `cat` with an error on
+    // stderr, and a shell that prints a banner must not pass for an answer.
+    if let Ok((out, _, 0)) = exec_on_connection_with_exit_code_timeout(&handle, "cat /etc/os-release", OS_PROBE_TIMEOUT).await {
+        return Ok(os_from_os_release(&out));
     }
-
-    // Fallback: uname -s for non-Linux systems
-    if let Ok(output) = exec_on_connection(&handle, "uname -s 2>/dev/null").await {
-        let os = output.trim().to_lowercase();
-        if !os.is_empty() {
+    if let Ok((out, _, 0)) = exec_on_connection_with_exit_code_timeout(&handle, "uname -s", OS_PROBE_TIMEOUT).await {
+        if let Some(os) = os_from_uname(&out) {
             return Ok(os);
         }
     }
+    if let Ok((out, _, 0)) = exec_on_connection_with_exit_code_timeout(&handle, "cmd /c ver", OS_PROBE_TIMEOUT).await {
+        if out.to_lowercase().contains("windows") {
+            return Ok("windows".to_string());
+        }
+    }
+    Ok("unknown".to_string())
+}
 
-    Ok("linux".to_string())
+/// The `ID=` of an os-release file (not `ID_LIKE=`). MSYS2, MinGW and Cygwin
+/// ship one on a Windows host; WSL's is its real distro, which is right.
+fn os_from_os_release(text: &str) -> String {
+    for line in text.lines() {
+        if let Some(rest) = line.trim().strip_prefix("ID=") {
+            let id = rest.trim().trim_matches(|c| c == '"' || c == '\'').to_lowercase();
+            if id.is_empty() {
+                break;
+            }
+            if id.contains("msys") || id.contains("mingw") || id.contains("cygwin") {
+                return "windows".to_string();
+            }
+            return id;
+        }
+    }
+    // An os-release without an ID is still a Linux system.
+    "linux".to_string()
+}
+
+/// `uname -s`, lowercased. Git Bash, MSYS and Cygwin on Windows answer
+/// `MINGW64_NT-10.0-19045`, `MSYS_NT-…` or `CYGWIN_NT-…`.
+fn os_from_uname(text: &str) -> Option<String> {
+    let os = text.lines().next()?.trim().to_lowercase();
+    if os.is_empty() {
+        return None;
+    }
+    if os.contains("_nt") {
+        return Some("windows".to_string());
+    }
+    Some(os)
+}
+
+#[cfg(test)]
+mod detect_os_tests {
+    use super::*;
+
+    #[test]
+    fn os_release_gives_its_id() {
+        let ubuntu = "NAME=\"Ubuntu\"\nID_LIKE=debian\nID=ubuntu\nVERSION_ID=\"24.04\"\n";
+        assert_eq!(os_from_os_release(ubuntu), "ubuntu");
+        assert_eq!(os_from_os_release("ID='alpine'\n"), "alpine");
+        assert_eq!(os_from_os_release("NAME=Something\n"), "linux");
+    }
+
+    #[test]
+    fn msys_and_cygwin_are_windows() {
+        assert_eq!(os_from_os_release("ID=msys2\n"), "windows");
+        assert_eq!(os_from_os_release("ID=cygwin\n"), "windows");
+        assert_eq!(os_from_uname("MINGW64_NT-10.0-19045\n").as_deref(), Some("windows"));
+        assert_eq!(os_from_uname("CYGWIN_NT-10.0\n").as_deref(), Some("windows"));
+    }
+
+    #[test]
+    fn uname_gives_the_kernel() {
+        assert_eq!(os_from_uname("Darwin\n").as_deref(), Some("darwin"));
+        assert_eq!(os_from_uname("FreeBSD\n").as_deref(), Some("freebsd"));
+        assert_eq!(os_from_uname("  \n"), None);
+    }
 }
 
 /// Inspect a key-file path so the UI can warn when the user picked the wrong
