@@ -1,12 +1,16 @@
 name: Deploy website to GitHub Pages
 
 # The website is plain HTML in docs/, published as is: no build step.
+# It also hosts the signed dnf repository of the latest stable release
+# (rpm/ and reachercm-packages.asc), unpacked from the release's assets.
+# The apt index needs no hosting: it is in the release itself.
 on:
   push:
     branches: [main]
     paths:
       - 'docs/**'
       - '.github/workflows/pages.yml'
+  # release.yml starts this after each stable release, so dnf sees it.
   workflow_dispatch:
 
 permissions:
@@ -27,9 +31,26 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Add the dnf repository of the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cp -r docs site
+          # releases/latest: the newest stable release (dev builds are
+          # pre-releases and are skipped). None yet leaves the site without it.
+          if gh release download --repo "$GITHUB_REPOSITORY" \
+              --pattern rpm-repodata.tar.gz --pattern reachercm-packages.asc --dir dl; then
+            mkdir -p site/rpm
+            tar -xzf dl/rpm-repodata.tar.gz -C site/rpm
+            cp dl/reachercm-packages.asc site/reachercm-packages.asc
+          else
+            echo "No stable release with a dnf repository yet."
+          fi
+
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: docs
+          path: site
 
       - name: Deploy to GitHub Pages
         id: deployment

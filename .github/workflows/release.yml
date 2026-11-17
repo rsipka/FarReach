@@ -13,6 +13,9 @@ on:
 
 permissions:
   contents: write
+  # To start the website deploy after a stable release; see the last step of
+  # publish-release.
+  actions: write
 
 jobs:
   # The one release every build uploads into. When each build made the
@@ -328,7 +331,7 @@ jobs:
       # and nothing is published without them: a missing key stops the
       # release here, as a draft. APT's flat index goes into the release
       # beside the .deb; dnf's repodata cannot (asset names have no
-      # folders), so it travels as one archive (rpm-repodata.tar.gz).
+      # folders), so it travels as one archive that pages.yml unpacks on the website.
       - name: Sign the apt and dnf repositories
         if: ${{ !contains(github.ref_name, '-dev.') }}
         env:
@@ -397,6 +400,16 @@ jobs:
             commit -qm "Update feed: $GITHUB_REF_NAME"
           git push -q --force origin HEAD:refs/heads/update-feed
           echo "update-feed now serves $GITHUB_REF_NAME"
+
+      # dnf reads its repository from the website, which pages.yml fills from
+      # the latest release. A release made with the workflow's own token never
+      # raises "release published" for other workflows, and workflow_dispatch
+      # is the one event that rule exempts, so ask directly.
+      - name: Publish the dnf repository on the website
+        if: ${{ !contains(github.ref_name, '-dev.') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
 
   build-android:
     needs: create-release

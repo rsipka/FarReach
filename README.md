@@ -103,7 +103,7 @@ Get Reacher CM from its [releases page](https://github.com/rsipka/ReacherCM/rele
 - Android: `.apk`
 - iPhone and iPad: unsigned `.ipa` for [LiveContainer](https://github.com/LiveContainer/LiveContainer) or sideloading. Add the source `https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/apps.json` in LiveContainer's Sources tab and each release shows up as an update.
 
-Reacher CM updates itself from those releases. Reach itself is also on Scoop and in apt/dnf repositories; Reacher CM is not.
+Reacher CM updates itself from those releases. On Ubuntu, Debian, Fedora and RHEL it can also come from its signed apt and dnf repositories (stable releases only); setup is on the [website](https://rsipka.github.io/ReacherCM/#linux).
 
 ## Built with
 

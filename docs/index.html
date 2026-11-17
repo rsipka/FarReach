@@ -52,6 +52,7 @@
   .card p { margin: 0; color: var(--muted); font-size: 0.95rem; }
   ul { padding-left: 20px; }
   li { margin: 4px 0; }
+  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; }
   .note p:first-child { margin-top: 0; }
   .note p:last-child { margin-bottom: 0; }
   .note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
@@ -69,7 +70,7 @@
       <a class="btn" href="https://github.com/rsipka/ReacherCM">Source on GitHub</a>
       <a class="btn" href="https://github.com/rsipka/ReacherCM/blob/main/CHANGELOG.md">Changelog</a>
     </div>
-    <p class="platforms">Windows · macOS · Linux (.deb, .rpm, AppImage) · Android · iOS (early builds)</p>
+    <p class="platforms">Windows · macOS · Linux (.deb, .rpm, AppImage, <a href="#linux">apt and dnf</a>) · Android · iOS (early builds)</p>
   </header>
 
   <h2>Added in Reacher CM</h2>
@@ -94,6 +95,28 @@
     <li>An encrypted vault for sessions and secrets, with strict host key checking.</li>
     <li>Native Rust networking and a fast UI. No Electron.</li>
   </ul>
+
+  <h2 id="linux">Install on Linux with apt or dnf</h2>
+  <p>Add the signed repository once, and your system's own updates keep Reacher CM up to date. It follows stable releases; dev builds are on the <a href="https://github.com/rsipka/ReacherCM/releases">releases page</a> only.</p>
+  <p><strong>Ubuntu, Debian and derivatives</strong></p>
+<pre>sudo apt install -y curl gpg
+curl -fsSL https://github.com/rsipka/ReacherCM/releases/latest/download/reachercm-packages.asc \
+  | sudo gpg --dearmor -o /usr/share/keyrings/reachercm.gpg
+echo "deb [signed-by=/usr/share/keyrings/reachercm.gpg] https://github.com/rsipka/ReacherCM/releases/latest/download ./" \
+  | sudo tee /etc/apt/sources.list.d/reachercm.list
+sudo apt update &amp;&amp; sudo apt install reacher-cm</pre>
+  <p><strong>Fedora, RHEL and derivatives</strong></p>
+<pre>sudo tee /etc/yum.repos.d/reachercm.repo &lt;&lt;'EOF'
+[reachercm]
+name=Reacher CM
+baseurl=https://rsipka.github.io/ReacherCM/rpm
+enabled=1
+repo_gpgcheck=1
+gpgcheck=0
+gpgkey=https://rsipka.github.io/ReacherCM/reachercm-packages.asc
+EOF
+sudo dnf install reacher-cm</pre>
+  <p>The key is trusted for this repository only. Every index is signed with it, and each package is checked against the checksum in the signed index.</p>
 
   <h2>Credits</h2>
   <div class="note">
