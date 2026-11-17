@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { openHistoryPanel } from '#lib/state/history.svelte.js';
 	import QuickConnect, { type QuickConnectPrefill } from './QuickConnect.svelte';
 	import RdpQuickConnect from '#lib/components/rdp/RdpQuickConnect.svelte';
 	import FaIcon from '#lib/components/shared/FaIcon.svelte';
@@ -731,6 +732,7 @@
 		const tab = createTab('telnet', session.host, undefined, session.name, session.detected_os ?? null);
 		tab.sessionId = session.id;
 		tab.terminalTheme = session.terminal_theme ?? null;
+		tab.historyMode = session.history ?? null;
 		tab.telnetConnectParams = {
 			host: session.host,
 			port: session.port,
@@ -762,6 +764,7 @@
 		);
 		tab.sessionId = session.id;
 		tab.terminalTheme = session.terminal_theme ?? null;
+		tab.historyMode = session.history ?? null;
 		addToast(t('session.connected_toast', { name: session.name }), 'success');
 	}
 
@@ -1018,6 +1021,7 @@
 			tab.sshConnectParams = connectParams;
 			tab.sessionId = session.id;
 			tab.terminalTheme = session.terminal_theme ?? null;
+			tab.historyMode = session.history ?? null;
 			addToast(t('session.connected_toast', { name: session.name }), 'success');
 			connectSession = undefined;
 			passwordFallback = false;
@@ -1473,6 +1477,11 @@
 				<button class="context-item" onclick={() => { if (contextMenu?.session) void setFavorite(contextMenu.session, !contextMenu.session.favorite); }} type="button">
 					{contextMenu.session.favorite ? t('session.remove_favorite') : t('session.add_favorite')}
 				</button>
+				{#if contextMenu.session.kind !== 'rdp' && contextMenu.session.kind !== 'vnc'}
+					<button class="context-item" onclick={() => { if (contextMenu?.session) openHistoryPanel({ sessionId: contextMenu.session.id, sessionName: contextMenu.session.name }); closeContextMenu(); }} type="button">
+						{t('history.session_menu')}
+					</button>
+				{/if}
 				<div class="context-sep"></div>
 				<div class="context-label">{contextMenu.session && selected.has(contextMenu.session.id) && selected.size > 1 ? t('session.move_n_to_folder', { count: String(selected.size) }) : t('session.move_to_folder')}</div>
 				<!-- Scrollable so a large number of folders doesn't make the menu

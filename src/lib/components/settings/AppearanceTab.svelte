@@ -13,6 +13,8 @@
 	import { stepUiZoom, UI_ZOOM_STEPS } from '#lib/state/ui-zoom.js';
 	import { shortcutLabel } from '#lib/state/shortcuts.svelte.js';
 	import { sessionLogDefaultDir } from '#lib/ipc/ssh.js';
+	import { historyForget, historyStats, type HistoryStats } from '#lib/ipc/history.js';
+	import { pushHistoryRetention } from '#lib/state/history.svelte.js';
 	import { open as pickFolder } from '@tauri-apps/plugin-dialog';
 	import { fontsListInstalled, type InstalledFont } from '#lib/ipc/fonts.js';
 	import { cssFontFamily } from '#lib/utils/font.js';
@@ -107,6 +109,27 @@
 	// logs actually go.
 	let logDefaultDir = $state('');
 
+	/** What the session history holds; null while the vault is locked. */
+	let historyInfo = $state<HistoryStats | null>(null);
+	/** Forgetting everything takes a second click. */
+	let forgetArmed = $state(false);
+
+	async function forgetAllHistory(): Promise<void> {
+		if (!forgetArmed) {
+			forgetArmed = true;
+			setTimeout(() => (forgetArmed = false), 4000);
+			return;
+		}
+		forgetArmed = false;
+		try {
+			await historyForget({ what: 'all' });
+			historyInfo = await historyStats();
+			addToast(t('history.forgot_all'), 'success');
+		} catch (err) {
+			addToast(String(err), 'error');
+		}
+	}
+
 	async function browseLogFolder(): Promise<void> {
 		const picked = await pickFolder({ directory: true });
 		if (typeof picked === 'string') updateSetting('sessionLogFolder', picked);
@@ -114,6 +137,7 @@
 
 	onMount(() => {
 		sessionLogDefaultDir().then((d) => (logDefaultDir = d)).catch(() => {});
+		historyStats().then((s) => (historyInfo = s)).catch(() => {});
 		// Re-read from disk in case a theme was installed or edited since startup.
 		loadInstalledThemes();
 		loadRegistry();
@@ -619,6 +643,87 @@
 		</div>
 	{/if}
 
+	<h3 class="section-title">{t('history.settings_section')}</h3>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('history.settings_mode')}</span>
+			<span class="setting-description">{t('history.settings_mode_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<select
+				class="log-field"
+				aria-label={t('history.settings_mode')}
+				value={settings.historyMode}
+				onchange={(e) => updateSetting('historyMode', e.currentTarget.value as 'off' | 'commands' | 'output')}
+			>
+				<option value="off">{t('history.mode_off')}</option>
+				<option value="commands">{t('history.mode_commands')}</option>
+				<option value="output">{t('history.mode_output')}</option>
+			</select>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('history.settings_keep')}</span>
+			<span class="setting-description">{t('history.settings_keep_desc')}</span>
+		</div>
+		<div class="setting-control history-keep">
+			<label>
+				{t('history.settings_output_days')}
+				<input class="log-field num" type="number" min="0" value={settings.historyOutputDays}
+					onchange={(e) => { updateSetting('historyOutputDays', Math.max(0, Math.floor(Number(e.currentTarget.value) || 0))); pushHistoryRetention(); }} />
+			</label>
+			<label>
+				{t('history.settings_command_days')}
+				<input class="log-field num" type="number" min="0" value={settings.historyCommandDays}
+					onchange={(e) => { updateSetting('historyCommandDays', Math.max(0, Math.floor(Number(e.currentTarget.value) || 0))); pushHistoryRetention(); }} />
+			</label>
+			<label>
+				{t('history.settings_max_mb')}
+				<input class="log-field num" type="number" min="0" step="256" value={settings.historyMaxMb}
+					onchange={(e) => { updateSetting('historyMaxMb', Math.max(0, Math.floor(Number(e.currentTarget.value) || 0))); pushHistoryRetention(); }} />
+			</label>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('history.settings_patterns')}</span>
+			<span class="setting-description">{t('history.settings_patterns_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<textarea
+				class="log-field patterns"
+				rows="3"
+				spellcheck="false"
+				aria-label={t('history.settings_patterns')}
+				placeholder="CORP-[0-9]{6}"
+				value={settings.historyPatterns}
+				onchange={(e) => updateSetting('historyPatterns', e.currentTarget.value)}
+			></textarea>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('history.settings_stored')}</span>
+			<span class="setting-description">
+				{#if historyInfo}
+					{t('history.settings_stored_desc', { commands: String(historyInfo.commands), outputs: String(historyInfo.outputs), mb: (historyInfo.bytes / 1048576).toFixed(1) })}
+				{:else}
+					{t('history.settings_stored_locked')}
+				{/if}
+			</span>
+		</div>
+		<div class="setting-control">
+			<button class="log-browse" type="button" disabled={!historyInfo || historyInfo.runs === 0} onclick={forgetAllHistory}>
+				{forgetArmed ? t('history.forget_all_confirm') : t('history.forget_all')}
+			</button>
+		</div>
+	</div>
+
 	<h3 class="section-title">{t('settings.rdp_section')}</h3>
 
 	<div class="setting-row">
@@ -653,6 +758,28 @@
 </div>
 
 <style>
+	.history-keep {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+		font-size: 0.75rem;
+	}
+
+	.history-keep label {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.log-field.num {
+		width: 90px;
+	}
+
+	.log-field.patterns {
+		font-family: var(--font-mono, monospace);
+		resize: vertical;
+	}
+
 	.log-field {
 		width: 100%;
 		min-width: 0;

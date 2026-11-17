@@ -138,6 +138,10 @@ pub struct SessionConfig {
     /// chosen in Settings. Kept on the session, so it syncs with it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal_theme: Option<String>,
+    /// What this session's tabs record into the session history: `off`,
+    /// `commands` or `output`; unset: the default chosen in Settings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history: Option<String>,
     /// Approvals of the password manager entries a saved credential brings
     /// to this session, by slot (`password`, `jump:0:passphrase`). An entry
     /// in a credential is approved per session and person like one of the
@@ -177,6 +181,9 @@ impl SessionConfig {
         }
         if self.terminal_theme.as_deref().is_some_and(|t| t.trim().is_empty()) {
             self.terminal_theme = None;
+        }
+        if !matches!(self.history.as_deref(), None | Some("off" | "commands" | "output")) {
+            self.history = None;
         }
     }
 }

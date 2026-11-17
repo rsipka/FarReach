@@ -10,6 +10,7 @@
 	import TabBar from './TabBar.svelte';
 	import Sidebar from './Sidebar.svelte';
 	import StatusBar from './StatusBar.svelte';
+	import HistoryPanel from '#lib/components/terminal/HistoryPanel.svelte';
 	import { monitorBarShown } from '#lib/state/monitor-bar.svelte.js';
 	import Toast from '#lib/components/shared/Toast.svelte';
 	import UpdateBanner from '#lib/components/shared/UpdateBanner.svelte';
@@ -239,6 +240,7 @@
 
 	{#if !monitorBarShown()}
 		<StatusBar />
+		<HistoryPanel />
 	{/if}
 	<Toast />
 	<UpdateBanner />

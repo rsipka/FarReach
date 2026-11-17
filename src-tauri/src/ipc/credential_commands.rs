@@ -98,6 +98,7 @@ pub async fn credential_lock(state: State<'_, AppState>) -> Result<(), String> {
     let mut manager = state.vault_manager.lock().await;
     // The user's act: held, so the next routine check does not reopen it.
     manager.hold();
+    crate::history::vault_locked();
     // As vault_lock: the password-manager listings and any passphrase kept
     // in memory go with it, and any passphrase question still open.
     crate::pwmanager::forget_all();

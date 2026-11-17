@@ -18,6 +18,7 @@
 	import { open as openDialog } from '@tauri-apps/plugin-dialog';
 	import { savedCredentialList, credentialsFor, type SavedCredential } from '#lib/ipc/savedCredentials.js';
 	import { DEFAULT_TELNET_OPTIONS, type TelnetOptions } from '#lib/ipc/telnet.js';
+	import type { HistoryMode } from '#lib/ipc/history.js';
 
 	interface Props {
 		open: boolean;
@@ -194,6 +195,8 @@
 	});
 	/** The terminal theme its tabs use; empty: the default from Settings. */
 	let terminalTheme = $state('');
+	/** What its tabs record into the session history; empty: the default from Settings. */
+	let historyChoice = $state<'' | HistoryMode>('');
 	let colorsOpen = $state(false);
 	let colorsSummary = $derived(
 		findTerminalTheme(terminalTheme)?.name ?? (terminalTheme ? t('termtheme.missing') : t('termtheme.session_default'))
@@ -264,6 +267,7 @@
 			customFields = (editSession.custom_fields ?? []).map((f) => ({ ...f, hidden: !!f.hidden, shown: false }));
 			docsOpen = !!notes.trim() || customFields.length > 0;
 			terminalTheme = editSession.terminal_theme ?? '';
+			historyChoice = editSession.history ?? '';
 			colorsOpen = false;
 			if (editSession.jump_chain && editSession.jump_chain.length > 0) {
 				jumpEnabled = true;
@@ -324,6 +328,7 @@
 			customFields = [];
 			docsOpen = false;
 			terminalTheme = '';
+			historyChoice = '';
 			colorsOpen = false;
 			jumpEnabled = false;
 			jumpHops = [];
@@ -389,6 +394,7 @@
 		const notesToSave = notes.trim() ? notes : null;
 		// Remote desktops paint their own screen: no terminal colours.
 		const themeToSave = kind === 'rdp' || kind === 'vnc' ? null : terminalTheme || null;
+		const historyToSave = kind === 'rdp' || kind === 'vnc' ? null : historyChoice || null;
 		const fieldsToSave: CustomField[] = customFields
 			.filter((f) => f.name.trim() || f.value.trim())
 			.map((f) => (f.hidden ? { name: f.name.trim(), value: f.value, hidden: true } : { name: f.name.trim(), value: f.value }));
@@ -468,6 +474,7 @@
 					notes: notesToSave,
 					custom_fields: fieldsToSave.length ? fieldsToSave : null,
 					terminal_theme: themeToSave,
+					history: historyToSave,
 				});
 				// Its open tabs take the new colours at once.
 				setSessionTerminalTheme(editSession.id, themeToSave);
@@ -496,7 +503,8 @@
 					credentialId: credential,
 					notes: notesToSave,
 					customFields: fieldsToSave,
-					terminalTheme: themeToSave
+					terminalTheme: themeToSave,
+					history: historyToSave
 				});
 			}
 			onsave?.();
@@ -986,6 +994,15 @@
 				/>
 				<p class="colors-hint">{t('termtheme.session_hint')}</p>
 			</Disclosure>
+			<div class="folder-section">
+				<span class="folder-label">{t('history.session_label')}</span>
+				<select class="folder-select" bind:value={historyChoice} disabled={saving}>
+					<option value="">{t('history.session_default')}</option>
+					<option value="off">{t('history.mode_off')}</option>
+					<option value="commands">{t('history.mode_commands')}</option>
+					<option value="output">{t('history.mode_output')}</option>
+				</select>
+			</div>
 		{/if}
 
 		<Disclosure title={t('session.docs')} summary={docsSummary} bind:open={docsOpen}>

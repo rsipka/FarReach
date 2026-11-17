@@ -14,7 +14,9 @@
 	import { noteLineEntered } from '#lib/state/explorer.svelte.js';
 	import { registerBufferReader, unregisterBufferReader } from '#lib/state/terminal-buffer.svelte.js';
 	import { terminalPalette } from '#lib/state/terminal-themes.svelte.js';
-	import { getSettings, updateSetting } from '#lib/state/settings.svelte.js';
+	import { getSettings, updateSetting, sessionLogConfig } from '#lib/state/settings.svelte.js';
+	import { historyStart, type HistoryMode } from '#lib/ipc/history.js';
+	import { setTabHistory, openHistoryPanel } from '#lib/state/history.svelte.js';
 	import { countPasteLines, shouldWarnOnPaste } from '#lib/terminal/paste.js';
 	import { rightClickAction, wordSeparator, MIDDLE_CLICK_PASTE_MS } from '#lib/terminal/mouse.js';
 	import { shouldRearmIme, nudgeCaret, REARM_SETTLE_MS } from '#lib/terminal/ime.js';
@@ -53,9 +55,52 @@
 		onReady?: () => void;
 		/** The session's terminal theme id; unset: the default from Settings. */
 		terminalTheme?: string | null;
+		/** The saved session the tab came from, for its history. */
+		sessionId?: string | null;
+		sessionName?: string | null;
+		/** The session's history choice; unset: the default from Settings. */
+		historyMode?: HistoryMode | null;
+		/** A WSL tab's distribution. */
+		wslDistro?: string | null;
 	}
 
-	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, telnetConnectParams, onReconnected, onReady, terminalTheme }: Props = $props();
+	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, telnetConnectParams, onReconnected, onReady, terminalTheme, sessionId, sessionName, historyMode, wslDistro }: Props = $props();
+
+	/**
+	 * Start recording this tab's stream into the session history (and, for
+	 * terminals other than SSH, into the file log), before its data flows:
+	 * an SSH session holds its output until `ssh_ready`, a Telnet one
+	 * connects after its listeners are up. Asking again for a stream
+	 * already recorded keeps what is there.
+	 */
+	async function registerHistory(stream: string): Promise<void> {
+		const s = getSettings();
+		const mode = historyMode ?? s.historyMode;
+		const ssh = termType === 'ssh';
+		const secrets = [sshConnectParams?.password, sshConnectParams?.keyPassphrase, telnetConnectParams?.password].filter(
+			(x): x is string => !!x
+		);
+		const host = sshConnectParams?.host ?? telnetConnectParams?.host ?? wslDistro ?? 'localhost';
+		try {
+			const status = await historyStart(stream, {
+				meta: {
+					sessionId: sessionId ?? null,
+					name: sessionName ?? '',
+					protocol: wslDistro ? 'wsl' : termType,
+					host,
+					user: sshConnectParams?.username ?? telnetConnectParams?.username ?? ''
+				},
+				level: mode === 'off' ? null : mode,
+				secrets,
+				patterns: s.historyPatterns.split('\n').map((p) => p.trim()).filter(Boolean),
+				// SSH writes its own file log, asked for at connect.
+				log: ssh ? null : sessionLogConfig()
+			});
+			setTabHistory(ptyId, stream, status, ssh && sessionLogConfig() !== null);
+		} catch (e) {
+			console.warn('Session history:', e);
+		}
+	}
 
 	/** The colours this terminal paints with. */
 	let palette = $derived(terminalPalette(terminalTheme));
@@ -217,7 +262,13 @@
 				{ label: t('textmenu.paste'), hint: `${mod}V`, action: () => void pasteFromClipboard(term) },
 				{ label: '', separator: true },
 				{ label: t('textmenu.select_all'), action: () => term.selectAll() },
-				{ label: t('terminal.menu_clear'), action: () => term.clear() }
+				{ label: t('terminal.menu_clear'), action: () => term.clear() },
+				{ label: '', separator: true },
+				{
+					label: t('history.search_menu'),
+					hint: `${isMac() ? '⌘⇧' : 'Ctrl+Shift+'}H`,
+					action: () => openHistoryPanel({ text: term.getSelection().trim().slice(0, 200), sessionId, sessionName, tabId: ptyId })
+				}
 			]
 		};
 	}
@@ -692,6 +743,13 @@
 				return true;
 			}
 
+			// Ctrl+Shift+H (Cmd+Shift+H): search history, from this session.
+			if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'h') {
+				event.preventDefault();
+				openHistoryPanel({ text: term.getSelection().trim().slice(0, 200), sessionId, sessionName, tabId: ptyId });
+				return false;
+			}
+
 			if (event.ctrlKey && event.key === 'c' && term.hasSelection()) {
 				void copySelection(term);
 				return false;
@@ -759,6 +817,8 @@
 				disconnected = true;
 			}
 		});
+
+		await registerHistory(eventId);
 
 		onReady?.();
 

@@ -50,6 +50,18 @@ export interface Settings {
 	sessionLogAppend: boolean;
 	/** Start each log with a date line. */
 	sessionLogHeader: boolean;
+	/** Session history: what terminal tabs record into the encrypted,
+	 *  searchable history, unless their session chooses otherwise. Off
+	 *  unless turned on, like the file log. */
+	historyMode: 'off' | 'commands' | 'output';
+	/** Output older than this many days is deleted (0: kept). */
+	historyOutputDays: number;
+	/** Commands older than this many days are deleted (0: kept). */
+	historyCommandDays: number;
+	/** The oldest output goes once history takes more than this (0: no cap). */
+	historyMaxMb: number;
+	/** The user's own patterns to mask before saving, one regex per line. */
+	historyPatterns: string;
 	/** Remote desktop: paint through WebGL (the GPU) rather than the 2D canvas. */
 	rdpHardwareRendering: boolean;
 	/** Remote desktop: advertise the graphics pipeline, for hosts that encode H.264. */
@@ -162,6 +174,11 @@ const defaults: Settings = {
 	sessionLogName: '&H-&Y&M&D-&T.log',
 	sessionLogAppend: true,
 	sessionLogHeader: true,
+	historyMode: 'off',
+	historyOutputDays: 90,
+	historyCommandDays: 365,
+	historyMaxMb: 2048,
+	historyPatterns: '',
 	rdpHardwareRendering: true,
 	rdpGraphicsPipeline: false,
 	rdpFullscreenButton: true,
@@ -264,6 +281,11 @@ export function loadSettings(): void {
 			settings.sessionLogName = parsed.sessionLogName ?? defaults.sessionLogName;
 			settings.sessionLogAppend = parsed.sessionLogAppend ?? defaults.sessionLogAppend;
 			settings.sessionLogHeader = parsed.sessionLogHeader ?? defaults.sessionLogHeader;
+			settings.historyMode = parsed.historyMode ?? defaults.historyMode;
+			settings.historyOutputDays = parsed.historyOutputDays ?? defaults.historyOutputDays;
+			settings.historyCommandDays = parsed.historyCommandDays ?? defaults.historyCommandDays;
+			settings.historyMaxMb = parsed.historyMaxMb ?? defaults.historyMaxMb;
+			settings.historyPatterns = parsed.historyPatterns ?? defaults.historyPatterns;
 			settings.rdpHardwareRendering = parsed.rdpHardwareRendering ?? defaults.rdpHardwareRendering;
 			settings.rdpGraphicsPipeline = parsed.rdpGraphicsPipeline ?? defaults.rdpGraphicsPipeline;
 			settings.rdpFullscreenButton = parsed.rdpFullscreenButton ?? defaults.rdpFullscreenButton;

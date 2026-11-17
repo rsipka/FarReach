@@ -9,6 +9,7 @@
 	 */
 	import { tick } from 'svelte';
 	import { isPaletteOpen, closePalette, requestSessionAction, requestTerminalFocus } from '#lib/state/palette.svelte.js';
+	import { openHistoryPanel } from '#lib/state/history.svelte.js';
 	import {
 		getTabs,
 		getActiveTab,
@@ -215,6 +216,16 @@
 			},
 			// The tab in front, as its own menu in the tab bar has it (#160).
 			...activeTabActions(),
+			{
+				id: 'action:history',
+				group: t('palette.group_actions'),
+				label: t('history.search_menu'),
+				hint: shortcutLabel('H', { ctrl: true, shift: true }),
+				run: () => {
+					const tab = getActiveTab();
+					openHistoryPanel({ sessionId: tab?.sessionId, sessionName: tab?.sessionName, tabId: tab?.id });
+				}
+			},
 			{
 				id: 'action:settings',
 				group: t('palette.group_actions'),

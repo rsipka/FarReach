@@ -16,6 +16,7 @@ pub mod k8s;
 pub mod logfiles;
 pub mod dragout;
 pub mod hardening;
+pub mod history;
 pub mod system_lock;
 pub mod http;
 pub mod recipe;
@@ -52,6 +53,7 @@ use ipc::plugin_commands::*;
 use ipc::marketplace_commands::*;
 use ipc::credential_commands::*;
 use ipc::settings_commands::*;
+use ipc::history_commands::*;
 use ipc::font_commands::*;
 use ipc::mcp_commands::*;
 use ipc::rdp_commands::*;
@@ -442,6 +444,15 @@ pub fn run() {
             ssh_hostkey_response,
             ssh_auth_prompt_response,
             session_log_default_dir,
+            history_start,
+            history_stop,
+            history_pause,
+            history_status,
+            history_search,
+            history_transcript,
+            history_forget,
+            history_configure,
+            history_stats,
             app_update_check,
             ctr_open,
             ctr_open_live,
@@ -871,6 +882,15 @@ pub fn run() {
             ssh_hostkey_response,
             ssh_auth_prompt_response,
             session_log_default_dir,
+            history_start,
+            history_stop,
+            history_pause,
+            history_status,
+            history_search,
+            history_transcript,
+            history_forget,
+            history_configure,
+            history_stats,
             app_update_check,
             ctr_open,
             ctr_open_live,
@@ -1246,6 +1266,7 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            crate::history::spawn_writer(app.handle().clone());
             use tauri::Manager;
 
             // Before anything can take a keystroke: a held key must repeat.

@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { SecretRef } from './pwmanager';
 import type { TelnetOptions } from './telnet';
+import type { HistoryMode } from './history';
 import { t } from '#lib/state/i18n.svelte.js';
 
 export interface AuthMethod {
@@ -75,6 +76,9 @@ export interface SessionConfig {
   /** The terminal colours its tabs use, by terminal theme id; unset: the
    *  default from Settings (see #lib/state/terminal-themes). */
   terminal_theme?: string | null;
+  /** What its tabs record into the session history; unset: the default
+   *  from Settings. */
+  history?: HistoryMode | null;
 }
 
 /** One named value of a session's documentation. */
@@ -179,6 +183,7 @@ export async function sessionCreate(params: {
   notes?: string | null;
   customFields?: CustomField[] | null;
   terminalTheme?: string | null;
+  history?: HistoryMode | null;
 }): Promise<SessionConfig> {
   return invoke<SessionConfig>('session_create', {
     name: params.name,
@@ -205,6 +210,7 @@ export async function sessionCreate(params: {
     notes: params.notes?.trim() ? params.notes : null,
     customFields: params.customFields?.length ? params.customFields : null,
     terminalTheme: params.terminalTheme || null,
+    history: params.history || null,
   });
 }
 

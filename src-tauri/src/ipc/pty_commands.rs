@@ -34,6 +34,7 @@ pub async fn pty_write(
     id: String,
     data: Vec<u8>,
 ) -> Result<(), String> {
+    crate::history::input(&id, &data);
     let mut manager = state
         .pty_manager
         .lock()
