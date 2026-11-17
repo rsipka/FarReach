@@ -40,8 +40,9 @@ export interface Tab {
 	wslDistro?: string;
 	/** The tab group it is in, if any (see TabGroup). */
 	groupId?: string;
-	/** An SSH or Telnet tab whose connection dropped, or is being made again: shown on
-	 *  the tab, so a dead session is seen from any tab, not only its own. */
+	/** An SSH or Telnet tab whose connection dropped (or ended), or is being made
+	 *  again, or a desktop that closed: shown on the tab, so a dead session is
+	 *  seen from any tab, not only its own. Closing the app does not count it. */
 	link?: 'down' | 'reconnecting';
 	/** The saved session this tab was opened from, if any. */
 	sessionId?: string;

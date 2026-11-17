@@ -70,13 +70,17 @@
 	let updateOpen = $state(false);
 	let updateCount = $state(0);
 
-	/** Count live SSH connections (backend truth; falls back to connected tabs), plus open desktops. */
+	/** Count live SSH connections (backend truth; falls back to connected tabs),
+	 *  plus open Telnet sessions and desktops. A tab whose session already
+	 *  ended (it shows Reconnect) is not live: closing it loses nothing. */
 	async function countActiveConnections(): Promise<number> {
-		const desktops = getTabs().filter(isDesktopTab).length;
+		const tabs = getTabs();
+		const ended = new Set(tabs.filter((tab) => tab.link === 'down' && tab.connectionId).map((tab) => tab.connectionId));
+		const others = tabs.filter((tab) => tab.link !== 'down' && (isDesktopTab(tab) || (tab.type === 'telnet' && !!tab.telnetConnectionId))).length;
 		try {
-			return (await sshListConnections()).length + desktops;
+			return (await sshListConnections()).filter((c) => !ended.has(c.id)).length + others;
 		} catch {
-			return getTabs().filter((tab) => tab.type === 'ssh' && !!tab.connectionId).length + desktops;
+			return tabs.filter((tab) => tab.type === 'ssh' && !!tab.connectionId && tab.link !== 'down').length + others;
 		}
 	}
 

@@ -2690,8 +2690,17 @@ async fn ssh_session_task(
         }};
     }
 
+    // Set when the remote shell ended with an exit status: a clean end,
+    // as against a drop or a close from this side.
+    let mut exit_code: Option<u32> = None;
+    let mut eof_deadline: Option<tokio::time::Instant> = None;
+
     loop {
         tokio::select! {
+            _ = async { tokio::time::sleep_until(eof_deadline.unwrap()).await }, if eof_deadline.is_some() => {
+                tracing::info!("SSH '{}' no exit status after EOF", connection_id);
+                break;
+            }
             msg = channel.wait() => {
                 match msg {
                     Some(ChannelMsg::Data { ref data }) => {
@@ -2712,12 +2721,17 @@ async fn ssh_session_task(
                     }
                     Some(ChannelMsg::ExitStatus { exit_status }) => {
                         tracing::info!("SSH '{}' exited with status {}", connection_id, exit_status);
-                        let _ = app_handle.emit(&exit_event, exit_status);
+                        exit_code = Some(exit_status);
                         break;
                     }
                     Some(ChannelMsg::Eof) => {
+                        // The exit status can come after EOF: wait a moment
+                        // for it (or the close) so a shell that ended is told
+                        // apart from a connection that dropped.
                         tracing::info!("SSH '{}' received EOF", connection_id);
-                        break;
+                        if eof_deadline.is_none() {
+                            eof_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_secs(2));
+                        }
                     }
                     None => {
                         tracing::info!("SSH '{}' channel closed", connection_id);
@@ -2855,7 +2869,9 @@ async fn ssh_session_task(
         let _ = app_handle.emit(&data_event, &tail);
     }
 
-    if let Err(e) = app_handle.emit(&exit_event, ()) {
+    // One exit event per session; `code` is set only when the shell ended
+    // on its own (the user typed exit), which the tab may close on.
+    if let Err(e) = app_handle.emit(&exit_event, serde_json::json!({ "code": exit_code })) {
         tracing::error!("Failed to emit '{}': {}", exit_event, e);
     }
     if let Some(cl) = extras.connlog.as_ref() {

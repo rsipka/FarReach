@@ -22,6 +22,9 @@ export interface Settings {
 	/** Sessions in the list open on a double click; a single click only
 	 *  focuses the row. Off: one click connects, as before. */
 	doubleClickToOpen: boolean;
+	/** A session that ends on its own (exit typed, the shell finished) closes
+	 *  its tab rather than offering Reconnect. A dropped connection still does. */
+	closeTabOnExit: boolean;
 	fontFamily: string;
 	defaultShell: string;
 	openLastSession: boolean;
@@ -145,6 +148,7 @@ const defaults: Settings = {
 	uiZoom: 1,
 	compactLayout: false,
 	doubleClickToOpen: false,
+	closeTabOnExit: false,
 	fontFamily: 'monospace',
 	defaultShell: '/bin/bash',
 	openLastSession: false,
@@ -246,6 +250,7 @@ export function loadSettings(): void {
 			settings.uiZoom = parsed.uiZoom ?? defaults.uiZoom;
 			settings.compactLayout = parsed.compactLayout ?? defaults.compactLayout;
 			settings.doubleClickToOpen = parsed.doubleClickToOpen ?? defaults.doubleClickToOpen;
+			settings.closeTabOnExit = parsed.closeTabOnExit ?? defaults.closeTabOnExit;
 			settings.fontFamily = parsed.fontFamily ?? defaults.fontFamily;
 			settings.defaultShell = parsed.defaultShell ?? defaults.defaultShell;
 			settings.openLastSession = parsed.openLastSession ?? defaults.openLastSession;

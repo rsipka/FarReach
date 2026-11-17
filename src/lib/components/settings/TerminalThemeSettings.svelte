@@ -140,14 +140,13 @@
 			aria-label={t('termtheme.more_search')}
 			autocomplete="off"
 			spellcheck="false"
-			disabled={!canEditOwn}
 		/>
 		{#if moreMatches.length > 0}
 			<div class="more-rows">
 				{#each moreMatches as name (name)}
 					<div class="more-row">
 						<span class="more-name">{name}</span>
-						<Button variant="secondary" size="sm" onclick={() => download(name)} disabled={downloading !== null}>
+						<Button variant="secondary" size="sm" onclick={() => download(name)} disabled={downloading !== null || !canEditOwn}>
 							{downloading === name ? t('termtheme.downloading') : t('termtheme.download')}
 						</Button>
 					</div>

@@ -138,6 +138,21 @@
 
 	<div class="setting-row">
 		<div class="setting-info">
+			<span class="setting-label">{t('settings.close_tab_on_exit')}</span>
+			<span class="setting-description">{t('settings.close_tab_on_exit_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.closeTabOnExit}
+				label={t('settings.close_tab_on_exit')}
+				onchange={(v) => updateSetting('closeTabOnExit', v)}
+			/>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
 			<span class="setting-label">{t('settings.paste_warning')}</span>
 			<span class="setting-description">{t('settings.paste_warning_desc')}</span>
 		</div>
