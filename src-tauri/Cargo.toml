@@ -51,7 +51,7 @@ cryptoki = "0.12"
 cryptoki-sys = "0.5"
 # SecurityKeyProvider middleware (src/ssh/sk.rs), loaded at run time as
 # OpenSSH dlopens it.
-libloading = "0.8"
+libloading = "0.9"
 
 # Encryption
 # zeroize: wipe the hashing blocks and the keys ciphers hold when they drop.
@@ -372,7 +372,7 @@ libc = "0.2"
 # The system's GSSAPI library for Kerberos logins, loaded when first used
 # (see src/ssh/gssapi.rs), so Reach starts without one.
 [target.'cfg(all(unix, not(target_os = "android")))'.dependencies]
-libloading = "0.8"
+libloading = "0.9"
 
 # Root certificates for HTTPS on Android; see src/http.rs.
 # Scanning another device's link QR code with the camera.
