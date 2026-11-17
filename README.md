@@ -5,7 +5,7 @@
 <h1 align="center">Reacher CM</h1>
 
 <p align="center">
-  A fork of <a href="https://github.com/alexandrosnt/Reach">Reach</a>, the modern, cross-platform SSH client and remote management tool.
+  A personal fork of <a href="https://github.com/alexandrosnt/Reach">Reach</a>, the modern, cross-platform SSH client and remote management tool, with additional features.
 </p>
 
 <p align="center">
@@ -14,9 +14,11 @@
 
 > **Reacher CM is built on Reach** by [Alexander Nt.](https://github.com/alexandrosnt) and the
 > [Reach contributors](https://github.com/alexandrosnt/Reach/graphs/contributors). Almost everything
-> here is their work. Reacher CM adds features that are tested here first and offered back to Reach
-> as pull requests; most of them are meant to land upstream. If you don't need what Reacher CM adds,
-> use [Reach](https://github.com/alexandrosnt/Reach) itself.
+> here is their work. Reacher CM is a personal fork that adds features of its own on top. If you don't
+> need what Reacher CM adds, use [Reach](https://github.com/alexandrosnt/Reach) itself.
+>
+> **AI-assisted:** most of the code Reacher CM adds is written with AI coding tools
+> ([Claude Code](https://claude.com/claude-code)), reviewed and tested by the maintainer.
 >
 > Reacher CM has its own app id, data folder and keychain entries, so it installs and runs next to
 > Reach. It starts empty: restore a Reach backup or point it at your sync location to bring data over.
@@ -40,7 +42,7 @@ Reacher CM adds what people moving from Remote Desktop Manager and similar tools
 - **Local-first sync**: every vault works offline and syncs in the background, through Turso, a folder, SFTP, Git or an SMB share without mounting it. Conflicting edits are kept as copies, not lost.
 - **Czech translation**, and early **iOS** builds.
 
-See the [changelog](CHANGELOG.md) for details. Most of these are offered back to Reach.
+See the [changelog](CHANGELOG.md) for details.
 
 ## Features
 

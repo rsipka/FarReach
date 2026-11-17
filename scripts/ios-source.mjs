@@ -105,7 +105,7 @@ export function buildSource({ releases, tag, repo, privacy = {}, now = new Date(
 		identifier: BUNDLE_ID,
 		subtitle: 'Unsigned Reacher CM builds for LiveContainer and sideloading',
 		description:
-			'Unsigned iOS builds of Reacher CM, a fork of the Reach SSH, SFTP, RDP and VNC client, made by GitHub Actions for each release.',
+			'Unsigned iOS builds of Reacher CM, a personal fork of the Reach SSH, SFTP, RDP and VNC client, made by GitHub Actions for each release.',
 		iconURL: icon,
 		website: base,
 		tintColor: '#43E6B0',
@@ -118,7 +118,7 @@ export function buildSource({ releases, tag, repo, privacy = {}, now = new Date(
 				developerName: 'Reacher CM',
 				subtitle: 'SSH, SFTP, RDP and VNC client',
 				localizedDescription:
-					'Reacher CM is a fork of Reach: SSH, SFTP, RDP, VNC, Telnet and serial sessions, an encrypted vault and sync. This is an early, unsigned iOS build, meant for LiveContainer or for signing yourself.',
+					'Reacher CM is a personal fork of Reach with additional features: SSH, SFTP, RDP, VNC, Telnet and serial sessions, an encrypted vault and sync. This is an early, unsigned iOS build, meant for LiveContainer or for signing yourself.',
 				iconURL: icon,
 				tintColor: '#43E6B0',
 				category: 'developer',

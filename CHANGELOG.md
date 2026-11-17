@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Reacher CM are documented here. Reacher CM is a fork of [Reach](https://github.com/alexandrosnt/Reach); the entries from v0.9.1 down are Reach's own.
+All notable changes to Reacher CM are documented here. Reacher CM is a personal fork of [Reach](https://github.com/alexandrosnt/Reach) with additional features, written with the help of AI coding tools; the entries from v0.9.1 down are Reach's own.
 
 ## Reacher CM (unreleased, based on Reach v0.9.2)
 - **Terminal copy and paste, your way** — A right click in the terminal now opens a menu (Copy, Paste, Select all, Clear terminal) instead of pasting at once. Settings > General has the choice: the menu, paste as in PuTTY, or copy the selection and paste without one (the old behaviour); Ctrl+right click opens the menu in any mode. New there too: copy on select, paste with the middle button (the selected text on Linux, the clipboard elsewhere), and the characters that end a word on a double click. A program that uses the mouse (mc, vim, tmux) now gets the click alone; hold Shift to keep it for the terminal. Also fixed: *Confirm multi-line pastes* and its line count were forgotten on restart.

@@ -13,7 +13,7 @@
   </developer>
   <description>
     <p>
-      Reacher CM is a fork of Reach, a modern SSH client and remote server management tool, free and open source.
+      Reacher CM is a personal fork of Reach, a modern SSH client and remote server management tool, with additional features. Free and open source.
     </p>
     <ul>
       <li>Tabbed SSH terminals, jump hosts and port forwarding</li>
