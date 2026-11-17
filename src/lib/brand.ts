@@ -19,6 +19,13 @@ export const UPSTREAM_URL = 'https://github.com/alexandrosnt/Reach';
 export const SHOW_COMMUNITY = false;
 
 /**
+ * Whether to show the "Support Reach" row in Settings > General. It links to
+ * the original author's GitHub Sponsors, so it is hidden for now. Set this to
+ * true to bring it back; nothing else was removed.
+ */
+export const SHOW_SPONSOR = false;
+
+/**
  * Keys where "Reach" is not the product name, or where it means the
  * original project (its community and sponsors), so they are left alone.
  */

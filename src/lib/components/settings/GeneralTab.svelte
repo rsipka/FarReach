@@ -9,7 +9,7 @@
 	import Dropdown from '#lib/components/shared/Dropdown.svelte';
 	import DiscordIcon from '#lib/components/shared/DiscordIcon.svelte';
 	import { COMMUNITY } from '#lib/data/community.js';
-	import { SHOW_COMMUNITY } from '#lib/brand.js';
+	import { SHOW_COMMUNITY, SHOW_SPONSOR } from '#lib/brand.js';
 	import LanguageSelect from '#lib/components/shared/LanguageSelect.svelte';
 	import Toggle from '#lib/components/shared/Toggle.svelte';
 	import X11ServerSetting from './X11ServerSetting.svelte';
@@ -357,29 +357,31 @@
 	</div>
 	<ReportProblem open={reportOpen} onclose={() => (reportOpen = false)} />
 
-	<!-- Not a nag: a row that exists, once, where someone who wants to give
-	     back can find it. No prompt, no badge, no reminder. -->
-	<div class="setting-row">
-		<div class="setting-info">
-			<span class="setting-label">{t('settings.support')}</span>
-			<span class="setting-description">{t('settings.support_desc')}</span>
+	{#if SHOW_SPONSOR}
+		<!-- Not a nag: a row that exists, once, where someone who wants to give
+		     back can find it. No prompt, no badge, no reminder. -->
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('settings.support')}</span>
+				<span class="setting-description">{t('settings.support_desc')}</span>
+			</div>
+			<div class="setting-control">
+				<button
+					class="discord-link sponsor-link"
+					title={COMMUNITY.sponsorLabel}
+					onclick={() => openUrl(COMMUNITY.sponsorUrl)}
+				>
+					<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+						<path
+							d="M4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.6 20.6 0 0 0 8 13.393a20.6 20.6 0 0 0 3.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.75.75 0 0 1-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5ZM8 14.25l-.345.666a.75.75 0 0 0 .69 0L8 14.25Z"
+						/>
+					</svg>
+					<span>{t('settings.sponsor')}</span>
+					<span class="ext"><FaIcon icon={faUpRightFromSquare} size={10} /></span>
+				</button>
+			</div>
 		</div>
-		<div class="setting-control">
-			<button
-				class="discord-link sponsor-link"
-				title={COMMUNITY.sponsorLabel}
-				onclick={() => openUrl(COMMUNITY.sponsorUrl)}
-			>
-				<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-					<path
-						d="M4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.6 20.6 0 0 0 8 13.393a20.6 20.6 0 0 0 3.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.75.75 0 0 1-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5ZM8 14.25l-.345.666a.75.75 0 0 0 .69 0L8 14.25Z"
-					/>
-				</svg>
-				<span>{t('settings.sponsor')}</span>
-				<span class="ext"><FaIcon icon={faUpRightFromSquare} size={10} /></span>
-			</button>
-		</div>
-	</div>
+	{/if}
 </div>
 
 <style>
