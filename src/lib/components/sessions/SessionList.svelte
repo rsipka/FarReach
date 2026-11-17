@@ -1032,7 +1032,7 @@
 			fallbackPassword = '';
 
 			// Detect OS in background and persist to session
-			if (!session.detected_os) {
+			if (!session.detected_os && !session.os_manual) {
 				sshDetectOs(id).then(async (osId) => {
 					if (osId) {
 						updateTabOs(id, osId);

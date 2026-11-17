@@ -743,6 +743,7 @@ pub async fn session_create(
     kind: Option<crate::state::SessionKind>,
     domain: Option<String>,
     detected_os: Option<String>,
+    os_manual: Option<bool>,
     share_path: Option<String>,
     via_session_id: Option<String>,
     try_agent_keys: Option<bool>,
@@ -800,6 +801,7 @@ pub async fn session_create(
         detected_os: detected_os
             .filter(|os| !os.is_empty())
             .or_else(|| (kind == crate::state::SessionKind::Rdp).then(|| "windows".to_string())),
+        os_manual: os_manual.unwrap_or(false),
         vault_id: if storage_vault_id != ensure_sessions_vault(&mut manager).await.unwrap_or_default() {
             Some(storage_vault_id.clone())
         } else {
@@ -2356,6 +2358,14 @@ mod documentation_tests {
         let mut blank = session(serde_json::json!({ "terminal_theme": " " }));
         blank.tidy_documentation();
         assert!(blank.terminal_theme.is_none());
+    }
+
+    #[test]
+    fn a_hand_picked_os_is_marked_and_automatic_left_out() {
+        let picked = serde_json::to_value(session(serde_json::json!({ "detected_os": "debian", "os_manual": true }))).unwrap();
+        assert_eq!(picked["os_manual"], true);
+        let found = serde_json::to_value(session(serde_json::json!({ "detected_os": "debian" }))).unwrap();
+        assert!(found.get("os_manual").is_none());
     }
 
     #[test]
