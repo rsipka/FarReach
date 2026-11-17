@@ -16,6 +16,7 @@
 	import { open } from '@tauri-apps/plugin-dialog';
 	import Toggle from '#lib/components/shared/Toggle.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
+	import RegistrySettings from './RegistrySettings.svelte';
 	import { onMount } from 'svelte';
 
 	let pluginsDir = $state('');
@@ -247,6 +248,8 @@
 			</div>
 		{/if}
 	</div>
+
+	<RegistrySettings />
 </div>
 
 <style>

@@ -254,7 +254,7 @@ fn hex(bytes: &[u8]) -> String {
 
 async fn client() -> Result<reqwest::Client, String> {
     crate::http::client_builder()
-        .user_agent("Reach (https://github.com/alexandrosnt/Reach)")
+        .user_agent(crate::USER_AGENT)
         .build()
         .map_err(|e| e.to_string())
 }

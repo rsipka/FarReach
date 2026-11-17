@@ -36,5 +36,6 @@ pub mod vault_commands;
 pub mod editor_commands;
 pub mod snippet_commands;
 pub mod recipe_commands;
+pub mod registry_url_commands;
 pub mod share_commands;
 pub mod pwmanager_commands;

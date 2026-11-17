@@ -51,6 +51,7 @@ use ipc::container_commands::*;
 use ipc::k8s_commands::*;
 use ipc::plugin_commands::*;
 use ipc::marketplace_commands::*;
+use ipc::registry_url_commands::*;
 use ipc::credential_commands::*;
 use ipc::settings_commands::*;
 use ipc::history_commands::*;
@@ -99,6 +100,8 @@ static APP_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 /// that existing data depends on (the app id, keychain services, vault file
 /// names) keep their Reach names on purpose.
 pub const APP_NAME: &str = "Reacher CM";
+/// Sent as the User-Agent on downloads from GitHub (VcXsrv, OpenTofu).
+pub const USER_AGENT: &str = "ReacherCM (https://github.com/rsipka/ReacherCM)";
 
 /// Reacher CM's own app id and desktop data folder name, so it installs and
 /// runs next to Reach (`com.reach.desktop`, data in `com.reach.app`) without
@@ -782,6 +785,9 @@ pub fn run() {
             recipe_fetch_registry,
             recipe_install,
             recipe_registry_url,
+            registry_url_get,
+            registry_url_set,
+            registry_url_reset,
             share_get_config,
             share_set_enabled,
             share_set_ice_servers,
@@ -1217,6 +1223,9 @@ pub fn run() {
             recipe_fetch_registry,
             recipe_install,
             recipe_registry_url,
+            registry_url_get,
+            registry_url_set,
+            registry_url_reset,
             share_get_config,
             share_set_enabled,
             share_set_ice_servers,
