@@ -57,6 +57,7 @@
 	import { untrustedRefsFromError } from '#lib/ipc/sessions.js';
 	import { getSettings, updateSetting } from '#lib/state/settings.svelte.js';
 	import { isMobile } from '#lib/platform.js';
+	import { setTabLink } from '#lib/state/tabs.svelte.js';
 	import MobileKeyBar, { type BarKey } from '#lib/components/shared/MobileKeyBar.svelte';
 
 	interface Props {
@@ -121,6 +122,11 @@
 
 	type Phase = 'connecting' | 'connected' | 'closed' | 'error';
 	let phase = $state<Phase>('connecting');
+	// A desktop that closed or failed is marked on its tab, and quitting the
+	// app does not count it as a live session.
+	$effect(() => {
+		setTabLink(id, phase === 'closed' || phase === 'error' ? 'down' : undefined);
+	});
 	let message = $state('');
 
 	let unlisten: UnlistenFn | null = null;

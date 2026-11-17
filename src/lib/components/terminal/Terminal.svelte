@@ -24,7 +24,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { trieMatch, registerTerminalInput, unregisterTerminalInput, type TerminalInput } from '#lib/state/snippets.svelte.js';
 	import { terminalFocusRequests } from '#lib/state/palette.svelte.js';
-	import { setTabLink } from '#lib/state/tabs.svelte.js';
+	import { setTabLink, closeTab } from '#lib/state/tabs.svelte.js';
 	import { broadcastInput, getBroadcastTargets } from '#lib/state/broadcast.svelte.js';
 	import { isTerminalReply, TYPED_WINDOW_MS } from '#lib/terminal/broadcast.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -70,6 +70,8 @@
 	let currentConnectionId = $state<string | undefined>();
 	let disconnected = $state(false);
 	let reconnecting = $state(false);
+	/** The remote shell ended on its own rather than the connection dropping. */
+	let cleanEnd = $state(false);
 
 	$effect.pre(() => {
 		currentConnectionId = connectionId;
@@ -723,6 +725,7 @@
 		const prefix = termType === 'local' ? 'pty' : termType;
 		const dataEventName = `${prefix}-data-${eventId}`;
 		const exitEventName = `${prefix}-exit-${eventId}`;
+		sessionStartedAt = Date.now();
 
 		unlistenData = await listen<number[]>(dataEventName, (event) => {
 			const payload = event.payload;
@@ -735,16 +738,23 @@
 			}
 		});
 
-		unlistenExit = await listen<{ code?: number; error?: string | null }>(exitEventName, (event) => {
+		unlistenExit = await listen<{ code?: number | null; error?: string | null } | null>(exitEventName, (event) => {
 			if (termType === 'telnet') {
 				const error = event.payload?.error;
+				if (!error && closeOnCleanExit()) return;
+				cleanEnd = !error;
 				term.write(`\r\n\x1b[90m[${error ? `${t('telnet.closed')}: ${error}` : t('telnet.closed')}]\x1b[0m\r\n`);
 				disconnected = true;
 				return;
 			}
-			const code = event.payload?.code ?? 0;
-			term.write(`\r\n\x1b[90m[Process exited with code ${code}]\x1b[0m\r\n`);
+			// SSH: a code means the shell ended on its own (exit typed); none
+			// means the connection dropped. A local shell always ends cleanly.
+			const code = event.payload?.code;
+			if ((termType !== 'ssh' || typeof code === 'number') && closeOnCleanExit()) return;
+			const note = typeof code === 'number' || termType !== 'ssh' ? `Process exited with code ${code ?? 0}` : t('terminal.connection_closed');
+			term.write(`\r\n\x1b[90m[${note}]\x1b[0m\r\n`);
 			if (termType === 'ssh') {
+				cleanEnd = typeof code === 'number';
 				disconnected = true;
 			}
 		});
@@ -758,6 +768,18 @@
 		}
 	}
 
+	/** When the current session's listeners went up. */
+	let sessionStartedAt = 0;
+
+	/** The session ended cleanly: close its tab if Settings say so. One that
+	 *  ended within moments of starting more likely failed (a shell that
+	 *  would not start, a server that refuses shells): it stays, to be read. */
+	function closeOnCleanExit(): boolean {
+		if (!getSettings().closeTabOnExit || Date.now() - sessionStartedAt < 2000) return false;
+		closeTab(ptyId);
+		return true;
+	}
+
 	/**
 	 * Open the Telnet connection: listen under a new id first, so nothing the
 	 * device sends at once (a banner, a login prompt) is lost, then connect.
@@ -767,6 +789,7 @@
 		if (!telnetConnectParams || reconnecting) return;
 		reconnecting = true;
 		disconnected = false;
+		cleanEnd = false;
 		const newId = crypto.randomUUID();
 		const { host, port } = telnetConnectParams;
 		try {
@@ -799,6 +822,7 @@
 		if (!terminal || !sshConnectParams || reconnecting) return;
 		reconnecting = true;
 		disconnected = false;
+		cleanEnd = false;
 
 		const term = terminal;
 		const newId = crypto.randomUUID();
@@ -1187,7 +1211,7 @@
 					<path d="M21.5 22v-6h-6" />
 					<path d="M21.5 16a10 10 0 0 1-17.13 4" />
 				</svg>
-				<span class="reconnect-text">{t('terminal.connection_lost')}</span>
+				<span class="reconnect-text">{t(cleanEnd ? 'terminal.session_ended' : 'terminal.connection_lost')}</span>
 				<button class="reconnect-btn" onclick={handleReconnect} disabled={reconnecting}>
 					{reconnecting ? t('terminal.reconnecting') : t('terminal.reconnect')}
 				</button>
