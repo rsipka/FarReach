@@ -56,7 +56,7 @@ pub(crate) fn check_url(url: &str) -> Result<String, String> {
     if parsed.scheme() != "https" {
         return Err("The registry address must start with https://".into());
     }
-    if parsed.host_str().map_or(true, str::is_empty) {
+    if parsed.host_str().is_none_or(str::is_empty) {
         return Err("The registry address has no host".into());
     }
     Ok(url.to_string())

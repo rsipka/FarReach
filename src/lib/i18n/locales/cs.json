@@ -804,7 +804,7 @@
   "sync.join_confirm": "Vlastní identita tohoto zařízení i data v něm budou nahrazeny identitou druhého zařízení. Pokračujte dalším kliknutím.",
   "sync.join_confirm_button": "Nahradit a připojit",
   "sync.joined_toast": "Připojeno. Toto zařízení teď otevírá stejné trezory.",
-  "sync.personal_db_exists": "Tato organizace Turso už obsahuje osobní trezor z jiného zařízení ({names}). Otevřít ho lze jen identitou toho zařízení: na něm otevřete Nastavení > Synchronizace > Propojit další zařízení a kód vložte sem do části Připojit k jinému zařízení. Pokud přesto chcete samostatný trezor, klikněte znovu na Uložit.",
+  "sync.personal_db_exists": "Tato organizace Turso už obsahuje osobní trezor z jiného zařízení ({{names}}). Otevřít ho lze jen identitou toho zařízení: na něm otevřete Nastavení > Synchronizace > Propojit další zařízení a kód vložte sem do části Připojit k jinému zařízení. Pokud přesto chcete samostatný trezor, klikněte znovu na Uložit.",
   "sync.reusing_database": "Používám vaši existující osobní databázi...",
   "sync.scan_qr": "Naskenovat QR kód",
   "sync.link_qr_hint": "Na druhém zařízení klepněte na Naskenovat QR kód (na úvodní obrazovce nebo v části Připojit k jinému zařízení), nebo vložte kód níže.",
