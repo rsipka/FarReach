@@ -666,7 +666,7 @@ mod sys {
             for name in CANDIDATES {
                 // SAFETY: a system GSSAPI library; its initialisers are the
                 // library's own.
-                let Ok(l) = (unsafe { libloading::Library::new(name) }) else { continue };
+                let Ok(l) = (unsafe { libloading::Library::new(*name) }) else { continue };
                 // SAFETY: the library is one of the GSSAPI libraries above.
                 match unsafe { Lib::from(l) } {
                     Ok(lib) => {

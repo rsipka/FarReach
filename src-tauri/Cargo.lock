@@ -4541,18 +4541,6 @@ dependencies = [
 
 [[package]]
 name = "k8s-openapi"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9c6922f6afe80418dd6019818af5d0d34584c371780ff09b9752370c25b4abb"
-dependencies = [
- "base64 0.22.1",
- "jiff",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "k8s-openapi"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab0d13801242174b1f3966907c3f32039f2d6b36c7ce82c61225d66ed5d1eb70"
@@ -4657,7 +4645,7 @@ version = "5.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee2daae7debf056a191329a20b5ba6f6de6d437e87d14e586453633b3de04f7f"
 dependencies = [
- "k8s-openapi 0.29.0",
+ "k8s-openapi",
  "kube-client",
  "kube-core",
 ]
@@ -4679,9 +4667,10 @@ dependencies = [
  "hyper-rustls",
  "hyper-timeout",
  "hyper-util",
+ "ipnet",
  "jiff",
  "jsonpath-rust",
- "k8s-openapi 0.29.0",
+ "k8s-openapi",
  "kube-core",
  "pem",
  "percent-encoding",
@@ -4710,7 +4699,7 @@ dependencies = [
  "form_urlencoded",
  "http 1.5.0",
  "jiff",
- "k8s-openapi 0.29.0",
+ "k8s-openapi",
  "serde",
  "serde-value",
  "serde_json",
@@ -7320,7 +7309,7 @@ dependencies = [
  "ironrdp-rdpdr",
  "ironrdp-svc",
  "ironrdp-tls",
- "k8s-openapi 0.28.0",
+ "k8s-openapi",
  "keepass",
  "keyring-core",
  "kube",
