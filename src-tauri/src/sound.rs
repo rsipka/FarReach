@@ -137,7 +137,7 @@ mod play {
         let mut next = 0;
         device
             .build_output_stream::<T, _, _>(
-                config,
+                config.clone(),
                 move |out: &mut [T], _| {
                     for s in out.iter_mut() {
                         *s = T::from_sample(samples.get(next).copied().unwrap_or(0.0));
