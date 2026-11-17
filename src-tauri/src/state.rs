@@ -151,6 +151,10 @@ pub struct SessionConfig {
     /// `commands` or `output`; unset: the default chosen in Settings.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub history: Option<String>,
+    /// Start this session's terminals in a tmux session on the server (see
+    /// `ssh::tmux`); unset: as its folder says, else not.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tmux: Option<crate::ssh::tmux::TmuxSetting>,
     /// Approvals of the password manager entries a saved credential brings
     /// to this session, by slot (`password`, `jump:0:passphrase`). An entry
     /// in a credential is approved per session and person like one of the
@@ -308,6 +312,10 @@ pub struct Folder {
     /// unless a session links its own or a nearer folder names another.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credential_id: Option<String>,
+    /// Start the terminals of the sessions inside (at any depth) in tmux,
+    /// unless a session or a nearer folder says otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tmux: Option<bool>,
 }
 
 /// Configuration for a port-forwarding tunnel.

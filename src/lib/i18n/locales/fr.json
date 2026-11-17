@@ -3063,5 +3063,22 @@
   "bulk.undo_last": "Annuler la dernière modification groupée",
   "bulk.undone_toast": "Modification groupée annulée sur {{count}} sessions",
   "bulk.undo_partial": "Annulée sur {{count}} sessions. Modifiées depuis, donc laissées telles quelles : {{names}}",
-  "bulk.into_credential": "Dans les nouveaux identifiants, liés à {{count}} sur {{total}}"
+  "bulk.into_credential": "Dans les nouveaux identifiants, liés à {{count}} sur {{total}}",
+  "tmux.session_label": "tmux sur le serveur",
+  "tmux.session_folder_on": "Comme le dossier (activé)",
+  "tmux.session_folder_off": "Comme le dossier (désactivé)",
+  "tmux.mode_attach": "Rejoindre ou créer",
+  "tmux.mode_off": "Désactivé",
+  "tmux.name_label": "Nom de la session tmux",
+  "tmux.session_hint": "Le terminal démarre dans cette session tmux sur le serveur : votre travail continue si la connexion tombe ou si l'onglet est fermé, et la connexion suivante y revient. Un serveur sans tmux ouvre un shell normal.",
+  "tmux.name_invalid": "Le nom de la session tmux ne peut contenir que des lettres, des chiffres, - et _ (64 caractères au plus).",
+  "tmux.folder_menu": "tmux pour les sessions du dossier",
+  "tmux.folder_inherit": "Comme le dossier parent",
+  "tmux.folder_on": "Activé",
+  "tmux.folder_off": "Désactivé",
+  "tmux.kill": "Terminer la session tmux",
+  "tmux.kill_confirm": "Terminer la session tmux « {{name}} » sur le serveur ? Tout ce qui s'y exécute s'arrête, y compris dans les autres onglets et sur les autres ordinateurs qui y sont attachés.",
+  "tmux.kill_failed": "Impossible de terminer la session tmux : {{error}}",
+  "tmux.quit_note": "{{count}} d'entre elles tournent dans tmux, qui continue sur le serveur : reconnectez-vous pour y revenir.",
+  "tmux.auto_reconnecting": "Toujours actif dans tmux. Reconnexion automatique."
 }

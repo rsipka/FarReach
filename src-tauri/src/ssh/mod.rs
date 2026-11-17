@@ -24,6 +24,7 @@ pub mod session_opts;
 pub mod tun;
 pub mod unlocked;
 pub mod sk;
+pub mod tmux;
 pub mod userauth;
 pub mod x11;
 #[cfg(windows)]

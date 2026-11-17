@@ -18,6 +18,7 @@
 	import { historyStart, type HistoryMode } from '#lib/ipc/history.js';
 	import { setTabHistory, openHistoryPanel } from '#lib/state/history.svelte.js';
 	import { countPasteLines, shouldWarnOnPaste } from '#lib/terminal/paste.js';
+	import { autoReconnectDelay, needsUser } from '#lib/terminal/tmux.js';
 	import { rightClickAction, wordSeparator, MIDDLE_CLICK_PASTE_MS } from '#lib/terminal/mouse.js';
 	import { shouldRearmIme, nudgeCaret, REARM_SETTLE_MS } from '#lib/terminal/ime.js';
 	import { installWebkitInputFix } from '#lib/terminal/webkit-input-fix.js';
@@ -121,6 +122,63 @@
 
 	$effect.pre(() => {
 		currentConnectionId = connectionId;
+	});
+
+	// tmux tabs (see #lib/terminal/tmux): a dropped connection costs
+	// nothing on the server, so the tab reconnects by itself, at once when
+	// the network comes back or the app is shown again (a phone app that
+	// was in the background).
+	let inTmux = $derived(termType === 'ssh' && !!sshConnectParams?.tmux);
+	let autoReconnecting = $state(false);
+	let autoAttempt = 0;
+	let autoSince = 0;
+	let autoTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function startAutoReconnect(): void {
+		if (!inTmux || autoReconnecting) return;
+		autoReconnecting = true;
+		autoAttempt = 0;
+		autoSince = Date.now();
+		scheduleAutoReconnect();
+	}
+
+	function scheduleAutoReconnect(): void {
+		clearTimeout(autoTimer);
+		if (!autoReconnecting) return;
+		const wait = autoReconnectDelay(autoAttempt, Date.now() - autoSince);
+		if (wait === null) {
+			stopAutoReconnect();
+			return;
+		}
+		autoTimer = setTimeout(() => void autoReconnectNow(), wait);
+	}
+
+	function stopAutoReconnect(): void {
+		autoReconnecting = false;
+		clearTimeout(autoTimer);
+	}
+
+	async function autoReconnectNow(): Promise<void> {
+		if (!autoReconnecting || reconnecting || !disconnected) return;
+		clearTimeout(autoTimer);
+		autoAttempt += 1;
+		const error = await handleReconnect();
+		if (error === null || needsUser(error)) stopAutoReconnect();
+		else scheduleAutoReconnect();
+	}
+
+	$effect(() => {
+		if (!inTmux) return;
+		const wake = () => {
+			if (document.visibilityState === 'visible') void autoReconnectNow();
+		};
+		window.addEventListener('online', wake);
+		document.addEventListener('visibilitychange', wake);
+		return () => {
+			window.removeEventListener('online', wake);
+			document.removeEventListener('visibilitychange', wake);
+			stopAutoReconnect();
+		};
 	});
 
 	let containerEl: HTMLDivElement | undefined = $state();
@@ -815,6 +873,8 @@
 			if (termType === 'ssh') {
 				cleanEnd = typeof code === 'number';
 				disconnected = true;
+				// Detached or ended in tmux is a clean end: nothing to go back to.
+				if (!cleanEnd) startAutoReconnect();
 			}
 		});
 
@@ -875,12 +935,13 @@
 		}
 	}
 
-	async function handleReconnect(): Promise<void> {
+	/** Connect again; the error, or null once connected. */
+	async function handleReconnect(): Promise<string | null> {
 		if (terminal && termType === 'telnet') {
 			await connectTelnet(terminal);
-			return;
+			return null;
 		}
-		if (!terminal || !sshConnectParams || reconnecting) return;
+		if (!terminal || !sshConnectParams || reconnecting) return 'busy';
 		reconnecting = true;
 		disconnected = false;
 		cleanEnd = false;
@@ -908,10 +969,12 @@
 
 			term.write(`\r\n\x1b[32m[${t('terminal.reconnected')}]\x1b[0m\r\n`);
 			onReconnected?.(newId);
+			return null;
 		} catch (err) {
 			const reason = untrustedRefsFromError(err) ? t('pwmanager.untrusted_reopen') : String(err);
 			term.write(`\r\n\x1b[31m[${t('terminal.reconnect_failed')}: ${reason}]\x1b[0m\r\n`);
 			disconnected = true;
+			return untrustedRefsFromError(err) ? 'approval needed' : String(err);
 		} finally {
 			reconnecting = false;
 		}
@@ -1273,9 +1336,15 @@
 					<path d="M21.5 16a10 10 0 0 1-17.13 4" />
 				</svg>
 				<span class="reconnect-text">{t(cleanEnd ? 'terminal.session_ended' : 'terminal.connection_lost')}</span>
-				<button class="reconnect-btn" onclick={handleReconnect} disabled={reconnecting}>
+				{#if autoReconnecting}
+					<span class="reconnect-auto">{t('tmux.auto_reconnecting')}</span>
+				{/if}
+				<button class="reconnect-btn" onclick={() => (autoReconnecting ? autoReconnectNow() : handleReconnect())} disabled={reconnecting}>
 					{reconnecting ? t('terminal.reconnecting') : t('terminal.reconnect')}
 				</button>
+				{#if autoReconnecting}
+					<button class="reconnect-cancel" onclick={stopAutoReconnect} type="button">{t('common.cancel')}</button>
+				{/if}
 			</div>
 		</div>
 	{/if}
@@ -1441,6 +1510,24 @@
 	.reconnect-text {
 		font-size: 0.85rem;
 		font-weight: 500;
+	}
+
+	.reconnect-auto {
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+	}
+
+	.reconnect-cancel {
+		padding: 4px 12px;
+		border: none;
+		background: none;
+		color: var(--color-text-secondary);
+		font-size: 0.8rem;
+		cursor: pointer;
+	}
+
+	.reconnect-cancel:hover {
+		color: var(--color-text-primary);
 	}
 
 	.reconnect-btn {
