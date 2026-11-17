@@ -817,7 +817,7 @@
   "sync.join_confirm": "This device's own identity and the data in it are replaced by the other device's. Click again to continue.",
   "sync.join_confirm_button": "Replace and join",
   "sync.joined_toast": "Joined. This device now opens the same vaults.",
-  "sync.personal_db_exists": "This Turso organization already holds a personal vault from another device ({names}). It can only be opened with that device's identity: on that device open Settings > Sync > Link another device, then paste the code here under Join from another device. Click Save again to create a separate vault anyway.",
+  "sync.personal_db_exists": "This Turso organization already holds a personal vault from another device ({{names}}). It can only be opened with that device's identity: on that device open Settings > Sync > Link another device, then paste the code here under Join from another device. Click Save again to create a separate vault anyway.",
   "sync.reusing_database": "Using your existing personal database...",
   "sync.scan_qr": "Scan QR code",
   "sync.link_qr_hint": "On the other device, tap Scan QR code (on its first screen or under Join from another device), or paste the code below.",
