@@ -103,9 +103,6 @@ export const IMPORT_SOURCES: Record<ImportSourceId, ImportSource> = {
 	}
 };
 
-/** The sources picked in the "another app" dialog, in menu order. */
-export const OTHER_SOURCES: ImportSourceId[] = ['mremoteng', 'mobaxterm', 'putty', 'winscp', 'tabby'];
-
 /** The app's settings on this computer as text, or null when none were found. */
 export async function readLocal(source: ImportSourceId): Promise<string | null> {
 	let parts = await invoke<number[][] | null>('import_read_local', { source });
