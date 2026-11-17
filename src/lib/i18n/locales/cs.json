@@ -2887,7 +2887,7 @@
   "settings.double_click_open": "Otevírat relace dvojklikem",
   "settings.double_click_open_desc": "Jedním kliknutím relaci v seznamu vyberete, dvojklikem se připojíte. Enter se připojí i nadále.",
   "settings.close_tab_on_exit": "Zavřít kartu po skončení relace",
-  "settings.close_tab_on_exit_desc": "Když shell skončí sám (napíšete exit), karta se zavře místo nabídky Znovu připojit. Při výpadku spojení se nabídka zobrazí i nadále.",
+  "settings.close_tab_on_exit_desc": "Když shell skončí sám (napíšete exit), karta se zavře místo nabídky Znovu připojit. Stejně tak plocha RDP, ze které se odhlásíte. Při výpadku spojení se nabídka zobrazí i nadále.",
   "settings.server_monitoring": "Monitorování serveru",
   "settings.server_monitoring_desc": "Pod terminály SSH a WSL zobrazovat procesor, paměť, disk a přihlášené uživatele serveru. Každá relace si to může ve svém nastavení zapnout nebo vypnout.",
   "settings.check_updates": "Kontrolovat aktualizace",

@@ -733,7 +733,7 @@
   "settings.double_click_open": "Sitzungen per Doppelklick öffnen",
   "settings.double_click_open_desc": "Ein einfacher Klick wählt eine Sitzung in der Liste aus, ein Doppelklick verbindet. Die Eingabetaste verbindet weiterhin.",
   "settings.close_tab_on_exit": "Tab schließen, wenn eine Sitzung endet",
-  "settings.close_tab_on_exit_desc": "Endet die Shell von selbst (Sie tippen exit), wird ihr Tab geschlossen, statt „Neu verbinden“ anzubieten. Bei einer abgebrochenen Verbindung wird es weiterhin angeboten.",
+  "settings.close_tab_on_exit_desc": "Endet die Shell von selbst (Sie tippen exit), wird ihr Tab geschlossen, statt „Neu verbinden“ anzubieten. Ebenso ein RDP-Desktop, von dem Sie sich abmelden. Bei einer abgebrochenen Verbindung wird es weiterhin angeboten.",
   "settings.server_monitoring": "Serverüberwachung",
   "settings.server_monitoring_desc": "CPU, Arbeitsspeicher, Festplatte und angemeldete Benutzer des Servers unter SSH- und WSL-Terminals anzeigen. Eine Sitzung kann dies in ihren Einstellungen für sich ein- oder ausschalten.",
   "settings.check_updates": "Nach Updates suchen",

@@ -733,7 +733,7 @@
   "settings.double_click_open": "Abrir sesiones con doble clic",
   "settings.double_click_open_desc": "Un clic selecciona una sesión de la lista; un doble clic se conecta. Intro sigue conectando.",
   "settings.close_tab_on_exit": "Cerrar la pestaña cuando termina una sesión",
-  "settings.close_tab_on_exit_desc": "Cuando el shell termina por sí solo (escribes exit), su pestaña se cierra en lugar de ofrecer Reconectar. Una conexión caída lo sigue ofreciendo.",
+  "settings.close_tab_on_exit_desc": "Cuando el shell termina por sí solo (escribes exit), su pestaña se cierra en lugar de ofrecer Reconectar. Lo mismo ocurre con un escritorio RDP del que cierras sesión. Una conexión caída lo sigue ofreciendo.",
   "settings.server_monitoring": "Monitorización del servidor",
   "settings.server_monitoring_desc": "Mostrar CPU, memoria, disco y usuarios conectados del servidor bajo los terminales SSH y WSL. Cada sesión puede activarla o desactivarla en su configuración.",
   "settings.check_updates": "Buscar actualizaciones",

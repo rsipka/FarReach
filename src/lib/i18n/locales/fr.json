@@ -733,7 +733,7 @@
   "settings.double_click_open": "Ouvrir les sessions par double-clic",
   "settings.double_click_open_desc": "Un simple clic sélectionne une session dans la liste ; un double-clic s'y connecte. Entrée connecte toujours.",
   "settings.close_tab_on_exit": "Fermer l’onglet à la fin d’une session",
-  "settings.close_tab_on_exit_desc": "Quand le shell se termine de lui-même (vous tapez exit), son onglet se ferme au lieu de proposer Reconnecter. Une connexion perdue le propose toujours.",
+  "settings.close_tab_on_exit_desc": "Quand le shell se termine de lui-même (vous tapez exit), son onglet se ferme au lieu de proposer Reconnecter. De même pour un bureau RDP dont vous vous déconnectez. Une connexion perdue le propose toujours.",
   "settings.server_monitoring": "Surveillance du serveur",
   "settings.server_monitoring_desc": "Afficher le processeur, la mémoire, le disque et les utilisateurs connectés du serveur sous les terminaux SSH et WSL. Une session peut l'activer ou la désactiver dans ses propres réglages.",
   "settings.check_updates": "Rechercher les mises à jour",

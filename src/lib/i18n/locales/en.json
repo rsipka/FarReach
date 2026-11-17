@@ -733,7 +733,7 @@
   "settings.double_click_open": "Open sessions with a double click",
   "settings.double_click_open_desc": "A single click picks a session in the list; a double click connects. Enter still connects.",
   "settings.close_tab_on_exit": "Close the tab when a session ends",
-  "settings.close_tab_on_exit_desc": "When the shell ends on its own (you type exit), its tab closes instead of offering Reconnect. A dropped connection still offers it.",
+  "settings.close_tab_on_exit_desc": "When the shell ends on its own (you type exit), its tab closes instead of offering Reconnect. So does an RDP desktop you log off from. A dropped connection still offers it.",
   "settings.server_monitoring": "Server monitoring",
   "settings.server_monitoring_desc": "Show CPU, memory, disk and logged-in users of the server under SSH and WSL terminals. A session can turn it on or off for itself in its settings.",
   "settings.check_updates": "Check for updates",
