@@ -81,7 +81,6 @@ jobs:
               - src-tauri/vendor
               - src-tauri/gen
               - node_modules
-              - docs/node_modules
               # Test-only: fixed keys, salts and passwords on purpose (known
               # answers, test vaults). Unit tests live in *_tests.rs files.
               - src-tauri/src/**/*_tests.rs

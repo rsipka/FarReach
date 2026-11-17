@@ -41,7 +41,6 @@ jobs:
       frontend: ${{ steps.pick.outputs.frontend }}
       rust: ${{ steps.pick.outputs.rust }}
       mobile: ${{ steps.pick.outputs.mobile }}
-      docs: ${{ steps.pick.outputs.docs }}
     steps:
       # A pull request's files come from the API; a push needs the history.
       - uses: actions/checkout@v7
@@ -51,7 +50,7 @@ jobs:
         id: filter
         if: github.event_name != 'workflow_dispatch'
         with:
-          # Markdown never builds into the app; docs/ is its own filter.
+          # Markdown never builds into the app.
           predicate-quantifier: some-with-excludes
           filters: |
             frontend:
@@ -83,9 +82,6 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - '!**/*.md'
-            docs:
-              - '.github/workflows/build-check.yml'
-              - 'docs/**'
 
       # Started by hand, everything runs.
       - id: pick
@@ -94,9 +90,8 @@ jobs:
           FRONTEND: ${{ steps.filter.outputs.frontend }}
           RUST: ${{ steps.filter.outputs.rust }}
           MOBILE: ${{ steps.filter.outputs.mobile }}
-          DOCS: ${{ steps.filter.outputs.docs }}
         run: |
-          for area in FRONTEND RUST MOBILE DOCS; do
+          for area in FRONTEND RUST MOBILE; do
             value="${!area}"
             [ "$ALL" = true ] && value=true
             echo "${area,,}=${value:-false}" | tee -a "$GITHUB_OUTPUT"
@@ -263,31 +258,6 @@ jobs:
             adb push "$RUNNER_TEMP/android-test/." /data/local/tmp/reach/
             adb shell "cd /data/local/tmp/reach && chmod +x reach-tests && REACH_KNOWNHOSTS_TESTDATA=/data/local/tmp/reach/testdata HOME=/data/local/tmp/reach TMPDIR=/data/local/tmp/reach LD_LIBRARY_PATH=/data/local/tmp/reach ./reach-tests"
 
-  # The documentation site, built the way its deploy builds it: from docs/
-  # alone, with the app never set up.
-  docs:
-    needs: changes
-    if: needs.changes.outputs.docs == 'true'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: docs
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          # The newest 22, not the runner's cached one: Astro raises its
-          # minimum within 22 (7.4.2 needs 22.23.4) and the cache lags.
-          check-latest: true
-
-      - name: Build the site
-        run: |
-          npm ci
-          npm run build
-
   # The APKs, packaged the way the release packages them: the same generated
   # Gradle project, the same signing and packaging block, the same build
   # command. Signed with a throwaway key made here, since only the release has
@@ -397,7 +367,7 @@ jobs:
   result:
     name: Build check result
     if: always()
-    needs: [changes, frontend, test, android, docs, android-apk]
+    needs: [changes, frontend, test, android, android-apk]
     runs-on: ubuntu-latest
     steps:
       - env:
