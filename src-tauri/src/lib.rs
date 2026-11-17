@@ -51,6 +51,7 @@ use ipc::container_commands::*;
 use ipc::k8s_commands::*;
 use ipc::plugin_commands::*;
 use ipc::marketplace_commands::*;
+use ipc::registry_url_commands::*;
 use ipc::credential_commands::*;
 use ipc::settings_commands::*;
 use ipc::history_commands::*;
@@ -71,6 +72,7 @@ use ipc::dragout_commands::*;
 use ipc::webview_commands::*;
 use ipc::ssh_commands::*;
 use ipc::sshconfig_commands::*;
+use ipc::import_commands::*;
 use ipc::x11server_commands::*;
 use ipc::sshkey_commands::*;
 use ipc::tofu_commands::*;
@@ -99,6 +101,8 @@ static APP_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 /// that existing data depends on (the app id, keychain services, vault file
 /// names) keep their Reach names on purpose.
 pub const APP_NAME: &str = "Reacher CM";
+/// Sent as the User-Agent on downloads from GitHub (VcXsrv, OpenTofu).
+pub const USER_AGENT: &str = "ReacherCM (https://github.com/rsipka/ReacherCM)";
 
 /// Reacher CM's own app id and desktop data folder name, so it installs and
 /// runs next to Reach (`com.reach.desktop`, data in `com.reach.app`) without
@@ -370,6 +374,10 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_reach_unlock::init());
+    #[cfg(mobile)]
+    {
+        builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+    }
     // NOTE: AppState is managed inside `setup()` (not here) so it can be rooted
     // at the Tauri-resolved, writable app data dir — required on Android/iOS.
 
@@ -503,6 +511,7 @@ pub fn run() {
             ssh_resize,
             ssh_list_connections,
             ssh_detect_os,
+            ssh_tmux_kill,
             inspect_key_file,
             // SSH Config commands
             sshconfig_scan,
@@ -511,6 +520,8 @@ pub fn run() {
             x11server_cancel,
             x11server_remove,
             sshconfig_exists,
+            import_read_local,
+            import_yaml_to_json,
             ssh_options_report,
             ssh_key_import,
             ssh_key_list,
@@ -551,9 +562,12 @@ pub fn run() {
             session_delete,
             session_move_to_folder,
             session_set_favorite,
+            session_bulk_update,
+            session_bulk_undo,
             session_list_folders,
             session_create_folder,
             session_set_folder_credential,
+            session_set_folder_tmux,
             saved_credential_list,
             credential_keys_unlock,
             credential_keys_unlock_enabled,
@@ -606,6 +620,9 @@ pub fn run() {
             vault_reset,
             vault_export_identity,
             vault_import_identity,
+            vault_export_device_link,
+            vault_link_device,
+            qr_svg,
             vault_lock,
             vault_is_held,
             vault_resume,
@@ -655,6 +672,7 @@ pub fn run() {
             // Turso Platform API
             turso_create_database,
             turso_create_database_token,
+            turso_list_personal_databases,
             // Personal sync config
             vault_set_personal_sync,
             vault_get_personal_sync,
@@ -772,6 +790,9 @@ pub fn run() {
             recipe_fetch_registry,
             recipe_install,
             recipe_registry_url,
+            registry_url_get,
+            registry_url_set,
+            registry_url_reset,
             share_get_config,
             share_set_enabled,
             share_set_ice_servers,
@@ -941,6 +962,7 @@ pub fn run() {
             ssh_resize,
             ssh_list_connections,
             ssh_detect_os,
+            ssh_tmux_kill,
             inspect_key_file,
             // SSH Config commands
             sshconfig_scan,
@@ -949,6 +971,8 @@ pub fn run() {
             x11server_cancel,
             x11server_remove,
             sshconfig_exists,
+            import_read_local,
+            import_yaml_to_json,
             ssh_options_report,
             ssh_key_import,
             ssh_key_list,
@@ -989,9 +1013,12 @@ pub fn run() {
             session_delete,
             session_move_to_folder,
             session_set_favorite,
+            session_bulk_update,
+            session_bulk_undo,
             session_list_folders,
             session_create_folder,
             session_set_folder_credential,
+            session_set_folder_tmux,
             saved_credential_list,
             credential_keys_unlock,
             credential_keys_unlock_enabled,
@@ -1035,6 +1062,9 @@ pub fn run() {
             vault_reset,
             vault_export_identity,
             vault_import_identity,
+            vault_export_device_link,
+            vault_link_device,
+            qr_svg,
             vault_lock,
             vault_is_held,
             vault_resume,
@@ -1084,6 +1114,7 @@ pub fn run() {
             // Turso Platform API
             turso_create_database,
             turso_create_database_token,
+            turso_list_personal_databases,
             // Personal sync config
             vault_set_personal_sync,
             vault_get_personal_sync,
@@ -1201,6 +1232,9 @@ pub fn run() {
             recipe_fetch_registry,
             recipe_install,
             recipe_registry_url,
+            registry_url_get,
+            registry_url_set,
+            registry_url_reset,
             share_get_config,
             share_set_enabled,
             share_set_ice_servers,

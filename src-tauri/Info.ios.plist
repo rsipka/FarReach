@@ -11,5 +11,8 @@
 	-->
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Reach connects to servers on your local network over SSH, RDP and VNC when you ask it to.</string>
+	<!-- The camera reads another device's link QR code (Settings > Sync). -->
+	<key>NSCameraUsageDescription</key>
+	<string>The camera reads the QR code that links this device to your other one.</string>
 </dict>
 </plist>

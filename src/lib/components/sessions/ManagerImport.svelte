@@ -1,19 +1,26 @@
 <script lang="ts">
 	/**
-	 * Import hosts from a Devolutions Remote Desktop Manager export: a .rdm
-	 * (XML) or .json file, picked or pasted (see #lib/sessions/rdm-import).
-	 * RDP, SSH and VNC entries become sessions in the selected vault, and the
-	 * RDM group path is recreated as nested folders, reusing folders already
-	 * there, and a linked SSH gateway becomes the session's jump host.
-	 * Passwords are never imported: the session asks for them on connect.
-	 * An export saved without credentials has no usernames, so the dialog
-	 * asks for one to use where the export gives none. Hosts already saved
-	 * are shown but not imported again.
+	 * Import hosts from another connection manager: Devolutions Remote
+	 * Desktop Manager, or (picked in the dialog) mRemoteNG, MobaXterm, PuTTY,
+	 * WinSCP or Tabby. A file is picked or pasted, or the app's own settings
+	 * are read from this computer; each app's reader is in
+	 * #lib/sessions/import (RDM's in #lib/sessions/rdm-import).
+	 *
+	 * Hosts become sessions in the selected vault, their folders are
+	 * recreated as nested folders (reusing folders already there), and jump
+	 * hosts come along. Passwords come along where the file holds them in a
+	 * readable form; a file sealed with a master password asks for it, and
+	 * can be imported without passwords instead. Logins the file keeps apart
+	 * (RDM credential entries, a folder's login, MobaXterm credentials) are
+	 * saved once as Reach credentials. A file without usernames gets one
+	 * asked for. Hosts already saved are shown but not imported again.
 	 */
 	import Modal from '#lib/components/shared/Modal.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
 	import { sessionCreate, sessionCreateFolder, sessionList, sessionListFolders, sessionSetFolderCredential, type AuthMethod, type Folder, type JumpHostConfig, type SessionConfig } from '#lib/ipc/sessions.js';
-	import { findChildFolder, findExisting, parseRdmExport, type RdmCredential, type RdmImportHost, type RdmSkipped } from '#lib/sessions/rdm-import.js';
+	import { findChildFolder, findExisting } from '#lib/sessions/rdm-import.js';
+	import { decodeFile, type ImportCredential, type ImportHost, type ImportNotice, type ImportSkipped } from '#lib/sessions/import/common.js';
+	import { IMPORT_SOURCES, OTHER_SOURCES, readLocal, type ImportSourceId } from '#lib/sessions/import/sources.js';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
 	import { savedCredentialCreate, savedCredentialList, credentialsFor } from '#lib/ipc/savedCredentials.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
@@ -23,9 +30,20 @@
 		open: boolean;
 		vaultId?: string | null;
 		onsave?: () => void;
+		/** RDM; or, left out, the person picks among the other apps. */
+		source?: ImportSourceId;
 	}
 
-	let { open = $bindable(), vaultId = null, onsave }: Props = $props();
+	let { open = $bindable(), vaultId = null, onsave, source: fixedSource }: Props = $props();
+
+	let pickedSource = $state<ImportSourceId>(OTHER_SOURCES[0]);
+	const sourceId = $derived(fixedSource ?? pickedSource);
+	const src = $derived(IMPORT_SOURCES[sourceId]);
+	const isRdm = $derived(sourceId === 'rdm');
+
+	function descFor(id: ImportSourceId): string {
+		return id === 'rdm' ? t('session.rdm_import_desc') : t(`session.mgr_import_desc_${id}`);
+	}
 
 	/** Larger than any real export; stops a wrong pick from freezing the window. */
 	const MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -37,8 +55,12 @@
 	let reading = $state(false);
 	let importing = $state(false);
 	let error = $state<string | undefined>();
-	let hosts = $state<RdmImportHost[]>([]);
-	let skipped = $state<RdmSkipped[]>([]);
+	let hosts = $state<ImportHost[]>([]);
+	let skipped = $state<ImportSkipped[]>([]);
+	let notice = $state<ImportNotice | undefined>();
+	/** The file asks for its master password; `wrong` after one that did not fit. */
+	let askPassword = $state<{ wrong: boolean } | null>(null);
+	let masterPassword = $state('');
 	let failed = $state<{ name: string; error: string }[]>([]);
 	let existingSessions = $state<SessionConfig[]>([]);
 	let folders = $state<Folder[]>([]);
@@ -46,8 +68,8 @@
 	let filter = $state('');
 	/** Used for every host, and gateway, the export gives no username for. */
 	let fallbackUser = $state('');
-	/** The logins RDM keeps apart (credential entries, groups' own), to save as Reach credentials. */
-	let rdmCredentials = $state<RdmCredential[]>([]);
+	/** The logins the file keeps apart (credential entries, folders' own), to save as Reach credentials. */
+	let rdmCredentials = $state<ImportCredential[]>([]);
 	let makeCredentials = $state(true);
 	/** Selected hosts that would log in with a saved credential. */
 	const credentialHosts = $derived(hosts.filter((h) => selected.has(h.id) && h.credential).length);
@@ -71,17 +93,17 @@
 	const anyWithoutUser = $derived(hosts.some((h) => needsUser(h) && !h.username));
 	const canImport = $derived(parsed && selectedCount > 0 && missingUser === 0 && !busy);
 
-	function isSaved(host: RdmImportHost): boolean {
+	function isSaved(host: ImportHost): boolean {
 		// Compared with the username it would be saved under, fallback included.
 		return findExisting({ ...host, username: userFor(host) }, existingSessions, target) !== undefined;
 	}
 
-	function folderLabel(host: RdmImportHost): string {
+	function folderLabel(host: ImportHost): string {
 		return host.folder.join(' / ');
 	}
 
-	function skipReason(s: RdmSkipped): string {
-		if (s.reason === 'duplicate') return t('session.rdm_import_duplicate');
+	function skipReason(s: ImportSkipped): string {
+		if (s.reason === 'duplicate') return isRdm ? t('session.rdm_import_duplicate') : t('session.mgr_import_duplicate');
 		if (s.reason === 'bad_port') return t('session.rdp_import_bad_port');
 		if (s.reason === 'unsupported') return t('session.rdm_import_unsupported', { type: s.type ?? '?' });
 		return t('session.rdp_import_no_host');
@@ -102,7 +124,8 @@
 			return;
 		}
 		try {
-			raw = await file.text();
+			// Byte by byte: PuTTY's registry exports are UTF-16, MobaXterm's files Windows-1252.
+			raw = decodeFile(new Uint8Array(await file.arrayBuffer()));
 			fileName = file.name;
 		} catch (err) {
 			error = String(err);
@@ -111,28 +134,60 @@
 		await read();
 	}
 
-	async function read(): Promise<void> {
+	/** The app's own settings on this computer. */
+	async function readFromComputer(): Promise<void> {
 		error = undefined;
-		const result = parseRdmExport(raw);
-		if (!result.ok) {
-			if (result.error === 'bad_file') error = t('session.rdm_import_bad_file', { error: result.detail });
-			else if (result.error === 'encrypted') error = t('session.rdm_import_encrypted');
-			else error = t('session.rdm_import_none');
-			return;
-		}
 		reading = true;
 		try {
+			const found = await readLocal(sourceId);
+			if (found === null) {
+				error = t('session.mgr_import_not_found', { app: src.app });
+				return;
+			}
+			raw = found;
+			fileName = t('session.mgr_import_from_computer');
+		} catch (err) {
+			error = String(err);
+			return;
+		} finally {
+			reading = false;
+		}
+		await read();
+	}
+
+	/** `password`: undefined on a first read, the master password once typed, null to skip passwords. */
+	async function read(password?: string | null): Promise<void> {
+		error = undefined;
+		reading = true;
+		try {
+			const result = await src.parse(raw, password);
+			if (!result.ok) {
+				if (result.error === 'password') {
+					if (password === null) error = t('session.mgr_import_password_required');
+					askPassword = { wrong: result.wrong };
+				} else if (result.error === 'bad_file') error = t('session.rdm_import_bad_file', { error: result.detail });
+				else if (result.error === 'encrypted') error = isRdm ? t('session.rdm_import_encrypted') : t('session.mgr_import_encrypted');
+				else error = isRdm ? t('session.rdm_import_none') : t('session.mgr_import_none');
+				return;
+			}
 			await loadSaved();
 			hosts = result.hosts;
 			skipped = result.skipped;
+			notice = result.notice;
 			rdmCredentials = result.credentials;
 			selected = new Set(result.hosts.filter((h) => !isSaved(h)).map((h) => h.id));
+			askPassword = null;
+			masterPassword = '';
 			parsed = true;
 		} catch (err) {
 			error = String(err);
 		} finally {
 			reading = false;
 		}
+	}
+
+	function noticeText(n: ImportNotice): string {
+		return n === 'passwords_keychain' ? t('session.mgr_import_passwords_keychain') : t('session.mgr_import_passwords_skipped');
 	}
 
 	function toggle(id: string): void {
@@ -162,24 +217,25 @@
 		return parent;
 	}
 
-	function authFor(h: RdmImportHost): AuthMethod {
-		return h.keyPath ? { type: 'Key', path: h.keyPath } : { type: 'Password' };
+	function authFor(h: { keyPath?: string | null; password?: string | null }): AuthMethod {
+		if (h.keyPath) return { type: 'Key', path: h.keyPath };
+		return h.password ? { type: 'Password', password: h.password } : { type: 'Password' };
 	}
 
 	/** VNC has no user name; Telnet's is optional, typed at the device's
 	 *  prompt, so the one asked for here is not forced on it. */
-	function needsUser(h: RdmImportHost): boolean {
+	function needsUser(h: ImportHost): boolean {
 		return h.kind !== 'vnc' && h.kind !== 'telnet';
 	}
 
-	function userFor(h: RdmImportHost): string {
+	function userFor(h: ImportHost): string {
 		return h.username || (needsUser(h) ? fallbackUser.trim() : '');
 	}
 
-	/** The gateway hops; their own credentials are not in the export, so the login asks. */
-	function jumpFor(h: RdmImportHost): JumpHostConfig[] | null {
+	/** The jump hosts; a hop the file gives no login for logs in as the host does, and the login asks for its password. */
+	function jumpFor(h: ImportHost): JumpHostConfig[] | null {
 		if (h.jump.length === 0) return null;
-		return h.jump.map((g) => ({ host: g.host, port: g.port, username: userFor(h), auth_method: { type: 'Password' } }));
+		return h.jump.map((g) => ({ host: g.host, port: g.port, username: g.username || userFor(h), auth_method: authFor(g) }));
 	}
 
 	/**
@@ -189,7 +245,7 @@
 	 * by RDM key, and the credential each folder has by folder id.
 	 */
 	async function saveCredentials(
-		chosen: RdmImportHost[],
+		chosen: ImportHost[],
 		created: Map<string, string>
 	): Promise<{ ids: Map<string, string>; folderCredential: Map<string, string> }> {
 		const ids = new Map<string, string>();
@@ -200,8 +256,8 @@
 		for (const c of rdmCredentials) {
 			if (!chosen.some((h) => h.credential?.key === c.key)) continue;
 			const same = have.find((x) => x.name === c.name && x.username === c.username && (x.domain ?? null) === (c.domain ?? null));
-			// No password: RDM's are not read. It is typed once, in the Credentials tab.
-			const saved = same ?? (await savedCredentialCreate({ name: c.name, username: c.username, domain: c.domain, authMethod: { type: 'Password' }, vaultId: target }));
+			// The password when the file gave one; otherwise it is typed once, in the Credentials tab.
+			const saved = same ?? (await savedCredentialCreate({ name: c.name, username: c.username, domain: c.domain, authMethod: authFor(c), vaultId: target }));
 			ids.set(c.key, saved.id);
 		}
 		// A group the hosts inherit from: its folder gets the credential, unless it has another already.
@@ -235,7 +291,7 @@
 	 * nothing when its folder gives it that one; "own" when it has its own
 	 * login but sits in a folder with a credential, which would win otherwise.
 	 */
-	function credentialIdFor(h: RdmImportHost, ids: Map<string, string>, folderCredential: Map<string, string>, created: Map<string, string>): string | null {
+	function credentialIdFor(h: ImportHost, ids: Map<string, string>, folderCredential: Map<string, string>, created: Map<string, string>): string | null {
 		const chain = knownFolders(h.folder, created).reverse();
 		const inherited = chain.map((f) => folderCredential.get(f)).find(Boolean) ?? null;
 		const id = h.credential ? (ids.get(h.credential.key) ?? null) : null;
@@ -273,7 +329,7 @@
 					folderId: await folderFor(h.folder, created),
 					credentialId: credentialIdFor(h, ids, folderCredential, created),
 					vaultId: target,
-					tags: ['rdm-import'],
+					tags: [src.tag],
 					kind: h.kind,
 					domain: h.kind === 'rdp' ? h.domain : null,
 					detectedOs: h.kind === 'rdp' ? 'windows' : null,
@@ -287,7 +343,7 @@
 			}
 		}
 		if (count > 0) {
-			addToast(t('session.rdm_import_done', { count: String(count) }), 'success');
+			addToast(isRdm ? t('session.rdm_import_done', { count: String(count) }) : t('session.mgr_import_done', { count: String(count), app: src.app }), 'success');
 			onsave?.();
 		}
 		if (failures.length === 0) {
@@ -315,6 +371,9 @@
 		error = undefined;
 		hosts = [];
 		skipped = [];
+		notice = undefined;
+		askPassword = null;
+		masterPassword = '';
 		failed = [];
 		existingSessions = [];
 		folders = [];
@@ -326,35 +385,74 @@
 	}
 </script>
 
-<Modal {open} onclose={close} title={t('session.import_rdm')} maxWidth="600px">
+<Modal {open} onclose={close} title={isRdm ? t('session.import_rdm') : t('session.mgr_import_title')} maxWidth="600px">
 	<div class="import-content">
-		<p class="import-desc">{t('session.rdm_import_desc')}</p>
+		{#if !fixedSource}
+			<label class="user-field">
+				<span>{t('session.mgr_import_source')}</span>
+				<select
+					class="tool-input"
+					bind:value={pickedSource}
+					onchange={() => {
+						askPassword = null;
+						masterPassword = '';
+						error = undefined;
+					}}
+					disabled={busy || parsed}
+				>
+					{#each OTHER_SOURCES as id (id)}<option value={id}>{IMPORT_SOURCES[id].app}</option>{/each}
+				</select>
+			</label>
+		{/if}
+		<p class="import-desc">{descFor(sourceId)}</p>
 
-		{#if !parsed}
+		{#if !parsed && askPassword}
+			<label class="user-field">
+				<span>{t('session.mgr_import_password_label', { app: src.app })}</span>
+				<input
+					class="tool-input"
+					type="password"
+					bind:value={masterPassword}
+					autocomplete="off"
+					onkeydown={(e) => {
+						if (e.key === 'Enter' && masterPassword) read(masterPassword);
+					}}
+					disabled={busy}
+				/>
+			</label>
+			<p class="user-hint" class:warn={askPassword.wrong}>
+				{askPassword.wrong ? t('session.mgr_import_password_wrong') : t('session.mgr_import_password_hint')}
+			</p>
+			{#if error}<div class="import-error" role="alert">{error}</div>{/if}
+		{:else if !parsed}
 			<div class="file-row">
 				<input
 					bind:this={fileInput}
 					class="file-input"
 					type="file"
-					accept=".rdm,.json,.xml"
+					accept={src.accept}
 					onchange={pickFile}
 					disabled={busy}
 				/>
 				<Button variant="secondary" onclick={() => fileInput?.click()} disabled={busy}>{t('session.rdm_import_choose')}</Button>
-				<span class="file-name">{fileName ?? t('session.rdm_import_or_paste')}</span>
+				{#if src.local}
+					<Button variant="secondary" onclick={readFromComputer} disabled={busy}>{t('session.mgr_import_read_local')}</Button>
+				{/if}
+				<span class="file-name">{fileName ?? t(isRdm ? 'session.rdm_import_or_paste' : 'session.mgr_import_or_paste')}</span>
 			</div>
 			<textarea
 				class="tool-input json-input"
 				bind:value={raw}
 				oninput={() => (fileName = null)}
-				aria-label={t('session.import_rdm')}
-				placeholder={'<?xml version="1.0"?>\n<ArrayOfConnection>\n  <Connection>…</Connection>\n</ArrayOfConnection>'}
+				aria-label={isRdm ? t('session.import_rdm') : t('session.mgr_import_title')}
+				placeholder={src.placeholder}
 				spellcheck="false"
 				disabled={busy}
 			></textarea>
 			{#if error}<div class="import-error" role="alert">{error}</div>{/if}
 		{:else}
 			{#if error}<div class="import-error" role="alert">{error}</div>{/if}
+			{#if notice}<div class="import-note">{noticeText(notice)}</div>{/if}
 			{#if failed.length > 0}
 				<div class="import-error" role="alert">
 					<strong>{t('session.rdp_import_failed', { count: String(failed.length) })}</strong>
@@ -388,14 +486,14 @@
 						<span>{t('session.rdm_import_user')}</span>
 						<input class="tool-input" type="text" bind:value={fallbackUser} autocomplete="off" spellcheck="false" disabled={busy} />
 					</label>
-					<p class="user-hint" class:warn={missingUser > 0}>{t('session.rdm_import_user_hint')}</p>
+					<p class="user-hint" class:warn={missingUser > 0}>{isRdm ? t('session.rdm_import_user_hint') : t('session.mgr_import_user_hint')}</p>
 				{/if}
 				{#if rdmCredentials.length > 0}
 					<label class="cred-option">
 						<input type="checkbox" bind:checked={makeCredentials} disabled={busy} />
-						<span>{t('session.rdm_import_credentials', { count: String(rdmCredentials.length), hosts: String(credentialHosts) })}</span>
+						<span>{t(isRdm ? 'session.rdm_import_credentials' : 'session.mgr_import_credentials', { count: String(rdmCredentials.length), hosts: String(credentialHosts) })}</span>
 					</label>
-					<p class="user-hint">{t('session.rdm_import_credentials_hint')}</p>
+					<p class="user-hint">{isRdm ? t('session.rdm_import_credentials_hint') : t('session.mgr_import_credentials_hint')}</p>
 				{/if}
 				<div class="select-actions">
 					<button class="select-btn" type="button" onclick={() => (selected = new Set(selectableHosts.map((h) => h.id)))} disabled={busy}>
@@ -423,7 +521,7 @@
 									<span class="host-name">{h.name}</span>
 									{#if saved}<span class="badge-imported">{t('session.import_already_exists')}</span>{/if}
 								</span>
-								<span class="host-detail">{h.username ? `${h.username}@` : ''}{h.host}:{h.port}{h.domain ? ` · ${h.domain}` : ''}{h.keyPath ? ` · ${h.keyPath}` : ''}{h.jump.length > 0 ? ` · ${t('session.rdm_import_via', { host: h.jump.map((g) => `${g.host}:${g.port}`).join(' → ') })}` : ''}</span>
+								<span class="host-detail">{h.username ? `${h.username}@` : ''}{h.host}:{h.port}{h.domain ? ` · ${h.domain}` : ''}{h.keyPath ? ` · ${h.keyPath}` : ''}{h.jump.length > 0 ? ` · ${t('session.rdm_import_via', { host: h.jump.map((g) => `${g.host}:${g.port}`).join(' → ') })}` : ''}{h.password ? ` · ${t('session.mgr_import_has_password')}` : ''}</span>
 							</span>
 							{#if h.folder.length > 0}<span class="host-folder">{folderLabel(h)}</span>{/if}
 						</label>
@@ -435,8 +533,14 @@
 
 	{#snippet actions()}
 		<Button variant="secondary" onclick={close} disabled={importing}>{t('common.cancel')}</Button>
-		{#if !parsed}
-			<Button variant="primary" onclick={read} disabled={!raw.trim() || busy}>{t('session.rdp_import_parse')}</Button>
+		{#if !parsed && askPassword}
+			<Button variant="secondary" onclick={() => read(null)} disabled={busy}>{t('session.mgr_import_skip_passwords')}</Button>
+			<Button variant="primary" onclick={() => read(masterPassword)} disabled={!masterPassword || busy}>
+				{#if reading}<span class="spinner"></span>{/if}
+				{t('session.mgr_import_unlock')}
+			</Button>
+		{:else if !parsed}
+			<Button variant="primary" onclick={() => read()} disabled={!raw.trim() || busy}>{t('session.rdp_import_parse')}</Button>
 		{:else}
 			<Button variant="primary" onclick={handleImport} disabled={!canImport}>
 				{#if importing}<span class="spinner"></span>{/if}
@@ -489,6 +593,7 @@
 
 	.file-row {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 10px;
 		min-width: 0;

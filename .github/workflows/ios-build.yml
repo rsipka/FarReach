@@ -3,9 +3,14 @@ name: iOS build
 # An unsigned iOS build (.ipa) of Reach, for running inside LiveContainer or
 # signing yourself (Sideloadly, AltStore and the like). Nothing is signed and
 # no Apple account is needed; see src-tauri/ios/README.md.
+#
+# On a pull request only in the full tier (see build-check.yml): a Dependabot
+# pull request, the full-ci label, or the repository variable CI_FULL_ON_PR.
+# Every push to main still builds, so the latest main always has an IPA.
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
   workflow_dispatch:
@@ -14,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'full-ci' && format('-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 env:
@@ -26,6 +31,12 @@ jobs:
   # checked by build-check.yml; on main it rebuilds too, so the IPA from the
   # latest main always has the current frontend.
   changes:
+    if: >-
+      github.event_name != 'pull_request' ||
+      (vars.CI_FULL_ON_PR == 'true' ||
+       github.event.pull_request.user.login == 'dependabot[bot]' ||
+       contains(github.event.pull_request.labels.*.name, 'full-ci')) &&
+      (github.event.action != 'labeled' || github.event.label.name == 'full-ci')
     runs-on: ubuntu-latest
     permissions:
       contents: read

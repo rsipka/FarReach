@@ -84,6 +84,18 @@ export interface SessionConfig {
   /** What its tabs record into the session history; unset: the default
    *  from Settings. */
   history?: HistoryMode | null;
+  /** Start its terminals in tmux on the server; unset: as its folder says
+   *  (see #lib/terminal/tmux). */
+  tmux?: TmuxSetting | null;
+}
+
+/** A session's own tmux choice. */
+export interface TmuxSetting {
+  /** `attach`: attach to the named tmux session, or create it; `inherit`:
+   *  as the folder says (kept to hold a name). */
+  mode: 'off' | 'attach' | 'inherit';
+  /** The tmux session's name; unset: made from the session's name. */
+  name?: string | null;
 }
 
 /** One named value of a session's documentation. */
@@ -152,6 +164,8 @@ export interface Folder {
   vault_id: string | null;
   /** A saved credential the sessions inside log in with. */
   credential_id?: string | null;
+  /** Start the sessions inside in tmux, unless they or a nearer folder say otherwise. */
+  tmux?: boolean | null;
 }
 
 export async function sessionList(): Promise<SessionConfig[]> {
@@ -191,6 +205,7 @@ export async function sessionCreate(params: {
   terminalTheme?: string | null;
   monitoring?: boolean | null;
   history?: HistoryMode | null;
+  tmux?: TmuxSetting | null;
 }): Promise<SessionConfig> {
   return invoke<SessionConfig>('session_create', {
     name: params.name,
@@ -220,6 +235,7 @@ export async function sessionCreate(params: {
     terminalTheme: params.terminalTheme || null,
     monitoring: params.monitoring ?? null,
     history: params.history || null,
+    tmux: params.tmux ?? null,
   });
 }
 
@@ -341,6 +357,11 @@ export async function sessionUpdateFolderParent(folderId: string, parentId: stri
   return invoke<Folder>('session_update_folder_parent', { folderId, parentId });
 }
 
+/** Turn tmux on or off for a folder's sessions; null: as the folder above says. */
+export async function sessionSetFolderTmux(folderId: string, tmux: boolean | null): Promise<Folder> {
+  return invoke<Folder>('session_set_folder_tmux', { folderId, tmux });
+}
+
 /** Set or clear the saved credential a folder's sessions log in with. */
 export async function sessionSetFolderCredential(folderId: string, credentialId: string | null): Promise<Folder> {
   return invoke<Folder>('session_set_folder_credential', { folderId, credentialId });
@@ -373,4 +394,51 @@ export async function sessionShare(
 /** Fetch installed WSL distributions on Windows */
 export async function wslListDistros(): Promise<string[]> {
   return invoke<string[]>('wsl_list_distros');
+}
+
+/** One field of a bulk edit: a value for every session, or none. */
+export type BulkChange<T> = { set: T } | 'clear';
+
+/** What a bulk edit changes; a field left out stays as each session has it. */
+export interface SessionPatch {
+  username?: string;
+  /** Only sessions that log in with a password take it. */
+  password?: BulkChange<string>;
+  /** `{ set: id }` a saved credential, `{ set: 'own' }` the session's own
+   *  login, `'clear'` the folder's credential, if any. */
+  credential?: BulkChange<string>;
+  port?: number;
+  domain?: BulkChange<string>;
+  tags_add?: string[];
+  tags_remove?: string[];
+  notes?: { op: 'replace' | 'append'; text: string } | { op: 'clear' };
+  terminal_theme?: BulkChange<string>;
+  history?: BulkChange<HistoryMode>;
+}
+
+export interface BulkOutcome {
+  id: string;
+  name: string;
+  status: 'changed' | 'unchanged' | 'failed';
+  /** Patch fields this session does not take, e.g. `domain` on SSH. */
+  skipped: string[];
+  error?: string;
+}
+
+export interface BulkResult {
+  results: BulkOutcome[];
+  /** For `sessionBulkUndo`; absent when nothing changed. */
+  undo?: string;
+}
+
+/** Change the same fields on many sessions. Each is saved as the session
+ *  editor would save it; one that fails is reported and the rest stay saved. */
+export async function sessionBulkUpdate(sessionIds: string[], patch: SessionPatch): Promise<BulkResult> {
+  return invoke<BulkResult>('session_bulk_update', { sessionIds, patch });
+}
+
+/** Put the sessions of the last bulk edit back as they were, except those
+ *  changed since (`kept`, by name). */
+export async function sessionBulkUndo(token: string): Promise<{ restored: number; kept: string[] }> {
+  return invoke<{ restored: number; kept: string[] }>('session_bulk_undo', { token });
 }

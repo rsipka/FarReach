@@ -9,13 +9,15 @@
 		variant: 'close' | 'update';
 		/** Number of active SSH connections that would be terminated. */
 		count: number;
+		/** How many of them run in tmux on their server, which they outlive. */
+		tmuxCount?: number;
 		/** Close & disconnect (close) / Update & restart (update). */
 		onconfirm: () => void;
 		/** Cancel/dismiss (close) or postpone (update — also fired on backdrop close). */
 		oncancel: () => void;
 	}
 
-	let { open, variant, count, onconfirm, oncancel }: Props = $props();
+	let { open, variant, count, tmuxCount = 0, onconfirm, oncancel }: Props = $props();
 
 	let title = $derived(
 		variant === 'update' ? t('updater.relaunch_title') : t('session.close_active_title')
@@ -29,6 +31,9 @@
 
 <Modal {open} onclose={oncancel} {title} maxWidth="440px">
 	<p class="msg">{message}</p>
+	{#if tmuxCount > 0}
+		<p class="msg tmux-note">{t('tmux.quit_note', { count: String(tmuxCount) })}</p>
+	{/if}
 
 	{#snippet actions()}
 		{#if variant === 'update'}
@@ -47,5 +52,10 @@
 		font-size: 0.875rem;
 		line-height: 1.5;
 		color: var(--color-text-primary);
+	}
+
+	.tmux-note {
+		margin-top: 8px;
+		color: var(--color-text-secondary);
 	}
 </style>

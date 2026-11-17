@@ -25,7 +25,11 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/webkit-input.yml'
+  # On a pull request only in the full tier (see build-check.yml): a
+  # Dependabot pull request, the full-ci label, or the repository variable
+  # CI_FULL_ON_PR. Pushes to main that touch these files still run it.
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - 'src/lib/terminal/**'
       - 'src/lib/platform.ts'
@@ -39,6 +43,12 @@ permissions:
 
 jobs:
   webkit:
+    if: >-
+      github.event_name != 'pull_request' ||
+      (vars.CI_FULL_ON_PR == 'true' ||
+       github.event.pull_request.user.login == 'dependabot[bot]' ||
+       contains(github.event.pull_request.labels.*.name, 'full-ci')) &&
+      (github.event.action != 'labeled' || github.event.label.name == 'full-ci')
     # A real Mac, because the whole point is the engine.
     runs-on: macos-latest
     timeout-minutes: 20

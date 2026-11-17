@@ -1,0 +1,7 @@
+{
+  "identifier": "mobile",
+  "description": "Phone-only permissions: the camera scanner for another device's link QR code",
+  "windows": ["main"],
+  "platforms": ["android", "iOS"],
+  "permissions": ["barcode-scanner:default"]
+}

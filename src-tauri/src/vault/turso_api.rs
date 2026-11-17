@@ -62,6 +62,44 @@ pub async fn create_database(
     })
 }
 
+/// The names of the organization's databases.
+pub async fn list_databases(org: &str, api_token: &str) -> Result<Vec<TursoDbInfo>, VaultError> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    struct Db {
+        db_id: String,
+        hostname: String,
+        name: String,
+    }
+    #[derive(Deserialize)]
+    struct Dbs {
+        databases: Vec<Db>,
+    }
+    let url = format!("{}/organizations/{}/databases", TURSO_API_BASE, org);
+    let response = crate::http::client()
+        .get(&url)
+        .bearer_auth(api_token)
+        .send()
+        .await
+        .map_err(|e| VaultError::SyncError(format!("Failed to list Turso databases: {}", e)))?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(VaultError::SyncError(explain(status, &body, org)));
+    }
+    let dbs: Dbs = response
+        .json()
+        .await
+        .map_err(|e| VaultError::SyncError(format!("Failed to parse Turso response: {}", e)))?;
+    Ok(dbs.databases.into_iter().map(|d| TursoDbInfo { db_id: d.db_id, hostname: d.hostname, name: d.name }).collect())
+}
+
+/// The personal vault databases among `dbs`: the app names each one
+/// `reach-personal-` and the start of its owner's user id.
+pub fn personal_databases(dbs: Vec<TursoDbInfo>) -> Vec<TursoDbInfo> {
+    dbs.into_iter().filter(|d| d.name.starts_with("reach-personal-")).collect()
+}
+
 /// Create an auth token for a Turso database.
 pub async fn create_database_token(
     org: &str,
@@ -195,6 +233,13 @@ fn explain(status: reqwest::StatusCode, body: &str, org: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn personal_databases_are_picked_out() {
+        let db = |n: &str| TursoDbInfo { db_id: n.into(), hostname: format!("{n}-org.turso.io"), name: n.into() };
+        let found = personal_databases(vec![db("reach-personal-1a2b3c4d"), db("vault-shared"), db("reach-personal-9f9f9f9f")]);
+        assert_eq!(found.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(), ["reach-personal-1a2b3c4d", "reach-personal-9f9f9f9f"]);
+    }
 
     #[test]
     fn a_group_is_found_or_made() {

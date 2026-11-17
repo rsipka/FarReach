@@ -20,6 +20,7 @@ pub mod sync_bundle;
 pub mod sync_engine;
 pub mod sync_local;
 pub mod sync_record;
+pub mod sync_s3;
 pub mod sync_store;
 pub mod sync_tokens;
 pub mod turso_api;

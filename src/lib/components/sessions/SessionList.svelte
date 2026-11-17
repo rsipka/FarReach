@@ -14,7 +14,8 @@
 		faXmark,
 		faListCheck,
 		faFolder,
-		faFolderOpen
+		faFolderOpen,
+		faPen
 	} from '@fortawesome/free-solid-svg-icons';
 	import { registerSessionActions, shortcutLabel } from '#lib/state/shortcuts.svelte.js';
 	import { pendingSessionAction, takeSessionAction } from '#lib/state/palette.svelte.js';
@@ -25,8 +26,9 @@
 	import SessionEditor from './SessionEditor.svelte';
 	import SshConfigImport from './SshConfigImport.svelte';
 	import RdpImport from './RdpImport.svelte';
-	import RdmImport from './RdmImport.svelte';
+	import ManagerImport from './ManagerImport.svelte';
 	import CredentialList from './CredentialList.svelte';
+	import BulkEditor from './BulkEditor.svelte';
 	import { savedCredentialList, credentialsFor, type SavedCredential } from '#lib/ipc/savedCredentials.js';
 	import SessionCard from './SessionCard.svelte';
 	import VaultSelector from '#lib/components/vault/VaultSelector.svelte';
@@ -36,7 +38,7 @@
 	import Button from '#lib/components/shared/Button.svelte';
 	import UntrustedRefsDialog from '#lib/components/pwmanager/UntrustedRefsDialog.svelte';
 	import { sessionUntrustedSecretRefs, sessionApproveSecretRefs, untrustedRefsFromError, type UntrustedRefs } from '#lib/ipc/sessions.js';
-	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetFolderCredential, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
+	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetFolderCredential, sessionSetFolderTmux, sessionBulkUndo, type BulkResult, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
 	import { sshConnect, sshDisconnect, sshDetectOs, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
@@ -53,7 +55,9 @@
 	import { untrack } from 'svelte';
 	import { positionMenu } from '#lib/utils/positionMenu.js';
 	import { buildFolderTree, canMoveFolder, folderPath, type FolderTreeNode } from '#lib/sessions/folder-tree.js';
-	import { vaultState, checkState, initIdentity, importIdentity, ALL_VAULTS, loadVaultFilter, type VaultFilter } from '#lib/state/vault.svelte.js';
+	import { canScanLinkCode, scanLinkCode } from '#lib/state/link-scan.js';
+	import { vaultState, checkState, initIdentity, importIdentity, linkDevice, ALL_VAULTS, loadVaultFilter, type VaultFilter } from '#lib/state/vault.svelte.js';
+	import { tmuxFor } from '#lib/terminal/tmux.js';
 
 	let showQuickConnect = $state(false);
 	let showRdpConnect = $state(false);
@@ -61,6 +65,7 @@
 	let showImport = $state(false);
 	let showRdpImport = $state(false);
 	let showRdmImport = $state(false);
+	let showAppImport = $state(false);
 	let editingSession = $state<SessionConfig | undefined>();
 	let sessions = $state<SessionConfig[]>([]);
 	let loading = $state(true);
@@ -170,7 +175,8 @@
 				void sessionGet(r.sessionId)
 					.then((s) => {
 						setActivePage('terminal');
-						return handleConnect(r.shell ? { ...s, shell: r.shell } : s);
+						// A container's shell is never wrapped in tmux.
+						return handleConnect(r.shell ? { ...s, shell: r.shell, tmux: { mode: 'off' } } : s);
 					})
 					.catch((err) => addToast(String(err), 'error'));
 			}
@@ -385,6 +391,75 @@
 		}
 	}
 
+	// ---- Editing the selected sessions at once (BulkEditor) -------------------
+	let bulkEditOpen = $state(false);
+	/** Undoes the last bulk edit until the app quits or the vault locks. */
+	let lastBulkUndo = $state<string | null>(null);
+	let bulkEditSessions = $derived(bulkEditOpen ? sessions.filter(s => selected.has(s.id)) : []);
+
+	function openBulkEdit(): void {
+		closeContextMenu();
+		if (selected.size === 1) {
+			const only = sessions.find(s => selected.has(s.id));
+			if (only) handleEdit(only);
+			return;
+		}
+		if (selected.size > 1) bulkEditOpen = true;
+	}
+
+	async function bulkEdited(result: BulkResult): Promise<void> {
+		await loadSessions();
+		const changed = result.results.filter(r => r.status === 'changed').length;
+		const failed = result.results.filter(r => r.status === 'failed').length;
+		if (result.undo) lastBulkUndo = result.undo;
+		if (failed > 0) return; // the editor shows what failed
+		const token = result.undo;
+		addToast(
+			t('bulk.done_toast', { count: String(changed) }),
+			'success',
+			30000,
+			token ? { label: t('bulk.undo'), run: () => void undoBulkEdit(token) } : undefined
+		);
+	}
+
+	async function undoBulkEdit(token: string | null = lastBulkUndo): Promise<void> {
+		closeContextMenu();
+		if (!token) return;
+		try {
+			const r = await sessionBulkUndo(token);
+			lastBulkUndo = null;
+			await loadSessions();
+			if (r.kept.length > 0) {
+				addToast(t('bulk.undo_partial', { count: String(r.restored), names: r.kept.join(', ') }), 'warning', 8000);
+			} else {
+				addToast(t('bulk.undone_toast', { count: String(r.restored) }), 'success');
+			}
+		} catch (err) {
+			lastBulkUndo = null;
+			addToast(String(err), 'error');
+		}
+	}
+
+	/** Add every session inside a folder, at any depth, to the selection. */
+	function selectFolderSessions(folder: Folder): void {
+		closeContextMenu();
+		const inside = new Set([folder.id]);
+		let grew = true;
+		while (grew) {
+			grew = false;
+			for (const f of folders) {
+				if (f.parent_id && inside.has(f.parent_id) && !inside.has(f.id)) {
+					inside.add(f.id);
+					grew = true;
+				}
+			}
+		}
+		const next = new Set(selected);
+		for (const s of filteredSessions) if (s.folder_id && inside.has(s.folder_id)) next.add(s.id);
+		selected = next;
+		selectMode = true;
+	}
+
 	async function deleteSelected(): Promise<void> {
 		const ids = [...selected];
 		bulkDeleteConfirm = false;
@@ -406,7 +481,7 @@
 		if (!selecting) return;
 		function onKey(e: KeyboardEvent) {
 			// A dialog on top closes itself first.
-			if (e.key === 'Escape' && !moveIds_ && !bulkDeleteConfirm) clearSelection();
+			if (e.key === 'Escape' && !moveIds_ && !bulkDeleteConfirm && !bulkEditOpen) clearSelection();
 		}
 		window.addEventListener('keydown', onKey);
 		return () => window.removeEventListener('keydown', onKey);
@@ -598,6 +673,7 @@
 	let initError = $state('');
 	let importKey = $state('');
 	let importing = $state(false);
+	let linkCode = $state('');
 
 	// Connect prompt state
 	let connectSession = $state<SessionConfig | undefined>();
@@ -629,6 +705,17 @@
 		closeContextMenu();
 		try {
 			await sessionSetFolderCredential(folder.id, credentialId);
+			await loadSessions();
+		} catch (err) {
+			addToast(String(err), 'error');
+		}
+	}
+
+	/** Turn tmux on or off for a folder's sessions; null: as the folder above says. */
+	async function setFolderTmux(folder: Folder, value: boolean | null): Promise<void> {
+		closeContextMenu();
+		try {
+			await sessionSetFolderTmux(folder.id, value);
 			await loadSessions();
 		} catch (err) {
 			addToast(String(err), 'error');
@@ -991,6 +1078,7 @@
 				cols: 80,
 				rows: 24,
 				shell: session.shell ?? undefined,
+				tmux: tmuxFor(session, folders),
 				injectColors: getSettings().typeShellSetup,
 				sessionLog: sessionLogConfig(),
 				showLoginMessage: getSettings().showLoginMessage,
@@ -1172,6 +1260,35 @@
 		}
 	}
 
+	// First run on another device: open the vaults the first one syncs
+	async function handleLink(): Promise<void> {
+		importing = true;
+		initError = '';
+		try {
+			await linkDevice(linkCode.trim());
+			linkCode = '';
+			await loadSessions();
+			addToast(t('sync.joined_toast'), 'success');
+		} catch (err) {
+			initError = String(err);
+		} finally {
+			importing = false;
+		}
+	}
+
+	async function handleScanLink(): Promise<void> {
+		initError = '';
+		try {
+			const code = await scanLinkCode();
+			if (code) {
+				linkCode = code;
+				await handleLink();
+			}
+		} catch (err) {
+			initError = String(err);
+		}
+	}
+
 	// Reset - delete existing data and start fresh
 	async function handleReset(): Promise<void> {
 		// Delete identity file and vaults to start fresh
@@ -1276,9 +1393,26 @@
 			{#if initError}
 				<p class="init-error">{initError}</p>
 			{/if}
-			<button class="init-btn" onclick={handleInitialize} disabled={initializing}>
+			<button class="init-btn" onclick={handleInitialize} disabled={initializing || importing}>
 				{#if initializing}{t('session.initializing')}{:else}{t('session.initialize')}{/if}
 			</button>
+			<!-- Or join the vaults another device already syncs -->
+			<p class="init-desc">{t('session.link_device_hint')}</p>
+			<input
+				class="import-input"
+				type="password"
+				placeholder={t('session.paste_link_code')}
+				bind:value={linkCode}
+				disabled={importing || initializing}
+			/>
+			<div class="recovery-buttons">
+				{#if canScanLinkCode()}
+					<button class="reset-btn" onclick={handleScanLink} disabled={importing || initializing}>{t('sync.scan_qr')}</button>
+				{/if}
+				<button class="reset-btn" onclick={handleLink} disabled={importing || initializing || !linkCode.trim()}>
+					{#if importing}{t('sync.joining')}{:else}{t('sync.join')}{/if}
+				</button>
+			</div>
 		</div>
 	{:else if keychainError}
 		<!-- Keychain error: data exists but can't access key -->
@@ -1391,6 +1525,10 @@
 							<FaIcon icon={faFileImport} size={12} />
 							<span>{t('session.import_rdm')}</span>
 						</button>
+						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => (showAppImport = true))}>
+							<FaIcon icon={faFileImport} size={12} />
+							<span>{t('session.import_other_app')}</span>
+						</button>
 					</div>
 				{/if}
 			</div>
@@ -1424,6 +1562,10 @@
 					</button>
 				</div>
 				<div class="bulk-actions">
+					<button class="bulk-btn" type="button" disabled={selected.size === 0} onclick={openBulkEdit} title={t('bulk.edit_hint')}>
+						<FaIcon icon={faPen} size={11} />
+						<span>{t('bulk.edit')}</span>
+					</button>
 					<button class="bulk-btn primary" type="button" disabled={selected.size === 0} onclick={() => openMove([...selected])}>
 						<FaIcon icon={faFolderOpen} size={11} />
 						<span>{t('session.move_to')}</span>
@@ -1473,9 +1615,15 @@
 				<button class="context-item" onclick={() => { if (contextMenu?.session) handleConnect(contextMenu.session); closeContextMenu(); }} type="button">
 					{t('session.connect')}
 				</button>
-				<button class="context-item" onclick={() => { if (contextMenu?.session) handleEdit(contextMenu.session); closeContextMenu(); }} type="button">
-					{t('session.edit')}
-				</button>
+				{#if selected.has(contextMenu.session.id) && selected.size > 1}
+					<button class="context-item" onclick={openBulkEdit} type="button">
+						{t('bulk.edit_n', { count: String(selected.size) })}
+					</button>
+				{:else}
+					<button class="context-item" onclick={() => { if (contextMenu?.session) handleEdit(contextMenu.session); closeContextMenu(); }} type="button">
+						{t('session.edit')}
+					</button>
+				{/if}
 				<button class="context-item" onclick={() => { if (contextMenu?.session) void setFavorite(contextMenu.session, !contextMenu.session.favorite); }} type="button">
 					{contextMenu.session.favorite ? t('session.remove_favorite') : t('session.add_favorite')}
 				</button>
@@ -1521,6 +1669,7 @@
 				{/if}
 			{:else if contextMenu.folder}
 				<button class="context-item" onclick={() => contextNewFolder(contextMenu?.folder?.id ?? null)} type="button">{t('session.new_folder')}</button>
+				<button class="context-item" onclick={() => { if (contextMenu?.folder) selectFolderSessions(contextMenu.folder); }} type="button">{t('bulk.select_folder')}</button>
 				<div class="context-sep"></div>
 				<div class="context-label">{t('session.move_to_folder')}</div>
 				<div class="context-folders">
@@ -1538,13 +1687,31 @@
 					{/each}
 				</div>
 				<div class="context-sep"></div>
+				<div class="context-label">{t('tmux.folder_menu')}</div>
+				<div class="context-folders">
+					{#each [[null, 'tmux.folder_inherit'], [true, 'tmux.folder_on'], [false, 'tmux.folder_off']] as const as [value, label] (label)}
+						<button class="context-item context-folder-item" class:context-current={(contextMenu.folder.tmux ?? null) === value} onclick={() => { if (contextMenu?.folder) void setFolderTmux(contextMenu.folder, value); }} type="button">{t(label)}</button>
+					{/each}
+				</div>
+				<div class="context-sep"></div>
 				<button class="context-item context-danger" onclick={() => { if (contextMenu?.folder) handleDeleteFolder(contextMenu.folder.id); closeContextMenu(); }} type="button">{t('common.delete')}</button>
 			{:else}
 				<button class="context-item" onclick={() => contextNewFolder()} type="button">{t('session.new_folder')}</button>
+				{#if lastBulkUndo}
+					<button class="context-item" onclick={() => void undoBulkEdit()} type="button">{t('bulk.undo_last')}</button>
+				{/if}
 			{/if}
 		</div>
 	{/if}
 </div>
+
+<BulkEditor
+	open={bulkEditOpen}
+	sessions={bulkEditSessions}
+	credentials={savedCredentials}
+	onclose={() => (bulkEditOpen = false)}
+	onapplied={(r) => void bulkEdited(r)}
+/>
 
 <Modal open={moveIds_ !== null} onclose={() => (moveIds_ = null)} title={t('session.move_n_title', { count: String(moveIds_?.length ?? 0) })} maxWidth="420px">
 	<div class="move-body">
@@ -1609,7 +1776,8 @@
 <SessionEditor bind:open={showEditor} editSession={editingSession} vaultId={targetVaultId} {folders} onsave={handleEditorSave} />
 <SshConfigImport bind:open={showImport} vaultId={targetVaultId} onsave={handleEditorSave} />
 <RdpImport bind:open={showRdpImport} vaultId={targetVaultId} onsave={handleEditorSave} />
-<RdmImport bind:open={showRdmImport} vaultId={targetVaultId} onsave={handleEditorSave} />
+<ManagerImport bind:open={showRdmImport} source="rdm" vaultId={targetVaultId} onsave={handleEditorSave} />
+<ManagerImport bind:open={showAppImport} vaultId={targetVaultId} onsave={handleEditorSave} />
 <UntrustedRefsDialog
 	asked={askedRefs}
 	busy={approvingRefs}
@@ -2662,7 +2830,7 @@
 
 	.bulk-actions {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: 1fr 1fr 1fr;
 		gap: 6px;
 	}
 

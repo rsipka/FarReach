@@ -156,6 +156,8 @@ tar = "0.4"
 tauri-plugin-process = "2.3.1"
 # The Android half of vault unlock (fingerprint, security keys); a no-op elsewhere.
 tauri-plugin-reach-unlock = { path = "plugins/reach-unlock" }
+# The QR code that links another device (Settings > Sync), drawn as SVG.
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 # VNC (RFB) client for VNC sessions.
 vnc-rs = "0.6"
 # Tight-encoded VNC rectangles are JPEG. Already in the tree through `image`.
@@ -374,6 +376,10 @@ libc = "0.2"
 libloading = "0.9"
 
 # Root certificates for HTTPS on Android; see src/http.rs.
+# Scanning another device's link QR code with the camera.
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-barcode-scanner = "2"
+
 [target.'cfg(target_os = "android")'.dependencies]
 webpki-root-certs = "1"
 # A cluster whose kubeconfig names no CA is checked against the bundled
