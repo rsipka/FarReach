@@ -370,6 +370,10 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_reach_unlock::init());
+    #[cfg(mobile)]
+    {
+        builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+    }
     // NOTE: AppState is managed inside `setup()` (not here) so it can be rooted
     // at the Tauri-resolved, writable app data dir — required on Android/iOS.
 
@@ -606,6 +610,9 @@ pub fn run() {
             vault_reset,
             vault_export_identity,
             vault_import_identity,
+            vault_export_device_link,
+            vault_link_device,
+            qr_svg,
             vault_lock,
             vault_is_held,
             vault_resume,
@@ -655,6 +662,7 @@ pub fn run() {
             // Turso Platform API
             turso_create_database,
             turso_create_database_token,
+            turso_list_personal_databases,
             // Personal sync config
             vault_set_personal_sync,
             vault_get_personal_sync,
@@ -1035,6 +1043,9 @@ pub fn run() {
             vault_reset,
             vault_export_identity,
             vault_import_identity,
+            vault_export_device_link,
+            vault_link_device,
+            qr_svg,
             vault_lock,
             vault_is_held,
             vault_resume,
@@ -1084,6 +1095,7 @@ pub fn run() {
             // Turso Platform API
             turso_create_database,
             turso_create_database_token,
+            turso_list_personal_databases,
             // Personal sync config
             vault_set_personal_sync,
             vault_get_personal_sync,

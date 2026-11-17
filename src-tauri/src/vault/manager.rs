@@ -3882,3 +3882,10 @@ mod copied_ids_tests;
 #[cfg(test)]
 #[path = "manager_sync_tokens_tests.rs"]
 mod sync_tokens_tests;
+
+#[path = "manager_device_link.rs"]
+pub mod device_link;
+
+#[cfg(test)]
+#[path = "manager_device_link_tests.rs"]
+mod device_link_tests;

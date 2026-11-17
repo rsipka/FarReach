@@ -144,6 +144,23 @@ export async function importIdentity(secretKey: string): Promise<string> {
 	return invoke<string>('vault_import_identity', { secret_key: secretKey });
 }
 
+/** A code that links another device to this identity and the vaults it
+ * syncs. As SENSITIVE as the backup key. */
+export async function exportDeviceLink(): Promise<string> {
+	return invoke<string>('vault_export_device_link');
+}
+
+/** `text` as a QR code, in SVG. */
+export async function qrSvg(text: string): Promise<string> {
+	return invoke<string>('qr_svg', { text });
+}
+
+/** Replace this device's identity with the one in a link code and open the
+ * vaults it syncs. */
+export async function linkDevice(code: string): Promise<string> {
+	return invoke<string>('vault_link_device', { code });
+}
+
 export async function getPublicKey(): Promise<string | null> {
 	return invoke<string | null>('vault_get_public_key');
 }
@@ -398,6 +415,11 @@ export interface TursoDbInfo {
 /** Create a new database in Turso (for shared vaults). */
 export async function createTursoDatabase(dbName: string): Promise<TursoDbInfo> {
 	return invoke<TursoDbInfo>('turso_create_database', { db_name: dbName });
+}
+
+/** Personal vault databases already in the Turso organization. */
+export async function listTursoPersonalDatabases(): Promise<TursoDbInfo[]> {
+	return invoke<TursoDbInfo[]>('turso_list_personal_databases');
 }
 
 /** Create an auth token for a Turso database. */
