@@ -84,13 +84,13 @@ You should see a database with a name like `reach-personal-xxxxx`.
 
 ## Setting Up a Second Device
 
-1. Install Reach on the new device.
-2. Go through the setup wizard.
-3. Enter the same Turso credentials (org name + API token).
-4. Import your identity. Either use a backup file or paste your backup key (you can export it from Settings > Sync > "Export Backup Key" on your original device).
-5. Your vaults will sync down from Turso.
+Each device makes its own encryption identity, and a vault can only be opened by the identity that made it (or members it was shared with). So a second device does not sign in with Turso credentials: it is linked to the first one.
 
-The identity import step is important. Without your encryption keys, the synced data is just encrypted blobs that can't be read.
+1. On the device that already syncs, open **Settings > Sync > Link another device** and click **Show link code**.
+2. Install Reacher CM on the new device. On its first screen, paste the code under "Already syncing on another device?" and click **Join**. A device that is already set up can do the same in **Settings > Sync > Join from another device**; its own identity and data are replaced.
+3. Your vaults sync down, whatever storage they use (Turso, a folder, SFTP, Git, SMB). The master password is the first device's.
+
+The code holds your identity's secret key and the sync tokens, so treat it like the backup key: move it yourself over a channel you trust, and do not keep it. Entering the same Turso organization and API token on an unlinked device does not reach your data; Reacher CM says so instead of creating a second personal database.
 
 ## A Note About Security
 

@@ -606,6 +606,8 @@ pub fn run() {
             vault_reset,
             vault_export_identity,
             vault_import_identity,
+            vault_export_device_link,
+            vault_link_device,
             vault_lock,
             vault_is_held,
             vault_resume,
@@ -655,6 +657,7 @@ pub fn run() {
             // Turso Platform API
             turso_create_database,
             turso_create_database_token,
+            turso_list_personal_databases,
             // Personal sync config
             vault_set_personal_sync,
             vault_get_personal_sync,
@@ -1035,6 +1038,8 @@ pub fn run() {
             vault_reset,
             vault_export_identity,
             vault_import_identity,
+            vault_export_device_link,
+            vault_link_device,
             vault_lock,
             vault_is_held,
             vault_resume,
@@ -1084,6 +1089,7 @@ pub fn run() {
             // Turso Platform API
             turso_create_database,
             turso_create_database_token,
+            turso_list_personal_databases,
             // Personal sync config
             vault_set_personal_sync,
             vault_get_personal_sync,

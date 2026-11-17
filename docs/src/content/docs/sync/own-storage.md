@@ -19,7 +19,7 @@ Shared vaults always stay on Turso, because each member needs a database they ca
 3. Click **Test connection**. Reach tells you whether the location is empty (your data is written there on the first sync) or already holds your vault (this device joins it).
 4. Click **Use for sync**.
 
-On your other devices, unlock with the same identity (see [Setting Up Cloud Sync](/sync/setup/) for moving your identity), then choose the same location there. Anything a device held on its own is merged in.
+On your other devices, use **Settings > Sync > Link another device** (see [Setting Up a Second Device](/sync/setup/#setting-up-a-second-device)): the linked device opens the same vault from the same location.
 
 ## What is stored
 

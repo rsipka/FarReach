@@ -3,9 +3,9 @@
 	import Input from '#lib/components/shared/Input.svelte';
 	import SyncStatusSection from './SyncStatusSection.svelte';
 	import SyncBackendSection from './SyncBackendSection.svelte';
-	import { getSettings, saveSettings, exportIdentity } from '#lib/state/vault.svelte.js';
+	import { getSettings, saveSettings, exportIdentity, linkDevice } from '#lib/state/vault.svelte.js';
 	import type { AppSettings } from '#lib/ipc/vault.js';
-	import { createTursoDatabase, createTursoDatabaseToken, setPersonalSync, acceptInvite } from '#lib/ipc/vault.js';
+	import { createTursoDatabase, createTursoDatabaseToken, setPersonalSync, acceptInvite, exportDeviceLink, listTursoPersonalDatabases } from '#lib/ipc/vault.js';
 	import { vaultState } from '#lib/state/vault.svelte.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -28,6 +28,15 @@
 	// Export key
 	let showExportKey = $state(false);
 	let exportedKey = $state('');
+
+	// Link another device / join from one
+	let linkCode = $state('');
+	let joinCode = $state('');
+	let joinArmed = $state(false);
+	let joining = $state(false);
+	// Another device's personal database is in the organization: the next
+	// Save makes a separate one anyway.
+	let createAnyway = $state(false);
 
 	// Accept invite
 	let inviteSyncUrl = $state('');
@@ -88,10 +97,24 @@
 				};
 				await saveSettings(initialSettings);
 
-				// Step 2: Now create the database (backend will read saved credentials)
-				addToast(t('sync.creating_database'), 'info');
+				// Step 2: Use this identity's database if it is already
+				// there, or create it (backend reads the saved credentials).
+				// A database made by another device's identity cannot be
+				// opened from here: that device has to link this one.
 				const dbName = `reach-personal-${userUuid?.substring(0, 8) || Date.now()}`;
-				const dbInfo = await createTursoDatabase(dbName);
+				const existing = await listTursoPersonalDatabases();
+				let dbInfo = existing.find((d) => d.name === dbName);
+				if (dbInfo) {
+					addToast(t('sync.reusing_database'), 'info');
+				} else if (existing.length > 0 && !createAnyway) {
+					createAnyway = true;
+					error = t('sync.personal_db_exists', { names: existing.map((d) => d.name).join(', ') });
+					saving = false;
+					return;
+				} else {
+					addToast(t('sync.creating_database'), 'info');
+					dbInfo = await createTursoDatabase(dbName);
+				}
 				const token = await createTursoDatabaseToken(dbInfo.name);
 
 				newPersonalDbUrl = `libsql://${dbInfo.hostname}`;
@@ -133,6 +156,35 @@
 			showExportKey = true;
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
+		}
+	}
+
+	async function handleLinkDevice() {
+		error = '';
+		try {
+			linkCode = await exportDeviceLink();
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		}
+	}
+
+	async function handleJoin() {
+		if (!joinArmed) {
+			joinArmed = true;
+			return;
+		}
+		joining = true;
+		error = '';
+		try {
+			await linkDevice(joinCode.trim());
+			joinCode = '';
+			joinArmed = false;
+			addToast(t('sync.joined_toast'), 'success');
+			await loadSettings();
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			joining = false;
 		}
 	}
 
@@ -207,6 +259,50 @@
 				</Button>
 			</div>
 		{/if}
+
+		<!-- Link Devices Section -->
+		<div class="section">
+			<h3 class="section-title">{t('sync.link_device')}</h3>
+			<p class="section-desc">{t('sync.link_device_desc')}</p>
+			<div class="action-row">
+				<Button variant="secondary" size="sm" onclick={handleLinkDevice}>
+					{t('sync.show_link_code')}
+				</Button>
+			</div>
+			{#if linkCode}
+				<div class="export-box">
+					<p class="export-warning">{t('sync.link_code_warning')}</p>
+					<div class="export-key">
+						<code>{linkCode}</code>
+						<button class="copy-btn" onclick={() => copyToClipboard(linkCode)}>{t('sync.copy')}</button>
+					</div>
+					<Button variant="ghost" size="sm" onclick={() => (linkCode = '')}>
+						{t('common.close')}
+					</Button>
+				</div>
+			{/if}
+
+			<h3 class="section-title">{t('sync.join_device')}</h3>
+			<p class="section-desc">{t('sync.join_device_desc')}</p>
+			<div class="form-field">
+				<Input
+					label={t('sync.link_code')}
+					type="password"
+					placeholder="reachercm-link1:..."
+					bind:value={joinCode}
+					disabled={joining}
+					oninput={() => (joinArmed = false)}
+				/>
+			</div>
+			{#if joinArmed}
+				<p class="export-warning">{t('sync.join_confirm')}</p>
+			{/if}
+			<div class="action-row">
+				<Button variant={joinArmed ? 'danger' : 'secondary'} size="sm" onclick={handleJoin} disabled={joining || !joinCode.trim()}>
+					{joining ? t('sync.joining') : joinArmed ? t('sync.join_confirm_button') : t('sync.join')}
+				</Button>
+			</div>
+		</div>
 
 		<!-- Turso Sync Section -->
 		<div class="section">
