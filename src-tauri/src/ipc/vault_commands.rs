@@ -68,6 +68,7 @@ pub async fn vault_unlock(
 pub async fn vault_lock(state: State<'_, AppState>) -> Result<(), String> {
     let mut manager = state.vault_manager.lock().await;
     manager.hold();
+    crate::history::vault_locked();
     // The password-manager settings live in the vault: what was listed with
     // them goes when it locks, and so does a passphrase kept in memory (and
     // any passphrase question still open is cancelled).

@@ -369,7 +369,11 @@
 									telnetConnectParams={tab.telnetConnectParams}
 									onReconnected={(newId) => (tab.type === 'telnet' ? setTelnetConnection(tab.id, newId) : updateTabConnection(tab.id, newId))}
 									onReady={() => handleTerminalReady(tab)}
-									terminalTheme={tab.terminalTheme}/>
+									terminalTheme={tab.terminalTheme}
+									sessionId={tab.sessionId}
+									sessionName={tab.sessionName}
+									historyMode={tab.historyMode}
+									wslDistro={tab.wslDistro}/>
 							{/if}
 						</div>
 					{/each}

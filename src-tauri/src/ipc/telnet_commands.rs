@@ -61,6 +61,7 @@ pub async fn telnet_send(
     id: String,
     data: Vec<u8>,
 ) -> Result<(), String> {
+    crate::history::input(&id, &data);
     state.telnet_manager.lock().await.send(&id, data)
 }
 

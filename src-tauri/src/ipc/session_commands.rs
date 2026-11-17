@@ -753,6 +753,7 @@ pub async fn session_create(
     notes: Option<String>,
     custom_fields: Option<Vec<crate::state::CustomField>>,
     terminal_theme: Option<String>,
+    history: Option<String>,
 ) -> Result<SessionConfig, String> {
     let mut manager = state.vault_manager.lock().await;
     let kind = kind.unwrap_or_default();
@@ -813,6 +814,7 @@ pub async fn session_create(
         notes,
         custom_fields,
         terminal_theme,
+        history,
         credential_ref_approvals: Default::default(),
     };
     session.tidy_documentation();
