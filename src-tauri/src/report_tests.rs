@@ -19,8 +19,8 @@ fn takes_out_addresses_but_keeps_times() {
 
 #[test]
 fn keeps_rust_paths_which_look_like_ipv6() {
-    let line = "INFO reach_lib::monitoring::collector: up, then [::1]:22 and ::1 refused";
-    assert_eq!(redact(line, None, &[]), "INFO reach_lib::monitoring::collector: up, then [[ip]]:22 and [ip] refused");
+    let line = "INFO reacher_cm_lib::monitoring::collector: up, then [::1]:22 and ::1 refused";
+    assert_eq!(redact(line, None, &[]), "INFO reacher_cm_lib::monitoring::collector: up, then [[ip]]:22 and [ip] refused");
 }
 
 #[test]
