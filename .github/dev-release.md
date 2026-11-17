@@ -20,7 +20,10 @@
    `X*10000000 + Y*100000 + Z*1000 + N` (0.9.2-dev.4 is `902004`). Windows and
    Android refuse to install a build whose number did not go up. The workflow
    stops at once if any of these does not match the tag.
-3. Merge that to main, then tag main and push the tag:
+3. Merge that to main. Pull requests check Linux only, so make sure the
+   full Build check (Windows, macOS, Android) is green on main first: the
+   night's run if nothing was merged since, otherwise Actions > Build check >
+   Run workflow on main. Then tag main and push the tag:
    `git tag vX.Y.Z-dev.N && git push origin vX.Y.Z-dev.N`.
 
 Pushing the tag starts the Windows, macOS, Linux, Android and iOS builds.
