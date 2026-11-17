@@ -42,5 +42,7 @@ export async function openContainerShell(route: Route, engine: Engine, container
 	await sshConnect(params);
 	const tab = createTab('ssh', `${containerName} · ${from.title}`, id, from.sessionName, from.detectedOs);
 	tab.sshConnectParams = params;
+	tab.sessionId = from.sessionId;
+	tab.terminalTheme = from.terminalTheme;
 	setActivePage('terminal');
 }

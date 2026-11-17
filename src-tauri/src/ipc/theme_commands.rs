@@ -41,3 +41,10 @@ pub async fn theme_uninstall(theme_id: String) -> Result<(), String> {
 pub async fn theme_default_registry_url() -> Result<String, String> {
     Ok(DEFAULT_THEMES_URL.to_string())
 }
+
+/// Download a colour scheme from iTerm2-Color-Schemes by name, for Settings
+/// to import as a custom terminal theme. Only when the user asks for one.
+#[tauri::command]
+pub async fn terminal_scheme_download(name: String) -> Result<String, String> {
+    theme::fetch_iterm_scheme(&name).await
+}

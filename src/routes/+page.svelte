@@ -368,7 +368,8 @@
 									sshConnectParams={tab.sshConnectParams}
 									telnetConnectParams={tab.telnetConnectParams}
 									onReconnected={(newId) => (tab.type === 'telnet' ? setTelnetConnection(tab.id, newId) : updateTabConnection(tab.id, newId))}
-									onReady={() => handleTerminalReady(tab)}/>
+									onReady={() => handleTerminalReady(tab)}
+									terminalTheme={tab.terminalTheme}/>
 							{/if}
 						</div>
 					{/each}

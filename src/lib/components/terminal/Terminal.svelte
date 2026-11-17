@@ -13,7 +13,7 @@
 	import { untrustedRefsFromError } from '#lib/ipc/sessions.js';
 	import { noteLineEntered } from '#lib/state/explorer.svelte.js';
 	import { registerBufferReader, unregisterBufferReader } from '#lib/state/terminal-buffer.svelte.js';
-	import { themeState } from '#lib/state/theme.svelte.js';
+	import { terminalPalette } from '#lib/state/terminal-themes.svelte.js';
 	import { getSettings, updateSetting } from '#lib/state/settings.svelte.js';
 	import { countPasteLines, shouldWarnOnPaste } from '#lib/terminal/paste.js';
 	import { rightClickAction, wordSeparator, MIDDLE_CLICK_PASTE_MS } from '#lib/terminal/mouse.js';
@@ -50,9 +50,14 @@
 		telnetConnectParams?: TelnetConnectParams;
 		onReconnected?: (newConnectionId: string) => void;
 		onReady?: () => void;
+		/** The session's terminal theme id; unset: the default from Settings. */
+		terminalTheme?: string | null;
 	}
 
-	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, telnetConnectParams, onReconnected, onReady }: Props = $props();
+	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, telnetConnectParams, onReconnected, onReady, terminalTheme }: Props = $props();
+
+	/** The colours this terminal paints with. */
+	let palette = $derived(terminalPalette(terminalTheme));
 	/** A connection made by Reach (SSH, Telnet) that can drop and be made again. */
 	let remote = $derived(termType === 'ssh' || termType === 'telnet');
 	let shown = $derived(visible ?? active);
@@ -418,17 +423,19 @@
 			scrollback: 10000,
 			wordSeparator: wordSeparator(appSettings.terminalWordSeparators),
 			allowProposedApi: true,
-			theme: { ...themeState.current.terminal }
+			theme: { ...palette }
 		});
 	}
 
 	// xterm keeps its palette in JS, not CSS, so a theme change has to be pushed
 	// into every live terminal. Without this the terminal kept whatever colours
 	// it was constructed with — which is why it stayed black in light mode.
+	// The palette is the session's terminal theme, the default one, or the app
+	// theme's (#lib/state/terminal-themes), and follows a change to any.
 	$effect(() => {
-		const palette = themeState.current.terminal;
+		const p = palette;
 		if (terminal) {
-			terminal.options.theme = { ...palette };
+			terminal.options.theme = { ...p };
 		}
 	});
 
@@ -1165,7 +1172,7 @@
 <div
 	class="terminal-wrapper"
 	style:display={shown ? 'flex' : 'none'}
-	style:--term-bg={themeState.current.terminal.background}
+	style:--term-bg={palette.background}
 >
 	<div bind:this={containerEl} class="terminal-container"></div>
 	{#if onPhone && !disconnected}

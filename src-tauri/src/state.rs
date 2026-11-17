@@ -133,6 +133,11 @@ pub struct SessionConfig {
     /// in the order the user put them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_fields: Option<Vec<CustomField>>,
+    /// The terminal colours this session's tabs use, by terminal theme id
+    /// (see src/lib/state/terminal-themes.svelte.ts); unset: the default
+    /// chosen in Settings. Kept on the session, so it syncs with it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_theme: Option<String>,
     /// Approvals of the password manager entries a saved credential brings
     /// to this session, by slot (`password`, `jump:0:passphrase`). An entry
     /// in a credential is approved per session and person like one of the
@@ -169,6 +174,9 @@ impl SessionConfig {
         }
         if self.custom_fields.as_ref().is_some_and(|f| f.is_empty()) {
             self.custom_fields = None;
+        }
+        if self.terminal_theme.as_deref().is_some_and(|t| t.trim().is_empty()) {
+            self.terminal_theme = None;
         }
     }
 }

@@ -35,6 +35,7 @@ export async function duplicateTab(id: string): Promise<void> {
 			from.localCommand ? { program: from.localCommand.program, args: [...from.localCommand.args] } : undefined,
 			from.wslDistro
 		);
+		keepSession(tab, from);
 		placeAfter(tab.id, from.id);
 		return;
 	}
@@ -43,6 +44,7 @@ export async function duplicateTab(id: string): Promise<void> {
 		// Its terminal connects by itself, as the first one did.
 		const tab = createTab('telnet', from.title, undefined, from.sessionName, from.detectedOs);
 		tab.telnetConnectParams = { ...from.telnetConnectParams!, options: { ...from.telnetConnectParams!.options } };
+		keepSession(tab, from);
 		placeAfter(tab.id, from.id);
 		return;
 	}
@@ -51,5 +53,12 @@ export async function duplicateTab(id: string): Promise<void> {
 	await sshConnect(params);
 	const tab = createTab('ssh', from.title, params.id, from.sessionName, from.detectedOs);
 	tab.sshConnectParams = params;
+	keepSession(tab, from);
 	placeAfter(tab.id, from.id);
+}
+
+/** A copy of a session's tab is that session's too, colours included. */
+function keepSession(tab: Tab, from: Tab): void {
+	tab.sessionId = from.sessionId;
+	tab.terminalTheme = from.terminalTheme;
 }

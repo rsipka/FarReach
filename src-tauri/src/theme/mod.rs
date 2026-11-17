@@ -69,6 +69,52 @@ const TERMINAL_KEYS: &[&str] = &[
     "brightBlue", "brightMagenta", "brightCyan", "brightWhite",
 ];
 
+/// iTerm2-Color-Schemes' scheme files. Settings downloads one from here when
+/// someone asks for a scheme by name that the app does not bundle (see
+/// scripts/gen-terminal-schemes.py), so it is their own download.
+const ITERM_SCHEMES_BASE: &str =
+    "https://raw.githubusercontent.com/mbadolato/iTerm2-Color-Schemes/master/schemes/";
+
+/// The address of one scheme of the collection. The name is one path
+/// segment, percent-encoded, and can name nothing outside `schemes/`.
+pub fn iterm_scheme_url(name: &str) -> Result<reqwest::Url, String> {
+    let bad = name.trim().is_empty()
+        || name.chars().count() > 100
+        || name.contains(['/', '\\'])
+        || name.contains("..")
+        || name.chars().any(char::is_control);
+    if bad {
+        return Err("Not a colour scheme name".into());
+    }
+    let mut url = reqwest::Url::parse(ITERM_SCHEMES_BASE).map_err(|e| e.to_string())?;
+    url.path_segments_mut()
+        .map_err(|_| "Bad base address".to_string())?
+        .pop_if_empty()
+        .push(&format!("{name}.itermcolors"));
+    Ok(url)
+}
+
+/// Download one .itermcolors file of the collection, as text.
+pub async fn fetch_iterm_scheme(name: &str) -> Result<String, String> {
+    let url = iterm_scheme_url(name)?;
+    let resp = client()
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Fetch failed: {}", e))?;
+    if !resp.status().is_success() {
+        return Err(format!("The scheme could not be downloaded (HTTP {})", resp.status()));
+    }
+    if resp.content_length().is_some_and(|n| n as usize > MAX_THEME_BYTES) {
+        return Err("Scheme file too large".into());
+    }
+    let bytes = resp.bytes().await.map_err(|e| format!("Read failed: {}", e))?;
+    if bytes.len() > MAX_THEME_BYTES {
+        return Err("Scheme file too large".into());
+    }
+    String::from_utf8(bytes.to_vec()).map_err(|_| "The scheme file is not text".to_string())
+}
+
 /// Fetch the registry index.
 pub async fn fetch_index(url: &str) -> Result<Vec<ThemeEntry>, String> {
     let resp = client()
@@ -307,6 +353,23 @@ mod tests {
         let mut t = complete_theme();
         t["appearance"] = serde_json::json!("sepia");
         assert!(validate(&t).unwrap_err().contains("appearance"));
+    }
+
+    #[test]
+    fn a_scheme_name_is_one_encoded_segment() {
+        let url = iterm_scheme_url("Builtin Tango Dark (v2) #1").unwrap();
+        assert_eq!(
+            url.as_str(),
+            "https://raw.githubusercontent.com/mbadolato/iTerm2-Color-Schemes/master/schemes/Builtin%20Tango%20Dark%20(v2)%20%231.itermcolors"
+        );
+        assert!(iterm_scheme_url("Homebrew").unwrap().as_str().ends_with("/schemes/Homebrew.itermcolors"));
+    }
+
+    #[test]
+    fn a_scheme_name_cannot_leave_the_folder() {
+        for name in ["", " ", "../x", "a/b", "a\\b", "x\ny", ".."] {
+            assert!(iterm_scheme_url(name).is_err(), "{name:?} was accepted");
+        }
     }
 
     #[test]
