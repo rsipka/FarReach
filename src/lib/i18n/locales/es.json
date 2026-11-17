@@ -2731,6 +2731,7 @@
   "credential.domain": "Dominio (RDP, opcional)",
   "credential.edit_hint": "Sesiones que las usan ahora: {{count}}. Un cambio se aplica a todas.",
   "credential.vault_hint": "Se guardan en el almacén elegido arriba. Solo las sesiones y carpetas de ese almacén pueden usarlas.",
+  "credential.entry_hint": "El secreto se obtiene de tu gestor de contraseñas al conectar. Cada sesión que usa esta credencial pregunta una vez antes de usar la entrada.",
   "credential.delete_title": "¿Borrar {{name}}?",
   "credential.delete_used": "Las usan sesiones: {{sessions}}, carpetas: {{folders}}. Volverán a sus propias credenciales guardadas.",
   "credential.delete_unused": "Ninguna sesión ni carpeta las usa.",

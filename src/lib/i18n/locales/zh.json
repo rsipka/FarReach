@@ -2731,6 +2731,7 @@
   "credential.domain": "域（RDP，可选）",
   "credential.edit_hint": "当前使用它的会话：{{count}}。修改将应用于所有会话。",
   "credential.vault_hint": "保存在上方所选的保管库中。只有该保管库中的会话和文件夹可以使用。",
+  "credential.entry_hint": "连接时从你的密码管理器获取密钥。使用此凭据的每个会话在使用该条目前会询问一次。",
   "credential.delete_title": "删除 {{name}}？",
   "credential.delete_used": "使用它的会话：{{sessions}}，文件夹：{{folders}}。它们将恢复为各自保存的登录信息。",
   "credential.delete_unused": "没有会话或文件夹使用它。",
