@@ -249,6 +249,18 @@ export const icons: Record<string, DistroIconData> = {
 	},
 };
 
+/** The icons a session can be given by hand, one per logo, by title. */
+export function osChoices(): { id: string; title: string }[] {
+	const bySlug = new Map<string, string>();
+	for (const [id, slug] of Object.entries(osIdToSlug)) {
+		// One id per logo: the one named like it (linux, redhat), else the first.
+		if (!bySlug.has(slug) || id === slug.toLowerCase()) bySlug.set(slug, id);
+	}
+	return [...bySlug.entries()]
+		.map(([slug, id]) => ({ id, title: icons[slug]?.title ?? id }))
+		.sort((a, b) => a.title.localeCompare(b.title));
+}
+
 /** Look up icon data for an os-release ID string. Falls back to generic
  *  Linux for an ID we have no logo for; "unknown" (nothing answered the
  *  probes: a switch, a restricted shell) gets none. */

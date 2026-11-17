@@ -4,6 +4,7 @@
 	import Button from '#lib/components/shared/Button.svelte';
 	import KeyPicker from './KeyPicker.svelte';
 	import DistroIcon from './DistroIcon.svelte';
+	import { osChoices } from '#lib/data/distro-icons.js';
 	import Input from '#lib/components/shared/Input.svelte';
 	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField } from '#lib/ipc/sessions.js';
 	import { isWindows } from '#lib/platform.js';
@@ -50,6 +51,12 @@
 	// The OS found on the last connect is kept for good; Clear forgets it, so
 	// the next connect looks again. (From the ReachQ fork by CPTProgrammer.)
 	let osCleared = $state(false);
+	// An icon picked by hand ('' = found on connect for SSH, none otherwise).
+	// A picked one is kept: connecting never replaces it.
+	let osChoice = $state('');
+	const osOptions = osChoices();
+	let autoOs = $derived(editSession && !editSession.os_manual && kind === sessionKind(editSession) && !osCleared ? (editSession.detected_os ?? '') : '');
+	let osTitle = (id: string) => (id === 'unknown' ? t('session.os_none') : (osOptions.find((o) => o.id === id)?.title ?? id));
 	let sharePath = $state('');
 	/** VNC only: the saved SSH session to go through, or '' for direct. */
 	let viaSessionId = $state('');
@@ -246,6 +253,7 @@
 
 	function fillForm(editSession: SessionConfig | undefined): void {
 		osCleared = false;
+		osChoice = editSession?.os_manual ? (editSession.detected_os ?? '') : '';
 		if (editSession) {
 			kind = sessionKind(editSession);
 			domain = editSession.domain ?? '';
@@ -474,7 +482,11 @@
 					kind,
 					domain: filled ? (editSession.domain ?? null) : rdp ? (domain.trim() || null) : null,
 					// A session that changed protocol changed machine type too.
-					detected_os: rdp ? os : (kind === sessionKind(editSession) && !osCleared ? editSession.detected_os : null),
+					// Picked by hand: kept. Automatic: what the last connect
+					// found, unless cleared, switched from a picked one, or
+					// the protocol changed (so did the machine type).
+					detected_os: rdp ? os : osChoice ? osChoice : autoOs || null,
+					os_manual: !rdp && !!osChoice,
 					share_path: rdp ? (sharePath.trim() || null) : null,
 					via_session_id: via,
 					try_agent_keys: !desktop && authType === 'Key' && tryAgentKeys ? true : null,
@@ -507,7 +519,8 @@
 					shell: desktop ? null : (shell.trim() || null),
 					kind,
 					domain: rdp ? domain : null,
-					detectedOs: rdp ? os : null,
+					detectedOs: rdp ? os : (osChoice || null),
+					osManual: !rdp && !!osChoice,
 					sharePath: rdp ? sharePath : null,
 					viaSessionId: via,
 					tryAgentKeys: !desktop && authType === 'Key' && tryAgentKeys,
@@ -986,19 +999,33 @@
 
 		<Input label={t('session.tags')} bind:value={tagsStr} placeholder={kind === 'rdp' ? 'office, windows' : 'production, web, linux'} disabled={saving} />
 
-		{#if editSession?.detected_os && kind === 'ssh' && sessionKind(editSession) === 'ssh'}
+		{#if kind === 'ssh' || kind === 'telnet' || kind === 'vnc'}
 			<div class="folder-section">
-				<span class="folder-label">{t('session.detected_os')}</span>
-				{#if osCleared}
-					<span class="os-cleared">{t('session.os_cleared')}</span>
-				{:else}
-					<div class="os-row">
-						<DistroIcon osId={editSession.detected_os} size={16} />
-						<span class="os-id">{editSession.detected_os === 'unknown' ? t('session.os_unknown') : editSession.detected_os}</span>
+				<span class="folder-label">{t('session.os_icon')}</span>
+				<div class="os-row">
+					<span class="os-preview"><DistroIcon osId={osChoice || autoOs} size={16} /></span>
+					<select class="folder-select os-select" bind:value={osChoice} disabled={saving}>
+						{#if kind === 'ssh'}
+							<option value="">{autoOs ? t('session.os_auto_detected', { os: osTitle(autoOs) }) : t('session.os_auto')}</option>
+							<option value="unknown">{t('session.os_none')}</option>
+						{:else}
+							<option value="">{t('session.os_none')}</option>
+						{/if}
+						{#if osChoice && osChoice !== 'unknown' && !osOptions.some((o) => o.id === osChoice)}
+							<option value={osChoice}>{osChoice}</option>
+						{/if}
+						{#each osOptions as o (o.id)}
+							<option value={o.id}>{o.title}</option>
+						{/each}
+					</select>
+					{#if kind === 'ssh' && !osChoice && autoOs}
 						<Button variant="secondary" size="sm" onclick={() => (osCleared = true)} disabled={saving}>
 							{t('session.os_clear')}
 						</Button>
-					</div>
+					{/if}
+				</div>
+				{#if kind === 'ssh' && !osChoice && osCleared}
+					<span class="os-cleared">{t('session.os_cleared')}</span>
 				{/if}
 			</div>
 		{/if}
@@ -1156,10 +1183,16 @@
 		gap: 8px;
 	}
 
-	.os-id {
+	.os-preview {
+		display: inline-flex;
+		width: 16px;
+		justify-content: center;
+		flex-shrink: 0;
+	}
+
+	.os-select {
 		flex: 1;
-		font-size: 0.8125rem;
-		color: var(--color-text-primary);
+		min-width: 0;
 	}
 
 	.os-cleared {
