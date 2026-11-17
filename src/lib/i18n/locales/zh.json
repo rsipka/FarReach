@@ -2836,7 +2836,7 @@
   "termtheme.edit": "编辑",
   "termtheme.delete": "删除",
   "termtheme.import": "导入文件...",
-  "termtheme.locked": "解锁 Reach 后才能创建、导入或下载自己的主题。",
+  "termtheme.locked": "你的主题保存在保险库中：请先设置或解锁保险库，才能创建、导入或下载主题。",
   "termtheme.more_title": "来自 iTerm2-Color-Schemes 的更多方案",
   "termtheme.more_hint": "另有 {{count}} 个方案，仅在你选择时从 GitHub 下载。适用其作者的许可证；参见",
   "termtheme.more_search": "按名称搜索，例如 Homebrew",
