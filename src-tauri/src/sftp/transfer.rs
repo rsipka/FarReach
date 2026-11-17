@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use crate::ssh::client::{SharedHandle, SshError, exec_on_connection, exec_on_connection_with_exit_code};
 use base64::Engine;
 pub use tokio_util::sync::CancellationToken;
+use super::backend::{RemoteFs, SftpProtocol};
+use super::pipeline;
 
 #[derive(Debug, Error)]
 pub enum TransferError {
@@ -40,6 +42,108 @@ pub struct TransferProgress {
 /// and writes to the local file incrementally. Progress events are emitted as
 /// data arrives — no per-chunk SSH roundtrips.
 pub async fn download_file(
+    fs: &RemoteFs,
+    remote_path: &str,
+    local_path: &str,
+    transfer_id: &str,
+    app_handle: &tauri::AppHandle,
+    cancel: &CancellationToken,
+) -> Result<(), TransferError> {
+    if let Some(proto) = fs.sftp().await {
+        return download_file_sftp(fs, &proto, remote_path, local_path, transfer_id, app_handle, cancel).await;
+    }
+    download_file_exec(&fs.handle, remote_path, local_path, transfer_id, app_handle, cancel).await
+}
+
+/// The parent of `local_path`, made if missing. A download aimed at a path
+/// that has not been made yet would otherwise fail with a bare "No such file
+/// or directory", which says nothing about which part was missing.
+fn make_local_parent(local_path: &str) -> Result<(), TransferError> {
+    if let Some(parent) = Path::new(local_path).parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                TransferError::IoError(format!("Failed to create {}: {}", parent.display(), e))
+            })?;
+        }
+    }
+    Ok(())
+}
+
+/// Download over SFTP: many reads in flight, written to the local file in
+/// order as they arrive. Nothing is run on the server, so this works on
+/// SFTP-only accounts and Windows.
+async fn download_file_sftp(
+    fs: &RemoteFs,
+    proto: &SftpProtocol,
+    remote_path: &str,
+    local_path: &str,
+    transfer_id: &str,
+    app_handle: &tauri::AppHandle,
+    cancel: &CancellationToken,
+) -> Result<(), TransferError> {
+    use std::io::Write;
+
+    tracing::info!("Downloading {} to {} (sftp)", remote_path, local_path);
+    let filename = file_name_of(remote_path);
+
+    let total_bytes = match proto.session.stat(remote_path).await {
+        Ok(a) if a.attrs.is_dir() => {
+            return Err(TransferError::Remote(format!("{remote_path}: is a folder")));
+        }
+        Ok(a) => a.attrs.size.unwrap_or(0),
+        Err(e) => {
+            fs.note_error(&e).await;
+            return Err(TransferError::Remote(pipeline::describe(remote_path, &e)));
+        }
+    };
+
+    make_local_parent(local_path)?;
+    let mut file = std::io::BufWriter::with_capacity(
+        1024 * 1024,
+        std::fs::File::create(local_path)
+            .map_err(|e| TransferError::IoError(format!("Failed to create local file: {}", e)))?,
+    );
+    let emit = |sent: u64| emit_progress(app_handle, transfer_id, &filename, sent, total_bytes);
+    emit(0);
+
+    let mut last = 0u64;
+    let received = pipeline::read_file(
+        proto,
+        remote_path,
+        total_bytes,
+        cancel,
+        |data| file.write_all(data).map_err(|e| TransferError::IoError(format!("Write error: {}", e))),
+        |done| {
+            if done - last >= 256 * 1024 {
+                last = done;
+                emit(done);
+            }
+        },
+    )
+    .await
+    .and_then(|bytes| {
+        file.flush().map_err(|e| TransferError::IoError(format!("Flush error: {}", e)))?;
+        Ok(bytes)
+    });
+    let bytes = match received {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            // What arrived is not the file (#150).
+            drop(file);
+            let _ = std::fs::remove_file(local_path);
+            tracing::warn!("Download of {} failed: {}", remote_path, e);
+            return Err(e);
+        }
+    };
+
+    // The file may have shrunk while it was read; it is whole as it is now.
+    emit_progress(app_handle, transfer_id, &filename, bytes, bytes);
+    let _ = app_handle.emit(&format!("transfer-complete-{}", transfer_id), ());
+    tracing::info!("Download complete: {} ({} bytes)", remote_path, bytes);
+    Ok(())
+}
+
+async fn download_file_exec(
     handle: &SharedHandle,
     remote_path: &str,
     local_path: &str,
@@ -96,17 +200,7 @@ pub async fn download_file(
     channel.exec(true, format!("base64 {}", shell_path(remote_path))).await
         .map_err(|e| SshError::ChannelError(format!("{}", e)))?;
 
-    // Create/truncate the local file. The parent has to exist first: a
-    // download aimed at a path that has not been made yet would otherwise
-    // fail with a bare "No such file or directory", which says nothing about
-    // which part was missing.
-    if let Some(parent) = std::path::Path::new(local_path).parent() {
-        if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                TransferError::IoError(format!("Failed to create {}: {}", parent.display(), e))
-            })?;
-        }
-    }
+    make_local_parent(local_path)?;
     let mut file = std::fs::File::create(local_path)
         .map_err(|e| TransferError::IoError(format!("Failed to create local file: {}", e)))?;
 
@@ -293,23 +387,25 @@ pub(crate) async fn receive_base64<C: ChannelMessages>(
 /// reports under the one transfer id, counting bytes across the whole tree,
 /// so one dropped folder shows as one transfer.
 pub async fn upload_path(
-    handle: &SharedHandle,
+    fs: &RemoteFs,
     local_path: &str,
     remote_path: &str,
     transfer_id: &str,
     app_handle: &tauri::AppHandle,
     cancel: &CancellationToken,
 ) -> Result<(), TransferError> {
+    let sftp = fs.sftp().await;
+    let sftp = sftp.as_deref();
     if Path::new(local_path).is_dir() {
-        upload_directory(handle, local_path, remote_path, transfer_id, app_handle, cancel).await
+        upload_directory(fs, sftp, local_path, remote_path, transfer_id, app_handle, cancel).await
     } else {
-        upload_file(handle, local_path, remote_path, transfer_id, app_handle, cancel).await
+        upload_file(fs, sftp, local_path, remote_path, transfer_id, app_handle, cancel).await
     }
 }
 
-/// Upload a file to the remote host using streaming base64 over a single SSH exec.
-pub async fn upload_file(
-    handle: &SharedHandle,
+async fn upload_file(
+    fs: &RemoteFs,
+    sftp: Option<&SftpProtocol>,
     local_path: &str,
     remote_path: &str,
     transfer_id: &str,
@@ -319,21 +415,21 @@ pub async fn upload_file(
     tracing::info!("Uploading {} to {}", local_path, remote_path);
 
     let filename = file_name_of(local_path);
-    let data = read_local(Path::new(local_path))?;
-    let total_bytes = data.len() as u64;
+    let total_bytes = local_size(Path::new(local_path))?;
     let emit = |sent: u64| emit_progress(app_handle, transfer_id, &filename, sent, total_bytes);
 
     emit(0);
-    send_bytes(handle, &data, remote_path, cancel, emit).await?;
-    emit(total_bytes);
+    let sent = send_file(fs, sftp, Path::new(local_path), remote_path, cancel, emit).await?;
+    emit_progress(app_handle, transfer_id, &filename, sent, sent);
     let _ = app_handle.emit(&format!("transfer-complete-{}", transfer_id), ());
 
-    tracing::info!("Upload complete: {} ({} bytes)", remote_path, total_bytes);
+    tracing::info!("Upload complete: {} ({} bytes)", remote_path, sent);
     Ok(())
 }
 
 async fn upload_directory(
-    handle: &SharedHandle,
+    fs: &RemoteFs,
+    sftp: Option<&SftpProtocol>,
     local_path: &str,
     remote_path: &str,
     transfer_id: &str,
@@ -349,19 +445,29 @@ async fn upload_directory(
     let emit = |sent: u64| emit_progress(app_handle, transfer_id, &name, sent, total_bytes);
 
     emit(0);
-    for command in mkdir_commands(&plan.dirs) {
-        if cancel.is_cancelled() {
-            return Err(TransferError::Cancelled);
+    match sftp {
+        Some(proto) => {
+            for dir in &plan.dirs {
+                if cancel.is_cancelled() {
+                    return Err(TransferError::Cancelled);
+                }
+                make_dir_sftp(proto, dir).await?;
+            }
         }
-        let (_, stderr, code) = exec_on_connection_with_exit_code(handle, &command).await?;
-        remote_outcome(i64::from(code), &stderr)?;
+        None => {
+            for command in mkdir_commands(&plan.dirs) {
+                if cancel.is_cancelled() {
+                    return Err(TransferError::Cancelled);
+                }
+                let (_, stderr, code) = exec_on_connection_with_exit_code(&fs.handle, &command).await?;
+                remote_outcome(i64::from(code), &stderr)?;
+            }
+        }
     }
 
     let mut done: u64 = 0;
     for file in &plan.files {
-        let data = read_local(&file.local)?;
-        send_bytes(handle, &data, &file.remote, cancel, |sent| emit(done + sent)).await?;
-        done += data.len() as u64;
+        done += send_file(fs, sftp, &file.local, &file.remote, cancel, |sent| emit(done + sent)).await?;
     }
 
     emit(total_bytes);
@@ -374,6 +480,80 @@ async fn upload_directory(
         done
     );
     Ok(())
+}
+
+/// Make one folder of an upload over SFTP; one that is already there is
+/// fine, as with `mkdir -p`. The plan lists parents first, so the parent of
+/// each is there by the time it is made.
+async fn make_dir_sftp(proto: &SftpProtocol, dir: &str) -> Result<(), TransferError> {
+    use russh_sftp::protocol::FileAttributes;
+    let made = proto.session.mkdir(dir, FileAttributes::empty()).await;
+    let Err(e) = made else { return Ok(()) };
+    match proto.session.stat(dir).await {
+        Ok(a) if a.attrs.is_dir() => Ok(()),
+        _ => Err(TransferError::Remote(pipeline::describe(dir, &e))),
+    }
+}
+
+/// Send one local file to `remote_path`; how many bytes it was.
+///
+/// Over SFTP the file is read from disk as it goes, so a large one is never
+/// held in memory; the shell path reads it whole first, as it always has.
+async fn send_file(
+    fs: &RemoteFs,
+    sftp: Option<&SftpProtocol>,
+    local: &Path,
+    remote_path: &str,
+    cancel: &CancellationToken,
+    mut on_progress: impl FnMut(u64),
+) -> Result<u64, TransferError> {
+    let Some(proto) = sftp else {
+        let data = read_local(local)?;
+        send_bytes(&fs.handle, &data, remote_path, cancel, on_progress).await?;
+        return Ok(data.len() as u64);
+    };
+
+    use std::io::Read;
+    let mut file = std::fs::File::open(local).map_err(|e| {
+        TransferError::IoError(format!("Failed to read local file {}: {}", local.display(), e))
+    })?;
+    let next = |max: usize| -> Result<Option<Vec<u8>>, TransferError> {
+        let mut buf = vec![0u8; max];
+        let mut filled = 0;
+        while filled < max {
+            match file.read(&mut buf[filled..]) {
+                Ok(0) => break,
+                Ok(n) => filled += n,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(e) => {
+                    return Err(TransferError::IoError(format!(
+                        "Failed to read local file {}: {}",
+                        local.display(),
+                        e
+                    )))
+                }
+            }
+        }
+        buf.truncate(filled);
+        Ok((filled > 0).then_some(buf))
+    };
+    let mut last = 0u64;
+    let sent = pipeline::write_file(proto, remote_path, cancel, next, |done| {
+        if done - last >= 256 * 1024 {
+            last = done;
+            on_progress(done);
+        }
+    })
+    .await;
+    if matches!(sent, Err(TransferError::Cancelled)) {
+        // TRUNCATE has already emptied whatever was there.
+        if let Err(e) = proto.session.remove(remote_path).await {
+            tracing::warn!("Could not remove the cancelled upload {}: {}", remote_path, e);
+        }
+    }
+    let sent = sent?;
+    on_progress(sent);
+    Ok(sent)
 }
 
 /// What uploading a local directory takes: the remote directories to create,
@@ -466,6 +646,12 @@ fn file_name_of(local_path: &str) -> String {
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| local_path.to_string())
+}
+
+fn local_size(path: &Path) -> Result<u64, TransferError> {
+    std::fs::metadata(path).map(|m| m.len()).map_err(|e| {
+        TransferError::IoError(format!("Failed to read local file {}: {}", path.display(), e))
+    })
 }
 
 fn read_local(path: &Path) -> Result<Vec<u8>, TransferError> {
@@ -682,10 +868,36 @@ fn shell_path(path: &str) -> String {
 /// target fails its copy instead of keeping what arrived as the whole file:
 /// an unreadable file used to drop as an empty one (#150).
 pub async fn stream_file(
-    handle: &SharedHandle,
+    fs: &RemoteFs,
     remote_path: &str,
     sink: std::sync::mpsc::SyncSender<Result<Vec<u8>, String>>,
 ) -> Result<u64, TransferError> {
+    if let Some(proto) = fs.sftp().await {
+        let result = async {
+            let size = proto
+                .session
+                .stat(remote_path)
+                .await
+                .map_err(|e| TransferError::Remote(pipeline::describe(remote_path, &e)))?
+                .attrs
+                .size
+                .unwrap_or(0);
+            // Never cancelled from here: a drop that is called off closes
+            // the sink, and the next chunk fails to go.
+            let never = CancellationToken::new();
+            pipeline::read_file(&proto, remote_path, size, &never, |data| {
+                sink.send(Ok(data.to_vec()))
+                    .map_err(|_| TransferError::IoError("drop cancelled".to_string()))
+            }, |_| {})
+            .await
+        }
+        .await;
+        if let Err(e) = &result {
+            let _ = sink.send(Err(e.to_string()));
+        }
+        return result;
+    }
+    let handle = &fs.handle;
     let channel_error = |e: russh::Error| TransferError::SshError(SshError::ChannelError(format!("{}", e)));
     let result = async {
         let mut channel = {

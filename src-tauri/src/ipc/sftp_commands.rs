@@ -12,14 +12,14 @@ pub async fn sftp_list_dir(
     path: String,
 ) -> Result<Vec<RemoteEntry>, String> {
     info!("sftp_list_dir called: conn={}, path={}", connection_id, path);
-    let handle = {
+    let fs = {
         let manager = state.ssh_manager.lock().await;
-        manager.get_handle(&connection_id).map_err(|e| {
+        manager.get_fs(&connection_id).map_err(|e| {
             info!("sftp_list_dir handle error: {}", e);
             e.to_string()
         })?
     };
-    let result = browser::list_directory(&handle, &path)
+    let result = browser::list_directory(&fs, &path)
         .await
         .map_err(|e| {
             info!("sftp_list_dir browse error: {}", e);
@@ -94,9 +94,9 @@ pub async fn sftp_upload(
     remote_path: String,
     transfer_id: Option<String>,
 ) -> Result<String, String> {
-    let handle = {
+    let fs = {
         let manager = state.ssh_manager.lock().await;
-        manager.get_handle(&connection_id).map_err(|e| e.to_string())?
+        manager.get_fs(&connection_id).map_err(|e| e.to_string())?
     };
     let transfer_id = transfer_id_from(transfer_id)?;
     let tid = transfer_id.clone();
@@ -108,7 +108,7 @@ pub async fn sftp_upload(
 
     tokio::spawn(async move {
         let result = crate::sftp::transfer::upload_path(
-            &handle, &local_path, &remote_path, &tid, &app, &cancel,
+            &fs, &local_path, &remote_path, &tid, &app, &cancel,
         ).await;
         if let Ok(mut map) = transfers.lock() {
             map.remove(&tid);
@@ -137,9 +137,9 @@ pub async fn sftp_download(
     local_path: String,
     transfer_id: Option<String>,
 ) -> Result<String, String> {
-    let handle = {
+    let fs = {
         let manager = state.ssh_manager.lock().await;
-        manager.get_handle(&connection_id).map_err(|e| e.to_string())?
+        manager.get_fs(&connection_id).map_err(|e| e.to_string())?
     };
     let transfer_id = transfer_id_from(transfer_id)?;
     let tid = transfer_id.clone();
@@ -152,7 +152,7 @@ pub async fn sftp_download(
 
     tokio::spawn(async move {
         let result = crate::sftp::transfer::download_file(
-            &handle, &remote_path, &local_path, &tid, &app, &cancel,
+            &fs, &remote_path, &local_path, &tid, &app, &cancel,
         ).await;
         if let Ok(mut map) = transfers.lock() {
             map.remove(&tid);
@@ -177,11 +177,11 @@ pub async fn sftp_delete(
     connection_id: String,
     path: String,
 ) -> Result<(), String> {
-    let handle = {
+    let fs = {
         let manager = state.ssh_manager.lock().await;
-        manager.get_handle(&connection_id).map_err(|e| e.to_string())?
+        manager.get_fs(&connection_id).map_err(|e| e.to_string())?
     };
-    browser::delete_entry(&handle, &path)
+    browser::delete_entry(&fs, &path)
         .await
         .map_err(|e| e.to_string())
 }
@@ -194,11 +194,11 @@ pub async fn sftp_rename(
     old_path: String,
     new_path: String,
 ) -> Result<(), String> {
-    let handle = {
+    let fs = {
         let manager = state.ssh_manager.lock().await;
-        manager.get_handle(&connection_id).map_err(|e| e.to_string())?
+        manager.get_fs(&connection_id).map_err(|e| e.to_string())?
     };
-    browser::rename_entry(&handle, &old_path, &new_path)
+    browser::rename_entry(&fs, &old_path, &new_path)
         .await
         .map_err(|e| e.to_string())
 }
@@ -210,11 +210,11 @@ pub async fn sftp_touch(
     connection_id: String,
     path: String,
 ) -> Result<(), String> {
-    let handle = {
+    let fs = {
         let manager = state.ssh_manager.lock().await;
-        manager.get_handle(&connection_id).map_err(|e| e.to_string())?
+        manager.get_fs(&connection_id).map_err(|e| e.to_string())?
     };
-    browser::touch_file(&handle, &path)
+    browser::touch_file(&fs, &path)
         .await
         .map_err(|e| e.to_string())
 }
@@ -227,11 +227,11 @@ pub async fn sftp_read_file(
     path: String,
 ) -> Result<String, String> {
     info!("sftp_read_file called: conn={}, path={}", connection_id, path);
-    let handle = {
+    let fs = {
         let manager = state.ssh_manager.lock().await;
-        manager.get_handle(&connection_id).map_err(|e| e.to_string())?
+        manager.get_fs(&connection_id).map_err(|e| e.to_string())?
     };
-    browser::read_text_file(&handle, &path)
+    browser::read_text_file(&fs, &path)
         .await
         .map_err(|e| e.to_string())
 }
@@ -245,11 +245,11 @@ pub async fn sftp_write_file(
     content: String,
 ) -> Result<(), String> {
     info!("sftp_write_file called: conn={}, path={}", connection_id, path);
-    let handle = {
+    let fs = {
         let manager = state.ssh_manager.lock().await;
-        manager.get_handle(&connection_id).map_err(|e| e.to_string())?
+        manager.get_fs(&connection_id).map_err(|e| e.to_string())?
     };
-    browser::write_text_file(&handle, &path, &content)
+    browser::write_text_file(&fs, &path, &content)
         .await
         .map_err(|e| e.to_string())
 }
@@ -261,11 +261,11 @@ pub async fn sftp_mkdir(
     connection_id: String,
     path: String,
 ) -> Result<(), String> {
-    let handle = {
+    let fs = {
         let manager = state.ssh_manager.lock().await;
-        manager.get_handle(&connection_id).map_err(|e| e.to_string())?
+        manager.get_fs(&connection_id).map_err(|e| e.to_string())?
     };
-    browser::make_directory(&handle, &path)
+    browser::make_directory(&fs, &path)
         .await
         .map_err(|e| e.to_string())
 }

@@ -995,6 +995,8 @@ pub(crate) struct ActiveConnection {
     cmd_tx: mpsc::UnboundedSender<SessionCommand>,
     info: ConnectionInfo,
     handle: SharedHandle,
+    /// The file explorer's SFTP session, opened on first use.
+    sftp: crate::sftp::backend::SftpSlot,
     /// Keep intermediate jump host sessions alive for the lifetime of this connection.
     /// These are intentionally stored but never directly read — dropping them closes the tunnels.
     #[allow(dead_code)]
@@ -1594,6 +1596,14 @@ impl SshManager {
     pub fn get_handle(&self, id: &str) -> Result<SharedHandle, SshError> {
         self.connections.get(id)
             .map(|c| c.handle.clone())
+            .ok_or_else(|| SshError::NotFound(id.to_string()))
+    }
+
+    /// The connection's files, for the explorer: SFTP where the server
+    /// has it, shell commands where it does not.
+    pub fn get_fs(&self, id: &str) -> Result<crate::sftp::backend::RemoteFs, SshError> {
+        self.connections.get(id)
+            .map(|c| crate::sftp::backend::RemoteFs::new(c.handle.clone(), c.sftp.clone()))
             .ok_or_else(|| SshError::NotFound(id.to_string()))
     }
 }
@@ -2528,6 +2538,7 @@ async fn into_active_connection(
         cmd_tx,
         info,
         handle: shared,
+        sftp: Default::default(),
         jump_handles,
     })
 }

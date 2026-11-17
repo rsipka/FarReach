@@ -122,3 +122,74 @@ async fn live_terminal_cwd() {
     }
     println!("one lookup takes {:?}", started.elapsed() / 10);
 }
+
+/// The explorer's operations over SFTP and over the shell, on the same
+/// server. `REACH_TEST_REMOTE_DIR` is a folder the user may write; for an
+/// SFTP-only account in a chroot, a path inside the jail. Set
+/// `REACH_SFTP_ONLY=1` for such an account to skip the shell run.
+#[tokio::test]
+#[ignore = "needs an SSH server"]
+async fn live_explorer_operations() {
+    use crate::sftp::backend::{RemoteFs, SftpSlot};
+    use crate::sftp::browser;
+
+    let handle = connect().await;
+    let base = std::env::var("REACH_TEST_REMOTE_DIR").unwrap_or_else(|_| "/tmp".into());
+    let mut runs = vec![("sftp", RemoteFs::new(handle.clone(), SftpSlot::default()))];
+    if std::env::var("REACH_SFTP_ONLY").is_err() {
+        runs.push(("shell", RemoteFs::shell_only(handle.clone())));
+    }
+    for (how, fs) in runs {
+        assert_eq!(fs.sftp().await.is_some(), how == "sftp", "{how}");
+        let root = format!("{base}/rcm-live-{how}");
+        let _ = browser::delete_entry(&fs, &root).await;
+
+        browser::make_directory(&fs, &format!("{root}/a/b")).await.unwrap();
+        browser::write_text_file(&fs, &format!("{root}/a/note.txt"), "hello\nwörld\n").await.unwrap();
+        assert_eq!(browser::read_text_file(&fs, &format!("{root}/a/note.txt")).await.unwrap(), "hello\nwörld\n");
+        browser::touch_file(&fs, &format!("{root}/a/b/empty")).await.unwrap();
+        browser::touch_file(&fs, &format!("{root}/a/note.txt")).await.unwrap();
+        assert_eq!(browser::read_text_file(&fs, &format!("{root}/a/note.txt")).await.unwrap().len(), 13, "{how}: touch kept the content");
+
+        let listed = browser::list_directory(&fs, &format!("{root}/a")).await.unwrap();
+        let names: Vec<_> = listed.iter().map(|e| (e.name.as_str(), e.is_dir)).collect();
+        assert_eq!(names, [("b", true), ("note.txt", false)], "{how}");
+        let note = &listed[1];
+        assert_eq!((note.size, note.permissions.len()), (13, 10), "{how}: {note:?}");
+        assert!(!note.owner.is_empty() && note.modified > 0, "{how}: {note:?}");
+        println!("{how}: {note:?}");
+
+        let err = browser::rename_entry(&fs, &format!("{root}/a/note.txt"), &format!("{root}/a/b")).await.unwrap_err();
+        assert!(err.to_string().contains("already exists"), "{how}: {err}");
+        browser::rename_entry(&fs, &format!("{root}/a/note.txt"), &format!("{root}/a/renamed.txt")).await.unwrap();
+
+        let err = browser::list_directory(&fs, &format!("{root}/missing")).await.unwrap_err();
+        println!("{how}: missing folder: {err}");
+
+        // A big file there and back, with its timing.
+        let data: Vec<u8> = (0..(30 * 1024 * 1024 + 7)).map(|i| (i * 31 % 251) as u8).collect();
+        let local = std::env::temp_dir().join(format!("rcm-live-{how}.bin"));
+        std::fs::write(&local, &data).unwrap();
+        let remote = format!("{root}/a/b/big.bin");
+        let started = Instant::now();
+        let sent = send_file(&fs, fs.sftp().await.as_deref(), &local, &remote, &CancellationToken::new(), |_| {}).await.unwrap();
+        println!("{how}: upload {} MB in {:?}", sent >> 20, started.elapsed());
+        assert_eq!(sent, data.len() as u64);
+        let (tx, rx) = std::sync::mpsc::sync_channel::<Result<Vec<u8>, String>>(1024);
+        let reader = std::thread::spawn(move || {
+            let mut back = Vec::new();
+            for chunk in rx {
+                back.extend(chunk.unwrap());
+            }
+            back
+        });
+        let started = Instant::now();
+        stream_file(&fs, &remote, tx).await.unwrap();
+        println!("{how}: download in {:?}", started.elapsed());
+        assert!(reader.join().unwrap() == data, "{how}: the file came back different");
+
+        browser::delete_entry(&fs, &root).await.unwrap();
+        assert!(browser::list_directory(&fs, &root).await.is_err(), "{how}: still there");
+        let _ = std::fs::remove_file(local);
+    }
+}
