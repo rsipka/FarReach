@@ -69,6 +69,8 @@ pub async fn vault_lock(state: State<'_, AppState>) -> Result<(), String> {
     let mut manager = state.vault_manager.lock().await;
     manager.hold();
     crate::history::vault_locked();
+    // The records kept to undo the last bulk edit hold passwords.
+    crate::ipc::session_commands::forget_bulk_undo();
     // The password-manager settings live in the vault: what was listed with
     // them goes when it locks, and so does a passphrase kept in memory (and
     // any passphrase question still open is cancelled).

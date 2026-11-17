@@ -859,32 +859,63 @@ pub async fn session_create(
 #[tracing::instrument(skip_all, fields(id = %session.id))]
 pub async fn session_update(
     state: State<'_, AppState>,
-    mut session: SessionConfig,
+    session: SessionConfig,
 ) -> Result<SessionConfig, String> {
     let manager = state.vault_manager.lock().await;
 
     if manager.is_locked() {
         return Err("Vault is locked".to_string());
     }
+    let (loc, stored) = prepare_update(&manager, session).await?;
+    let json = serde_json::to_string(&stored.record).map_err(|e| e.to_string())?;
+    let plaintext = SecretBox::new(Box::new(json.into_bytes()));
+
+    // O(1) update by primary key
+    manager
+        .update_secret(&loc.vault_id, &loc.secret_id, plaintext)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    tracing::info!("Updated session: {} in vault: {}", stored.session.id, loc.vault_id);
+    let mut session = stored.session;
+    open_approvals(&manager, &mut session).await;
+    Ok(session)
+}
+
+/// A session about to be written: the record as stored, and the session
+/// as the window sent it, with approvals sealed.
+struct Prepared {
+    record: SessionConfig,
+    session: SessionConfig,
+}
+
+/// Everything `session_update` does before it writes: find the session,
+/// check its credential links, keep the stored approvals and login as the
+/// editor expects, and seal the user's approvals. Shared with the bulk
+/// edit, so a session changed there is stored exactly as the editor would.
+async fn prepare_update(
+    manager: &crate::vault::VaultManager,
+    mut session: SessionConfig,
+) -> Result<(SessionLoc, Prepared), String> {
     session.tidy_documentation();
 
     // Find which vault contains this session
-    let loc = locate_session(&manager, &session.id).await
+    let loc = locate_session(manager, &session.id).await
         .ok_or_else(|| format!("Session not found: {}", session.id))?;
 
-    let logins = creds::logins(&manager).await;
-    let vault = creds::vault_of(&manager, &loc.vault_id);
+    let logins = creds::logins(manager).await;
+    let vault = creds::vault_of(manager, &loc.vault_id);
     creds::check_links(&logins.creds, &session, vault.as_deref())?;
 
     // The record being replaced, as this user reads it: which password
     // manager references they had approved (see `seal_for`), and its own
     // login and the one a credential filled in, if one did.
-    let (stored, before) = match read_session(&manager, &loc.vault_id, &loc.secret_id).await {
+    let (stored, before) = match read_session(manager, &loc.vault_id, &loc.secret_id).await {
         Ok(mut s) => {
             let own = creds::SessionLogins::all(&s);
             let replaced = creds::fill(&mut s, vault.as_deref(), &logins.folders, &logins.creds);
             let filled = creds::SessionLogins::all(&s).only(&replaced);
-            open_approvals(&manager, &mut s).await;
+            open_approvals(manager, &mut s).await;
             (Some(s), Some((own, filled)))
         }
         Err(_) => (None, None),
@@ -903,20 +934,14 @@ pub async fn session_update(
         &logins.creds,
         before.as_ref().map(|(own, filled)| (own, filled)),
     );
-    seal_approvals(&manager, &mut session, stored.as_ref()).await;
-    let json = serde_json::to_string(&to_store(&session, own)).map_err(|e| e.to_string())?;
-    let plaintext = SecretBox::new(Box::new(json.into_bytes()));
-
-    // O(1) update by primary key
-    manager
-        .update_secret(&loc.vault_id, &loc.secret_id, plaintext)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    tracing::info!("Updated session: {} in vault: {}", session.id, loc.vault_id);
-    open_approvals(&manager, &mut session).await;
-    Ok(session)
+    seal_approvals(manager, &mut session, stored.as_ref()).await;
+    let record = to_store(&session, own);
+    Ok((loc, Prepared { record, session }))
 }
+
+#[path = "session_bulk.rs"]
+mod bulk;
+pub use bulk::*;
 
 /// Move many sessions into a folder (`None`: out of any folder) in one
 /// go. Only `folder_id` changes: each stored session is read and written
