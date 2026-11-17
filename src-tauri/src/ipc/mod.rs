@@ -5,6 +5,7 @@ pub mod plugin_commands;
 pub mod marketplace_commands;
 pub mod credential_commands;
 pub mod settings_commands;
+pub mod font_commands;
 pub mod mcp_commands;
 pub mod monitoring_commands;
 #[cfg(desktop)]

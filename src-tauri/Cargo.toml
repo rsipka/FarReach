@@ -225,6 +225,9 @@ serialport = "4"
 tauri-plugin-autostart = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-single-instance = "2"
+# The installed fonts, for the terminal font picker. Pure Rust; the
+# fontconfig feature only parses its config files to find the font folders.
+fontdb = "0.24"
 # Dragging a file out of the window to the desktop. Tauri has no API for this
 # and there is no other maintained option; see src/lib/explorer/drag-out.ts
 # for what it can and cannot do.
