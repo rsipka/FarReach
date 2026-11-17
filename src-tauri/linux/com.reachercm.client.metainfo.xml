@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- AppStream metadata, read by Linux software centres and the AppImage
-     catalog. Installed as usr/share/metainfo/com.farreach.client.metainfo.xml
+     catalog. Installed as usr/share/metainfo/com.reachercm.client.metainfo.xml
      by the AppImage, .deb and .rpm bundles (tauri.conf.json). -->
 <component type="desktop-application">
-  <id>com.farreach.client</id>
+  <id>com.reachercm.client</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
-  <name>FarReach</name>
+  <name>Reacher CM</name>
   <summary>SSH client and remote server manager</summary>
   <developer id="com.github.alexandrosnt">
     <name>Alexander Nt.</name>
   </developer>
   <description>
     <p>
-      FarReach is a fork of Reach, a modern SSH client and remote server management tool, free and open source.
+      Reacher CM is a fork of Reach, a modern SSH client and remote server management tool, free and open source.
     </p>
     <ul>
       <li>Tabbed SSH terminals, jump hosts and port forwarding</li>
@@ -23,14 +23,14 @@
       <li>Ansible and OpenTofu automation, databases and a serial console</li>
     </ul>
   </description>
-  <launchable type="desktop-id">FarReach.desktop</launchable>
-  <url type="homepage">https://github.com/rsipka/FarReach</url>
-  <url type="bugtracker">https://github.com/rsipka/FarReach/issues</url>
-  <url type="vcs-browser">https://github.com/rsipka/FarReach</url>
+  <launchable type="desktop-id">ReacherCM.desktop</launchable>
+  <url type="homepage">https://github.com/rsipka/ReacherCM</url>
+  <url type="bugtracker">https://github.com/rsipka/ReacherCM/issues</url>
+  <url type="vcs-browser">https://github.com/rsipka/ReacherCM</url>
   <screenshots>
     <screenshot type="default">
       <caption>Terminals, sessions and the server monitor</caption>
-      <image>https://raw.githubusercontent.com/rsipka/FarReach/main/assets/preview.png</image>
+      <image>https://raw.githubusercontent.com/rsipka/ReacherCM/main/assets/preview.png</image>
     </screenshot>
   </screenshots>
   <categories>
@@ -42,7 +42,7 @@
        fails if the version in Cargo.toml is missing here. -->
   <releases>
     <release version="0.9.2-dev.4" date="2026-11-17" type="development">
-      <url type="details">https://github.com/rsipka/FarReach/releases/tag/v0.9.2-dev.4</url>
+      <url type="details">https://github.com/rsipka/ReacherCM/releases/tag/v0.9.2-dev.4</url>
     </release>
     <release version="0.9.2" date="2026-11-15">
       <url type="details">https://github.com/alexandrosnt/Reach/releases/tag/v0.9.2</url>

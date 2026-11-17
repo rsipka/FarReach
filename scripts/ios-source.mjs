@@ -1,6 +1,6 @@
 /**
  * Builds apps.json, the AltStore-style source LiveContainer (and SideStore,
- * AltStore Classic) reads to offer FarReach's unsigned IPA and its updates.
+ * AltStore Classic) reads to offer Reacher CM's unsigned IPA and its updates.
  *
  * release.yml runs it for each tagged release, attaches the result to that
  * release and copies it to the update-feed branch, so the source is always
@@ -20,7 +20,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-export const BUNDLE_ID = 'com.farreach.client';
+export const BUNDLE_ID = 'com.reachercm.client';
 // Older versions stay listed so one can go back; the newest is what updates.
 export const MAX_VERSIONS = 10;
 // Matches tauri.ios.conf.json's minimumSystemVersion.
@@ -101,11 +101,11 @@ export function buildSource({ releases, tag, repo, privacy = {}, now = new Date(
 	const icon = `${raw}/src-tauri/icons/ios/AppIcon-512@2x.png`;
 
 	return {
-		name: 'FarReach',
+		name: 'Reacher CM',
 		identifier: BUNDLE_ID,
-		subtitle: 'Unsigned FarReach builds for LiveContainer and sideloading',
+		subtitle: 'Unsigned Reacher CM builds for LiveContainer and sideloading',
 		description:
-			'Unsigned iOS builds of FarReach, a fork of the Reach SSH, SFTP, RDP and VNC client, made by GitHub Actions for each release.',
+			'Unsigned iOS builds of Reacher CM, a fork of the Reach SSH, SFTP, RDP and VNC client, made by GitHub Actions for each release.',
 		iconURL: icon,
 		website: base,
 		tintColor: '#43E6B0',
@@ -113,12 +113,12 @@ export function buildSource({ releases, tag, repo, privacy = {}, now = new Date(
 		featuredApps: [BUNDLE_ID],
 		apps: [
 			{
-				name: 'FarReach',
+				name: 'Reacher CM',
 				bundleIdentifier: BUNDLE_ID,
-				developerName: 'FarReach',
+				developerName: 'Reacher CM',
 				subtitle: 'SSH, SFTP, RDP and VNC client',
 				localizedDescription:
-					'FarReach is a fork of Reach: SSH, SFTP, RDP, VNC, Telnet and serial sessions, an encrypted vault and sync. This is an early, unsigned iOS build, meant for LiveContainer or for signing yourself.',
+					'Reacher CM is a fork of Reach: SSH, SFTP, RDP, VNC, Telnet and serial sessions, an encrypted vault and sync. This is an early, unsigned iOS build, meant for LiveContainer or for signing yourself.',
 				iconURL: icon,
 				tintColor: '#43E6B0',
 				category: 'developer',

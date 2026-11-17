@@ -92,15 +92,15 @@ use std::sync::OnceLock;
 /// store read from this instead.
 static APP_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-/// The product name the fork shows (FarReach, a fork of Reach). Identifiers
+/// The product name the fork shows (Reacher CM, a fork of Reach). Identifiers
 /// that existing data depends on (the app id, keychain services, vault file
 /// names) keep their Reach names on purpose.
-pub const APP_NAME: &str = "FarReach";
+pub const APP_NAME: &str = "Reacher CM";
 
-/// FarReach's own app id and desktop data folder name, so it installs and
+/// Reacher CM's own app id and desktop data folder name, so it installs and
 /// runs next to Reach (`com.reach.desktop`, data in `com.reach.app`) without
 /// sharing its data, keychain entries or single-instance lock.
-pub const APP_ID: &str = "com.farreach.client";
+pub const APP_ID: &str = "com.reachercm.client";
 
 /// The app, for code with no handle of its own that needs a mobile plugin:
 /// the keychain functions, which on Android go through the Keystore.
@@ -1253,7 +1253,7 @@ pub fn run() {
             // Failure is ignored — a temp directory we cannot clear is not a
             // reason to refuse to start.
             {
-                let stale = std::env::temp_dir().join("farreach-drag");
+                let stale = std::env::temp_dir().join("reachercm-drag");
                 if stale.is_dir() {
                     let _ = std::fs::remove_dir_all(&stale);
                 }
@@ -1263,7 +1263,7 @@ pub fn run() {
             // (not before build) so it picks up that dir.
             //
             // Desktop keeps its data in `dirs::data_dir()/APP_ID` (upstream Reach
-            // uses `com.reach.app`). FarReach has its own folder so it can run
+            // uses `com.reach.app`). Reacher CM has its own folder so it can run
             // next to Reach.
             //
             // Mobile MUST use the Tauri-resolved OS sandbox: there
@@ -1280,7 +1280,7 @@ pub fn run() {
             let _ = std::fs::create_dir_all(&data_dir);
             // The same for where those copies are kept now (`private_tmp_dir`),
             // and for files pasted from a remote desktop that a crash left.
-            // Only one FarReach runs at a time, so nothing here is in use.
+            // Only one Reacher CM runs at a time, so nothing here is in use.
             let _ = std::fs::remove_dir_all(data_dir.join("tmp"));
             tracing::info!("App data dir: {:?}", data_dir);
             app.manage(AppState::new());
@@ -1635,11 +1635,11 @@ mod metainfo_tests {
     /// version being built, so a release cannot ship with a stale history.
     #[test]
     fn metainfo_lists_this_version() {
-        let xml = include_str!("../linux/com.farreach.client.metainfo.xml");
+        let xml = include_str!("../linux/com.reachercm.client.metainfo.xml");
         let release = format!("<release version=\"{}\"", env!("CARGO_PKG_VERSION"));
         assert!(
             xml.contains(&release),
-            "linux/com.farreach.client.metainfo.xml has no {release} entry: add this version to <releases>"
+            "linux/com.reachercm.client.metainfo.xml has no {release} entry: add this version to <releases>"
         );
     }
 }

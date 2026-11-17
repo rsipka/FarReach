@@ -1,4 +1,4 @@
-package com.farreach.client
+package com.reachercm.client
 
 import android.os.Bundle
 import android.view.View

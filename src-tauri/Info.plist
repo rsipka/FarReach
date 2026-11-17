@@ -10,6 +10,6 @@
 		and is only offered for builds signed with an Apple-issued certificate.
 	-->
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>FarReach connects to servers on your local network over SSH when you ask it to.</string>
+	<string>Reacher CM connects to servers on your local network over SSH when you ask it to.</string>
 </dict>
 </plist>
