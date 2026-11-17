@@ -11,10 +11,13 @@ import { getSettings } from '#lib/state/settings.svelte.js';
 import type { Tab } from '#lib/state/tabs.svelte.js';
 
 /** Whether a tab's server is monitored: its session's own choice, or the
- *  default from Settings. */
+ *  default from Settings. A Windows host is off unless its session turns it
+ *  on: the stats come from /proc, which Windows has not got. */
 export function monitoringWanted(tab: Tab | undefined): boolean {
 	if (!tab) return false;
-	return tab.monitoring ?? getSettings().serverMonitoring;
+	if (tab.monitoring != null) return tab.monitoring;
+	if (tab.type === 'ssh' && tab.detectedOs === 'windows') return false;
+	return getSettings().serverMonitoring;
 }
 
 /** Server stats come from an SSH or WSL session; the bar also holds the
