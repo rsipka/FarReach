@@ -817,7 +817,7 @@
   "sync.join_confirm": "L'identité propre de cet appareil et ses données sont remplacées par celles de l'autre appareil. Cliquez à nouveau pour continuer.",
   "sync.join_confirm_button": "Remplacer et rejoindre",
   "sync.joined_toast": "Rejoint. Cet appareil ouvre désormais les mêmes coffres.",
-  "sync.personal_db_exists": "Cette organisation Turso contient déjà un coffre personnel d'un autre appareil ({names}). Il ne peut être ouvert qu'avec l'identité de cet appareil : sur celui-ci, ouvrez Paramètres > Synchronisation > Associer un autre appareil, puis collez le code ici sous Rejoindre depuis un autre appareil. Cliquez à nouveau sur Enregistrer pour créer quand même un coffre séparé.",
+  "sync.personal_db_exists": "Cette organisation Turso contient déjà un coffre personnel d'un autre appareil ({{names}}). Il ne peut être ouvert qu'avec l'identité de cet appareil : sur celui-ci, ouvrez Paramètres > Synchronisation > Associer un autre appareil, puis collez le code ici sous Rejoindre depuis un autre appareil. Cliquez à nouveau sur Enregistrer pour créer quand même un coffre séparé.",
   "sync.reusing_database": "Utilisation de votre base de données personnelle existante...",
   "sync.scan_qr": "Scanner le code QR",
   "sync.link_qr_hint": "Sur l'autre appareil, touchez Scanner le code QR (sur son premier écran ou sous Rejoindre depuis un autre appareil), ou collez le code ci-dessous.",
