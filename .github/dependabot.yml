@@ -33,15 +33,6 @@ updates:
         update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
 
-  # The docs site
-  - package-ecosystem: "npm"
-    directory: "/docs"
-    schedule:
-      interval: "monthly"
-    groups:
-      docs:
-        patterns: ["*"]
-
   # Workflow actions
   - package-ecosystem: "github-actions"
     directory: "/"

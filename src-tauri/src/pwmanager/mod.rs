@@ -55,7 +55,7 @@
 //! 5. **Tests** with a fake CLI (see `passbolt_tests.rs`): the command
 //!    line holds no secret, the environment is the allowlist, output is
 //!    parsed into metadata only, errors are cleaned.
-//! 6. **User docs**: `docs/src/content/docs/vault/password-managers.md`.
+//! 6. **User docs**: the Password managers entry in `CHANGELOG.md`.
 
 pub mod bitwarden;
 mod cache;

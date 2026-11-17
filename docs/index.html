@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reacher CM: SSH client and connection manager</title>
+<meta name="description" content="Reacher CM is a free, open source SSH client and connection manager for Windows, macOS, Linux and Android, built on Reach.">
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --line: #262a33;
+    --text: #e6e8ec;
+    --muted: #9aa1ad;
+    --accent: #4f9cff;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --line: #e1e4ea;
+      --text: #1b1e24;
+      --muted: #5b6270;
+      --accent: #1f6fe5;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  a { color: var(--accent); }
+  main { max-width: 920px; margin: 0 auto; padding: 48px 16px 32px; }
+  header { text-align: center; }
+  header img { width: 96px; height: 96px; border-radius: 20px; }
+  h1 { font-size: 2.4rem; margin: 12px 0 4px; }
+  .tagline { color: var(--muted); font-size: 1.15rem; margin: 0 auto; max-width: 640px; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 28px 0 8px; }
+  .btn {
+    display: inline-block; padding: 10px 20px; border-radius: 8px; text-decoration: none;
+    border: 1px solid var(--line); background: var(--panel); color: var(--text); font-weight: 600;
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .platforms { text-align: center; color: var(--muted); font-size: 0.95rem; }
+  h2 { margin: 48px 0 16px; font-size: 1.5rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  .card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+  .card p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+  ul { padding-left: 20px; }
+  li { margin: 4px 0; }
+  .note p:first-child { margin-top: 0; }
+  .note p:last-child { margin-bottom: 0; }
+  .note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  footer { border-top: 1px solid var(--line); margin-top: 48px; padding-top: 20px; color: var(--muted); font-size: 0.9rem; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icon.png" alt="Reacher CM icon">
+    <h1>Reacher CM</h1>
+    <p class="tagline">A free, open source SSH client and connection manager. Terminals, remote desktops, file transfer, tunnels and an encrypted vault in one app, with no account and no subscription.</p>
+    <div class="buttons">
+      <a class="btn primary" href="https://github.com/rsipka/ReacherCM/releases">Download</a>
+      <a class="btn" href="https://github.com/rsipka/ReacherCM">Source on GitHub</a>
+      <a class="btn" href="https://github.com/rsipka/ReacherCM/blob/main/CHANGELOG.md">Changelog</a>
+    </div>
+    <p class="platforms">Windows · macOS · Linux (.deb, .rpm, AppImage) · Android · iOS (early builds)</p>
+  </header>
+
+  <h2>Added in Reacher CM</h2>
+  <div class="grid">
+    <div class="card"><h3>Import from Remote Desktop Manager</h3><p>RDP, SSH, VNC and Telnet entries, folders, logins, notes and custom fields from an RDM export.</p></div>
+    <div class="card"><h3>Saved credentials</h3><p>One login kept once in a vault and used by many sessions, a whole folder or a jump host.</p></div>
+    <div class="card"><h3>Password managers</h3><p>Use logins straight from Passbolt, 1Password, Bitwarden or KeePass.</p></div>
+    <div class="card"><h3>Local-first sync</h3><p>Every vault works offline and syncs in the background through Turso, a folder, SFTP, Git or an SMB share.</p></div>
+    <div class="card"><h3>Session notes and fields</h3><p>Free-text notes and named fields on each session, encrypted and synced.</p></div>
+    <div class="card"><h3>Telnet sessions</h3><p>For switches, routers and console servers, with automatic login.</p></div>
+    <div class="card"><h3>Broadcast input</h3><p>Type or paste into several terminals at once.</p></div>
+    <div class="card"><h3>Searchable session history</h3><p>Optionally keep commands and output in an encrypted, searchable history, with secrets masked.</p></div>
+    <div class="card"><h3>Terminal colors</h3><p>Hundreds of color schemes, per-session colors and your own editable themes.</p></div>
+  </div>
+
+  <h2>Everything from Reach</h2>
+  <ul>
+    <li>SSH with tabs, split panes and tab groups, and full <code>~/.ssh/config</code> support (ProxyJump, ControlMaster, FIDO2 keys and more).</li>
+    <li>Remote Desktop (RDP) and VNC in a tab, local shells, WSL and serial consoles.</li>
+    <li>SFTP file explorer with drag and drop and in-place editing.</li>
+    <li>Port tunnels, snippets, system monitoring, Ansible and OpenTofu.</li>
+    <li>An encrypted vault for sessions and secrets, with strict host key checking.</li>
+    <li>Native Rust networking and a fast UI. No Electron.</li>
+  </ul>
+
+  <h2>Credits</h2>
+  <div class="note">
+    <p>Reacher CM is a personal fork of <a href="https://github.com/alexandrosnt/Reach">Reach</a> by Alexander Nt. and the Reach contributors. Almost everything here is their work. Some features are based on the <a href="https://github.com/CPTProgrammer/ReachQ">ReachQ</a> fork by CPTProgrammer. If you do not need what Reacher CM adds, use Reach itself.</p>
+    <p>Most of the code Reacher CM adds is written with AI coding tools, then reviewed and tested by the maintainer. Reacher CM installs next to Reach with its own data folder, so both can be used side by side.</p>
+  </div>
+
+  <footer>
+    MIT licence · <a href="https://github.com/rsipka/ReacherCM/issues">Report a problem</a>
+  </footer>
+</main>
+</body>
+</html>

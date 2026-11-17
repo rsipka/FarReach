@@ -5,7 +5,7 @@
 - `vX.Y.Z-dev.N` makes **Reacher CM Dev**, published as a GitHub pre-release.
 - `vX.Y.Z` makes a stable release, published as the latest release. Only a
   stable release signs the apt and dnf repositories (secrets
-  `APT_GPG_PRIVATE_KEY`, `APT_GPG_PASSPHRASE`) and rebuilds the docs site.
+  `APT_GPG_PRIVATE_KEY`, `APT_GPG_PASSPHRASE`).
 
 ## Making a dev build
 

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/rsipka/ReacherCM/releases">Download</a> · <a href="https://github.com/rsipka/ReacherCM/issues">Report a Bug</a> · <a href="https://reachssh.com/">Reach documentation</a> · <a href="https://github.com/alexandrosnt/Reach">Upstream Reach</a>
+  <a href="https://rsipka.github.io/ReacherCM/">Website</a> · <a href="https://github.com/rsipka/ReacherCM/releases">Download</a> · <a href="https://github.com/rsipka/ReacherCM/issues">Report a Bug</a> · <a href="https://reachssh.com/">Reach documentation</a> · <a href="https://github.com/alexandrosnt/Reach">Upstream Reach</a>
 </p>
 
 > **Reacher CM is built on Reach** by [Alexander Nt.](https://github.com/alexandrosnt) and the
