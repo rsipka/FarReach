@@ -42,6 +42,8 @@ export interface SessionConfig {
   folder_id: string | null;
   tags: string[];
   detected_os?: string | null;
+  /** detected_os was picked by hand, so connecting never replaces it. */
+  os_manual?: boolean;
   vault_id?: string | null; // Which vault this session belongs to
   jump_chain?: JumpHostConfig[] | null; // ProxyJump chain
   proxy?: ProxySessionConfig | null; // Proxy config (SOCKS5/Tor, HTTP)
@@ -190,6 +192,7 @@ export async function sessionCreate(params: {
   domain?: string | null;
   /** For RDP: what the machine is, since the protocol cannot say. */
   detectedOs?: string | null;
+  osManual?: boolean;
   sharePath?: string | null;
   viaSessionId?: string | null;
   tryAgentKeys?: boolean | null;
@@ -219,6 +222,7 @@ export async function sessionCreate(params: {
     kind: params.kind ?? 'ssh',
     domain: params.domain?.trim() ? params.domain.trim() : null,
     detectedOs: params.detectedOs ?? null,
+    osManual: params.osManual || null,
     sharePath: params.sharePath?.trim() ? params.sharePath.trim() : null,
     viaSessionId: params.viaSessionId || null,
     tryAgentKeys: params.tryAgentKeys || null,
@@ -390,4 +394,51 @@ export async function sessionShare(
 /** Fetch installed WSL distributions on Windows */
 export async function wslListDistros(): Promise<string[]> {
   return invoke<string[]>('wsl_list_distros');
+}
+
+/** One field of a bulk edit: a value for every session, or none. */
+export type BulkChange<T> = { set: T } | 'clear';
+
+/** What a bulk edit changes; a field left out stays as each session has it. */
+export interface SessionPatch {
+  username?: string;
+  /** Only sessions that log in with a password take it. */
+  password?: BulkChange<string>;
+  /** `{ set: id }` a saved credential, `{ set: 'own' }` the session's own
+   *  login, `'clear'` the folder's credential, if any. */
+  credential?: BulkChange<string>;
+  port?: number;
+  domain?: BulkChange<string>;
+  tags_add?: string[];
+  tags_remove?: string[];
+  notes?: { op: 'replace' | 'append'; text: string } | { op: 'clear' };
+  terminal_theme?: BulkChange<string>;
+  history?: BulkChange<HistoryMode>;
+}
+
+export interface BulkOutcome {
+  id: string;
+  name: string;
+  status: 'changed' | 'unchanged' | 'failed';
+  /** Patch fields this session does not take, e.g. `domain` on SSH. */
+  skipped: string[];
+  error?: string;
+}
+
+export interface BulkResult {
+  results: BulkOutcome[];
+  /** For `sessionBulkUndo`; absent when nothing changed. */
+  undo?: string;
+}
+
+/** Change the same fields on many sessions. Each is saved as the session
+ *  editor would save it; one that fails is reported and the rest stay saved. */
+export async function sessionBulkUpdate(sessionIds: string[], patch: SessionPatch): Promise<BulkResult> {
+  return invoke<BulkResult>('session_bulk_update', { sessionIds, patch });
+}
+
+/** Put the sessions of the last bulk edit back as they were, except those
+ *  changed since (`kept`, by name). */
+export async function sessionBulkUndo(token: string): Promise<{ restored: number; kept: string[] }> {
+  return invoke<{ restored: number; kept: string[] }>('session_bulk_undo', { token });
 }

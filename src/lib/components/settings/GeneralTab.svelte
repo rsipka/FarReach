@@ -15,6 +15,7 @@
 	import X11ServerSetting from './X11ServerSetting.svelte';
 	import ReportProblem from './ReportProblem.svelte';
 	import { getSettings, updateSetting, syncTraySettings } from '#lib/state/settings.svelte.js';
+	import { manualUpdateCheck } from '#lib/state/updater.svelte.js';
 	import { effectiveThreshold, MIN_PASTE_THRESHOLD } from '#lib/terminal/paste.js';
 	import { DEFAULT_WORD_SEPARATORS, rightClickMode } from '#lib/terminal/mouse.js';
 	import { t, changeLocale } from '#lib/state/i18n.svelte.js';
@@ -70,6 +71,25 @@
 	async function onMinimizeToTrayChange(checked: boolean) {
 		await invoke('set_close_to_tray', { enabled: checked });
 		updateSetting('minimizeToTray', checked);
+	}
+
+	function onCheckForUpdatesChange(checked: boolean) {
+		updateSetting('checkForUpdates', checked);
+	}
+
+	/** Check now: works with automatic checks off too. A newer release opens
+	 *  the usual update banner; otherwise a toast says how it went. */
+	let checkingUpdates = $state(false);
+	async function onCheckNow() {
+		if (checkingUpdates) return;
+		checkingUpdates = true;
+		try {
+			const { found, error } = await manualUpdateCheck();
+			if (error) addToast(t('settings.update_check_failed', { error }), 'error');
+			else if (!found) addToast(t('settings.update_up_to_date'), 'success');
+		} finally {
+			checkingUpdates = false;
+		}
 	}
 
 	async function onStartWithSystemChange(checked: boolean) {
@@ -162,6 +182,24 @@
 				checked={settings.serverMonitoring}
 				label={t('settings.server_monitoring')}
 				onchange={(v) => updateSetting('serverMonitoring', v)}
+			/>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.check_updates')}</span>
+			<span class="setting-description">{t('settings.check_updates_desc')}</span>
+		</div>
+		<div class="setting-control update-controls">
+			<button class="discord-link" onclick={onCheckNow} disabled={checkingUpdates}>
+				<span>{checkingUpdates ? t('settings.check_updates_checking') : t('settings.check_updates_now')}</span>
+			</button>
+			<Toggle
+				hideLabel
+				checked={settings.checkForUpdates}
+				label={t('settings.check_updates')}
+				onchange={onCheckForUpdatesChange}
 			/>
 		</div>
 	</div>
@@ -402,6 +440,12 @@
 <style>
 	/* The dropdowns' box: it was the page's black, the one dark well in a
 	   column of grey controls. */
+	.update-controls {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+
 	.threshold-input {
 		padding: 9px 12px;
 		border-radius: var(--radius-btn);

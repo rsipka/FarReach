@@ -3,6 +3,7 @@ import { relaunch } from '@tauri-apps/plugin-process';
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { isMobile } from '#lib/platform.js';
+import { getSettings } from '#lib/state/settings.svelte.js';
 
 /** A phone: Tauri's updater does not run there. Reach checks the same feed
  *  (app_update_check) and links to the release's APK; Android's installer
@@ -82,7 +83,14 @@ export async function checkForUpdate(): Promise<boolean> {
 	}
 }
 
+/** Settings > General > Check for updates. Off: nothing is fetched unless
+ *  the user presses Check now. */
+function automaticChecksOn(): boolean {
+	return getSettings().checkForUpdates;
+}
+
 export async function startupUpdateCheck(): Promise<void> {
+	if (!automaticChecksOn()) return;
 	const found = await checkForUpdate();
 	// A phone gets the banner, not the dialog: there is nothing to install in
 	// place, only a link to open.
@@ -157,6 +165,18 @@ export function postponeRelaunch(): void {
 	relaunchPostponed = true;
 }
 
+/**
+ * A check the user asked for (Settings > General > Check now), whether or
+ * not automatic checks are on. A newer release shows the usual banner again
+ * even if it was dismissed before. Returns what was found, or the error.
+ */
+export async function manualUpdateCheck(): Promise<{ found: boolean; error: string | null }> {
+	if (downloading || installing) return { found: updateAvailable, error: null };
+	const found = await checkForUpdate();
+	if (found) dismissed = false;
+	return { found, error };
+}
+
 export function dismissUpdate(): void {
 	dismissed = true;
 }
@@ -168,7 +188,7 @@ export function skipStartupUpdate(): void {
 export function startPeriodicChecks(): void {
 	stopPeriodicChecks();
 	periodicInterval = setInterval(async () => {
-		if (!downloading && !installing && !startupBlocking) {
+		if (automaticChecksOn() && !downloading && !installing && !startupBlocking) {
 			const found = await checkForUpdate();
 			if (found) {
 				dismissed = false;

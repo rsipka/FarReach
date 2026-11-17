@@ -189,6 +189,18 @@ export async function importIdentity(secretKey: string): Promise<string> {
 	return uuid;
 }
 
+/** Make this device another device of the identity in a link code. */
+export async function linkDevice(code: string): Promise<string> {
+	const uuid = await vaultIpc.linkDevice(code);
+	vaultState.locked = false;
+	vaultState.hasIdentity = true;
+	vaultState.userUuid = uuid;
+	vaultState.publicKey = await vaultIpc.getPublicKey();
+	await refreshVaults();
+	restoreLocalSettingsFromVault();
+	return uuid;
+}
+
 export async function lock(): Promise<void> {
 	await vaultIpc.lock();
 	vaultState.locked = true;

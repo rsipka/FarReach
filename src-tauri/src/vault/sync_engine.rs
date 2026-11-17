@@ -75,6 +75,8 @@ pub enum Backend {
     /// An SMB share, reached by Reach's own client.
     Smb(SmbTarget),
     Git(GitTarget),
+    /// An S3 bucket, on Amazon or any S3-compatible store.
+    S3(crate::vault::sync_s3::S3Target),
 }
 
 /// What an SFTP backend's token holds: whatever logs in.
@@ -98,6 +100,9 @@ impl Backend {
     /// - `smb://[domain;]user@server[:port]/share/folder`, with the password
     ///   as token;
     /// - `git:<remote>[#branch]`, with an optional token for https;
+    /// - `s3://host[:port]/bucket/folder[?region=..&style=path|virtual]`
+    ///   (`s3+http://` on this computer only), with a token of JSON
+    ///   `{access_key, secret_key}`;
     /// - anything else is a Turso URL.
     pub fn parse(url: &str, token: &str, app_dir: &Path) -> Result<Backend, VaultError> {
         let url = url.trim();
@@ -161,6 +166,10 @@ impl Backend {
                 password: token.to_string(),
             }));
         }
+        let lower = url.to_ascii_lowercase();
+        if lower.starts_with("s3://") || lower.starts_with("s3+http://") {
+            return Ok(Backend::S3(crate::vault::sync_s3::S3Target::parse(url, token)?));
+        }
         if let Some(rest) = url.strip_prefix("git:") {
             let (remote, branch) = match rest.rsplit_once('#') {
                 Some((r, b)) if !b.trim().is_empty() => (r.trim(), b.trim()),
@@ -208,6 +217,7 @@ impl Backend {
             Backend::Sftp(_) => "sftp",
             Backend::Smb(_) => "smb",
             Backend::Git(_) => "git",
+            Backend::S3(_) => "s3",
         }
     }
 
@@ -228,6 +238,7 @@ impl Backend {
             Backend::Sftp(t) => format!("sftp:{}@{}:{}/{}", t.user, t.host.to_ascii_lowercase(), t.port, t.path),
             Backend::Smb(t) => format!("smb:{}@{}:{}/{}/{}", t.user.to_ascii_lowercase(), t.server.to_ascii_lowercase(), t.port, t.share.to_ascii_lowercase(), t.path.to_ascii_lowercase()),
             Backend::Git(t) => format!("git:{}#{}", t.remote, t.branch),
+            Backend::S3(t) => t.identity(),
         }
     }
 
@@ -239,6 +250,7 @@ impl Backend {
             Backend::Sftp(t) => Store::sftp(t).await?,
             Backend::Smb(t) => Store::smb(t).await?,
             Backend::Git(t) => Store::git(t).await?,
+            Backend::S3(t) => Store::S3(crate::vault::sync_s3::S3Store::open(t)?),
         }))
     }
 

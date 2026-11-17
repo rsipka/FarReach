@@ -23,6 +23,9 @@
 			>
 				<span class="toast-dot" style="background-color: {dotColors[toast.type]}"></span>
 				<span class="toast-message" title={toast.message}>{toast.message}</span>
+				{#if toast.action}
+					<button class="toast-action" type="button" onclick={() => { toast.action?.run(); dismissToast(toast.id); }}>{toast.action.label}</button>
+				{/if}
 				<button class="toast-close" onclick={() => dismissToast(toast.id)} aria-label={t('common.dismiss')}>
 					<svg width="10" height="10" viewBox="0 0 10 10" fill="none">
 						<path d="M1 1L9 9M9 1L1 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
@@ -34,6 +37,23 @@
 {/if}
 
 <style>
+	.toast-action {
+		flex-shrink: 0;
+		padding: 2px 8px;
+		font-family: var(--font-sans);
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--color-accent);
+		background: transparent;
+		border: 1px solid var(--color-accent);
+		border-radius: var(--radius-btn);
+		cursor: pointer;
+	}
+
+	.toast-action:hover {
+		background-color: var(--color-surface-hover);
+	}
+
 	.toast-container {
 		position: fixed;
 		top: calc(80px + var(--safe-top));

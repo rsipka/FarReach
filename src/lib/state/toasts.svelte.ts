@@ -9,6 +9,13 @@ export interface Toast {
 	type: ToastType;
 	duration: number;
 	dismissing: boolean;
+	/** A button on the toast, such as Undo; pressing it closes the toast. */
+	action?: ToastAction;
+}
+
+export interface ToastAction {
+	label: string;
+	run: () => void;
 }
 
 let toasts = $state<Toast[]>([]);
@@ -44,11 +51,12 @@ export function getToasts(): Toast[] {
 export function addToast(
 	message: string,
 	type: ToastType = 'info',
-	duration: number = 3000
+	duration: number = 3000,
+	action?: ToastAction
 ): Toast {
 	const id = crypto.randomUUID();
 
-	const toast: Toast = { id, message, type, duration, dismissing: false };
+	const toast: Toast = { id, message, type, duration, dismissing: false, action };
 	toasts.push(toast);
 
 	playSound();
