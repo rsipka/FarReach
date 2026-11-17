@@ -72,6 +72,7 @@ use ipc::dragout_commands::*;
 use ipc::webview_commands::*;
 use ipc::ssh_commands::*;
 use ipc::sshconfig_commands::*;
+use ipc::import_commands::*;
 use ipc::x11server_commands::*;
 use ipc::sshkey_commands::*;
 use ipc::tofu_commands::*;
@@ -518,6 +519,8 @@ pub fn run() {
             x11server_cancel,
             x11server_remove,
             sshconfig_exists,
+            import_read_local,
+            import_yaml_to_json,
             ssh_options_report,
             ssh_key_import,
             ssh_key_list,
@@ -965,6 +968,8 @@ pub fn run() {
             x11server_cancel,
             x11server_remove,
             sshconfig_exists,
+            import_read_local,
+            import_yaml_to_json,
             ssh_options_report,
             ssh_key_import,
             ssh_key_list,

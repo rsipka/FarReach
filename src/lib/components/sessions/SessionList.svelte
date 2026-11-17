@@ -26,7 +26,7 @@
 	import SessionEditor from './SessionEditor.svelte';
 	import SshConfigImport from './SshConfigImport.svelte';
 	import RdpImport from './RdpImport.svelte';
-	import RdmImport from './RdmImport.svelte';
+	import ManagerImport from './ManagerImport.svelte';
 	import CredentialList from './CredentialList.svelte';
 	import BulkEditor from './BulkEditor.svelte';
 	import { savedCredentialList, credentialsFor, type SavedCredential } from '#lib/ipc/savedCredentials.js';
@@ -64,6 +64,7 @@
 	let showImport = $state(false);
 	let showRdpImport = $state(false);
 	let showRdmImport = $state(false);
+	let showAppImport = $state(false);
 	let editingSession = $state<SessionConfig | undefined>();
 	let sessions = $state<SessionConfig[]>([]);
 	let loading = $state(true);
@@ -1510,6 +1511,10 @@
 							<FaIcon icon={faFileImport} size={12} />
 							<span>{t('session.import_rdm')}</span>
 						</button>
+						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => (showAppImport = true))}>
+							<FaIcon icon={faFileImport} size={12} />
+							<span>{t('session.import_other_app')}</span>
+						</button>
 					</div>
 				{/if}
 			</div>
@@ -1750,7 +1755,8 @@
 <SessionEditor bind:open={showEditor} editSession={editingSession} vaultId={targetVaultId} {folders} onsave={handleEditorSave} />
 <SshConfigImport bind:open={showImport} vaultId={targetVaultId} onsave={handleEditorSave} />
 <RdpImport bind:open={showRdpImport} vaultId={targetVaultId} onsave={handleEditorSave} />
-<RdmImport bind:open={showRdmImport} vaultId={targetVaultId} onsave={handleEditorSave} />
+<ManagerImport bind:open={showRdmImport} source="rdm" vaultId={targetVaultId} onsave={handleEditorSave} />
+<ManagerImport bind:open={showAppImport} vaultId={targetVaultId} onsave={handleEditorSave} />
 <UntrustedRefsDialog
 	asked={askedRefs}
 	busy={approvingRefs}

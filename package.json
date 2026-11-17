@@ -29,6 +29,7 @@
     "select:test": "node --import ./scripts/resolve-lib.mjs scripts/select-test.mjs",
     "rdp-import:test": "node scripts/rdp-import-test.mjs",
     "rdm-import:test": "node scripts/rdm-import-test.mjs",
+    "import-managers:test": "node --import ./scripts/resolve-lib.mjs scripts/import-managers-test.mjs",
     "logsource:test": "node scripts/logsource-test.mjs",
     "split:test": "node scripts/split-test.mjs",
     "broadcast:test": "node scripts/broadcast-test.mjs",

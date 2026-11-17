@@ -26,93 +26,27 @@
  * Kept apart from the dialog so it can be tested in Node.
  */
 
-import type { Folder, SessionConfig, SessionKind } from '#lib/ipc/sessions.js';
+import type { Folder, SessionConfig } from '#lib/ipc/sessions.js';
+import { DEFAULT_PORT, parsePort, text, type ImportCredential, type ImportField, type ImportHop, type ImportHost, type ImportHostCredential, type ImportKind, type ImportParseResult, type ImportSkipReason, type ImportSkipped } from './import/common.ts';
 
-export type RdmKind = Extract<SessionKind, 'ssh' | 'rdp' | 'vnc' | 'telnet'>;
+export { parsePort };
 
-export interface RdmImportHost {
-	/** Position in the export, unique within one file. */
-	id: string;
-	kind: RdmKind;
-	name: string;
-	host: string;
-	port: number;
-	username: string;
-	/** Windows logon domain, RDP only. */
-	domain: string | null;
-	/** SSH only: a private key file named by the entry, on the machine RDM ran on. */
-	keyPath: string | null;
-	/** The RDM group path, outermost first; empty at the top level. */
-	folder: string[];
-	/** SSH only: the SSH gateway(s) RDM reaches the host through, outermost first. */
-	jump: RdmGateway[];
-	/** The credential the host logs in with, if it has a username. */
-	credential: RdmHostCredential | null;
-	/** Telnet only: plain TCP with no Telnet (a PuTTY Raw entry). */
-	raw: boolean;
-	/** The entry's Description and Notes as plain text, one after the other. */
-	notes: string | null;
-	/** The entry's custom fields (RDM's Custom Field 1 to 5), in order. */
-	fields: RdmField[];
-}
-
-export interface RdmField {
-	name: string;
-	value: string;
-	/** RDM's "Hidden" box: masked until revealed. */
-	hidden: boolean;
-}
-
-/** A login RDM keeps apart from the hosts: a credential entry, or a group's own. */
-export interface RdmCredential {
-	/** The credential entry's ID, or `group:` and the group's path. */
-	key: string;
-	name: string;
-	username: string;
-	domain: string | null;
-}
-
-export interface RdmHostCredential {
-	key: string;
-	/** Inherited: the group path it comes from, for a folder default. Null when the host links it itself. */
-	from: string[] | null;
-}
-
+export type RdmKind = ImportKind;
+export type RdmImportHost = ImportHost;
+export type RdmField = ImportField;
+/** A login RDM keeps apart from the hosts: a credential entry (key: its ID), or a group's own (key: `group:` and the path). */
+export type RdmCredential = ImportCredential;
+export type RdmHostCredential = ImportHostCredential;
 /** One hop of an RDM SSH gateway entry; its credentials are not in the export. */
-export interface RdmGateway {
-	host: string;
-	port: number;
-}
-
-/** Why an entry in the export could not become a session. */
-export type RdmSkipReason = 'no_host' | 'bad_port' | 'unsupported' | 'duplicate';
-
-export interface RdmSkipped {
-	label: string;
-	reason: RdmSkipReason;
-	/** For `unsupported`: the RDM connection type, as the file names it. */
-	type?: string;
-}
-
-export type RdmParseResult =
-	| { ok: true; hosts: RdmImportHost[]; skipped: RdmSkipped[]; credentials: RdmCredential[] }
-	| { ok: false; error: 'bad_file'; detail: string }
-	| { ok: false; error: 'encrypted' }
-	| { ok: false; error: 'no_hosts' };
-
-const DEFAULT_PORT: Record<RdmKind, number> = { ssh: 22, rdp: 3389, vnc: 5900, telnet: 23 };
+export type RdmGateway = ImportHop;
+export type RdmSkipReason = ImportSkipReason;
+export type RdmSkipped = ImportSkipped;
+export type RdmParseResult = ImportParseResult;
 
 type Obj = Record<string, unknown>;
 
 function isObj(value: unknown): value is Obj {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** A trimmed string, or '' for anything that is not a string or a number. */
-function text(value: unknown): string {
-	if (typeof value === 'string') return value.trim();
-	if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-	return '';
 }
 
 // ---------------------------------------------------------------------------
@@ -131,19 +65,22 @@ function decodeEntities(s: string): string {
 	});
 }
 
-interface XmlElement {
+export interface XmlElement {
 	name: string;
+	/** Attributes by name, entities decoded. */
+	attrs: Record<string, string>;
 	children: XmlElement[];
 	text: string;
 }
 
 /**
- * A small XML reader for RDM's element-and-text files: attributes are
- * ignored, and so are comments, processing instructions and the doctype.
+ * A small XML reader: elements, their text and attributes (mRemoteNG keeps
+ * everything in attributes, RDM in text). Comments, processing instructions
+ * and the doctype are left out.
  * Throws on markup that does not nest.
  */
 export function parseXml(raw: string): XmlElement {
-	const root: XmlElement = { name: '#root', children: [], text: '' };
+	const root: XmlElement = { name: '#root', attrs: {}, children: [], text: '' };
 	const stack: XmlElement[] = [root];
 	let i = 0;
 	const n = raw.length;
@@ -187,7 +124,7 @@ export function parseXml(raw: string): XmlElement {
 			if (selfClosing) body = body.slice(0, -1);
 			const name = body.trim().split(/\s/, 1)[0];
 			if (!name) throw new Error('empty tag name');
-			const el: XmlElement = { name, children: [], text: '' };
+			const el: XmlElement = { name, attrs: parseAttrs(body.trim().slice(name.length)), children: [], text: '' };
 			top.children.push(el);
 			if (!selfClosing) stack.push(el);
 			i = end + 1;
@@ -196,6 +133,12 @@ export function parseXml(raw: string): XmlElement {
 	if (stack.length !== 1) throw new Error(`<${stack[stack.length - 1].name}> is not closed`);
 	if (root.children.length === 0) throw new Error('no elements');
 	return root;
+}
+
+function parseAttrs(s: string): Record<string, string> {
+	const out: Record<string, string> = {};
+	for (const m of s.matchAll(/([^\s=]+)\s*=\s*("([^"]*)"|'([^']*)')/g)) out[m[1]] = decodeEntities(m[3] ?? m[4] ?? '');
+	return out;
 }
 
 /** The `>` that ends a start tag, skipping any inside quoted attribute values. */
@@ -347,12 +290,6 @@ function gatewayHops(entry: Obj): RdmGateway[] {
 		if (port !== null) hops.push({ host: address.host, port });
 	}
 	return hops;
-}
-
-/** A TCP port, or null when the value is not one. */
-export function parsePort(value: string): number | null {
-	const n = Number(value);
-	return Number.isInteger(n) && n >= 1 && n <= 65535 ? n : null;
 }
 
 /**
