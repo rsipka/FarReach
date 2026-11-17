@@ -162,7 +162,7 @@ async fn fetch(cancel: &AtomicBool, progress: &impl Fn(Progress)) -> Result<Vec<
     }
     use futures_util::StreamExt;
     let client = crate::http::client_builder()
-        .user_agent("Reach (https://github.com/alexandrosnt/Reach)")
+        .user_agent(crate::USER_AGENT)
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client.get(URL).send().await.map_err(|e| format!("X server download failed: {e}"))?;

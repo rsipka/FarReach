@@ -100,6 +100,8 @@ static APP_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 /// that existing data depends on (the app id, keychain services, vault file
 /// names) keep their Reach names on purpose.
 pub const APP_NAME: &str = "Reacher CM";
+/// Sent as the User-Agent on downloads from GitHub (VcXsrv, OpenTofu).
+pub const USER_AGENT: &str = "ReacherCM (https://github.com/rsipka/ReacherCM)";
 
 /// Reacher CM's own app id and desktop data folder name, so it installs and
 /// runs next to Reach (`com.reach.desktop`, data in `com.reach.app`) without
