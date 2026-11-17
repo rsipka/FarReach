@@ -2667,6 +2667,7 @@ async fn ssh_session_task(
         ($payload:expr) => {{
             let payload = $payload;
             mirror_to_mcp!(payload);
+            crate::history::output(&mcp_id, &payload);
             // Logged as it is shown, before the hold-until-ready buffer, so
             // the login message is in the file even if the tab opens late.
             if let Some(l) = log.as_mut() {
@@ -2866,8 +2867,10 @@ async fn ssh_session_task(
         if let Some(l) = log.as_mut() {
             l.push(&tail);
         }
+        crate::history::output(&connection_id, &tail);
         let _ = app_handle.emit(&data_event, &tail);
     }
+    crate::history::stop(&connection_id);
 
     // One exit event per session; `code` is set only when the shell ended
     // on its own (the user typed exit), which the tab may close on.

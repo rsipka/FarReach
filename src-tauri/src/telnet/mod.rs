@@ -179,6 +179,9 @@ async fn run(
                     }
                 }
                 let text = decoder.push(&received.data);
+                if !text.is_empty() {
+                    crate::history::output(&id, &text);
+                }
                 if !text.is_empty() && app.emit(&data_event, text).is_err() {
                     break;
                 }
@@ -203,6 +206,9 @@ async fn run(
         if let Some(tail) = decoder.flush() {
             let _ = app.emit(&data_event, tail);
         }
+    }
+    if !replaced {
+        crate::history::stop(&id);
     }
     if let Some(e) = &error {
         tracing::info!("Telnet {id}: connection ended: {e}");

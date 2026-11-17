@@ -19,6 +19,7 @@
 	import { open as openDialog } from '@tauri-apps/plugin-dialog';
 	import { savedCredentialList, credentialsFor, type SavedCredential } from '#lib/ipc/savedCredentials.js';
 	import { DEFAULT_TELNET_OPTIONS, type TelnetOptions } from '#lib/ipc/telnet.js';
+	import type { HistoryMode } from '#lib/ipc/history.js';
 
 	interface Props {
 		open: boolean;
@@ -197,6 +198,8 @@
 	let terminalTheme = $state('');
 	/** Server monitoring for its tabs: '' the default from Settings. */
 	let monitoringChoice = $state<'' | 'on' | 'off'>('');
+	/** What its tabs record into the session history; empty: the default from Settings. */
+	let historyChoice = $state<'' | HistoryMode>('');
 	let colorsOpen = $state(false);
 	let colorsSummary = $derived(
 		findTerminalTheme(terminalTheme)?.name ?? (terminalTheme ? t('termtheme.missing') : t('termtheme.session_default'))
@@ -268,6 +271,7 @@
 			docsOpen = !!notes.trim() || customFields.length > 0;
 			terminalTheme = editSession.terminal_theme ?? '';
 			monitoringChoice = editSession.monitoring == null ? '' : editSession.monitoring ? 'on' : 'off';
+			historyChoice = editSession.history ?? '';
 			colorsOpen = false;
 			if (editSession.jump_chain && editSession.jump_chain.length > 0) {
 				jumpEnabled = true;
@@ -329,6 +333,7 @@
 			docsOpen = false;
 			terminalTheme = '';
 			monitoringChoice = '';
+			historyChoice = '';
 			colorsOpen = false;
 			jumpEnabled = false;
 			jumpHops = [];
@@ -396,6 +401,7 @@
 		const themeToSave = kind === 'rdp' || kind === 'vnc' ? null : terminalTheme || null;
 		// Only SSH and WSL sessions have a server to monitor.
 		const monitoringToSave = (kind === 'ssh' || kind === 'wsl') && monitoringChoice ? monitoringChoice === 'on' : null;
+		const historyToSave = kind === 'rdp' || kind === 'vnc' ? null : historyChoice || null;
 		const fieldsToSave: CustomField[] = customFields
 			.filter((f) => f.name.trim() || f.value.trim())
 			.map((f) => (f.hidden ? { name: f.name.trim(), value: f.value, hidden: true } : { name: f.name.trim(), value: f.value }));
@@ -476,6 +482,7 @@
 					custom_fields: fieldsToSave.length ? fieldsToSave : null,
 					terminal_theme: themeToSave,
 					monitoring: monitoringToSave,
+					history: historyToSave,
 				});
 				// Its open tabs take the new colours (and monitoring choice) at once.
 				setSessionTerminalTheme(editSession.id, themeToSave);
@@ -506,7 +513,8 @@
 					notes: notesToSave,
 					customFields: fieldsToSave,
 					terminalTheme: themeToSave,
-					monitoring: monitoringToSave
+					monitoring: monitoringToSave,
+					history: historyToSave
 				});
 			}
 			onsave?.();
@@ -996,6 +1004,15 @@
 				/>
 				<p class="colors-hint">{t('termtheme.session_hint')}</p>
 			</Disclosure>
+			<div class="folder-section">
+				<span class="folder-label">{t('history.session_label')}</span>
+				<select class="folder-select" bind:value={historyChoice} disabled={saving}>
+					<option value="">{t('history.session_default')}</option>
+					<option value="off">{t('history.mode_off')}</option>
+					<option value="commands">{t('history.mode_commands')}</option>
+					<option value="output">{t('history.mode_output')}</option>
+				</select>
+			</div>
 		{/if}
 
 		{#if kind === 'ssh' || kind === 'wsl'}

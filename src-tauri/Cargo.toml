@@ -214,6 +214,9 @@ serde-saphyr = { version = "0.0.29", features = ["serialize"] }
 # phone builds them: Android and iOS have no PTY, serial port, autostart,
 # self-update or drag-out, and the code using them is behind cfg(desktop).
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+# Session history: its file is encrypted page by page (SQLite3 Multiple
+# Ciphers), built with CMake; desktop only until the mobile builds are tried.
+libsql = { version = "0.9", default-features = false, features = ["core", "encryption"] }
 # The local clipboard for RDP: text and file lists. Android has no file clipboard and uses the plugin.
 arboard = { version = "3.6", default-features = false }
 # Sound for RDP. The same crate again with one more feature: Cargo unions the

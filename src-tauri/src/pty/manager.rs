@@ -244,6 +244,7 @@ fn pty_reader_loop(
                 if payload.is_empty() {
                     continue;
                 }
+                crate::history::output(id, &payload);
                 if let Some(mcp) = mcp_state.clone() {
                     let (id, bytes) = (mcp_id.clone(), payload.as_bytes().to_vec());
                     tauri::async_runtime::spawn(async move { mcp.push_output(&id, &bytes).await; });
@@ -261,8 +262,10 @@ fn pty_reader_loop(
     }
 
     if let Some(tail) = decoder.flush() {
+        crate::history::output(id, &tail);
         let _ = app_handle.emit(&data_event, tail);
     }
+    crate::history::stop(id);
 
     // Notify frontend that the PTY has exited.
     if let Err(e) = app_handle.emit(&exit_event, ()) {

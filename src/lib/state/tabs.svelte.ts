@@ -2,6 +2,7 @@ import type { SshConnectParams } from '#lib/ipc/ssh.js';
 import { rdpDisconnect, type RdpConnectParams } from '#lib/ipc/rdp.js';
 import { vncDisconnect, type VncConnectParams } from '#lib/ipc/vnc.js';
 import type { TelnetConnectParams } from '#lib/ipc/telnet.js';
+import type { HistoryMode } from '#lib/ipc/history.js';
 import * as splits from '#lib/terminal/split.js';
 import type { Direction, Split } from '#lib/terminal/split.js';
 
@@ -51,6 +52,8 @@ export interface Tab {
 	/** That session's server monitoring choice; unset: the default from
 	 *  Settings (see monitoringWanted). */
 	monitoring?: boolean | null;
+	/** That session's history choice; unset: the default from Settings. */
+	historyMode?: HistoryMode | null;
 }
 
 let tabs = $state<Tab[]>([]);

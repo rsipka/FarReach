@@ -168,6 +168,10 @@ fn refuse_reserved(key: &str) -> Result<(), String> {
     if crate::pwmanager::config::is_reserved_setting_key(key) {
         return Err("This setting is managed in Settings → Password managers".to_string());
     }
+    // The session history file's key: never handed to the window.
+    if key == crate::history::KEY_SETTING {
+        return Err("This setting is not available".to_string());
+    }
     Ok(())
 }
 

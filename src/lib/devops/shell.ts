@@ -45,5 +45,6 @@ export async function openContainerShell(route: Route, engine: Engine, container
 	tab.sessionId = from.sessionId;
 	tab.terminalTheme = from.terminalTheme;
 	tab.monitoring = from.monitoring;
+	tab.historyMode = from.historyMode;
 	setActivePage('terminal');
 }

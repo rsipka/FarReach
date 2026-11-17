@@ -2,6 +2,13 @@
 	import { getActiveTab } from '#lib/state/tabs.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import Clock from './Clock.svelte';
+	import { tabHistory, toggleTabHistoryPause, openHistoryPanel } from '#lib/state/history.svelte.js';
+
+	// What the active tab records: the session history (pausable) and the
+	// file log, shown so that recording is never silent.
+	let tap = $derived(tabHistory(getActiveTab()?.id));
+	let recording = $derived(tap?.status.recording ?? null);
+	let logging = $derived(!!tap?.status.logFile || !!tap?.sshLog);
 
 	let activeTab = $derived(getActiveTab());
 
@@ -34,6 +41,21 @@
 	<div class="statusbar-center"></div>
 
 	<div class="statusbar-right">
+		{#if recording && tap}
+			<button
+				type="button"
+				class="rec"
+				class:paused={tap.status.paused}
+				title={tap.status.paused ? t('history.indicator_paused_hint') : t(recording === 'output' ? 'history.indicator_output_hint' : 'history.indicator_commands_hint')}
+				onclick={() => activeTab && void toggleTabHistoryPause(activeTab.id)}
+				oncontextmenu={(e) => { e.preventDefault(); openHistoryPanel({ sessionId: activeTab?.sessionId, sessionName: activeTab?.sessionName, tabId: activeTab?.id }); }}
+			>
+				<span class="dot"></span>{tap.status.paused ? t('history.indicator_paused') : t('history.indicator')}
+			</button>
+		{/if}
+		{#if logging}
+			<span class="log" title={tap?.status.logFile ?? t('history.log_hint')}>{t('history.log_indicator')}</span>
+		{/if}
 		<Clock />
 	</div>
 </footer>
@@ -77,7 +99,38 @@
 
 	.statusbar-right {
 		flex: 1;
-		text-align: right;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 10px;
+	}
+
+	.rec,
+	.log {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		white-space: nowrap;
+		font-size: inherit;
+		color: inherit;
+	}
+
+	.rec {
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+	}
+
+	.rec .dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background-color: var(--color-danger);
+	}
+
+	.rec.paused .dot {
+		background-color: var(--color-text-secondary);
 	}
 
 	.status-indicator {

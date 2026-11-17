@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pushHistoryRetention } from '#lib/state/history.svelte.js';
 	import { applyTheme, themeState, loadInstalledThemes, DARK, LIGHT } from '#lib/state/theme.svelte.js';
 	import { loadCustomTerminalThemes } from '#lib/state/terminal-themes.svelte.js';
 	import type { Snippet } from 'svelte';
@@ -43,6 +44,7 @@
 
 	onMount(() => {
 		loadSettings();
+		pushHistoryRetention();
 		// The interface size chosen last time, before anything is laid out.
 		applyUiZoom();
 		startAutoLock();
