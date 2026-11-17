@@ -158,6 +158,7 @@ fn quit_app(app: tauri::AppHandle) {
     // A password manager passphrase kept in memory goes before the process
     // does (it is encrypted there, but there is no reason to leave it).
     pwmanager::forget_passphrase();
+    ssh::unlocked::forget();
     app.exit(0);
 }
 
@@ -542,6 +543,8 @@ pub fn run() {
             session_create_folder,
             session_set_folder_credential,
             saved_credential_list,
+            credential_keys_unlock,
+            credential_keys_unlock_enabled,
             saved_credential_create,
             saved_credential_update,
             saved_credential_delete,
@@ -967,6 +970,8 @@ pub fn run() {
             session_create_folder,
             session_set_folder_credential,
             saved_credential_list,
+            credential_keys_unlock,
+            credential_keys_unlock_enabled,
             saved_credential_create,
             saved_credential_update,
             saved_credential_delete,

@@ -30,6 +30,9 @@ pub(crate) fn any_open() -> bool {
 pub(crate) enum Kind {
     Password,
     Passphrase,
+    /// A key's passphrase asked ahead of any login, to keep for this run
+    /// (`credential_keys_unlock`). The window words this one itself.
+    Unlock,
     /// The server's keyboard-interactive questions (one-time codes and the like).
     Keyboard,
     /// A yes or no (AddKeysToAgent ask).

@@ -17,7 +17,10 @@
 		promptId: string;
 		host: string;
 		port: number;
-		kind: 'password' | 'passphrase' | 'keyboard' | 'confirm';
+		/** `unlock`: a credential key's passphrase asked ahead of any login
+		 *  (Settings → Security). `host` holds the credentials' names, `title`
+		 *  the key, and `instructions` is "retry" after a wrong passphrase. */
+		kind: 'password' | 'passphrase' | 'unlock' | 'keyboard' | 'confirm';
 		title: string;
 		instructions: string;
 		fields: { text: string; echo: boolean }[];
@@ -81,7 +84,16 @@
 
 	let heading = $derived(current ? t(`authprompt.title_${current.kind}`, { host: current.host }) : '');
 	// The backend's own sentence ("Enter passphrase for key …") under the heading.
-	let detail = $derived(current && current.kind !== 'keyboard' ? current.title : '');
+	let detail = $derived(
+		!current || current.kind === 'keyboard'
+			? ''
+			: current.kind === 'unlock'
+				? t('authprompt.unlock_detail', { key: current.title, credentials: current.host })
+				: current.title
+	);
+	let instructions = $derived(
+		current?.kind === 'unlock' ? (current.instructions ? t('authprompt.unlock_retry') : '') : (current?.instructions ?? '')
+	);
 </script>
 
 {#if current}
@@ -93,8 +105,8 @@
 			{#if detail}
 				<p class="msg">{detail}</p>
 			{/if}
-			{#if current.instructions}
-				<p class="msg pre">{current.instructions}</p>
+			{#if instructions}
+				<p class="msg pre">{instructions}</p>
 			{/if}
 			{#if current.kind !== 'confirm'}
 				{#each current.fields as f, i (i)}
@@ -113,7 +125,9 @@
 					</label>
 				{/each}
 			{/if}
-			<p class="hint">{t('authprompt.host_hint', { host: `${current.host}:${current.port}` })}</p>
+			<p class="hint">
+				{current.kind === 'unlock' ? t('authprompt.unlock_hint') : t('authprompt.host_hint', { host: `${current.host}:${current.port}` })}
+			</p>
 		</form>
 
 		{#snippet actions()}

@@ -472,6 +472,8 @@ pub fn forget_passphrase() {
 pub fn forget_all() {
     clear_cache();
     forget_passphrase();
+    // Key passphrases kept for this run go with the vault as well.
+    crate::ssh::unlocked::forget();
 }
 
 /// Whether a typed passphrase is kept in memory now for the account these

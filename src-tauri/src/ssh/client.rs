@@ -447,7 +447,10 @@ pub(crate) async fn cascade_authenticate<H: russh::client::Handler>(
                 material.clone()
             }
         };
-        let key = decode_key(&material, key_auth.passphrase.as_deref()).map_err(|e| {
+        // No passphrase with the key: one it was unlocked with earlier in
+        // this run (Settings → Security), if any.
+        let unlocked = if key_auth.passphrase.is_none() { crate::ssh::unlocked::get(&material) } else { None };
+        let key = decode_key(&material, key_auth.passphrase.as_deref().or(unlocked.as_deref())).map_err(|e| {
             tracing::error!("SSH key load failed for {}: {}", key_auth.label(), e);
             SshError::ConnectionFailed(describe_key_load_error(
                 match &key_auth.source {
@@ -460,6 +463,11 @@ pub(crate) async fn cascade_authenticate<H: russh::client::Handler>(
                 &e,
             ))
         })?;
+        // A passphrase typed for this connect opened the key: kept for the
+        // run when that setting is on.
+        if let Some(p) = key_auth.passphrase.as_deref().filter(|_| key_is_encrypted(&material) == Some(true)) {
+            crate::ssh::unlocked::remember(&material, p);
+        }
         let fingerprint = key.public_key().fingerprint(russh::keys::HashAlg::Sha256).to_string();
         tracing::info!(
             "SSH key loaded successfully, attempting publickey auth as '{}'",

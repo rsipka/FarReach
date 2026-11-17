@@ -201,6 +201,21 @@ pub async fn ssh_key_list(state: State<'_, AppState>) -> Result<Vec<StoredKeyInf
     Ok(keys)
 }
 
+/// Every imported key with its material, by id, for unlocking at start.
+/// Never sent to the window.
+pub(crate) async fn all_materials(manager: &crate::vault::VaultManager) -> Vec<(String, String, StoredKeyMaterial)> {
+    let Some(vault_id) = manager.get_vault_id_by_name(SSH_KEYS_VAULT) else { return Vec::new() };
+    let category = SecretCategory::SshKey.to_string();
+    let Ok(secrets) = manager.read_secrets_in(&vault_id, &[category.as_str()]).await else { return Vec::new() };
+    secrets
+        .into_iter()
+        .filter_map(|(meta, plaintext)| {
+            let material = serde_json::from_slice::<StoredKeyMaterial>(plaintext.ok()?.expose_secret()).ok()?;
+            Some((meta.id, meta.name, material))
+        })
+        .collect()
+}
+
 /// Rename a key, or save/replace/clear the passphrase stored with it.
 #[tauri::command]
 #[tracing::instrument(skip(passphrase, state))]
