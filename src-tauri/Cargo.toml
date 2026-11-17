@@ -313,7 +313,7 @@ zbus-secret-service-keyring-store = { version = "1", features = ["rt-tokio-crypt
 # The notification sound, played without WebKitGTK's GStreamer, whose missing
 # audio output crashed the page (src/sound.rs, issue #87). The version RDP's
 # sound already builds.
-cpal = "0.17"
+cpal = "0.18"
 # Following the screen lock and sleep over D-Bus (src/system_lock.rs); the
 # version already in the tree.
 zbus = { version = "5", features = ["blocking-api"] }
