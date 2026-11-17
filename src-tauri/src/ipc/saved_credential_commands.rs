@@ -13,9 +13,20 @@
 //! a session (the list, the editor, the connect commands, the approvals)
 //! sees it filled in, so the approvals are given for the login really used.
 //!
-//! Password manager references are not allowed in a credential for now:
-//! each reference is approved per session, and a credential would carry
-//! one approval to every session that uses it.
+//! A credential's secret can be a password manager entry
+//! ([`crate::pwmanager::SecretRef`]) instead of a stored password or
+//! passphrase. Such an entry is approved like one of a session's own: per
+//! person, for the session it is used in, as that session is (see
+//! `session_commands::ref_slots`). So a credential never carries an
+//! approval to the sessions that use it: the reference in the credential
+//! record holds none (any found there are dropped), and each session keeps
+//! the approvals for the entries its credential brings in its own record
+//! (`SessionConfig::credential_ref_approvals`, by slot). [`fill`] puts them
+//! on the filled-in reference when a session is read, where they are
+//! verified like any other; [`keep_ref_approvals`] takes them back off
+//! before the session is stored. A session whose credential points at an
+//! entry therefore asks once, the first time each person connects with it,
+//! and again if the credential is pointed at another entry.
 
 use crate::ipc::session_commands as sessions;
 use crate::state::{AppState, AuthMethod, CredentialUse, Folder, JumpHostConfig, SavedCredential, SessionConfig};
@@ -47,9 +58,18 @@ impl OwnLogin {
     }
 
     fn same(&self, other: &OwnLogin) -> bool {
+        // A reference's approvals and flags are not part of which login it
+        // is: they differ between a read and what the editor sends back.
+        let method = |m: &AuthMethod| {
+            let mut m = m.clone();
+            if let Some((_, r)) = sessions::auth_ref_mut(&mut m) {
+                *r = bare_ref(r);
+            }
+            serde_json::to_value(&m).ok()
+        };
         self.username == other.username
             && self.domain.as_deref().filter(|d| !d.is_empty()) == other.domain.as_deref().filter(|d| !d.is_empty())
-            && serde_json::to_value(&self.auth_method).ok() == serde_json::to_value(&other.auth_method).ok()
+            && method(&self.auth_method) == method(&other.auth_method)
     }
 }
 
@@ -115,8 +135,54 @@ impl SessionLogins {
     }
 }
 
-fn login_of(c: &SavedCredential) -> OwnLogin {
-    OwnLogin { username: c.username.clone(), domain: c.domain.clone(), auth_method: c.auth_method.clone() }
+/// A reference with nothing but what it points at: no approvals, no flags.
+fn bare_ref(r: &crate::pwmanager::SecretRef) -> crate::pwmanager::SecretRef {
+    crate::pwmanager::SecretRef {
+        provider: r.provider.clone(),
+        entry_id: r.entry_id.clone(),
+        field: r.field.clone(),
+        label: r.label.clone(),
+        ..Default::default()
+    }
+}
+
+/// A credential's login for the part of a session filed under `slot`
+/// (`""` for the session's own, `"jump:0:"` for its first jump host). A
+/// password manager entry in it gets the approvals this session keeps for
+/// it, and none from the credential record.
+fn login_of(c: &SavedCredential, slot: &str, kept: &std::collections::BTreeMap<String, Vec<String>>) -> OwnLogin {
+    let mut auth_method = c.auth_method.clone();
+    if let Some((field, r)) = sessions::auth_ref_mut(&mut auth_method) {
+        *r = bare_ref(r);
+        r.approvals = kept.get(&format!("{slot}{field}")).cloned().unwrap_or_default();
+    }
+    OwnLogin { username: c.username.clone(), domain: c.domain.clone(), auth_method }
+}
+
+/// Before a session read with [`fill`] is stored with its own logins
+/// (`own`: the parts a credential filled in) put back: keep the approvals
+/// on the entries the credential brought, by slot, in the session. A part
+/// no credential fills now keeps what it had, for the day the credential is
+/// back (it may only be missing on this device).
+pub(crate) fn keep_ref_approvals(s: &mut SessionConfig, own: &SessionLogins) {
+    let put = |slot: &str, m: &AuthMethod, kept: &mut std::collections::BTreeMap<String, Vec<String>>| {
+        kept.retain(|k, _| !(k.starts_with(slot) && !k[slot.len()..].contains(':')));
+        if let Some((field, r)) = sessions::auth_ref(m) {
+            if !r.approvals.is_empty() {
+                kept.insert(format!("{slot}{field}"), r.approvals.clone());
+            }
+        }
+    };
+    let mut kept = std::mem::take(&mut s.credential_ref_approvals);
+    if own.session.is_some() {
+        put("", &s.auth_method, &mut kept);
+    }
+    for (i, (j, l)) in s.jump_chain.iter().flatten().zip(&own.hops).enumerate() {
+        if l.is_some() {
+            put(&format!("jump:{i}:"), &j.auth_method, &mut kept);
+        }
+    }
+    s.credential_ref_approvals = kept;
 }
 
 /// The credential a session in `vault` (None: this device's own) logs in
@@ -156,13 +222,14 @@ pub(crate) fn fill(s: &mut SessionConfig, vault: Option<&str>, folders: &[Folder
         match find(&id) {
             Some(c) => {
                 replaced.session = Some(OwnLogin::of(s));
-                login_of(c).put_into(s);
+                login_of(c, "", &s.credential_ref_approvals).put_into(s);
                 s.credential = Some(CredentialUse { id, name: c.name.clone(), folder_id, missing: false });
             }
             None => s.credential = Some(CredentialUse { id, name: String::new(), folder_id, missing: true }),
         }
     }
-    for j in s.jump_chain.iter_mut().flatten() {
+    let kept = &s.credential_ref_approvals;
+    for (i, j) in s.jump_chain.iter_mut().flatten().enumerate() {
         j.credential = None;
         let Some(id) = j.credential_id.clone().filter(|id| !id.is_empty() && id != OWN_LOGIN) else {
             replaced.hops.push(None);
@@ -171,7 +238,7 @@ pub(crate) fn fill(s: &mut SessionConfig, vault: Option<&str>, folders: &[Folder
         match find(&id) {
             Some(c) => {
                 replaced.hops.push(Some(OwnLogin::of_hop(j)));
-                let l = login_of(c);
+                let l = login_of(c, &format!("jump:{i}:"), kept);
                 j.username = l.username;
                 j.auth_method = l.auth_method;
                 j.credential = Some(CredentialUse { id, name: c.name.clone(), folder_id: None, missing: false });
@@ -300,21 +367,30 @@ pub(crate) fn vault_of(manager: &crate::vault::VaultManager, storage_vault: &str
     (sessions::sessions_vault_id(manager).as_deref() != Some(storage_vault)).then(|| storage_vault.to_string())
 }
 
-/// A credential that can be saved: named, with a username, and no password
-/// manager references (see the module docs).
-fn check(name: &str, username: &str, auth: &AuthMethod) -> Result<(), String> {
+/// A credential as it can be saved: named, with a username. A password
+/// manager entry in it must name a manager Reach knows and an entry, is
+/// stored with no approvals (see the module docs), and takes the place of
+/// a typed secret, which is dropped.
+fn check(name: &str, username: &str, auth: &mut AuthMethod) -> Result<(), String> {
     if name.trim().is_empty() {
         return Err("A credential needs a name".to_string());
     }
     if username.trim().is_empty() {
         return Err("A credential needs a username".to_string());
     }
-    match auth {
-        AuthMethod::Password { password_ref: Some(_), .. } | AuthMethod::Key { passphrase_ref: Some(_), .. } => {
-            Err("A saved credential cannot use a password manager entry yet".to_string())
+    if let Some((_, r)) = sessions::auth_ref_mut(auth) {
+        crate::pwmanager::ProviderId::parse(&r.provider)?;
+        if r.entry_id.trim().is_empty() {
+            return Err("The password manager entry has no id".to_string());
         }
-        _ => Ok(()),
+        *r = bare_ref(r);
     }
+    match auth {
+        AuthMethod::Password { password, password_ref: Some(_) } => *password = None,
+        AuthMethod::Key { passphrase, passphrase_ref: Some(_), .. } => *passphrase = None,
+        _ => {}
+    }
+    Ok(())
 }
 
 /// Where a credential's row is: its vault (as stored) and row id.
@@ -349,10 +425,10 @@ pub async fn saved_credential_create(
     name: String,
     username: String,
     domain: Option<String>,
-    auth_method: AuthMethod,
+    mut auth_method: AuthMethod,
     vault_id: Option<String>,
 ) -> Result<SavedCredential, String> {
-    check(&name, &username, &auth_method)?;
+    check(&name, &username, &mut auth_method)?;
     let mut manager = state.vault_manager.lock().await;
     if manager.is_locked() {
         return Err("Vault is locked. Set a master password first.".to_string());
@@ -387,9 +463,9 @@ pub async fn saved_credential_create(
 #[tracing::instrument(skip_all, fields(id = %credential.id))]
 pub async fn saved_credential_update(
     state: State<'_, AppState>,
-    credential: SavedCredential,
+    mut credential: SavedCredential,
 ) -> Result<SavedCredential, String> {
-    check(&credential.name, &credential.username, &credential.auth_method)?;
+    check(&credential.name, &credential.username, &mut credential.auth_method)?;
     let manager = state.vault_manager.lock().await;
     if manager.is_locked() {
         return Err("Vault is locked".to_string());
@@ -574,7 +650,7 @@ mod tests {
 
     #[test]
     fn a_filled_in_login_sent_back_is_not_stored() {
-        let c = login_of(&cred("c1", "admin", None));
+        let c = login_of(&cred("c1", "admin", None), "", &Default::default());
         let stored = OwnLogin::of(&session(None, None, None));
         let kept = login_to_store(c.clone(), &[&c], Some(stored));
         assert_eq!(kept.username, "own");
@@ -582,7 +658,7 @@ mod tests {
 
     #[test]
     fn a_login_the_user_typed_is_stored() {
-        let c = login_of(&cred("c1", "admin", None));
+        let c = login_of(&cred("c1", "admin", None), "", &Default::default());
         let typed = OwnLogin { username: "new".into(), domain: None, auth_method: AuthMethod::Agent };
         let stored = OwnLogin::of(&session(None, None, None));
         assert_eq!(login_to_store(typed, &[&c], Some(stored)).username, "new");
@@ -661,14 +737,78 @@ mod tests {
         assert!(matches!(out.auth_method, AuthMethod::Agent));
     }
 
+    fn entry(id: &str) -> crate::pwmanager::SecretRef {
+        crate::pwmanager::SecretRef { provider: "passbolt".into(), entry_id: id.into(), ..Default::default() }
+    }
+
+    fn cred_with_entry(id: &str, r: crate::pwmanager::SecretRef) -> SavedCredential {
+        SavedCredential { auth_method: AuthMethod::Password { password: None, password_ref: Some(r) }, ..cred(id, "admin", None) }
+    }
+
     #[test]
-    fn a_credential_with_a_password_manager_entry_is_refused() {
-        let r: crate::pwmanager::SecretRef =
-            serde_json::from_value(serde_json::json!({ "provider": "passbolt", "entry_id": "e" })).unwrap();
-        let auth = AuthMethod::Password { password: None, password_ref: Some(r) };
-        assert!(check("n", "u", &auth).is_err());
-        assert!(check("n", "u", &AuthMethod::Agent).is_ok());
-        assert!(check(" ", "u", &AuthMethod::Agent).is_err());
+    fn a_credential_can_name_a_password_manager_entry() {
+        let r = crate::pwmanager::SecretRef {
+            approvals: vec!["signed".into()],
+            trusted: true,
+            confirm: true,
+            label: Some("Web admin".into()),
+            ..entry("e")
+        };
+        let mut auth = AuthMethod::Password { password: Some("typed".into()), password_ref: Some(r) };
+        check("n", "u", &mut auth).unwrap();
+        match &auth {
+            AuthMethod::Password { password, password_ref: Some(r) } => {
+                assert!(password.is_none(), "the entry takes the place of a typed password");
+                assert!(r.approvals.is_empty() && !r.trusted && !r.confirm, "stored with no approvals");
+                assert_eq!((r.entry_id.as_str(), r.label.as_deref()), ("e", Some("Web admin")));
+            }
+            other => panic!("{other:?}"),
+        }
+        let mut unknown = AuthMethod::Password {
+            password: None,
+            password_ref: Some(crate::pwmanager::SecretRef { provider: "nope".into(), ..entry("e") }),
+        };
+        assert!(check("n", "u", &mut unknown).is_err());
+        let mut no_id = AuthMethod::Password { password: None, password_ref: Some(entry(" ")) };
+        assert!(check("n", "u", &mut no_id).is_err());
+        assert!(check("n", "u", &mut AuthMethod::Agent).is_ok());
+        assert!(check(" ", "u", &mut AuthMethod::Agent).is_err());
+    }
+
+    #[test]
+    fn a_credentials_entry_gets_only_the_sessions_own_approvals() {
+        // Approvals written into the credential record count for nothing.
+        let forged = crate::pwmanager::SecretRef { approvals: vec!["forged".into()], trusted: true, ..entry("e") };
+        let creds = [cred_with_entry("c1", forged)];
+        let mut s = session(None, Some("c1"), None);
+        with_hop(&mut s, Some("c1"));
+        s.credential_ref_approvals.insert("jump:0:password".into(), vec!["hop".into()]);
+        let replaced = fill(&mut s, None, &[], &creds);
+        let r = sessions::auth_ref(&s.auth_method).unwrap().1;
+        assert!(r.approvals.is_empty() && !r.trusted);
+        assert_eq!(sessions::auth_ref(&hop(&s).auth_method).unwrap().1.approvals, ["hop"]);
+
+        // What is signed while the session is open is kept when it is stored.
+        sessions::auth_ref_mut(&mut s.auth_method).unwrap().1.approvals = vec!["mine".into()];
+        keep_ref_approvals(&mut s, &replaced);
+        assert_eq!(s.credential_ref_approvals.get("password").unwrap(), &["mine"]);
+        assert_eq!(s.credential_ref_approvals.get("jump:0:password").unwrap(), &["hop"]);
+
+        // An approval taken back goes; a part no credential fills is left.
+        sessions::auth_ref_mut(&mut s.auth_method).unwrap().1.approvals.clear();
+        keep_ref_approvals(&mut s, &Replaced { session: replaced.session.clone(), hops: vec![None] });
+        assert!(!s.credential_ref_approvals.contains_key("password"));
+        assert!(s.credential_ref_approvals.contains_key("jump:0:password"));
+    }
+
+    #[test]
+    fn approvals_are_not_part_of_which_login_it_is() {
+        let c = cred_with_entry("c1", entry("e"));
+        let read = login_of(&c, "", &[("password".to_string(), vec!["mine".to_string()])].into());
+        let sent = login_of(&c, "", &Default::default());
+        assert!(read.same(&sent));
+        let other = login_of(&cred_with_entry("c1", entry("e2")), "", &Default::default());
+        assert!(!read.same(&other));
     }
 
     #[test]

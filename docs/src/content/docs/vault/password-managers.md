@@ -93,6 +93,7 @@ It works for:
 - the proxy password
 - RDP and VNC passwords
 - database connections, both the database password and a session the connection goes through
+- saved credentials: the password or key passphrase of a credential, for every session, folder and jump host that uses it
 
 A session that points at an entry connects without asking for a password. Reconnecting fetches the password again, so a password changed in Passbolt in the meantime is picked up.
 
@@ -119,6 +120,10 @@ The same goes for a session reached through another one:
 
 - **A VNC session that goes through an SSH session** is confirmed for that SSH session as it is, too. If someone changes the SSH session's host, port, user, jump hosts, proxy or ssh_config settings, or deletes it, the VNC session asks again before it sends your password, and the question names the SSH session and where it goes.
 - **A database connection that goes through a saved session** is confirmed when you save it: saving signs the session as it is then. If that session is later pointed somewhere else, the connection is refused with *The session this connection goes through has changed since you saved it*; open the connection in the database editor and save it again to confirm. *Test connection* in the editor, and connecting without saving, use the session as it is at that moment, since you are choosing it right then.
+
+### Entries in a saved credential
+
+A saved credential can point at an entry too, and a credential in a shared vault can be edited by everyone who can write to that vault. So the credential itself carries no confirmation: each session that uses it asks you once, the first time you connect with it, and remembers your answer for that session only. It asks again when the credential is pointed at another entry or given another username, or when the session changes where it connects. Your confirmation never counts for a teammate, who is asked for themselves.
 
 ## Several devices, several Reach versions
 

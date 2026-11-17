@@ -277,7 +277,7 @@ fn ref_what(slot: &str, r: &crate::pwmanager::SecretRef) -> String {
     }
 }
 
-fn auth_ref(m: &AuthMethod) -> Option<(&'static str, &crate::pwmanager::SecretRef)> {
+pub(crate) fn auth_ref(m: &AuthMethod) -> Option<(&'static str, &crate::pwmanager::SecretRef)> {
     match m {
         AuthMethod::Password { password_ref: Some(r), .. } => Some(("password", r)),
         AuthMethod::Key { passphrase_ref: Some(r), .. } => Some(("passphrase", r)),
@@ -285,7 +285,7 @@ fn auth_ref(m: &AuthMethod) -> Option<(&'static str, &crate::pwmanager::SecretRe
     }
 }
 
-fn auth_ref_mut(m: &mut AuthMethod) -> Option<(&'static str, &mut crate::pwmanager::SecretRef)> {
+pub(crate) fn auth_ref_mut(m: &mut AuthMethod) -> Option<(&'static str, &mut crate::pwmanager::SecretRef)> {
     match m {
         AuthMethod::Password { password_ref: Some(r), .. } => Some(("password", r)),
         AuthMethod::Key { passphrase_ref: Some(r), .. } => Some(("passphrase", r)),
@@ -581,6 +581,9 @@ async fn read_session_filled(
 /// `saved_credential_commands`), and nothing that is only ever read.
 fn to_store(session: &SessionConfig, logins: creds::SessionLogins) -> SessionConfig {
     let mut s = session.clone();
+    // Before the credential's login goes: the approvals just signed for the
+    // entries it brought stay with the session.
+    creds::keep_ref_approvals(&mut s, &logins);
     logins.put_into(&mut s);
     s.credential = None;
     for j in s.jump_chain.iter_mut().flatten() {
@@ -808,6 +811,7 @@ pub async fn session_create(
         credential: None,
         notes,
         custom_fields,
+        credential_ref_approvals: Default::default(),
     };
     session.tidy_documentation();
 
@@ -877,6 +881,10 @@ pub async fn session_update(
         }
         Err(_) => (None, None),
     };
+
+    // The approvals kept for a credential's entries are the stored ones,
+    // never what the window sent.
+    session.credential_ref_approvals = stored.as_ref().map(|s| s.credential_ref_approvals.clone()).unwrap_or_default();
 
     // A login sent is the session's own, unless it is one a credential
     // filled in (the editor shows that one): then the stored own login stays.
@@ -2117,6 +2125,117 @@ mod approval_tests {
         seal_for(Some(&ALICE), Some("alice"), &mut v, Some(&before), Some(&s));
         assert!(vnc_trusted(&v, Some(&s)));
         assert!(!vnc_trusted(&v, Some(&moved)));
+    }
+
+    // --- Entries a saved credential brings ---------------------------------
+
+    trait PwTrusted {
+        fn pw_trusted(&self) -> bool;
+    }
+    impl PwTrusted for SessionConfig {
+        fn pw_trusted(&self) -> bool {
+            ref_at(self, "password").is_some_and(|r| r.trusted)
+        }
+    }
+
+    fn cred_with(id: &str) -> crate::state::SavedCredential {
+        crate::state::SavedCredential {
+            id: "c1".into(),
+            name: "Admin".into(),
+            username: "admin".into(),
+            domain: None,
+            auth_method: AuthMethod::Password { password: None, password_ref: Some(entry(id)) },
+            vault_id: None,
+        }
+    }
+
+    /// A stored record as `who` reads it, with the credential filled in.
+    fn read_filled(stored: &SessionConfig, c: &crate::state::SavedCredential, key: &[u8; 32], who: &str) -> (SessionConfig, creds::SessionLogins) {
+        let mut s: SessionConfig = serde_json::from_str(&serde_json::to_string(stored).unwrap()).unwrap();
+        let own = creds::fill(&mut s, None, &[], std::slice::from_ref(c));
+        open_for(Some(key), Some(who), &mut s, None);
+        (s, own)
+    }
+
+    /// `who` says yes in the connect dialog; returns the record as stored.
+    fn approve_as(stored: &SessionConfig, c: &crate::state::SavedCredential, key: &[u8; 32], who: &str) -> SessionConfig {
+        let (mut s, own) = read_filled(stored, c, key, who);
+        let context = ref_context(&s, None).unwrap();
+        let want = RefSlot { slot: "password".into(), provider: "passbolt".into(), entry_id: ref_at(&s, "password").unwrap().entry_id.clone() };
+        approve_refs(&mut s, None, &context, &[want]).unwrap();
+        let before = s.clone();
+        seal_for(Some(key), Some(who), &mut s, Some(&before), None);
+        to_store(&s, own)
+    }
+
+    #[test]
+    fn a_credentials_entry_is_approved_per_session_and_person() {
+        let c = cred_with("e-cred");
+        let mut stored = session();
+        stored.credential_id = Some("c1".into());
+        let (s, _) = read_filled(&stored, &c, &ALICE, "alice");
+        assert_eq!(trusted(&s), [("password".to_string(), false)], "asked the first time");
+
+        let stored = approve_as(&stored, &c, &ALICE, "alice");
+        assert!(matches!(stored.auth_method, AuthMethod::Agent), "the credential's login is not stored in the session");
+        assert!(stored.credential_ref_approvals.contains_key("password"));
+        assert!(read_filled(&stored, &c, &ALICE, "alice").0.pw_trusted());
+        assert!(!read_filled(&stored, &c, &BOB, "bob").0.pw_trusted(), "alice's yes is not bob's");
+
+        // Bob approves too; alice's approval stays.
+        let stored = approve_as(&stored, &c, &BOB, "bob");
+        assert!(read_filled(&stored, &c, &ALICE, "alice").0.pw_trusted());
+        assert!(read_filled(&stored, &c, &BOB, "bob").0.pw_trusted());
+
+        // A save that changes nothing about where it connects keeps it.
+        let (read, own) = read_filled(&stored, &c, &ALICE, "alice");
+        let mut renamed = read.clone();
+        renamed.name = "web (prod)".into();
+        seal_for(Some(&ALICE), Some("alice"), &mut renamed, Some(&read), None);
+        let renamed = to_store(&renamed, own);
+        assert!(read_filled(&renamed, &c, &ALICE, "alice").0.pw_trusted());
+
+        // The credential pointed at another entry, or given another
+        // username, or the session at another server: asked again.
+        assert!(!read_filled(&stored, &cred_with("e-other"), &ALICE, "alice").0.pw_trusted());
+        let mut root = c.clone();
+        root.username = "root".into();
+        assert!(!read_filled(&stored, &root, &ALICE, "alice").0.pw_trusted());
+        let mut moved = stored.clone();
+        moved.host = "attacker.example".into();
+        assert!(!read_filled(&moved, &c, &ALICE, "alice").0.pw_trusted());
+
+        // Another session using the same credential, given this one's
+        // approvals by someone who can write to the vault: not approved.
+        let mut other = session();
+        other.id = "s2".into();
+        other.credential_id = Some("c1".into());
+        other.credential_ref_approvals = stored.credential_ref_approvals.clone();
+        assert!(!read_filled(&other, &c, &ALICE, "alice").0.pw_trusted());
+    }
+
+    #[test]
+    fn a_credentials_entry_for_a_jump_host_is_kept_by_its_slot() {
+        let c = cred_with("e-cred");
+        let mut stored = session();
+        stored.jump_chain = Some(vec![JumpHostConfig {
+            host: "bastion.example".into(),
+            port: 22,
+            username: "hop-own".into(),
+            auth_method: AuthMethod::Agent,
+            credential_id: Some("c1".into()),
+            credential: None,
+        }]);
+        let (mut s, own) = read_filled(&stored, &c, &ALICE, "alice");
+        assert_eq!(trusted(&s), [("jump:0:password".to_string(), false)]);
+        pick_all(&mut s);
+        seal_for(Some(&ALICE), Some("alice"), &mut s, None, None);
+        let stored = to_store(&s, own);
+        let hop = &stored.jump_chain.as_ref().unwrap()[0];
+        assert_eq!(hop.username, "hop-own");
+        assert!(matches!(hop.auth_method, AuthMethod::Agent));
+        assert_eq!(stored.credential_ref_approvals.keys().collect::<Vec<_>>(), ["jump:0:password"]);
+        assert_eq!(trusted(&read_filled(&stored, &c, &ALICE, "alice").0), [("jump:0:password".to_string(), true)]);
     }
 
     #[test]

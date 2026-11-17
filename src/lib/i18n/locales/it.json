@@ -2731,6 +2731,7 @@
   "credential.domain": "Dominio (RDP, facoltativo)",
   "credential.edit_hint": "Sessioni che le usano ora: {{count}}. Una modifica vale per tutte.",
   "credential.vault_hint": "Salvate nel vault scelto sopra. Solo sessioni e cartelle di quel vault possono usarle.",
+  "credential.entry_hint": "Il segreto viene recuperato dal gestore di password alla connessione. Ogni sessione che usa questa credenziale chiede una volta prima di usare la voce.",
   "credential.delete_title": "Eliminare {{name}}?",
   "credential.delete_used": "Usate da sessioni: {{sessions}}, cartelle: {{folders}}. Torneranno alle proprie credenziali salvate.",
   "credential.delete_unused": "Nessuna sessione o cartella le usa.",

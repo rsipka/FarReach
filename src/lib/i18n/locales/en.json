@@ -2731,6 +2731,7 @@
   "credential.domain": "Domain (RDP, optional)",
   "credential.edit_hint": "Sessions using it now: {{count}}. A change applies to all of them.",
   "credential.vault_hint": "Saved in the vault selected above. Only sessions and folders in that vault can use it.",
+  "credential.entry_hint": "The secret is fetched from your password manager when connecting. Each session using this credential asks once before it uses the entry.",
   "credential.delete_title": "Delete {{name}}?",
   "credential.delete_used": "Sessions using it: {{sessions}}, folders: {{folders}}. They go back to their own stored login.",
   "credential.delete_unused": "No session or folder uses it.",

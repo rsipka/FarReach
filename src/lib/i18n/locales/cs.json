@@ -2728,6 +2728,7 @@
   "credential.domain": "Doména (RDP, volitelné)",
   "credential.edit_hint": "Relací, které je teď používají: {{count}}. Změna platí pro všechny.",
   "credential.vault_hint": "Uloží se do trezoru vybraného nahoře. Použít je mohou jen relace a složky v tomto trezoru.",
+  "credential.entry_hint": "Tajný údaj se při připojení načte ze správce hesel. Každá relace s tímto přihlašovacím údajem se před použitím položky jednou zeptá.",
   "credential.delete_title": "Smazat {{name}}?",
   "credential.delete_used": "Používají je relace: {{sessions}}, složky: {{folders}}. Vrátí se ke svému vlastnímu uloženému přihlášení.",
   "credential.delete_unused": "Nepoužívá je žádná relace ani složka.",

@@ -2731,6 +2731,7 @@
   "credential.domain": "Domaine (RDP, facultatif)",
   "credential.edit_hint": "Sessions qui les utilisent : {{count}}. Une modification s'applique à toutes.",
   "credential.vault_hint": "Enregistrés dans le coffre choisi ci-dessus. Seuls les sessions et dossiers de ce coffre peuvent les utiliser.",
+  "credential.entry_hint": "Le secret est récupéré dans votre gestionnaire de mots de passe à la connexion. Chaque session utilisant cet identifiant demande une fois avant d'utiliser l'entrée.",
   "credential.delete_title": "Supprimer {{name}} ?",
   "credential.delete_used": "Utilisés par des sessions : {{sessions}}, dossiers : {{folders}}. Ils reviennent à leurs propres identifiants enregistrés.",
   "credential.delete_unused": "Aucune session ni aucun dossier ne les utilise.",
