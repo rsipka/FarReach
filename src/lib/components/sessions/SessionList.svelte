@@ -27,6 +27,7 @@
 	import SshConfigImport from './SshConfigImport.svelte';
 	import RdpImport from './RdpImport.svelte';
 	import ManagerImport from './ManagerImport.svelte';
+	import type { AnyImportSource } from './ImportSourcePicker.svelte';
 	import CredentialList from './CredentialList.svelte';
 	import BulkEditor from './BulkEditor.svelte';
 	import { savedCredentialList, credentialsFor, type SavedCredential } from '#lib/ipc/savedCredentials.js';
@@ -62,10 +63,24 @@
 	let showQuickConnect = $state(false);
 	let showRdpConnect = $state(false);
 	let showEditor = $state(false);
-	let showImport = $state(false);
-	let showRdpImport = $state(false);
-	let showRdmImport = $state(false);
-	let showAppImport = $state(false);
+	/** The import dialog open now, by source; null when none is. */
+	let importSource = $state<AnyImportSource | null>(null);
+	/** The source the dialog opens on: the one used last. */
+	let lastImportSource = $state<AnyImportSource>('ssh_config');
+
+	function openImport(source: AnyImportSource): void {
+		lastImportSource = source;
+		importSource = source;
+	}
+
+	function importOpen(source: AnyImportSource | 'manager'): boolean {
+		if (source === 'manager') return importSource !== null && importSource !== 'ssh_config' && importSource !== 'rdp';
+		return importSource === source;
+	}
+
+	function setImportOpen(source: AnyImportSource | 'manager', open: boolean): void {
+		if (!open && importOpen(source)) importSource = null;
+	}
 	let editingSession = $state<SessionConfig | undefined>();
 	let sessions = $state<SessionConfig[]>([]);
 	let loading = $state(true);
@@ -1513,21 +1528,9 @@
 							<span>{t('session.select_sessions')}</span>
 						</button>
 						<div class="menu-sep"></div>
-						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => (showImport = true))}>
+						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => openImport(lastImportSource))}>
 							<FaIcon icon={faFileImport} size={12} />
-							<span>{t('session.import_ssh_config')}</span>
-						</button>
-						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => (showRdpImport = true))}>
-							<FaIcon icon={faFileImport} size={12} />
-							<span>{t('session.import_rdp')}</span>
-						</button>
-						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => (showRdmImport = true))}>
-							<FaIcon icon={faFileImport} size={12} />
-							<span>{t('session.import_rdm')}</span>
-						</button>
-						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => (showAppImport = true))}>
-							<FaIcon icon={faFileImport} size={12} />
-							<span>{t('session.import_other_app')}</span>
+							<span>{t('session.import_sessions_menu')}</span>
 						</button>
 					</div>
 				{/if}
@@ -1774,10 +1777,15 @@
 <QuickConnect bind:open={showQuickConnect} prefill={quickPrefill} />
 <RdpQuickConnect bind:open={showRdpConnect} />
 <SessionEditor bind:open={showEditor} editSession={editingSession} vaultId={targetVaultId} {folders} onsave={handleEditorSave} />
-<SshConfigImport bind:open={showImport} vaultId={targetVaultId} onsave={handleEditorSave} />
-<RdpImport bind:open={showRdpImport} vaultId={targetVaultId} onsave={handleEditorSave} />
-<ManagerImport bind:open={showRdmImport} source="rdm" vaultId={targetVaultId} onsave={handleEditorSave} />
-<ManagerImport bind:open={showAppImport} vaultId={targetVaultId} onsave={handleEditorSave} />
+<SshConfigImport bind:open={() => importOpen('ssh_config'), (v) => setImportOpen('ssh_config', v)} vaultId={targetVaultId} onsave={handleEditorSave} onsource={openImport} />
+<RdpImport bind:open={() => importOpen('rdp'), (v) => setImportOpen('rdp', v)} vaultId={targetVaultId} onsave={handleEditorSave} onsource={openImport} />
+<ManagerImport
+	bind:open={() => importOpen('manager'), (v) => setImportOpen('manager', v)}
+	source={importSource !== null && importSource !== 'ssh_config' && importSource !== 'rdp' ? importSource : 'rdm'}
+	vaultId={targetVaultId}
+	onsave={handleEditorSave}
+	onsource={openImport}
+/>
 <UntrustedRefsDialog
 	asked={askedRefs}
 	busy={approvingRefs}
