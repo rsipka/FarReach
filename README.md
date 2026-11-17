@@ -40,6 +40,7 @@ Reacher CM adds what people moving from Remote Desktop Manager and similar tools
 - **Broadcast input**: type into several terminals at once.
 - **Favorites** on the start screen, and an option to open sessions with a double click.
 - **Local-first sync**: every vault works offline and syncs in the background, through Turso, a folder, SFTP, Git, an SMB share without mounting it, or an S3 bucket (Amazon, MinIO, Backblaze B2, Wasabi, R2). Conflicting edits are kept as copies, not lost.
+- **Update checks you can switch off**, with a *Check now* button for when you want one.
 - **Czech translation**, and early **iOS** builds.
 
 See the [changelog](CHANGELOG.md) for details.

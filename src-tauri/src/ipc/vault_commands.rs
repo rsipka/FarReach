@@ -493,7 +493,43 @@ pub async fn vault_import_identity(
     let mut manager = state.vault_manager.lock().await;
     // Another identity: as for a new one.
     crate::pwmanager::forget_all();
+    // A link code from another device carries its whole identity and sync.
+    if crate::vault::manager::device_link::is_link_code(&secret_key) {
+        return manager.link_device(&secret_key).await.map_err(|e| e.to_string());
+    }
     manager.import_identity(&secret_key).await.map_err(|e| e.to_string())
+}
+
+/// A code that links another device to this identity and the vaults it
+/// syncs. As sensitive as the backup key.
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn vault_export_device_link(state: State<'_, AppState>) -> Result<String, String> {
+    let manager = state.vault_manager.lock().await;
+    manager.export_device_link().await.map_err(|e| e.to_string())
+}
+
+/// `text` as a QR code, in SVG, for another device's camera.
+#[tauri::command]
+pub fn qr_svg(text: String) -> Result<String, String> {
+    let code = qrcode::QrCode::with_error_correction_level(text.as_bytes(), qrcode::EcLevel::L).map_err(|e| e.to_string())?;
+    Ok(code
+        .render::<qrcode::render::svg::Color>()
+        .min_dimensions(256, 256)
+        .quiet_zone(true)
+        .dark_color(qrcode::render::svg::Color("#000000"))
+        .light_color(qrcode::render::svg::Color("#ffffff"))
+        .build())
+}
+
+/// Replace this device's identity with the one in a link code from another
+/// device, and open the vaults that one syncs.
+#[tauri::command(rename_all = "snake_case")]
+#[tracing::instrument(skip(state, code))]
+pub async fn vault_link_device(code: String, state: State<'_, AppState>) -> Result<String, String> {
+    let mut manager = state.vault_manager.lock().await;
+    crate::pwmanager::forget_all();
+    manager.link_device(&code).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1006,6 +1042,21 @@ pub async fn turso_create_database(
     turso_api::create_database(&org, &api_token, &db_name, &group)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// The personal vault databases already in the Turso organization, so a
+/// second device does not make another one next to them.
+#[tauri::command(rename_all = "snake_case")]
+#[tracing::instrument(skip(state), err)]
+pub async fn turso_list_personal_databases(state: State<'_, AppState>) -> Result<Vec<TursoDbInfo>, String> {
+    let manager = state.vault_manager.lock().await;
+    let settings = manager.get_settings().await.map_err(|e| e.to_string())?;
+
+    let org = settings.turso_org.map(|o| o.trim().to_string()).filter(|o| !o.is_empty()).ok_or("Turso organization not configured")?;
+    let api_token = settings.turso_api_token.map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).ok_or("Turso API token not configured")?;
+
+    let all = turso_api::list_databases(&org, &api_token).await.map_err(|e| e.to_string())?;
+    Ok(turso_api::personal_databases(all))
 }
 
 /// Create an auth token for a Turso database.

@@ -42,6 +42,8 @@ export interface SessionConfig {
   folder_id: string | null;
   tags: string[];
   detected_os?: string | null;
+  /** detected_os was picked by hand, so connecting never replaces it. */
+  os_manual?: boolean;
   vault_id?: string | null; // Which vault this session belongs to
   jump_chain?: JumpHostConfig[] | null; // ProxyJump chain
   proxy?: ProxySessionConfig | null; // Proxy config (SOCKS5/Tor, HTTP)
@@ -176,6 +178,7 @@ export async function sessionCreate(params: {
   domain?: string | null;
   /** For RDP: what the machine is, since the protocol cannot say. */
   detectedOs?: string | null;
+  osManual?: boolean;
   sharePath?: string | null;
   viaSessionId?: string | null;
   tryAgentKeys?: boolean | null;
@@ -204,6 +207,7 @@ export async function sessionCreate(params: {
     kind: params.kind ?? 'ssh',
     domain: params.domain?.trim() ? params.domain.trim() : null,
     detectedOs: params.detectedOs ?? null,
+    osManual: params.osManual || null,
     sharePath: params.sharePath?.trim() ? params.sharePath.trim() : null,
     viaSessionId: params.viaSessionId || null,
     tryAgentKeys: params.tryAgentKeys || null,

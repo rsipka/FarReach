@@ -93,6 +93,10 @@ pub struct SessionConfig {
     pub tags: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detected_os: Option<String>,
+    /// `detected_os` was picked by hand in the session editor, so connecting
+    /// never replaces it. False: found on connect (SSH) or not set.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub os_manual: bool,
     /// Which vault this session belongs to (None = private __sessions__ vault)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vault_id: Option<String>,
