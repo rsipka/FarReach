@@ -120,6 +120,9 @@ export interface Settings {
 	autoLockMinutes: number;
 	/** Lock when the computer's own session locks or goes to sleep. */
 	lockOnSystemLock: boolean;
+	/** Ask for the passphrases of the saved credentials' keys once the vault
+	 *  opens, and keep them in memory until it locks or the app quits. */
+	unlockKeysAtStart: boolean;
 }
 
 /** Secure settings stored encrypted in vault (API keys etc.) */
@@ -170,7 +173,8 @@ const defaults: Settings = {
 	seenFeatures: [],
 	devopsTools: [],
 	autoLockMinutes: 0,
-	lockOnSystemLock: false
+	lockOnSystemLock: false,
+	unlockKeysAtStart: false
 };
 
 let settings = $state<Settings>({ ...defaults });
@@ -278,6 +282,7 @@ export function loadSettings(): void {
 			settings.devopsTools = parsed.devopsTools ?? ['ansible', 'tofu'];
 			settings.autoLockMinutes = parsed.autoLockMinutes ?? defaults.autoLockMinutes;
 			settings.lockOnSystemLock = parsed.lockOnSystemLock ?? defaults.lockOnSystemLock;
+			settings.unlockKeysAtStart = parsed.unlockKeysAtStart ?? defaults.unlockKeysAtStart;
 			// Migration: existing users who already have localStorage data get setupComplete: true
 			settings.setupComplete = parsed.setupComplete ?? true;
 		}

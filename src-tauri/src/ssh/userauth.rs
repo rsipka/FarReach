@@ -197,6 +197,7 @@ async fn prepare(auth: &AuthParams, p: &AuthPolicy, agent: &mut Option<Agent>, u
             KeySource::Material(m) => (m.clone(), None),
         };
         let public = decode_key(&material, k.passphrase.as_deref())
+            .or_else(|e| super::unlocked::get(&material).map_or(Err(e), |p| decode_key(&material, Some(&p))))
             .ok()
             .map(|key| key.public_key().clone())
             .or_else(|| path.as_ref().and_then(|p| public_of(&expand_tilde(p))));
@@ -367,6 +368,13 @@ impl FileSigner<'_> {
                 return Ok(k);
             }
         }
+        // Unlocked earlier in this run (Settings → Security).
+        if let Some(p) = super::unlocked::get(&material) {
+            if let Ok(k) = decode_key(&material, Some(&p)) {
+                self.key = Some(k.clone());
+                return Ok(k);
+            }
+        }
         let keychain_id = path.clone().unwrap_or_else(|| self.label.to_string());
         if self.policy.use_keychain {
             if let Some(p) = keychain::get(&keychain_id) {
@@ -389,6 +397,7 @@ impl FileSigner<'_> {
                 if self.policy.use_keychain {
                     keychain::set(&keychain_id, &pass);
                 }
+                super::unlocked::remember(&material, &pass);
                 self.key = Some(k.clone());
                 return Ok(k);
             }

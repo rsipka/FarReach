@@ -505,6 +505,136 @@ pub async fn saved_credential_delete(state: State<'_, AppState>, credential_id: 
     Ok(unlinked)
 }
 
+/// A passphrase-protected key that saved credentials log in with.
+struct LockedKey {
+    material: String,
+    /// The key's name in the key store, or the path of its file.
+    label: String,
+    /// The credentials that use it, by name.
+    used_by: Vec<String>,
+}
+
+/// One credential's key as it is used at connect: an imported key before a
+/// key file. `None` when it has no key here, or its passphrase comes with
+/// it (stored, or a password manager entry asked for at connect).
+fn key_of(c: &SavedCredential, stored: &[(String, String, crate::ssh::keystore::StoredKeyMaterial)]) -> Option<(String, String, Option<String>)> {
+    let AuthMethod::Key { path, passphrase, key_id, passphrase_ref: None, .. } = &c.auth_method else { return None };
+    let typed = passphrase.clone().filter(|p| !p.is_empty());
+    if let Some(id) = key_id.as_deref().filter(|i| !i.is_empty()) {
+        let (_, name, m) = stored.iter().find(|(k, _, _)| k == id)?;
+        return Some((m.private_key.clone(), name.clone(), typed.or_else(|| m.passphrase.clone().filter(|p| !p.is_empty()))));
+    }
+    let path = path.as_deref().map(str::trim).filter(|p| !p.is_empty())?;
+    let material = std::fs::read_to_string(crate::ssh::client::expand_tilde(path)).ok()?;
+    Some((material, path.to_string(), typed))
+}
+
+/// The keys to ask for: each one once, whichever credentials use it, and
+/// only those that do not open with what is stored or already kept.
+fn locked_keys(creds: &[SavedCredential], stored: &[(String, String, crate::ssh::keystore::StoredKeyMaterial)]) -> Vec<LockedKey> {
+    let mut out: Vec<(Vec<u8>, LockedKey)> = Vec::new();
+    for c in creds {
+        let Some((material, label, passphrase)) = key_of(c, stored) else { continue };
+        if crate::ssh::client::key_is_encrypted(&material) != Some(true) || crate::ssh::unlocked::opens(&material, passphrase.as_deref()) {
+            continue;
+        }
+        let hash = crate::ssh::unlocked::hash(&material).to_vec();
+        match out.iter_mut().find(|(h, _)| *h == hash) {
+            Some((_, k)) => k.used_by.push(c.name.clone()),
+            None => out.push((hash, LockedKey { material, label, used_by: vec![c.name.clone()] })),
+        }
+    }
+    out.into_iter().map(|(_, k)| k).collect()
+}
+
+/// What unlocking at start did.
+#[derive(Debug, Default, serde::Serialize)]
+pub struct KeysUnlocked {
+    /// Keys opened now and kept for this run.
+    pub unlocked: u32,
+    /// Keys left locked (cancelled, or the passphrase was wrong three
+    /// times): they ask at connect.
+    pub skipped: u32,
+}
+
+/// Only one round of questions at a time.
+static UNLOCKING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Settings → Security → "Unlock credential keys at start", switched on or
+/// off. On: a key passphrase typed from now on is kept in memory until the
+/// vault locks or the app quits. Off: what was kept is forgotten.
+#[tauri::command]
+pub fn credential_keys_unlock_enabled(enabled: bool) {
+    crate::ssh::unlocked::set_enabled(enabled);
+}
+
+/// Ask for the passphrase of every passphrase-protected key the saved
+/// credentials use, and keep each in memory for this run, so connecting
+/// with those credentials does not ask again. Called by the window once the
+/// vault is open, when the setting is on. Cancel leaves that key locked.
+#[tauri::command]
+#[tracing::instrument(skip(app, state))]
+pub async fn credential_keys_unlock(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<KeysUnlocked, String> {
+    use crate::ssh::prompt::{ask, Field, Kind};
+    use std::sync::atomic::Ordering;
+
+    crate::ssh::unlocked::set_enabled(true);
+    if UNLOCKING.swap(true, Ordering::SeqCst) {
+        return Ok(KeysUnlocked::default());
+    }
+    struct Done;
+    impl Drop for Done {
+        fn drop(&mut self) {
+            UNLOCKING.store(false, Ordering::SeqCst);
+        }
+    }
+    let _done = Done;
+
+    // Read under the lock, ask without it: a question can stay open for
+    // minutes and everything else needs the vault meanwhile.
+    let keys = {
+        let manager = state.vault_manager.lock().await;
+        if manager.is_locked() {
+            return Ok(KeysUnlocked::default());
+        }
+        let creds = read_credentials(&manager).await;
+        let stored = crate::ipc::sshkey_commands::all_materials(&manager).await;
+        locked_keys(&creds, &stored)
+    };
+
+    let mut result = KeysUnlocked::default();
+    for key in keys {
+        let used_by = key.used_by.join(", ");
+        let mut opened = false;
+        for attempt in 0..3 {
+            // The window words the question itself (`unlock`): the
+            // credential names as the host, the key as the title, and
+            // "retry" after a wrong passphrase.
+            let field = vec![Field { text: key.label.clone(), echo: false }];
+            let Some(answers) = ask(Some(&app), &used_by, 0, Kind::Unlock, &key.label, if attempt == 0 { "" } else { "retry" }, field).await else {
+                break;
+            };
+            // Locked, or switched off, while the question was open.
+            if !crate::ssh::unlocked::enabled() || state.vault_manager.lock().await.is_locked() {
+                return Ok(result);
+            }
+            let pass = answers.into_iter().next().unwrap_or_default();
+            if crate::ssh::client::decode_key(&key.material, Some(&pass)).is_ok_and(|k| !k.is_encrypted()) {
+                crate::ssh::unlocked::remember(&key.material, &pass);
+                opened = true;
+                break;
+            }
+        }
+        if opened {
+            result.unlocked += 1;
+        } else {
+            result.skipped += 1;
+        }
+    }
+    tracing::info!("Credential keys at start: {} unlocked, {} left locked", result.unlocked, result.skipped);
+    Ok(result)
+}
+
 /// Check that a credential a session or folder in `vault` names is one it
 /// can use: a credential in that same vault.
 pub(crate) fn check_link(creds: &[SavedCredential], credential_id: Option<&str>, vault: Option<&str>) -> Result<(), String> {
@@ -528,6 +658,47 @@ pub(crate) fn check_links(creds: &[SavedCredential], s: &SessionConfig, vault: O
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The throwaway keys of the keystore tests.
+    const PLAIN_KEY: &str = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\nQyNTUxOQAAACCwsCZ1pFDo+/0R+iXN9Emzi+emmN0GEbCoIL9hE1eafgAAAJhbzNn6W8zZ\n+gAAAAtzc2gtZWQyNTUxOQAAACCwsCZ1pFDo+/0R+iXN9Emzi+emmN0GEbCoIL9hE1eafg\nAAAEDs2ThleIPEbrfMS5+KvabXLE0113+oUG6NIEaDtPChvLCwJnWkUOj7/RH6Jc30SbOL\n56aY3QYRsKggv2ETV5p+AAAAEnJlYWNoLXRlc3RAZXhhbXBsZQECAw==\n-----END OPENSSH PRIVATE KEY-----\n";
+    const ENCRYPTED_KEY: &str = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAACmFlczI1Ni1jdHIAAAAGYmNyeXB0AAAAGAAAABCcqk0FV4\nKt6ydcd+Fwf0h1AAAAGAAAAAEAAAAzAAAAC3NzaC1lZDI1NTE5AAAAIJk+zQU8O+k3l0Y9\nx4epBs/36Jir8BpbhqTJH0+tr864AAAAoPYA20IkAMre5HEKk0iDCkEk72vCMulAvfM7LK\nO3hbWbXJAzOgl5v1AzwoTzi73AvzN7rTxU+wsQ9vuWntsc7WjaqdQeg/ZHi3pNKRkyX+Ay\nGmXQTdgeHjjkQ/mc7GTjpqYFV32+LlFRoC+zP50ivDKINyUXgzd0zz/G2xR5zQjU/boKQU\n719oRMkiGz8P1eib8piYDdiJ3fY0MDqbac8QM=\n-----END OPENSSH PRIVATE KEY-----\n";
+
+    #[test]
+    fn keys_to_unlock_are_the_locked_ones_each_once() {
+        use crate::ssh::keystore::StoredKeyMaterial;
+        let _alone = crate::ssh::unlocked::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::ssh::unlocked::forget();
+        let material = |key: &str, passphrase: Option<&str>| StoredKeyMaterial {
+            private_key: key.to_string(),
+            passphrase: passphrase.map(String::from),
+            public_key: None,
+        };
+        let stored = vec![
+            ("plain".to_string(), "Plain".to_string(), material(PLAIN_KEY, None)),
+            ("locked".to_string(), "Locked".to_string(), material(ENCRYPTED_KEY, None)),
+            ("saved".to_string(), "Saved".to_string(), material(ENCRYPTED_KEY.trim_end(), Some("hunter2"))),
+        ];
+        let cred = |name: &str, auth: serde_json::Value| -> SavedCredential {
+            serde_json::from_value(serde_json::json!({ "id": name, "name": name, "username": "u", "auth_method": auth })).unwrap()
+        };
+        let creds = vec![
+            cred("password", serde_json::json!({ "type": "Password", "password": "x" })),
+            cred("plain", serde_json::json!({ "type": "Key", "key_id": "plain" })),
+            cred("a", serde_json::json!({ "type": "Key", "key_id": "locked" })),
+            cred("b", serde_json::json!({ "type": "Key", "key_id": "locked" })),
+            // Its passphrase is saved with the key, typed into the
+            // credential, or comes from a password manager at connect.
+            cred("saved", serde_json::json!({ "type": "Key", "key_id": "saved" })),
+            cred("typed", serde_json::json!({ "type": "Key", "key_id": "locked", "passphrase": "hunter2" })),
+            cred("manager", serde_json::json!({ "type": "Key", "key_id": "locked", "passphrase_ref": { "provider": "passbolt", "entry_id": "e" } })),
+            cred("gone", serde_json::json!({ "type": "Key", "key_id": "not here" })),
+            cred("no file", serde_json::json!({ "type": "Key", "path": "/nonexistent/farreach-test-key" })),
+        ];
+        let keys = locked_keys(&creds, &stored);
+        assert_eq!(keys.len(), 1);
+        assert_eq!(keys[0].label, "Locked");
+        assert_eq!(keys[0].used_by, ["a", "b"]);
+    }
 
     fn session(folder: Option<&str>, cred: Option<&str>, vault: Option<&str>) -> SessionConfig {
         serde_json::from_value(serde_json::json!({

@@ -24,6 +24,7 @@
 	import { vaultState } from '#lib/state/vault.svelte.js';
 	import * as mcp from '#lib/state/mcp.svelte.js';
 	import * as share from '#lib/state/share.svelte.js';
+	import { unlockCredentialKeys, setKeysUnlockEnabled } from '#lib/ipc/savedCredentials.js';
 	import { installSelectMenus } from '#lib/utils/selectMenu.js';
 	import { initScreenEdges } from '#lib/edges.js';
 	import { onMount } from 'svelte';
@@ -110,6 +111,29 @@
 			// Same reason: the switch and the ICE list live in the vault.
 			share.load();
 		}
+	});
+
+	// Settings → Security → "Unlock credential keys at start": once the vault
+	// is open, ask for the passphrases of the saved credentials' keys. Asked
+	// again after a lock, which forgets them, and at once when the setting is
+	// switched on. Off: the backend forgets what it kept.
+	let keysAsked = false;
+	$effect(() => {
+		if (isEditorWindow) return;
+		const wanted = settings.unlockKeysAtStart;
+		const open = !vaultState.locked && !vaultState.held;
+		if (!wanted || !open) {
+			keysAsked = false;
+			if (!wanted) void setKeysUnlockEnabled(false).catch(() => {});
+			return;
+		}
+		if (keysAsked) return;
+		keysAsked = true;
+		unlockCredentialKeys()
+			.then((r) => {
+				if (r.unlocked > 0) addToast(t('security.keys_unlocked', { count: r.unlocked }), 'success', 3000);
+			})
+			.catch((err) => console.error('Unlocking credential keys failed:', err));
 	});
 
 	$effect(() => {

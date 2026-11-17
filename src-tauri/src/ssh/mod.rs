@@ -22,6 +22,7 @@ pub mod proxycmd;
 pub mod session_log;
 pub mod session_opts;
 pub mod tun;
+pub mod unlocked;
 pub mod sk;
 pub mod userauth;
 pub mod x11;

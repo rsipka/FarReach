@@ -246,6 +246,21 @@
 		</div>
 	</div>
 
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('security.unlock_keys_at_start')}</span>
+			<span class="setting-description">{t('security.unlock_keys_at_start_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.unlockKeysAtStart}
+				label={t('security.unlock_keys_at_start')}
+				onchange={(checked) => updateSetting('unlockKeysAtStart', checked)}
+			/>
+		</div>
+	</div>
+
 	{#if methods?.platform}
 		<div class="setting-row">
 			<div class="setting-info">

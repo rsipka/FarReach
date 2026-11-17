@@ -47,3 +47,22 @@ export async function savedCredentialDelete(credentialId: string): Promise<numbe
 export function credentialsFor(all: SavedCredential[], vaultId: string | null | undefined): SavedCredential[] {
   return all.filter((c) => (c.vault_id ?? null) === (vaultId ?? null));
 }
+
+/** What unlocking at start did: keys opened and kept for this run, and keys
+ *  left locked (cancelled or a wrong passphrase), which ask at connect. */
+export interface KeysUnlocked {
+  unlocked: number;
+  skipped: number;
+}
+
+/** Ask for the passphrase of every passphrase-protected key the saved
+ *  credentials use (Settings → Security). The questions arrive through the
+ *  login prompt dialog; the passphrases stay in the backend's memory. */
+export async function unlockCredentialKeys(): Promise<KeysUnlocked> {
+  return invoke<KeysUnlocked>('credential_keys_unlock');
+}
+
+/** Tell the backend the setting: off forgets every passphrase kept. */
+export async function setKeysUnlockEnabled(enabled: boolean): Promise<void> {
+  return invoke('credential_keys_unlock_enabled', { enabled });
+}
