@@ -750,7 +750,7 @@
 			// SSH: a code means the shell ended on its own (exit typed); none
 			// means the connection dropped. A local shell always ends cleanly.
 			const code = event.payload?.code;
-			if ((termType !== 'ssh' || typeof code === 'number') && closeOnCleanExit()) return;
+			if ((termType !== 'ssh' || typeof code === 'number') && closeOnCleanExit(termType === 'ssh' && code === 0)) return;
 			const note = typeof code === 'number' || termType !== 'ssh' ? `Process exited with code ${code ?? 0}` : t('terminal.connection_closed');
 			term.write(`\r\n\x1b[90m[${note}]\x1b[0m\r\n`);
 			if (termType === 'ssh') {
@@ -773,9 +773,12 @@
 
 	/** The session ended cleanly: close its tab if Settings say so. One that
 	 *  ended within moments of starting more likely failed (a shell that
-	 *  would not start, a server that refuses shells): it stays, to be read. */
-	function closeOnCleanExit(): boolean {
-		if (!getSettings().closeTabOnExit || Date.now() - sessionStartedAt < 2000) return false;
+	 *  would not start, a server that refuses shells): it stays, to be read,
+	 *  unless the shell said all was well (`success`: an SSH exit code of 0,
+	 *  as Ctrl+D at a fresh prompt gives). */
+	function closeOnCleanExit(success = false): boolean {
+		if (!getSettings().closeTabOnExit) return false;
+		if (!success && Date.now() - sessionStartedAt < 2000) return false;
 		closeTab(ptyId);
 		return true;
 	}
