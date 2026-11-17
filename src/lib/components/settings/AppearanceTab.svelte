@@ -16,6 +16,8 @@
 	import { historyForget, historyStats, type HistoryStats } from '#lib/ipc/history.js';
 	import { pushHistoryRetention } from '#lib/state/history.svelte.js';
 	import { open as pickFolder } from '@tauri-apps/plugin-dialog';
+	import { fontsListInstalled, type InstalledFont } from '#lib/ipc/fonts.js';
+	import { cssFontFamily } from '#lib/utils/font.js';
 
 	const settings = getSettings();
 	let currentFont = $derived(settings.fontFamily || 'monospace');
@@ -173,26 +175,24 @@
 	}
 
 
-	// Local + system monospace fonts only — NO network (Google Fonts) fetches.
-	// `JetBrains Mono` is bundled (app.css @font-face); the rest resolve to
-	// whatever the OS has installed, falling back to `monospace`. Any other
-	// installed font can be entered as a custom family.
-	const SYSTEM_FONTS = [
+	// Local fonts only — NO network (Google Fonts) fetches. `JetBrains Mono`
+	// is bundled (app.css @font-face) and `monospace` is the OS's own choice;
+	// the rest is what this computer has installed, read from its font folders
+	// (Rust `fonts_list_installed`). Where that list is empty (the phones) or
+	// fails, the known names below stand in: they work wherever the OS has
+	// them. Any other family can still be entered by name.
+	const BUILT_IN_FONTS = [
 		{ name: 'JetBrains Mono (bundled)', value: 'JetBrains Mono' },
 		{ name: 'System Monospace', value: 'monospace' },
-		{ name: 'SF Mono', value: 'SF Mono' },
-		{ name: 'Menlo', value: 'Menlo' },
-		{ name: 'Monaco', value: 'Monaco' },
-		{ name: 'Cascadia Code', value: 'Cascadia Code' },
-		{ name: 'Cascadia Mono', value: 'Cascadia Mono' },
-		{ name: 'Consolas', value: 'Consolas' },
-		{ name: 'Courier New', value: 'Courier New' },
-		{ name: 'DejaVu Sans Mono', value: 'DejaVu Sans Mono' },
-		{ name: 'Liberation Mono', value: 'Liberation Mono' },
-		{ name: 'Ubuntu Mono', value: 'Ubuntu Mono' },
-		{ name: 'Noto Sans Mono', value: 'Noto Sans Mono' },
-		{ name: 'Source Code Pro', value: 'Source Code Pro' },
 	];
+	const KNOWN_FONTS = [
+		'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', 'Cascadia Mono', 'Consolas',
+		'Courier New', 'DejaVu Sans Mono', 'Liberation Mono', 'Ubuntu Mono',
+		'Noto Sans Mono', 'Source Code Pro',
+	];
+	/** Rows drawn per group at most: each row loads its own font to show it,
+	 *  and a computer can have a thousand families. Search narrows. */
+	const FONT_ROWS = 200;
 
 	// Mixes ASCII, box-drawing, halfwidth kana, fullwidth latin and CJK so the
 	// user can check fullwidth/halfwidth column alignment of the chosen font.
@@ -204,20 +204,65 @@
 
 	let fontSearch = $state('');
 	let fontDropdownOpen = $state(false);
+	/** Undefined until the first open asks; null when asking failed. */
+	let installedFonts = $state<InstalledFont[] | null | undefined>(undefined);
+	let fontsLoading = $state(false);
+	let showAllFonts = $state(false);
 
-	let filteredFonts = $derived(
-		SYSTEM_FONTS.filter((f) => f.name.toLowerCase().includes(fontSearch.toLowerCase()))
-	);
+	async function toggleFontDropdown(): Promise<void> {
+		fontDropdownOpen = !fontDropdownOpen;
+		if (!fontDropdownOpen || installedFonts !== undefined || fontsLoading) return;
+		fontsLoading = true;
+		try {
+			installedFonts = await fontsListInstalled();
+		} catch (e) {
+			console.warn('Could not list installed fonts:', e);
+			installedFonts = null;
+		} finally {
+			fontsLoading = false;
+		}
+	}
 
-	// Full configurability: if the query matches no known entry, offer it as a
-	// custom font family (any font installed on the user's system).
+	/** The installed list when there is one, else the known names. */
+	let haveInstalled = $derived(!!installedFonts && installedFonts.length > 0);
+
+	let fontGroups = $derived.by(() => {
+		const q = fontSearch.trim().toLowerCase();
+		const hit = (name: string) => name.toLowerCase().includes(q);
+		const builtIn = BUILT_IN_FONTS.filter((f) => hit(f.name));
+		const bundled = new Set(BUILT_IN_FONTS.map((f) => f.value.toLowerCase()));
+		let mono: string[];
+		let other: string[] = [];
+		if (haveInstalled) {
+			const fonts = installedFonts!.filter((f) => !bundled.has(f.name.toLowerCase()) && hit(f.name));
+			mono = fonts.filter((f) => f.monospace).map((f) => f.name);
+			if (showAllFonts) other = fonts.filter((f) => !f.monospace).map((f) => f.name);
+		} else {
+			// Not asked yet or still loading: the list is about to come.
+			mono = installedFonts === undefined ? [] : KNOWN_FONTS.filter(hit);
+		}
+		return { builtIn, mono, other };
+	});
+
+	// Full configurability: if the query names no listed font, offer it as a
+	// custom font family. Proportional fonts count as listed even while
+	// hidden, so the hint below points at the switch instead.
 	let customFont = $derived.by(() => {
 		const q = fontSearch.trim();
 		if (!q) return null;
-		const known = SYSTEM_FONTS.some(
-			(f) => f.name.toLowerCase() === q.toLowerCase() || f.value.toLowerCase() === q.toLowerCase()
-		);
-		return known ? null : q;
+		const lq = q.toLowerCase();
+		const names = [
+			...BUILT_IN_FONTS.flatMap((f) => [f.name, f.value]),
+			...(haveInstalled ? installedFonts!.map((f) => f.name) : KNOWN_FONTS),
+		];
+		return names.some((n) => n.toLowerCase() === lq) ? null : q;
+	});
+
+	/** Proportional fonts the search would find with the switch on. */
+	let hiddenMatches = $derived.by(() => {
+		const q = fontSearch.trim().toLowerCase();
+		if (!q || showAllFonts || !haveInstalled) return 0;
+		return installedFonts!.filter((f) => !f.monospace && f.name.toLowerCase().includes(q)).length;
 	});
 
 	function selectFont(value: string): void {
@@ -382,8 +427,8 @@
 			<div class="font-picker">
 				<button
 					class="font-picker-btn"
-					style="font-family: '{currentFont}', monospace"
-					onclick={() => (fontDropdownOpen = !fontDropdownOpen)}
+					style:font-family={cssFontFamily(currentFont)}
+					onclick={toggleFontDropdown}
 				>
 					{currentFont}
 					<svg width="10" height="10" viewBox="0 0 10 10" fill="none" class="chevron" class:open={fontDropdownOpen}>
@@ -400,33 +445,63 @@
 							bind:value={fontSearch}
 						/>
 						<div class="font-list">
-							{#if filteredFonts.length > 0}
-								<div class="font-group-label">{t('settings.system_fonts')}</div>
-								{#each filteredFonts as font (font.value)}
-									<button
-										class="font-option"
-										class:active={currentFont === font.value}
-										style:font-family="'{font.value}', monospace"
-										onclick={() => selectFont(font.value)}
-									>
-										{font.name}
-									</button>
+							{#snippet fontRow(name: string, value: string)}
+								<button
+									class="font-option"
+									class:active={currentFont === value}
+									style:font-family={cssFontFamily(value)}
+									onclick={() => selectFont(value)}
+								>
+									{name}
+								</button>
+							{/snippet}
+							{#snippet moreRows(total: number)}
+								{#if total > FONT_ROWS}
+									<div class="font-empty">{t('settings.more_fonts', { count: total - FONT_ROWS })}</div>
+								{/if}
+							{/snippet}
+
+							{#if fontGroups.builtIn.length > 0}
+								<div class="font-group-label">{t('settings.builtin_fonts')}</div>
+								{#each fontGroups.builtIn as font (font.value)}
+									{@render fontRow(font.name, font.value)}
 								{/each}
+							{/if}
+							{#if fontsLoading}
+								<div class="font-empty">{t('settings.fonts_loading')}</div>
+							{/if}
+							{#if fontGroups.mono.length > 0}
+								<div class="font-group-label">
+									{haveInstalled ? t('settings.installed_mono_fonts') : t('settings.system_fonts')}
+								</div>
+								{#each fontGroups.mono.slice(0, FONT_ROWS) as name (name)}
+									{@render fontRow(name, name)}
+								{/each}
+								{@render moreRows(fontGroups.mono.length)}
+							{/if}
+							{#if fontGroups.other.length > 0}
+								<div class="font-group-label">{t('settings.installed_other_fonts')}</div>
+								{#each fontGroups.other.slice(0, FONT_ROWS) as name (name)}
+									{@render fontRow(name, name)}
+								{/each}
+								{@render moreRows(fontGroups.other.length)}
 							{/if}
 							{#if customFont}
 								<div class="font-group-label">{t('settings.custom_font')}</div>
-								<button
-									class="font-option"
-									style:font-family="'{customFont}', monospace"
-									onclick={() => selectFont(customFont)}
-								>
-									{t('settings.use_font', { font: customFont })}
-								</button>
+								{@render fontRow(t('settings.use_font', { font: customFont }), customFont)}
 							{/if}
-							{#if filteredFonts.length === 0 && !customFont}
+							{#if hiddenMatches > 0}
+								<div class="font-empty">{t('settings.fonts_hidden', { count: hiddenMatches })}</div>
+							{:else if !fontsLoading && fontGroups.builtIn.length + fontGroups.mono.length + fontGroups.other.length === 0 && !customFont}
 								<div class="font-empty">{t('settings.no_fonts')}</div>
 							{/if}
 						</div>
+						{#if haveInstalled}
+							<label class="font-all">
+								<input type="checkbox" bind:checked={showAllFonts} />
+								{t('settings.show_all_fonts')}
+							</label>
+						{/if}
 					</div>
 				{/if}
 			</div>
@@ -435,7 +510,7 @@
 
 	<div class="font-preview-box">
 		<span class="preview-label">{t('settings.preview')} — {currentFont} @ {currentSize}px</span>
-		<pre class="preview-pre" style="font-family: '{currentFont}', monospace; font-size: {currentSize}px;">{PREVIEW_TEXT}</pre>
+		<pre class="preview-pre" style:font-family={cssFontFamily(currentFont)} style:font-size="{currentSize}px">{PREVIEW_TEXT}</pre>
 	</div>
 
 	<div class="setting-row">
@@ -1093,6 +1168,13 @@
 		color: var(--color-text-primary);
 		background: var(--color-bg-primary);
 		border-radius: 0 0 8px 8px;
+	}
+
+	.font-all {
+		display: flex; align-items: center; gap: 6px;
+		padding: 7px 12px; border-top: 1px solid var(--color-border);
+		font-family: var(--font-sans); font-size: 0.75rem;
+		color: var(--color-text-secondary); cursor: pointer;
 	}
 
 	.font-empty {
