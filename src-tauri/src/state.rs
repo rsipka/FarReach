@@ -138,6 +138,11 @@ pub struct SessionConfig {
     /// chosen in Settings. Kept on the session, so it syncs with it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal_theme: Option<String>,
+    /// Server monitoring (CPU, memory, disk, users in the bar under the
+    /// terminal) for this session's tabs: on or off; unset: the default
+    /// chosen in Settings. Kept on the session, so it syncs with it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub monitoring: Option<bool>,
     /// What this session's tabs record into the session history: `off`,
     /// `commands` or `output`; unset: the default chosen in Settings.
     #[serde(default, skip_serializing_if = "Option::is_none")]
