@@ -193,6 +193,7 @@ pub async fn ssh_connect(
     password_ref: Option<crate::pwmanager::SecretRef>,
     key_passphrase_ref: Option<crate::pwmanager::SecretRef>,
     session_id: Option<String>,
+    tmux: Option<crate::ssh::tmux::TmuxStart>,
 ) -> Result<String, String> {
     // Boxed: Tauri builds a command's future on the main thread and passes it
     // by value before spawning it, and the main thread's stack is small
@@ -204,8 +205,16 @@ pub async fn ssh_connect(
         // Nothing is typed into the user's shell unless the caller asks for it
         // (Settings → Appearance): a caller that does not say gets no setup. The
         // login message is shown unless asked otherwise.
+        // tmux: the channel runs the tmux start script instead of the login
+        // shell (which becomes the shell of a new tmux window). Nothing is
+        // typed into it: the init would land in a tmux window, again on
+        // every reattach.
+        let shell = match &tmux {
+            Some(t) => Some(crate::ssh::tmux::start_command(t, shell.as_deref())?),
+            None => shell,
+        };
         let login = crate::ssh::client::LoginOptions {
-            inject_colors: inject_colors.unwrap_or(false),
+            inject_colors: inject_colors.unwrap_or(false) && tmux.is_none(),
             show_login_message: show_login_message.unwrap_or(true),
             log: session_log,
         };
@@ -267,7 +276,9 @@ pub async fn ssh_connect(
             })
             .await?;
         }
-        if let Some(s) = shell.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(t) = &tmux {
+            tracing::info!("ssh_connect: in tmux session '{}'", t.name);
+        } else if let Some(s) = shell.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
             tracing::info!("ssh_connect: per-session login shell override = '{}'", s);
         }
         // A key stored in the vault brings its own passphrase; one typed into the
@@ -573,6 +584,23 @@ mod detect_os_tests {
         assert_eq!(os_from_uname("FreeBSD\n").as_deref(), Some("freebsd"));
         assert_eq!(os_from_uname("  \n"), None);
     }
+}
+
+/// Ends a tab's tmux session for good (the tab's own connection runs it),
+/// with the sessions other tabs joined it as.
+#[tauri::command]
+pub async fn ssh_tmux_kill(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    name: String,
+) -> Result<(), String> {
+    let command = crate::ssh::tmux::kill_command(&name)?;
+    let handle = {
+        let manager = state.ssh_manager.lock().await;
+        manager.get_handle(&connection_id).map_err(|e| e.to_string())?
+    };
+    crate::ssh::client::exec_on_connection(&handle, &command).await.map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Inspect a key-file path so the UI can warn when the user picked the wrong

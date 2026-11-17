@@ -2,6 +2,12 @@ import { invoke } from '@tauri-apps/api/core';
 import type { SshOptions } from './sessions';
 import type { SecretRef } from './pwmanager';
 
+/** What a connect asks of tmux on the server (see #lib/terminal/tmux). */
+export interface TmuxStart {
+  /** The tmux session to attach to, or create. */
+  name: string;
+}
+
 export interface JumpHostConnectParams {
   host: string;
   port: number;
@@ -63,6 +69,9 @@ export interface SshConnectParams {
    * those the user approved for it.
    */
   sessionId?: string | null;
+  /** Start inside this tmux session on the server (attach or create);
+   *  absent: no tmux. See #lib/terminal/tmux. */
+  tmux?: TmuxStart | null;
 }
 
 export interface ConnectionInfo {
@@ -111,7 +120,13 @@ export async function sshConnect(params: SshConnectParams): Promise<string> {
     tryAgentKeys: params.tryAgentKeys ?? null,
     sshOptions: params.sshOptions ?? null,
     sessionId: params.sessionId ?? null,
+    tmux: params.tmux ?? null,
   });
+}
+
+/** End a tab's tmux session for good, with the ones other tabs joined it as. */
+export async function sshTmuxKill(connectionId: string, name: string): Promise<void> {
+  return invoke('ssh_tmux_kill', { connectionId, name });
 }
 
 export async function sshSend(connectionId: string, data: number[]): Promise<void> {

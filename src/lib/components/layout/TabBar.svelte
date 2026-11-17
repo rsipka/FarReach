@@ -6,6 +6,7 @@
 		tabsBeside, requestCloseBeside, getPendingClose, confirmPendingClose, cancelPendingClose
 	} from '#lib/state/tabs.svelte.js';
 	import { canDuplicate, duplicateTab } from '#lib/terminal/duplicate-tab.js';
+	import { sshTmuxKill } from '#lib/ipc/ssh.js';
 	import {
 		getBroadcastTargets, isTerminalTab, toggleBroadcastTarget, broadcastToAll, stopBroadcast
 	} from '#lib/state/broadcast.svelte.js';
@@ -151,6 +152,7 @@
 		items.push(
 			{ label: '', separator: true },
 			{ label: t('tabs.duplicate'), disabled: !canDuplicate(tab), action: () => duplicate(id) },
+			...(tab && tmuxOf(tab) ? [{ label: t('tmux.kill'), disabled: !tab.connectionId || tab.link === 'down', action: () => (confirmKill = tab) }] : []),
 			{ label: '', separator: true },
 			{ label: t('common.close'), action: () => closeTab(id) },
 			{ label: t('tabs.close_others'), disabled: tabsBeside(id, 'others').length === 0, action: () => requestCloseBeside(id, 'others') },
@@ -158,6 +160,26 @@
 			{ label: t('tabs.close_right'), disabled: tabsBeside(id, 'right').length === 0, action: () => requestCloseBeside(id, 'right') }
 		);
 		return items;
+	}
+
+	/** The tmux session an SSH tab runs in, if it does. */
+	function tmuxOf(tab: Tab): string | null {
+		return tab.type === 'ssh' ? (tab.sshConnectParams?.tmux?.name ?? null) : null;
+	}
+
+	/** A tab whose tmux session is about to be ended for good. */
+	let confirmKill = $state<Tab | null>(null);
+
+	async function killTmux(tab: Tab): Promise<void> {
+		const name = tmuxOf(tab);
+		if (!name || !tab.connectionId) return;
+		try {
+			// Its tmux client then exits, which ends the tab's session as an
+			// exit typed would (and closes it, if Settings say so).
+			await sshTmuxKill(tab.connectionId, name);
+		} catch (err) {
+			addToast(t('tmux.kill_failed', { error: String(err) }), 'error');
+		}
 	}
 
 	function duplicate(id: string): void {
@@ -461,6 +483,22 @@
 				if (confirmClose) closeGroup(confirmClose.id);
 				confirmClose = null;
 			}}>{t('tabs.group_close')}</Button
+		>
+	{/snippet}
+</Modal>
+
+<Modal open={confirmKill !== null} onclose={() => (confirmKill = null)} title={t('tmux.kill')} maxWidth="420px">
+	{#if confirmKill}
+		<p class="confirm-text">{t('tmux.kill_confirm', { name: tmuxOf(confirmKill) ?? '' })}</p>
+	{/if}
+	{#snippet actions()}
+		<Button variant="secondary" onclick={() => (confirmKill = null)}>{t('common.cancel')}</Button>
+		<Button
+			variant="danger"
+			onclick={() => {
+				if (confirmKill) void killTmux(confirmKill);
+				confirmKill = null;
+			}}>{t('tmux.kill')}</Button
 		>
 	{/snippet}
 </Modal>

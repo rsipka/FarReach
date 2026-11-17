@@ -3063,5 +3063,22 @@
   "bulk.undo_last": "Vrátit poslední hromadnou úpravu",
   "bulk.undone_toast": "Hromadná úprava vrácena u relací: {{count}}",
   "bulk.undo_partial": "Vráceno u relací: {{count}}. Mezitím změněné zůstaly beze změny: {{names}}",
-  "bulk.into_credential": "V nových přihlašovacích údajích, propojených s {{count}} z {{total}}"
+  "bulk.into_credential": "V nových přihlašovacích údajích, propojených s {{count}} z {{total}}",
+  "tmux.session_label": "tmux na serveru",
+  "tmux.session_folder_on": "Podle složky (zapnuto)",
+  "tmux.session_folder_off": "Podle složky (vypnuto)",
+  "tmux.mode_attach": "Připojit nebo vytvořit",
+  "tmux.mode_off": "Vypnuto",
+  "tmux.name_label": "Název relace tmux",
+  "tmux.session_hint": "Terminál se spustí uvnitř této relace tmux na serveru, takže vaše práce běží dál i po výpadku spojení nebo zavření karty a další připojení se do ní vrátí. Na serveru bez tmux se otevře běžný shell.",
+  "tmux.name_invalid": "Název relace tmux smí obsahovat jen písmena, číslice, - a _ (nejvýše 64 znaků).",
+  "tmux.folder_menu": "tmux pro relace uvnitř",
+  "tmux.folder_inherit": "Podle nadřazené složky",
+  "tmux.folder_on": "Zapnuto",
+  "tmux.folder_off": "Vypnuto",
+  "tmux.kill": "Ukončit relaci tmux",
+  "tmux.kill_confirm": "Ukončit relaci tmux „{{name}}“ na serveru? Vše, co v ní běží, se zastaví, i v dalších kartách a na dalších počítačích, které jsou k ní připojené.",
+  "tmux.kill_failed": "Relaci tmux se nepodařilo ukončit: {{error}}",
+  "tmux.quit_note": "Z toho {{count}} běží v tmux, který na serveru běží dál: po novém připojení se do něj vrátíte.",
+  "tmux.auto_reconnecting": "V tmux vše běží dál. Připojuji se znovu automaticky."
 }

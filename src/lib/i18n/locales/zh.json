@@ -3063,5 +3063,22 @@
   "bulk.undo_last": "撤销上次批量编辑",
   "bulk.undone_toast": "已在 {{count}} 个会话中撤销批量编辑",
   "bulk.undo_partial": "已在 {{count}} 个会话中撤销。之后被修改的保持不变：{{names}}",
-  "bulk.into_credential": "存入新凭据，关联 {{total}} 个中的 {{count}} 个"
+  "bulk.into_credential": "存入新凭据，关联 {{total}} 个中的 {{count}} 个",
+  "tmux.session_label": "服务器上的 tmux",
+  "tmux.session_folder_on": "跟随文件夹（开）",
+  "tmux.session_folder_off": "跟随文件夹（关）",
+  "tmux.mode_attach": "附加或创建",
+  "tmux.mode_off": "关",
+  "tmux.name_label": "tmux 会话名称",
+  "tmux.session_hint": "终端在服务器上的此 tmux 会话中启动：连接断开或标签页关闭时工作仍会继续，下次连接会回到这里。服务器没有 tmux 时会打开普通 shell。",
+  "tmux.name_invalid": "tmux 会话名称只能包含字母、数字、- 和 _（最多 64 个字符）。",
+  "tmux.folder_menu": "内部会话的 tmux",
+  "tmux.folder_inherit": "跟随上级文件夹",
+  "tmux.folder_on": "开",
+  "tmux.folder_off": "关",
+  "tmux.kill": "结束 tmux 会话",
+  "tmux.kill_confirm": "要结束服务器上的 tmux 会话“{{name}}”吗？其中运行的所有内容都会停止，包括其他标签页和其他已附加的计算机。",
+  "tmux.kill_failed": "无法结束 tmux 会话：{{error}}",
+  "tmux.quit_note": "其中 {{count}} 个在 tmux 中运行，会继续在服务器上运行：重新连接即可回到其中。",
+  "tmux.auto_reconnecting": "仍在 tmux 中运行。正在自动重新连接。"
 }
