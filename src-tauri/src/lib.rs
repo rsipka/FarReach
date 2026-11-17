@@ -51,6 +51,7 @@ use ipc::container_commands::*;
 use ipc::k8s_commands::*;
 use ipc::plugin_commands::*;
 use ipc::marketplace_commands::*;
+use ipc::registry_url_commands::*;
 use ipc::credential_commands::*;
 use ipc::settings_commands::*;
 use ipc::history_commands::*;
@@ -772,6 +773,9 @@ pub fn run() {
             recipe_fetch_registry,
             recipe_install,
             recipe_registry_url,
+            registry_url_get,
+            registry_url_set,
+            registry_url_reset,
             share_get_config,
             share_set_enabled,
             share_set_ice_servers,
@@ -1201,6 +1205,9 @@ pub fn run() {
             recipe_fetch_registry,
             recipe_install,
             recipe_registry_url,
+            registry_url_get,
+            registry_url_set,
+            registry_url_reset,
             share_get_config,
             share_set_enabled,
             share_set_ice_servers,

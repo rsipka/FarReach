@@ -110,8 +110,17 @@ pub async fn recipe_prepare(
 
 /// The registry index.
 #[tauri::command]
-pub async fn recipe_fetch_registry(url: Option<String>) -> Result<Vec<RecipeEntry>, String> {
-    let url = url.unwrap_or_else(|| DEFAULT_RECIPES_URL.to_string());
+pub async fn recipe_fetch_registry(
+    state: tauri::State<'_, crate::state::AppState>,
+    url: Option<String>,
+) -> Result<Vec<RecipeEntry>, String> {
+    // The address saved in Settings > Plugins > Registries, else the default.
+    let url = match url {
+        Some(u) => u,
+        None => {
+            crate::ipc::registry_url_commands::effective_url(&state, crate::ipc::registry_url_commands::Registry::Recipes).await
+        }
+    };
     if !url.starts_with("https://") && !url.starts_with("http://") {
         return Err("Registry URL must be http(s)".into());
     }
