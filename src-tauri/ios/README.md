@@ -121,17 +121,18 @@ tab, or it runs on every pull request; the IPA is the run's
 
 ### Updates through a LiveContainer source
 
-Each tagged release also attaches `FarReach_<version>_ios.ipa` and `apps.json`,
-an AltStore-style source listing that IPA (and up to nine older ones). Add
+Each tagged release, dev pre-releases included, also attaches
+`FarReach_<version>_ios_arm64_unsigned.ipa` and `apps.json`, an AltStore-style
+source listing that IPA (and up to nine older ones). Add
 
 ```
-https://github.com/rsipka/FarReach/releases/latest/download/apps.json
+https://raw.githubusercontent.com/rsipka/FarReach/update-feed/apps.json
 ```
 
 in LiveContainer's Sources tab (or open
 `livecontainer://source?url=` followed by that address, URL-encoded). The
-address always serves the newest release's file, so a new release appears as
-an update. SideStore and AltStore Classic read the same file.
+address is the `update-feed` branch, which `release.yml` rewrites with each
+release, so a new build appears as an update. SideStore and AltStore Classic read the same file.
 `scripts/ios-source.mjs` writes it in `release.yml`; test it with
 `npm run ios-source:test`.
 

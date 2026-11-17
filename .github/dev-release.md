@@ -1,18 +1,49 @@
-# FarReach Dev releases
+# FarReach releases
 
-Use a tag such as `v0.9.2-dev.1`, matching the version in `package.json`,
-`package-lock.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, and
-`src-tauri/tauri.conf.json`. Increment the Android `versionCode` and the
-Windows WiX version when preparing another dev build. The workflow uses
-the numeric upstream version as the iOS marketing version and assigns a
-separate bundle build number.
+`release.yml` builds a release for every tag that starts with `v`:
 
-Pushing the tag starts the Windows, macOS, Linux, Android, and iOS builds.
-GitHub publishes the downloads as the fork's latest release after the
-packages pass verification. Download the unsigned iOS IPA from the release
-and import it into LiveContainer. The iOS job uses Tauri's `--no-sign` option
-and requires no Apple credentials. Linux packages are available as direct
-downloads.
+- `vX.Y.Z-dev.N` makes **FarReach Dev**, published as a GitHub pre-release.
+- `vX.Y.Z` makes a stable release, published as the latest release. Only a
+  stable release signs the apt and dnf repositories (secrets
+  `APT_GPG_PRIVATE_KEY`, `APT_GPG_PASSPHRASE`) and rebuilds the docs site.
+
+## Making a dev build
+
+1. Set the version to `X.Y.Z-dev.N` in `package.json`, `package-lock.json`
+   (twice), `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` and
+   `src-tauri/tauri.conf.json`.
+2. In `src-tauri/tauri.conf.json` set `bundle.windows.wix.version` to
+   `X.Y.Z.N` and `bundle.android.versionCode` to
+   `X*10000000 + Y*100000 + Z*1000 + N` (0.9.2-dev.4 is `902004`). Windows and
+   Android refuse to install a build whose number did not go up. The workflow
+   stops at once if any of these does not match the tag.
+3. Merge that to main, then tag main and push the tag:
+   `git tag vX.Y.Z-dev.N && git push origin vX.Y.Z-dev.N`.
+
+Pushing the tag starts the Windows, macOS, Linux, Android and iOS builds.
+The release is published only when every platform is in it, so a failed
+build leaves it as a draft: re-run the failed jobs. Do not make the release
+by hand on GitHub; the workflow makes it.
+
+iOS gets the numeric version (`X.Y.Z`) as its marketing version and the dev
+number as its build number, since iOS allows only numbers there.
+
+## Update feed
+
+GitHub's `releases/latest` skips pre-releases, so the updaters do not read
+it. The last step of a release replaces the `update-feed` branch with one
+commit holding that release's `latest.json` and `apps.json`:
+
+- Desktop updater and the Android update check:
+  `https://raw.githubusercontent.com/rsipka/FarReach/update-feed/latest.json`
+- LiveContainer source:
+  `https://raw.githubusercontent.com/rsipka/FarReach/update-feed/apps.json`
+
+So every install, dev or stable, is offered the newest release of either
+kind. Builds from before this feed (up to 0.9.2-dev.3) still read
+`releases/latest`; install the next build by hand once. The AppImage's own
+zsync updates still follow GitHub's latest release, so they skip dev
+builds.
 
 ## GitHub Actions setup
 

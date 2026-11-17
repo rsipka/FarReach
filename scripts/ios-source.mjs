@@ -2,9 +2,10 @@
  * Builds apps.json, the AltStore-style source LiveContainer (and SideStore,
  * AltStore Classic) reads to offer FarReach's unsigned IPA and its updates.
  *
- * release.yml runs it for each tagged release and attaches the result to
- * that release, so the source is always served from one stable address:
- *   https://github.com/<owner>/<repo>/releases/latest/download/apps.json
+ * release.yml runs it for each tagged release, attaches the result to that
+ * release and copies it to the update-feed branch, so the source is always
+ * served from one address, dev pre-releases included:
+ *   https://raw.githubusercontent.com/<owner>/<repo>/update-feed/apps.json
  *
  * Versions come from the repository's releases that carry an IPA, newest
  * first; the release being made (still a draft) is put first.
@@ -66,7 +67,8 @@ export function buildSource({ releases, tag, repo, privacy = {}, now = new Date(
 	const raw = `https://raw.githubusercontent.com/${repo}/main`;
 
 	const picked = releases
-		.filter((r) => r.tag_name === tag || (!r.draft && !r.prerelease))
+		// Dev builds are pre-releases and are listed too; drafts are not.
+		.filter((r) => r.tag_name === tag || !r.draft)
 		.map((r) => ({ r, ipa: (r.assets ?? []).find((a) => IPA.test(a.name)) }))
 		.filter(({ ipa }) => ipa);
 

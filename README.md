@@ -99,7 +99,7 @@ Get FarReach from its [releases page](https://github.com/rsipka/FarReach/release
 - macOS: `.dmg`, Apple silicon and Intel
 - Linux: `.AppImage`, `.deb`, `.rpm`
 - Android: `.apk`
-- iPhone and iPad: unsigned `.ipa` for [LiveContainer](https://github.com/LiveContainer/LiveContainer) or sideloading. Add the source `https://github.com/rsipka/FarReach/releases/latest/download/apps.json` in LiveContainer's Sources tab and each release shows up as an update.
+- iPhone and iPad: unsigned `.ipa` for [LiveContainer](https://github.com/LiveContainer/LiveContainer) or sideloading. Add the source `https://raw.githubusercontent.com/rsipka/FarReach/update-feed/apps.json` in LiveContainer's Sources tab and each release shows up as an update.
 
 FarReach updates itself from those releases. Reach itself is also on Scoop and in apt/dnf repositories; FarReach is not.
 
