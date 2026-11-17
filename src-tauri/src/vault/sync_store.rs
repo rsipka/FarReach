@@ -1,6 +1,6 @@
 //! Places that hold a vault as one file: a folder (on this disk, a mounted
-//! share or a UNC path), an SMB share reached directly, an SFTP server, or a
-//! Git repository.
+//! share or a UNC path), an SMB share reached directly, an SFTP server, a
+//! Git repository, or an S3 bucket (see `sync_s3`).
 //!
 //! Each store gives the file with a revision, and takes a new one only if the
 //! revision is still the one read: two devices writing at once cannot both
@@ -88,6 +88,7 @@ pub struct GitTarget {
 pub enum Store {
     Files(Files),
     Git(GitStore),
+    S3(crate::vault::sync_s3::S3Store),
 }
 
 impl Store {
@@ -112,6 +113,7 @@ impl Store {
         match self {
             Store::Files(f) => f.get().await,
             Store::Git(g) => g.get().await,
+            Store::S3(s) => s.get().await,
         }
     }
 
@@ -121,6 +123,7 @@ impl Store {
         match self {
             Store::Files(f) => f.put(data, expected).await,
             Store::Git(g) => g.put(data, expected).await,
+            Store::S3(s) => s.put(data, expected).await,
         }
     }
 }

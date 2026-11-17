@@ -6,7 +6,7 @@
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 
-	type Kind = 'folder' | 'smb' | 'sftp' | 'git';
+	type Kind = 'folder' | 'smb' | 'sftp' | 'git' | 's3';
 
 	let kind = $state<Kind>('folder');
 	let folderPath = $state('');
@@ -28,6 +28,12 @@
 	let gitRemote = $state('');
 	let gitBranch = $state('reach-vault');
 	let gitToken = $state('');
+	let s3Endpoint = $state('');
+	let s3Bucket = $state('');
+	let s3Folder = $state('reach');
+	let s3Region = $state('');
+	let s3AccessKey = $state('');
+	let s3SecretKey = $state('');
 
 	let active = $state<string | null>(null);
 	let probe = $state<SyncProbe | null>(null);
@@ -83,6 +89,22 @@
 				smbShare = parts[0] ?? '';
 				smbFolder = parts.slice(1).join('/');
 				smbPassword = token;
+			} catch {
+				// Leave the form empty.
+			}
+		} else if (/^s3(\+http)?:\/\//i.test(url)) {
+			try {
+				const plain = /^s3\+http:/i.test(url);
+				const u = new URL(url.replace(/^s3(\+http)?:/i, plain ? 'http:' : 'https:'));
+				kind = 's3';
+				s3Endpoint = plain ? `http://${u.host}` : u.host;
+				const parts = u.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+				s3Bucket = parts[0] ?? '';
+				s3Folder = parts.slice(1).join('/');
+				s3Region = u.searchParams.get('region') ?? '';
+				const secret = JSON.parse(token || '{}');
+				s3AccessKey = secret.access_key ?? '';
+				s3SecretKey = secret.secret_key ?? '';
 			} catch {
 				// Leave the form empty.
 			}
@@ -144,6 +166,25 @@
 				token: JSON.stringify(secret)
 			};
 		}
+		if (kind === 's3') {
+			// "https://host", "http://localhost:9000" or just "host[:port]".
+			const endpoint = s3Endpoint.trim().replace(/\/+$/, '');
+			const bucket = s3Bucket.trim();
+			if (!endpoint || !bucket || !s3AccessKey.trim() || !s3SecretKey) return null;
+			const plain = /^http:\/\//i.test(endpoint);
+			const host = endpoint.replace(/^https?:\/\//i, '');
+			const folder = s3Folder
+				.trim()
+				.split('/')
+				.filter(Boolean)
+				.map(encodeURIComponent)
+				.join('/');
+			const region = s3Region.trim();
+			return {
+				url: `${plain ? 's3+http' : 's3'}://${host}/${encodeURIComponent(bucket)}${folder ? '/' + folder : ''}${region ? `?region=${encodeURIComponent(region)}` : ''}`,
+				token: JSON.stringify({ access_key: s3AccessKey.trim(), secret_key: s3SecretKey })
+			};
+		}
 		const remote = gitRemote.trim();
 		if (!remote) return null;
 		const branch = gitBranch.trim() || 'reach-vault';
@@ -197,6 +238,7 @@
 	function describe(url: string): string {
 		if (url.startsWith('folder:')) return url.slice('folder:'.length);
 		if (url.startsWith('git:')) return url.slice('git:'.length);
+		if (/^s3(\+http)?:\/\//i.test(url)) return url.split('?')[0].replace(/^s3\+http:/i, 's3:');
 		if (url.toLowerCase().startsWith('smb://')) {
 			try {
 				const u = new URL(url);
@@ -230,6 +272,7 @@
 			<option value="smb">{t('sync.kind_smb')}</option>
 			<option value="sftp">{t('sync.kind_sftp')}</option>
 			<option value="git">{t('sync.kind_git')}</option>
+			<option value="s3">{t('sync.kind_s3')}</option>
 		</select>
 	</div>
 
@@ -301,6 +344,24 @@
 		{#if sftpHostKey}
 			<p class="section-desc mono">{t('sync.host_key_trusted', { key: sftpHostKey })}</p>
 		{/if}
+	{:else if kind === 's3'}
+		<div class="form-field">
+			<Input label={t('sync.s3_endpoint')} placeholder="s3.eu-central-1.amazonaws.com" bind:value={s3Endpoint} oninput={changed} />
+		</div>
+		<div class="row">
+			<div class="grow"><Input label={t('sync.s3_bucket')} placeholder="my-vault-bucket" bind:value={s3Bucket} oninput={changed} /></div>
+			<div class="grow"><Input label={t('sync.s3_region')} placeholder="auto" bind:value={s3Region} oninput={changed} /></div>
+		</div>
+		<div class="form-field">
+			<Input label={t('sync.s3_folder')} placeholder="reach" bind:value={s3Folder} oninput={changed} />
+		</div>
+		<div class="form-field">
+			<Input label={t('sync.s3_access_key')} bind:value={s3AccessKey} oninput={changed} />
+		</div>
+		<div class="form-field">
+			<Input label={t('sync.s3_secret_key')} type="password" bind:value={s3SecretKey} oninput={changed} />
+		</div>
+		<p class="section-desc">{t('sync.s3_hint')}</p>
 	{:else}
 		<div class="form-field">
 			<Input label={t('sync.git_remote')} placeholder="git@github.com:me/reach-vault.git" bind:value={gitRemote} oninput={changed} />

@@ -29,7 +29,7 @@
 
 PuTTY hasn't changed in decades, MobaXterm is Windows-only, and Termius charges a subscription for the basics. Reach, which Reacher CM is built on, is an SSH client built from scratch: native Rust networking, a fast UI, encrypted storage, and the same app on Windows, macOS, Linux and Android. No Electron, no subscription, no account.
 
-Reacher CM adds what people moving from Remote Desktop Manager and similar tools miss most: importing from RDM, saved credentials shared by many sessions, session notes, Telnet, broadcast input, and sync through a folder, SFTP, Git or an SMB share.
+Reacher CM adds what people moving from Remote Desktop Manager and similar tools miss most: importing from RDM, saved credentials shared by many sessions, session notes, Telnet, broadcast input, and sync through a folder, SFTP, Git, an SMB share or an S3 bucket.
 
 ## Added in Reacher CM
 
@@ -39,7 +39,7 @@ Reacher CM adds what people moving from Remote Desktop Manager and similar tools
 - **Telnet sessions** for switches, routers and console servers, with automatic login.
 - **Broadcast input**: type into several terminals at once.
 - **Favorites** on the start screen, and an option to open sessions with a double click.
-- **Local-first sync**: every vault works offline and syncs in the background, through Turso, a folder, SFTP, Git or an SMB share without mounting it. Conflicting edits are kept as copies, not lost.
+- **Local-first sync**: every vault works offline and syncs in the background, through Turso, a folder, SFTP, Git, an SMB share without mounting it, or an S3 bucket (Amazon, MinIO, Backblaze B2, Wasabi, R2). Conflicting edits are kept as copies, not lost.
 - **Czech translation**, and early **iOS** builds.
 
 See the [changelog](CHANGELOG.md) for details.

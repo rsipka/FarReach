@@ -1,6 +1,6 @@
 ---
 title: "Sync to Your Own Storage"
-description: "Sync your personal data through a folder, an SMB share, an SFTP server or a Git repository instead of Turso."
+description: "Sync your personal data through a folder, an SMB share, an SFTP server, a Git repository or an S3 bucket instead of Turso."
 ---
 
 Your personal data (sessions, saved credentials, folders, settings) can sync through storage you already have, with no Turso account:
@@ -9,6 +9,7 @@ Your personal data (sessions, saved credentials, folders, settings) can sync thr
 - **SMB share**: a Windows file share or a NAS, reached by Reach itself, with no need to mount it or map a drive letter.
 - **SFTP server**: any server you can log in to with a password or a private key.
 - **Git repository**: any repository you can push to, through the `git` command.
+- **S3 bucket**: Amazon S3 or any S3-compatible store, such as MinIO, Backblaze B2, Wasabi or Cloudflare R2.
 
 Shared vaults always stay on Turso, because each member needs a database they can reach on their own.
 
@@ -46,6 +47,12 @@ The folder is under your login folder unless it starts with `/`. Reach does not 
 ### Git
 
 Reach runs the `git` command, so your own SSH keys, `~/.ssh/config` and credential helpers work as they do in a terminal. For an https remote you can also give an access token. Use an empty repository, or a branch of its own (Reach uses `reach-vault` unless you name another): each sync replaces that branch with a single commit, so the repository does not grow with every change.
+
+### S3
+
+Give the endpoint (the server's address, such as `s3.eu-central-1.amazonaws.com`, `s3.us-west-004.backblazeb2.com`, `<account>.r2.cloudflarestorage.com`, or `http://localhost:9000` for MinIO on this computer; plain `http://` is refused for any other server), the bucket, optionally a folder in it, and an access key with its secret. The region is read from the endpoint when it names one (R2 uses `auto`, others `us-east-1`); fill it in when your store wants another. Amazon buckets are addressed as `bucket.host`, every other store as `host/bucket`.
+
+The keys only need to read and write one object, `<folder>/reach-vault.reach` (`s3:GetObject` and `s3:PutObject` on Amazon). Two devices writing at once are kept apart by conditional writes (`If-Match` on the object's ETag); a store without them gets a check just before each write instead, which narrows the window but cannot close it. The keys are kept sealed on this device, like every other sync token.
 
 ## How often it syncs
 
