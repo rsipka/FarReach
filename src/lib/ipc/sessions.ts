@@ -365,3 +365,50 @@ export async function sessionShare(
 export async function wslListDistros(): Promise<string[]> {
   return invoke<string[]>('wsl_list_distros');
 }
+
+/** One field of a bulk edit: a value for every session, or none. */
+export type BulkChange<T> = { set: T } | 'clear';
+
+/** What a bulk edit changes; a field left out stays as each session has it. */
+export interface SessionPatch {
+  username?: string;
+  /** Only sessions that log in with a password take it. */
+  password?: BulkChange<string>;
+  /** `{ set: id }` a saved credential, `{ set: 'own' }` the session's own
+   *  login, `'clear'` the folder's credential, if any. */
+  credential?: BulkChange<string>;
+  port?: number;
+  domain?: BulkChange<string>;
+  tags_add?: string[];
+  tags_remove?: string[];
+  notes?: { op: 'replace' | 'append'; text: string } | { op: 'clear' };
+  terminal_theme?: BulkChange<string>;
+  history?: BulkChange<HistoryMode>;
+}
+
+export interface BulkOutcome {
+  id: string;
+  name: string;
+  status: 'changed' | 'unchanged' | 'failed';
+  /** Patch fields this session does not take, e.g. `domain` on SSH. */
+  skipped: string[];
+  error?: string;
+}
+
+export interface BulkResult {
+  results: BulkOutcome[];
+  /** For `sessionBulkUndo`; absent when nothing changed. */
+  undo?: string;
+}
+
+/** Change the same fields on many sessions. Each is saved as the session
+ *  editor would save it; one that fails is reported and the rest stay saved. */
+export async function sessionBulkUpdate(sessionIds: string[], patch: SessionPatch): Promise<BulkResult> {
+  return invoke<BulkResult>('session_bulk_update', { sessionIds, patch });
+}
+
+/** Put the sessions of the last bulk edit back as they were, except those
+ *  changed since (`kept`, by name). */
+export async function sessionBulkUndo(token: string): Promise<{ restored: number; kept: string[] }> {
+  return invoke<{ restored: number; kept: string[] }>('session_bulk_undo', { token });
+}

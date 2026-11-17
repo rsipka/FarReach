@@ -14,7 +14,8 @@
 		faXmark,
 		faListCheck,
 		faFolder,
-		faFolderOpen
+		faFolderOpen,
+		faPen
 	} from '@fortawesome/free-solid-svg-icons';
 	import { registerSessionActions, shortcutLabel } from '#lib/state/shortcuts.svelte.js';
 	import { pendingSessionAction, takeSessionAction } from '#lib/state/palette.svelte.js';
@@ -27,6 +28,7 @@
 	import RdpImport from './RdpImport.svelte';
 	import RdmImport from './RdmImport.svelte';
 	import CredentialList from './CredentialList.svelte';
+	import BulkEditor from './BulkEditor.svelte';
 	import { savedCredentialList, credentialsFor, type SavedCredential } from '#lib/ipc/savedCredentials.js';
 	import SessionCard from './SessionCard.svelte';
 	import VaultSelector from '#lib/components/vault/VaultSelector.svelte';
@@ -36,7 +38,7 @@
 	import Button from '#lib/components/shared/Button.svelte';
 	import UntrustedRefsDialog from '#lib/components/pwmanager/UntrustedRefsDialog.svelte';
 	import { sessionUntrustedSecretRefs, sessionApproveSecretRefs, untrustedRefsFromError, type UntrustedRefs } from '#lib/ipc/sessions.js';
-	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetFolderCredential, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
+	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetFolderCredential, sessionBulkUndo, type BulkResult, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
 	import { sshConnect, sshDisconnect, sshDetectOs, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
@@ -385,6 +387,75 @@
 		}
 	}
 
+	// ---- Editing the selected sessions at once (BulkEditor) -------------------
+	let bulkEditOpen = $state(false);
+	/** Undoes the last bulk edit until the app quits or the vault locks. */
+	let lastBulkUndo = $state<string | null>(null);
+	let bulkEditSessions = $derived(bulkEditOpen ? sessions.filter(s => selected.has(s.id)) : []);
+
+	function openBulkEdit(): void {
+		closeContextMenu();
+		if (selected.size === 1) {
+			const only = sessions.find(s => selected.has(s.id));
+			if (only) handleEdit(only);
+			return;
+		}
+		if (selected.size > 1) bulkEditOpen = true;
+	}
+
+	async function bulkEdited(result: BulkResult): Promise<void> {
+		await loadSessions();
+		const changed = result.results.filter(r => r.status === 'changed').length;
+		const failed = result.results.filter(r => r.status === 'failed').length;
+		if (result.undo) lastBulkUndo = result.undo;
+		if (failed > 0) return; // the editor shows what failed
+		const token = result.undo;
+		addToast(
+			t('bulk.done_toast', { count: String(changed) }),
+			'success',
+			30000,
+			token ? { label: t('bulk.undo'), run: () => void undoBulkEdit(token) } : undefined
+		);
+	}
+
+	async function undoBulkEdit(token: string | null = lastBulkUndo): Promise<void> {
+		closeContextMenu();
+		if (!token) return;
+		try {
+			const r = await sessionBulkUndo(token);
+			lastBulkUndo = null;
+			await loadSessions();
+			if (r.kept.length > 0) {
+				addToast(t('bulk.undo_partial', { count: String(r.restored), names: r.kept.join(', ') }), 'warning', 8000);
+			} else {
+				addToast(t('bulk.undone_toast', { count: String(r.restored) }), 'success');
+			}
+		} catch (err) {
+			lastBulkUndo = null;
+			addToast(String(err), 'error');
+		}
+	}
+
+	/** Add every session inside a folder, at any depth, to the selection. */
+	function selectFolderSessions(folder: Folder): void {
+		closeContextMenu();
+		const inside = new Set([folder.id]);
+		let grew = true;
+		while (grew) {
+			grew = false;
+			for (const f of folders) {
+				if (f.parent_id && inside.has(f.parent_id) && !inside.has(f.id)) {
+					inside.add(f.id);
+					grew = true;
+				}
+			}
+		}
+		const next = new Set(selected);
+		for (const s of filteredSessions) if (s.folder_id && inside.has(s.folder_id)) next.add(s.id);
+		selected = next;
+		selectMode = true;
+	}
+
 	async function deleteSelected(): Promise<void> {
 		const ids = [...selected];
 		bulkDeleteConfirm = false;
@@ -406,7 +477,7 @@
 		if (!selecting) return;
 		function onKey(e: KeyboardEvent) {
 			// A dialog on top closes itself first.
-			if (e.key === 'Escape' && !moveIds_ && !bulkDeleteConfirm) clearSelection();
+			if (e.key === 'Escape' && !moveIds_ && !bulkDeleteConfirm && !bulkEditOpen) clearSelection();
 		}
 		window.addEventListener('keydown', onKey);
 		return () => window.removeEventListener('keydown', onKey);
@@ -1422,6 +1493,10 @@
 					</button>
 				</div>
 				<div class="bulk-actions">
+					<button class="bulk-btn" type="button" disabled={selected.size === 0} onclick={openBulkEdit} title={t('bulk.edit_hint')}>
+						<FaIcon icon={faPen} size={11} />
+						<span>{t('bulk.edit')}</span>
+					</button>
 					<button class="bulk-btn primary" type="button" disabled={selected.size === 0} onclick={() => openMove([...selected])}>
 						<FaIcon icon={faFolderOpen} size={11} />
 						<span>{t('session.move_to')}</span>
@@ -1471,9 +1546,15 @@
 				<button class="context-item" onclick={() => { if (contextMenu?.session) handleConnect(contextMenu.session); closeContextMenu(); }} type="button">
 					{t('session.connect')}
 				</button>
-				<button class="context-item" onclick={() => { if (contextMenu?.session) handleEdit(contextMenu.session); closeContextMenu(); }} type="button">
-					{t('session.edit')}
-				</button>
+				{#if selected.has(contextMenu.session.id) && selected.size > 1}
+					<button class="context-item" onclick={openBulkEdit} type="button">
+						{t('bulk.edit_n', { count: String(selected.size) })}
+					</button>
+				{:else}
+					<button class="context-item" onclick={() => { if (contextMenu?.session) handleEdit(contextMenu.session); closeContextMenu(); }} type="button">
+						{t('session.edit')}
+					</button>
+				{/if}
 				<button class="context-item" onclick={() => { if (contextMenu?.session) void setFavorite(contextMenu.session, !contextMenu.session.favorite); }} type="button">
 					{contextMenu.session.favorite ? t('session.remove_favorite') : t('session.add_favorite')}
 				</button>
@@ -1519,6 +1600,7 @@
 				{/if}
 			{:else if contextMenu.folder}
 				<button class="context-item" onclick={() => contextNewFolder(contextMenu?.folder?.id ?? null)} type="button">{t('session.new_folder')}</button>
+				<button class="context-item" onclick={() => { if (contextMenu?.folder) selectFolderSessions(contextMenu.folder); }} type="button">{t('bulk.select_folder')}</button>
 				<div class="context-sep"></div>
 				<div class="context-label">{t('session.move_to_folder')}</div>
 				<div class="context-folders">
@@ -1539,10 +1621,21 @@
 				<button class="context-item context-danger" onclick={() => { if (contextMenu?.folder) handleDeleteFolder(contextMenu.folder.id); closeContextMenu(); }} type="button">{t('common.delete')}</button>
 			{:else}
 				<button class="context-item" onclick={() => contextNewFolder()} type="button">{t('session.new_folder')}</button>
+				{#if lastBulkUndo}
+					<button class="context-item" onclick={() => void undoBulkEdit()} type="button">{t('bulk.undo_last')}</button>
+				{/if}
 			{/if}
 		</div>
 	{/if}
 </div>
+
+<BulkEditor
+	open={bulkEditOpen}
+	sessions={bulkEditSessions}
+	credentials={savedCredentials}
+	onclose={() => (bulkEditOpen = false)}
+	onapplied={(r) => void bulkEdited(r)}
+/>
 
 <Modal open={moveIds_ !== null} onclose={() => (moveIds_ = null)} title={t('session.move_n_title', { count: String(moveIds_?.length ?? 0) })} maxWidth="420px">
 	<div class="move-body">
@@ -2660,7 +2753,7 @@
 
 	.bulk-actions {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: 1fr 1fr 1fr;
 		gap: 6px;
 	}
 
