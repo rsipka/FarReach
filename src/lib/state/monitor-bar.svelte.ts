@@ -7,6 +7,15 @@
 import { getActiveTab, getTabs } from '#lib/state/tabs.svelte.js';
 import { getActivePage } from '#lib/state/navigation.svelte.js';
 import * as share from '#lib/state/share.svelte.js';
+import { getSettings } from '#lib/state/settings.svelte.js';
+import type { Tab } from '#lib/state/tabs.svelte.js';
+
+/** Whether a tab's server is monitored: its session's own choice, or the
+ *  default from Settings. */
+export function monitoringWanted(tab: Tab | undefined): boolean {
+	if (!tab) return false;
+	return tab.monitoring ?? getSettings().serverMonitoring;
+}
 
 /** Server stats come from an SSH or WSL session; the bar also holds the
  *  sharing controls, so it stays for a shared local shell. Never under a

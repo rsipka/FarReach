@@ -11,11 +11,13 @@
 		sshUser?: string;
 		/** The id this session is shared under, for the MCP controls. */
 		sessionId?: string;
+		/** Server monitoring is off for this tab (its session or Settings). */
+		monitoringOff?: boolean;
 	}
 
-	let { connectionId, sshUser, sessionId }: Props = $props();
+	let { connectionId, sshUser, sessionId, monitoringOff = false }: Props = $props();
 
-	let stats = $derived(connectionId ? getStats(connectionId) : undefined);
+	let stats = $derived(connectionId && !monitoringOff ? getStats(connectionId) : undefined);
 
 	// This bar is the window's bottom row while it shows (monitor-bar.svelte.ts),
 	// so it carries what the status bar said: the connection's state, as the
@@ -190,7 +192,7 @@
 	     nothing to monitor and is still something you might share. -->
 	<div class="monitoring-bar disconnected">
 		{@render linkState()}
-		<span class="disconnected-text">{t('monitoring.not_connected')}</span>
+		<span class="disconnected-text">{monitoringOff && connectionId ? t('monitoring.off') : t('monitoring.not_connected')}</span>
 		<ShareBar />
 		<Clock />
 	</div>

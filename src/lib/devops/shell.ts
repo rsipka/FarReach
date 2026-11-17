@@ -44,6 +44,7 @@ export async function openContainerShell(route: Route, engine: Engine, container
 	tab.sshConnectParams = params;
 	tab.sessionId = from.sessionId;
 	tab.terminalTheme = from.terminalTheme;
+	tab.monitoring = from.monitoring;
 	tab.historyMode = from.historyMode;
 	setActivePage('terminal');
 }
