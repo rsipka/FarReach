@@ -164,9 +164,7 @@ jobs:
         run: |
           npm run check
           npm run i18n:check
-          npm run ios-source:test
-          npm run rdm-import:test
-          npm run import-managers:test
+          npm run test:scripts
           npm run build
 
   test:
