@@ -35,6 +35,7 @@
 	import MobileKeyBar, { type BarKey } from '#lib/components/shared/MobileKeyBar.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
 	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
+	import { cssFontFamily } from '#lib/utils/font.js';
 
 	interface Props {
 		ptyId: string;
@@ -92,7 +93,7 @@
 	 *  then sit spread out in cells sized for its widest one (#127). */
 	function terminalFont(family: string | undefined): string {
 		const f = family || 'monospace';
-		return onPhone && f === 'monospace' ? '"JetBrains Mono", monospace' : f;
+		return onPhone && f === 'monospace' ? '"JetBrains Mono", monospace' : cssFontFamily(f);
 	}
 
 	/** Make the terminal's text a size larger or smaller, from 8 to 32 px,

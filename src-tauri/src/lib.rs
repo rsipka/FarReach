@@ -52,6 +52,7 @@ use ipc::plugin_commands::*;
 use ipc::marketplace_commands::*;
 use ipc::credential_commands::*;
 use ipc::settings_commands::*;
+use ipc::font_commands::*;
 use ipc::mcp_commands::*;
 use ipc::rdp_commands::*;
 use ipc::vnc_commands::*;
@@ -586,6 +587,7 @@ pub fn run() {
             settings_set,
             settings_delete,
             settings_save_all,
+            fonts_list_installed,
             // Vault commands
             vault_init_identity,
             vault_unlock,
@@ -1005,6 +1007,7 @@ pub fn run() {
             settings_set,
             settings_delete,
             settings_save_all,
+            fonts_list_installed,
             // Vault commands
             vault_init_identity,
             vault_unlock,
