@@ -2836,7 +2836,7 @@
   "termtheme.edit": "Редактирай",
   "termtheme.delete": "Изтрий",
   "termtheme.import": "Импортиране на файл...",
-  "termtheme.locked": "Отключете Reach, за да създавате, импортирате или изтегляте свои теми.",
+  "termtheme.locked": "Вашите теми се пазят в трезора: настройте го или го отключете, за да създавате, импортирате или изтегляте теми.",
   "termtheme.more_title": "Още схеми от iTerm2-Color-Schemes",
   "termtheme.more_hint": "Още схеми: {{count}}. Изтеглят се от GitHub само когато изберете някоя. Важат лицензите на авторите им; вижте",
   "termtheme.more_search": "Търсене по име, напр. Homebrew",

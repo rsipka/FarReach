@@ -2836,7 +2836,7 @@
   "termtheme.edit": "Upravit",
   "termtheme.delete": "Smazat",
   "termtheme.import": "Importovat soubor...",
-  "termtheme.locked": "Odemkněte Reach, abyste mohli vytvářet, importovat nebo stahovat vlastní motivy.",
+  "termtheme.locked": "Vlastní motivy se ukládají do trezoru: nastavte ho nebo odemkněte, abyste je mohli vytvářet, importovat nebo stahovat.",
   "termtheme.more_title": "Další schémata z iTerm2-Color-Schemes",
   "termtheme.more_hint": "Dalších schémat: {{count}}. Stáhnou se z GitHubu, až když některé vyberete. Platí licence jejich autorů, viz",
   "termtheme.more_search": "Hledat podle názvu, např. Homebrew",
