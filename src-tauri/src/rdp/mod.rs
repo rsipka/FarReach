@@ -637,7 +637,9 @@ fn drive_name(path: &str) -> String {
 /// folded into one integer the way the reference viewer does it. Servers log
 /// it and nothing more, so what matters is only that it is stable and ours.
 fn client_build() -> u32 {
-    let mut parts = env!("CARGO_PKG_VERSION").split('.').map(|p| p.parse::<u32>().unwrap_or(0));
+    // A dev build (0.9.2-dev.4) counts as its numeric version.
+    let core = env!("CARGO_PKG_VERSION").split('-').next().unwrap_or("");
+    let mut parts = core.split('.').map(|p| p.parse::<u32>().unwrap_or(0));
     let major = parts.next().unwrap_or(0);
     let minor = parts.next().unwrap_or(0);
     let patch = parts.next().unwrap_or(0);

@@ -11,7 +11,9 @@
 
 1. Set the version to `X.Y.Z-dev.N` in `package.json`, `package-lock.json`
    (twice), `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` and
-   `src-tauri/tauri.conf.json`.
+   `src-tauri/tauri.conf.json`, and add a `<release version="X.Y.Z-dev.N"
+   type="development">` entry at the top of `<releases>` in
+   `src-tauri/linux/com.farreach.client.metainfo.xml` (a Rust test checks it).
 2. In `src-tauri/tauri.conf.json` set `bundle.windows.wix.version` to
    `X.Y.Z.N` and `bundle.android.versionCode` to
    `X*10000000 + Y*100000 + Z*1000 + N` (0.9.2-dev.4 is `902004`). Windows and
