@@ -161,10 +161,9 @@
 			<span class="session-name-row">
 				<span class="session-name">{session.name}</span>
 				{#if session.favorite}
-					<svg class="fav-mark" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label={t('session.favorite')}>
-						<title>{t('session.favorite')}</title>
+					<span class="mark-tip" title={t('session.favorite')}><svg class="fav-mark" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label={t('session.favorite')}>
 						<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
-					</svg>
+					</svg></span>
 				{/if}
 				<!-- Beside the name, which is short, so the address below has the
 				     row's width to itself. -->
@@ -651,5 +650,10 @@
 	.fav-mark {
 		flex-shrink: 0;
 		color: var(--color-accent);
+	}
+
+	.mark-tip {
+		display: inline-flex;
+		flex-shrink: 0;
 	}
 </style>
