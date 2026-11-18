@@ -10,6 +10,7 @@
 	import { ptyWrite, ptyResize } from '#lib/ipc/pty.js';
 	import { sshSend, sshResize, sshConnect, sshReady, type SshConnectParams } from '#lib/ipc/ssh.js';
 	import { telnetConnect, telnetDisconnect, telnetSend, telnetResize, type TelnetConnectParams } from '#lib/ipc/telnet.js';
+	import { serialConnect, serialDisconnect, serialSend, serialBreak, serialSummary as serialLabel, type SerialConnectParams } from '#lib/ipc/serial.js';
 	import { untrustedRefsFromError } from '#lib/ipc/sessions.js';
 	import { noteLineEntered } from '#lib/state/explorer.svelte.js';
 	import { registerBufferReader, unregisterBufferReader } from '#lib/state/terminal-buffer.svelte.js';
@@ -42,7 +43,7 @@
 
 	interface Props {
 		ptyId: string;
-		type: 'local' | 'ssh' | 'telnet';
+		type: 'local' | 'ssh' | 'telnet' | 'serial';
 		connectionId?: string;
 		/** Has the keyboard. */
 		active: boolean;
@@ -52,6 +53,8 @@
 		sshConnectParams?: SshConnectParams;
 		/** Telnet: where to connect. The terminal connects once it listens. */
 		telnetConnectParams?: TelnetConnectParams;
+		/** Serial: the port to open. The terminal opens it once it listens. */
+		serialConnectParams?: SerialConnectParams;
 		onReconnected?: (newConnectionId: string) => void;
 		onReady?: () => void;
 		/** The session's terminal theme id; unset: the default from Settings. */
@@ -65,7 +68,7 @@
 		wslDistro?: string | null;
 	}
 
-	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, telnetConnectParams, onReconnected, onReady, terminalTheme, sessionId, sessionName, historyMode, wslDistro }: Props = $props();
+	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, telnetConnectParams, serialConnectParams, onReconnected, onReady, terminalTheme, sessionId, sessionName, historyMode, wslDistro }: Props = $props();
 
 	/**
 	 * Start recording this tab's stream into the session history (and, for
@@ -81,7 +84,7 @@
 		const secrets = [sshConnectParams?.password, sshConnectParams?.keyPassphrase, telnetConnectParams?.password].filter(
 			(x): x is string => !!x
 		);
-		const host = sshConnectParams?.host ?? telnetConnectParams?.host ?? wslDistro ?? 'localhost';
+		const host = sshConnectParams?.host ?? telnetConnectParams?.host ?? serialConnectParams?.port ?? wslDistro ?? 'localhost';
 		try {
 			const status = await historyStart(stream, {
 				meta: {
@@ -105,8 +108,10 @@
 
 	/** The colours this terminal paints with. */
 	let palette = $derived(terminalPalette(terminalTheme));
-	/** A connection made by Reach (SSH, Telnet) that can drop and be made again. */
-	let remote = $derived(termType === 'ssh' || termType === 'telnet');
+	/** A connection made by Reach (SSH, Telnet, a serial port) that can drop and be made again. */
+	let remote = $derived(termType === 'ssh' || termType === 'telnet' || termType === 'serial');
+	/** Telnet and serial: the terminal makes the connection itself, once it listens. */
+	let selfConnecting = $derived(termType === 'telnet' || termType === 'serial');
 	let shown = $derived(visible ?? active);
 
 	// Local state seeded from the `connectionId` prop and overridden in-place on
@@ -321,6 +326,12 @@
 				{ label: '', separator: true },
 				{ label: t('textmenu.select_all'), action: () => term.selectAll() },
 				{ label: t('terminal.menu_clear'), action: () => term.clear() },
+				...(termType === 'serial'
+					? [
+							{ label: '', separator: true },
+							{ label: t('serial.send_break'), disabled: disconnected, action: sendBreak }
+						]
+					: []),
 				{ label: '', separator: true },
 				{
 					label: t('history.search_menu'),
@@ -642,6 +653,12 @@
 					console.error('[Terminal] Failed to write to Telnet:', err);
 				});
 			}
+		} else if (termType === 'serial') {
+			if (currentConnectionId && !disconnected) {
+				serialSend(currentConnectionId, data).catch((err) => {
+					console.error('[Terminal] Failed to write to the serial port:', err);
+				});
+			}
 		} else {
 			ptyWrite(ptyId, data).catch((err) => {
 				console.error('[Terminal] Failed to write to PTY:', err);
@@ -663,6 +680,8 @@
 			});
 		} else if (termType === 'telnet') {
 			if (currentConnectionId && !disconnected) telnetResize(currentConnectionId, cols, rows).catch(() => {});
+		} else if (termType === 'serial') {
+			// A serial line has no window size to tell.
 		} else {
 			ptyResize(ptyId, cols, rows).catch((err) => {
 				console.error('[Terminal] Failed to resize PTY:', err);
@@ -856,11 +875,12 @@
 		});
 
 		unlistenExit = await listen<{ code?: number | null; error?: string | null } | null>(exitEventName, (event) => {
-			if (termType === 'telnet') {
+			if (selfConnecting) {
 				const error = event.payload?.error;
 				if (!error && closeOnCleanExit()) return;
 				cleanEnd = !error;
-				term.write(`\r\n\x1b[90m[${error ? `${t('telnet.closed')}: ${error}` : t('telnet.closed')}]\x1b[0m\r\n`);
+				const closed = termType === 'serial' ? t('serial.closed') : t('telnet.closed');
+				term.write(`\r\n\x1b[90m[${error ? `${closed}: ${error}` : closed}]\x1b[0m\r\n`);
 				disconnected = true;
 				return;
 			}
@@ -935,10 +955,53 @@
 		}
 	}
 
+	/**
+	 * Open the serial port, listening under a new id first as Telnet does.
+	 * Opening it again (reconnect) drops the tab's old connection.
+	 */
+	async function connectSerial(term: Terminal): Promise<void> {
+		if (!serialConnectParams || reconnecting) return;
+		reconnecting = true;
+		disconnected = false;
+		cleanEnd = false;
+		const newId = crypto.randomUUID();
+		const { port, options } = serialConnectParams;
+		try {
+			unlistenData?.();
+			unlistenExit?.();
+			// The old connection holds the port: let it go before opening it again.
+			if (currentConnectionId) await serialDisconnect(currentConnectionId).catch(() => {});
+			currentConnectionId = newId;
+			await setupEventListeners(term);
+			term.write(`\x1b[90m[${t('serial.opening', { port, settings: serialLabel(options) })}]\x1b[0m\r\n`);
+			await serialConnect(newId, serialConnectParams);
+			if (!terminal) {
+				void serialDisconnect(newId).catch(() => {});
+				return;
+			}
+			onReconnected?.(newId);
+		} catch (err) {
+			term.write(`\r\n\x1b[31m[${t('serial.open_failed')}: ${String(err)}]\x1b[0m\r\n`);
+			disconnected = true;
+		} finally {
+			reconnecting = false;
+		}
+	}
+
+	function sendBreak(): void {
+		if (termType === 'serial' && currentConnectionId && !disconnected) {
+			serialBreak(currentConnectionId).catch((err) => console.error('[Terminal] Break failed:', err));
+		}
+	}
+
 	/** Connect again; the error, or null once connected. */
 	async function handleReconnect(): Promise<string | null> {
 		if (terminal && termType === 'telnet') {
 			await connectTelnet(terminal);
+			return null;
+		}
+		if (terminal && termType === 'serial') {
+			await connectSerial(terminal);
 			return null;
 		}
 		if (!terminal || !sshConnectParams || reconnecting) return 'busy';
@@ -1015,6 +1078,7 @@
 			// A Telnet tab connects from here, once; a terminal mounted again
 			// for a tab already connected only listens.
 			if (termType === 'telnet' && !currentConnectionId) void connectTelnet(term);
+			else if (termType === 'serial' && !currentConnectionId) void connectSerial(term);
 			else setupEventListeners(term);
 			setupResizeObserver(term, fit, containerEl);
 

@@ -48,18 +48,18 @@ export function appliesTo(field: BulkField, s: SessionConfig, credential?: Sessi
 	const k = kindOf(s);
 	switch (field) {
 		case 'username':
-			return k !== 'wsl' && !loginFromCredential(s, credential);
+			return k !== 'wsl' && k !== 'serial' && !loginFromCredential(s, credential);
 		case 'password':
-			return k !== 'wsl' && s.auth_method?.type === 'Password' && !loginFromCredential(s, credential);
+			return k !== 'wsl' && k !== 'serial' && s.auth_method?.type === 'Password' && !loginFromCredential(s, credential);
 		case 'credential':
 			return takesCredential(s);
 		case 'port':
-			return k !== 'wsl';
+			return k !== 'wsl' && k !== 'serial';
 		case 'domain':
 			return k === 'rdp';
 		case 'terminal_theme':
 		case 'history':
-			return k === 'ssh' || k === 'telnet' || k === 'wsl';
+			return k === 'ssh' || k === 'telnet' || k === 'wsl' || k === 'serial';
 		case 'tags':
 		case 'notes':
 			return true;

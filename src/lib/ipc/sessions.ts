@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { SecretRef } from './pwmanager';
 import type { TelnetOptions } from './telnet';
+import type { SerialOptions } from './serial';
 import type { HistoryMode } from './history';
 import { t } from '#lib/state/i18n.svelte.js';
 
@@ -64,6 +65,8 @@ export interface SessionConfig {
   wsl_distro?: string | null;
   /** Telnet only: how it talks to the device. Absent: the defaults. */
   telnet?: TelnetOptions | null;
+  /** Serial only: speed, framing, flow control and keys. The port is `host`. */
+  serial?: SerialOptions | null;
   /** A saved credential this session logs in with (see savedCredentials.ts).
    *  Unset: its folder's, if one applies. */
   credential_id?: string | null;
@@ -141,7 +144,7 @@ export interface SshOptions {
   my_accepted_weakenings?: string[] | null;
 }
 
-export type SessionKind = 'ssh' | 'rdp' | 'vnc' | 'wsl' | 'telnet';
+export type SessionKind = 'ssh' | 'rdp' | 'vnc' | 'wsl' | 'telnet' | 'serial';
 
 export function sessionKind(session: Pick<SessionConfig, 'kind'>): SessionKind {
   return session.kind ?? 'ssh';
@@ -200,6 +203,7 @@ export async function sessionCreate(params: {
   wslDistro?: string | null;
   credentialId?: string | null;
   telnet?: TelnetOptions | null;
+  serial?: SerialOptions | null;
   notes?: string | null;
   customFields?: CustomField[] | null;
   terminalTheme?: string | null;
@@ -230,6 +234,7 @@ export async function sessionCreate(params: {
     wslDistro: params.wslDistro || null,
     credentialId: params.credentialId || null,
     telnet: params.kind === 'telnet' ? (params.telnet ?? null) : null,
+    serial: params.kind === 'serial' ? (params.serial ?? null) : null,
     notes: params.notes?.trim() ? params.notes : null,
     customFields: params.customFields?.length ? params.customFields : null,
     terminalTheme: params.terminalTheme || null,

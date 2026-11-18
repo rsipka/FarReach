@@ -63,8 +63,8 @@ function terminalTarget(): { ssh: boolean; id: string } | null {
 	const tab = getActiveTab();
 	if (tab?.type === 'ssh') return tab.connectionId ? { ssh: true, id: tab.connectionId } : null;
 	if (tab?.type === 'local') return { ssh: false, id: tab.id };
-	// A Telnet terminal is always typed into through its mounted input.
-	if (tab?.type === 'telnet') return { ssh: false, id: tab.id };
+	// A Telnet or serial terminal is always typed into through its mounted input.
+	if (tab?.type === 'telnet' || tab?.type === 'serial') return { ssh: false, id: tab.id };
 	return null;
 }
 

@@ -74,12 +74,12 @@
 	let updateCount = $state(0);
 
 	/** Count live SSH connections (backend truth; falls back to connected tabs),
-	 *  plus open Telnet sessions and desktops. A tab whose session already
+	 *  plus open Telnet and serial sessions and desktops. A tab whose session already
 	 *  ended (it shows Reconnect) is not live: closing it loses nothing. */
 	async function countActiveConnections(): Promise<number> {
 		const tabs = getTabs();
 		const ended = new Set(tabs.filter((tab) => tab.link === 'down' && tab.connectionId).map((tab) => tab.connectionId));
-		const others = tabs.filter((tab) => tab.link !== 'down' && (isDesktopTab(tab) || (tab.type === 'telnet' && !!tab.telnetConnectionId))).length;
+		const others = tabs.filter((tab) => tab.link !== 'down' && (isDesktopTab(tab) || (tab.type === 'telnet' && !!tab.telnetConnectionId) || (tab.type === 'serial' && !!tab.serialConnectionId))).length;
 		try {
 			return (await sshListConnections()).filter((c) => !ended.has(c.id)).length + others;
 		} catch {
@@ -232,11 +232,11 @@
 			{@render children()}
 		</main>
 		<!-- The assistant works on shells. A desktop tab has none for it to
-		     read or type into, nor does a Telnet device's console (it runs
-		     no shell commands), so it is told there is no tab. -->
+		     read or type into, nor does a Telnet or serial device's console
+		     (it runs no shell commands), so it is told there is no tab. -->
 		<AIPanel
 			connectionId={activeConnectionId}
-			activeTabId={isDesktopTab(activeTab) || activeTab?.type === 'telnet' ? undefined : activeTab?.id}
+			activeTabId={isDesktopTab(activeTab) || activeTab?.type === 'telnet' || activeTab?.type === 'serial' ? undefined : activeTab?.id}
 			activeTabType={activeTab?.type === 'local' || activeTab?.type === 'ssh' ? activeTab.type : undefined}
 		/>
 	</div>

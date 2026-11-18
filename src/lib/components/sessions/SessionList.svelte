@@ -41,10 +41,12 @@
 	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetFolderCredential, sessionSetFolderTmux, sessionBulkUndo, type BulkResult, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
+	import { DEFAULT_SERIAL_OPTIONS } from '#lib/ipc/serial.js';
 	import { sshConnect, sshDisconnect, sshDetectOs, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
 	// Passwords are now stored encrypted in vault, not in memory cache
 	import { createTab, updateTabOs } from '#lib/state/tabs.svelte.js';
 	import { getSettings, sessionLogConfig } from '#lib/state/settings.svelte.js';
+	import { isMobile } from '#lib/platform.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { promptForMasterPassword } from '#lib/state/password-prompt.svelte.js';
 	import ConnectSteps from './ConnectSteps.svelte';
@@ -831,6 +833,26 @@
 		};
 	}
 
+	/**
+	 * Open a saved serial session in a terminal tab, which opens the port by
+	 * itself once it is listening. The port is the session's `host`.
+	 */
+	function openSerial(session: SessionConfig): void {
+		if (isMobile()) {
+			addToast(t('serial.desktop_only'), 'error');
+			return;
+		}
+		setActivePage('terminal');
+		const tab = createTab('serial', session.host, undefined, session.name, session.detected_os ?? null);
+		tab.sessionId = session.id;
+		tab.terminalTheme = session.terminal_theme ?? null;
+		tab.historyMode = session.history ?? null;
+		tab.serialConnectParams = {
+			port: session.host,
+			options: { ...DEFAULT_SERIAL_OPTIONS, ...(session.serial ?? {}) },
+		};
+	}
+
 	/** Launch a local WSL session as a terminal tab */
 	function openWsl(session: SessionConfig): void {
 		const distro = session.wsl_distro?.trim();
@@ -940,6 +962,10 @@
 		}
 		if (sessionKind(session) === 'telnet') {
 			openTelnet(session);
+			return;
+		}
+		if (sessionKind(session) === 'serial') {
+			openSerial(session);
 			return;
 		}
 		// Check if credentials are stored in the session (from vault)

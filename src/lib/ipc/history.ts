@@ -9,7 +9,7 @@ export type HistoryMode = 'off' | HistoryLevel;
 export interface RunMeta {
 	sessionId?: string | null;
 	name: string;
-	/** ssh, telnet, local, wsl. */
+	/** ssh, telnet, serial, local, wsl. */
 	protocol: string;
 	host: string;
 	user: string;

@@ -17,12 +17,14 @@
 
 import {
 	aesCbcDecrypt,
+	baudOf,
 	blankHost,
 	Dedupe,
 	fromBase64,
 	fromHex,
 	pbkdf2,
 	portOr,
+	serialHost,
 	text,
 	type ImportHop,
 	type ImportHost,
@@ -156,12 +158,22 @@ export async function parseTabby(data: unknown, passphrase?: string | null): Pro
 		const type = text(p.type);
 		if (p.isBuiltin === true || p.isTemplate === true) continue;
 		const name = text(p.name) || `#${index}`;
+		const options = isObj(p.options) ? p.options : {};
+		if (type === 'serial') {
+			const serial = tabbySerial(String(index), name, options);
+			if (!serial) skipped.push({ label: name, reason: 'no_host' });
+			else if (!dedupe.add(serial)) skipped.push({ label: name, reason: 'duplicate' });
+			else {
+				serial.folder = folderOf(text(p.group));
+				hosts.push(serial);
+			}
+			continue;
+		}
 		const kind: ImportKind | null = type === 'ssh' ? 'ssh' : type === 'telnet' ? 'telnet' : null;
 		if (!kind) {
 			skipped.push({ label: name, reason: 'unsupported', type: type || '?' });
 			continue;
 		}
-		const options = isObj(p.options) ? p.options : {};
 		const address = splitAddress(text(options.host));
 		if (!address.host) {
 			skipped.push({ label: name, reason: 'no_host' });
@@ -190,4 +202,21 @@ export async function parseTabby(data: unknown, passphrase?: string | null): Pro
 	if (hosts.length === 0 && skipped.length === 0) return { ok: false, error: 'no_hosts' };
 	const notice = !vault && anySsh ? 'passwords_keychain' : vault && passphrase === null ? 'passwords_skipped' : undefined;
 	return { ok: true, hosts, skipped, credentials: [], notice };
+}
+
+/** A serial profile: its port, speed, framing and flow control. */
+function tabbySerial(id: string, name: string, o: Record<string, unknown>): ImportHost | null {
+	const port = text(o.port);
+	if (!port) return null;
+	const host = serialHost(id, name, port, {});
+	const speed = baudOf(text(o.baudrate));
+	if (speed) host.serial!.baud_rate = speed;
+	const bits = Number(o.databits);
+	if (bits >= 5 && bits <= 8) host.serial!.data_bits = bits;
+	if (Number(o.stopbits) === 2) host.serial!.stop_bits = 2;
+	const parity = text(o.parity).toLowerCase();
+	if (parity === 'odd' || parity === 'even' || parity === 'none') host.serial!.parity = parity;
+	if (o.rtscts === true) host.serial!.flow_control = 'hardware';
+	else if (o.xon === true || o.xoff === true) host.serial!.flow_control = 'software';
+	return host;
 }

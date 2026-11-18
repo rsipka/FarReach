@@ -23,7 +23,6 @@ pub mod recipe;
 pub mod report;
 pub mod share;
 pub mod sound;
-#[cfg(desktop)]
 pub mod serial;
 pub mod session;
 pub mod sftp;
@@ -589,9 +588,10 @@ pub fn run() {
             pty_close,
             // Serial commands
             serial_list_ports,
-            serial_open,
-            serial_close,
+            serial_connect,
             serial_send,
+            serial_break,
+            serial_disconnect,
             // Monitoring commands
             monitoring_start,
             monitoring_start_wsl,

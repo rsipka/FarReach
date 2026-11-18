@@ -10,10 +10,12 @@
  */
 
 import type { SessionKind } from '#lib/ipc/sessions.js';
+import type { SerialOptions } from '#lib/ipc/serial.js';
 
-export type ImportKind = Extract<SessionKind, 'ssh' | 'rdp' | 'vnc' | 'telnet'>;
+export type ImportKind = Extract<SessionKind, 'ssh' | 'rdp' | 'vnc' | 'telnet' | 'serial'>;
 
-export const DEFAULT_PORT: Record<ImportKind, number> = { ssh: 22, rdp: 3389, vnc: 5900, telnet: 23 };
+/** A serial session's port is its `host`; it has no TCP port. */
+export const DEFAULT_PORT: Record<ImportKind, number> = { ssh: 22, rdp: 3389, vnc: 5900, telnet: 23, serial: 0 };
 
 /** One hop on the way to an SSH host. */
 export interface ImportHop {
@@ -68,6 +70,8 @@ export interface ImportHost {
 	credential: ImportHostCredential | null;
 	/** Telnet only: plain TCP with no Telnet. */
 	raw: boolean;
+	/** Serial only: the line settings the file gives; the rest are the defaults. */
+	serial?: Partial<SerialOptions>;
 	notes: string | null;
 	fields: ImportField[];
 	/** The host's own password, when the file holds one that could be read. */
@@ -132,6 +136,19 @@ export class Dedupe {
 /** A host with every optional field at its empty value. */
 export function blankHost(id: string, kind: ImportKind, name: string, host: string, port: number): ImportHost {
 	return { id, kind, name: name || host, host, port, username: '', domain: null, keyPath: null, folder: [], jump: [], credential: null, raw: false, notes: null, fields: [] };
+}
+
+/** A serial session on `port` (COM3, /dev/ttyUSB0). */
+export function serialHost(id: string, name: string, port: string, serial: Partial<SerialOptions>): ImportHost {
+	const host = blankHost(id, 'serial', name, port, 0);
+	host.serial = serial;
+	return host;
+}
+
+/** A speed as a positive whole number of baud, or undefined. */
+export function baudOf(value: string): number | undefined {
+	const n = Number(value.trim());
+	return Number.isInteger(n) && n > 0 && n <= 12_000_000 ? n : undefined;
 }
 
 /** "user@host" as some apps write it in the host field. */

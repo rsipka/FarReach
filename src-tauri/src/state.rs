@@ -49,6 +49,8 @@ pub enum SessionKind {
     Vnc,
     Wsl,
     Telnet,
+    /// A local serial port (`host` is the port name). Desktop only.
+    Serial,
 }
 
 impl SessionKind {
@@ -89,6 +91,9 @@ pub struct SessionConfig {
     /// Telnet only: how it talks to the device (mode, Enter, Backspace).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub telnet: Option<crate::telnet::protocol::TelnetOptions>,
+    /// Serial only: speed, framing, flow control and keys.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub serial: Option<crate::serial::options::SerialOptions>,
     pub folder_id: Option<String>,
     pub tags: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

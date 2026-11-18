@@ -10,9 +10,9 @@ import { getTerminalInput } from './snippets.svelte';
 
 let chosen = $state<string[]>([]);
 
-/** Tabs with a terminal in them: local, SSH and Telnet, not desktops. */
+/** Tabs with a terminal in them: local, SSH, Telnet and serial, not desktops. */
 export function isTerminalTab(tab: Pick<Tab, 'type'> | undefined): boolean {
-	return tab?.type === 'local' || tab?.type === 'ssh' || tab?.type === 'telnet';
+	return tab?.type === 'local' || tab?.type === 'ssh' || tab?.type === 'telnet' || tab?.type === 'serial';
 }
 
 function openTerminals(): string[] {

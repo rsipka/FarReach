@@ -175,6 +175,15 @@ section('PuTTY');
 "HostName"=""
 "Protocol"="serial"
 "SerialLine"="COM3"
+"SerialSpeed"=dword:0001c200
+"SerialDataBits"=dword:00000007
+"SerialStopHalfbits"=dword:00000004
+"SerialParity"=dword:00000002
+"SerialFlowControl"=dword:00000002
+
+[HKEY_CURRENT_USER\\Software\\SimonTatham\\PuTTY\\Sessions\\noline]
+"Protocol"="serial"
+"SerialLine"=""
 `;
 	// As `reg export` writes it: UTF-16 with a byte order mark.
 	const r = parsePutty(decodeFile(Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(reg, 'utf16le')])));
@@ -185,7 +194,9 @@ section('PuTTY');
 	check('SSH proxy by host, with its plain password', eq(byName(r, 'db').jump, [{ host: 'gw.example.com', port: 2049, username: 'gwuser', password: 'gwpass' }]));
 	check('user@host in HostName', byName(r, 'bastion').username === 'jump');
 	check('telnet session', byName(r, 'router').kind === 'telnet' && byName(r, 'router').port === 23);
-	check('serial skipped, Default Settings not listed', r.skipped.length === 1 && r.skipped[0].type === 'serial' && !r.hosts.some((h) => h.name === 'Default Settings'));
+	const consoleHost = byName(r, 'console');
+	check('serial session with its line settings', consoleHost.kind === 'serial' && consoleHost.host === 'COM3' && consoleHost.port === 0 && eq(consoleHost.serial, { baud_rate: 115200, data_bits: 7, stop_bits: 2, parity: 'even', flow_control: 'hardware' }), JSON.stringify(consoleHost));
+	check('serial with no line skipped, Default Settings not listed', r.skipped.length === 1 && r.skipped[0].label === 'noline' && r.skipped[0].reason === 'no_host' && !r.hosts.some((h) => h.name === 'Default Settings'));
 	const unix = parsePutty('[Sessions\\box%20one]\nHostName=box\nProtocol=ssh\nPortNumber=2200\nUserName=me\n');
 	check('Linux session files (as the app joins them)', unix.ok && unix.hosts[0].name === 'box one' && unix.hosts[0].port === 2200);
 }
@@ -280,6 +291,7 @@ ImgNum=41
 DC01=#91#4%dc01.corp%3389%[Domain admin]%0%-1%-1%-1%-1%0%0%-1%%%%%0%0%%-1%%-1%-1%0%-1%0%-1#MobaFont%10%0%0%-1%15%236,236,236%30,30,30%180,180,192%0%-1%0%%xterm%-1%-1%_Std_Colors_0_%80%24%0%1%-1%<none>%%0%1%-1#0# #-1
 switch=#98#1%10.0.0.1%23%%%2%%%%%0%0%%1080%#MobaFont%10%0%0%-1%15%236,236,236%30,30,30%180,180,192%0%-1%0%%xterm%-1%-1%_Std_Colors_0_%80%24%0%1%-1%<none>%%0%1%-1#0# #-1
 console=#131#8%-1%100%3%0%0%1%2%COM3#MobaFont%10#0# #-1
+usbconsole=#131#8%-1%115200%3%0%0%1%2%COM12  (USB Serial Port (COM12))#MobaFont%10#0#Lab switch#-1
 `;
 	const plain = await parseMobaXterm(sessions);
 	check('export (no passwords) reads without asking', plain.ok && plain.notice === undefined, JSON.stringify(plain).slice(0, 300));
@@ -290,7 +302,9 @@ console=#131#8%-1%100%3%0%0%1%2%COM3#MobaFont%10#0# #-1
 	const dc = byName(plain, 'DC01');
 	check('RDP in nested folder', dc.kind === 'rdp' && eq(dc.folder, ['Windows', 'Servers']));
 	check('telnet', byName(plain, 'switch').kind === 'telnet');
-	check('serial skipped', plain.skipped.some((s) => s.label === 'console' && s.type === 'Serial'));
+	check('serial port read; unknown speed left at the default', byName(plain, 'console').kind === 'serial' && byName(plain, 'console').host === 'COM3' && eq(byName(plain, 'console').serial, {}));
+	const usb = byName(plain, 'usbconsole');
+	check('serial port name and speed out of a described port', usb.host === 'COM12' && eq(usb.serial, { baud_rate: 115200 }) && usb.notes === 'Lab switch', JSON.stringify(usb));
 
 	const withMaster = `${sessions}[Passwords]
 ssh22:jump@bastion.example.com=${mobaMasterEncrypt('jumppw', 'master!')}
@@ -347,7 +361,7 @@ function tabbyVault(content, passphrase) {
 			{ id: 'ssh:custom:bastion', type: 'ssh', name: 'bastion', group: 'g1', options: { host: 'bastion.example.com', user: 'jump', privateKeys: ['file:///C:/Users/me/.ssh/id_ed25519'] } },
 			{ id: 'ssh:custom:db', type: 'ssh', name: 'db1', group: 'g2', options: { host: 'db1.internal', port: 2222, user: 'pg', jumpHost: 'ssh:custom:bastion' } },
 			{ type: 'telnet', name: 'switch', options: { host: '10.0.0.1', port: 23 } },
-			{ type: 'serial', name: 'console', options: { port: 'COM3' } },
+			{ type: 'serial', name: 'console', group: 'g1', options: { port: '/dev/ttyUSB0', baudrate: 115200, databits: 8, stopbits: 1, parity: 'none', rtscts: false, xon: true, xoff: true } },
 			{ type: 'local', name: 'bash', options: { command: 'bash' } }
 		]
 	};
@@ -356,7 +370,9 @@ function tabbyVault(content, passphrase) {
 	const db = byName(r, 'db1');
 	check('nested group folder', eq(db.folder, ['Prod', 'DB']));
 	check('jump host from profile, with its key', eq(db.jump, [{ host: 'bastion.example.com', port: 22, username: 'jump', keyPath: 'C:/Users/me/.ssh/id_ed25519', password: null }]), JSON.stringify(db.jump));
-	check('telnet; serial and local skipped', byName(r, 'switch').kind === 'telnet' && r.skipped.map((s) => s.type).join() === 'serial,local');
+	check('telnet; local skipped', byName(r, 'switch').kind === 'telnet' && r.skipped.map((s) => s.type).join() === 'local');
+	const tabbyConsole = byName(r, 'console');
+	check('serial profile with its settings', tabbyConsole.kind === 'serial' && tabbyConsole.host === '/dev/ttyUSB0' && eq(tabbyConsole.serial, { baud_rate: 115200, data_bits: 8, parity: 'none', flow_control: 'software' }) && eq(tabbyConsole.folder, ['Prod']), JSON.stringify(tabbyConsole));
 	const old = await parseTabby({ profiles: [{ type: 'ssh', name: 'x', group: 'Legacy group', options: { host: 'x' } }] });
 	check('old config: group by name', old.ok && eq(old.hosts[0].folder, ['Legacy group']));
 
@@ -377,7 +393,7 @@ function tabbyVault(content, passphrase) {
 	const sealed = { version: 8, encrypted: true, vault: tabbyVault({ config, secrets }, 'pp') };
 	check('encrypted config cannot be skipped', (await parseTabby(sealed, null)).error === 'password');
 	const opened = await parseTabby(sealed, 'pp');
-	check('encrypted config reads with passphrase', opened.ok && opened.hosts.length === 3 && byName(opened, 'db1').password === 'pgpw');
+	check('encrypted config reads with passphrase', opened.ok && opened.hosts.length === 4 && byName(opened, 'db1').password === 'pgpw');
 }
 
 console.log(failures === 0 ? '\nAll import tests passed.' : `\n${failures} test(s) failed.`);
