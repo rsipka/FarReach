@@ -3229,5 +3229,22 @@
   "settings.tmux_hide_status": "Skrýt stavový řádek tmux",
   "settings.tmux_hide_status_desc": "Jen v kartách s tmux, kde karta ukazuje název okna. Platí pro karty otevřené od teď.",
   "session.tooltip_tags": "Štítky: {{tags}}",
-  "session.tooltip_vault": "Trezor: {{name}}"
+  "session.tooltip_vault": "Trezor: {{name}}",
+  "bulk.section_connection": "Připojení",
+  "bulk.section_server": "Na serveru",
+  "bulk.jump_hosts": "Skokové servery",
+  "bulk.jump_replace": "Nahradit těmito skoky",
+  "bulk.jump_none": "Bez skokového serveru",
+  "bulk.hop_copy": "Převzít z uložené relace…",
+  "bulk.proxy": "Proxy",
+  "bulk.proxy_set": "Použít tuto proxy",
+  "bulk.proxy_none": "Bez proxy",
+  "bulk.shell": "Přihlašovací shell",
+  "bulk.shell_default": "Výchozí na serveru",
+  "bulk.fields_add": "Nastavit pole",
+  "bulk.fields_remove": "Odebrat pole (názvy oddělené čárkou)",
+  "bulk.tmux_folder": "Podle složky",
+  "bulk.key_needed": "Vyberte importovaný klíč nebo soubor s klíčem.",
+  "bulk.auth_password_hint": "Relace přepnuté na heslo dostanou heslo zadané výše; bez něj se na něj zeptají při připojení.",
+  "bulk.agent_keys": "Také klíče agenta"
 }

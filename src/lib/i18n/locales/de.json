@@ -3229,5 +3229,22 @@
   "settings.tmux_hide_status": "Statusleiste von tmux ausblenden",
   "settings.tmux_hide_status_desc": "Nur in tmux-Tabs, wo der Tab den Fensternamen zeigt. Gilt für ab jetzt geöffnete Tabs.",
   "session.tooltip_tags": "Tags: {{tags}}",
-  "session.tooltip_vault": "Tresor: {{name}}"
+  "session.tooltip_vault": "Tresor: {{name}}",
+  "bulk.section_connection": "Verbindung",
+  "bulk.section_server": "Auf dem Server",
+  "bulk.jump_hosts": "Jump-Hosts",
+  "bulk.jump_replace": "Durch diese Hops ersetzen",
+  "bulk.jump_none": "Kein Jump-Host",
+  "bulk.hop_copy": "Aus einer gespeicherten Sitzung übernehmen…",
+  "bulk.proxy": "Proxy",
+  "bulk.proxy_set": "Diesen Proxy verwenden",
+  "bulk.proxy_none": "Kein Proxy",
+  "bulk.shell": "Login-Shell",
+  "bulk.shell_default": "Standard des Servers",
+  "bulk.fields_add": "Feld setzen",
+  "bulk.fields_remove": "Felder entfernen (Namen, durch Komma getrennt)",
+  "bulk.tmux_folder": "Wie der Ordner",
+  "bulk.key_needed": "Wählen Sie einen importierten Schlüssel oder eine Schlüsseldatei.",
+  "bulk.auth_password_hint": "Auf Passwort umgestellte Sitzungen erhalten das Passwort oben; leer fragen sie beim Verbinden.",
+  "bulk.agent_keys": "Auch Agent-Schlüssel"
 }

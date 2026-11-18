@@ -3229,5 +3229,22 @@
   "settings.tmux_hide_status": "Masquer la barre d'état de tmux",
   "settings.tmux_hide_status_desc": "Seulement dans les onglets tmux, où l'onglet affiche le nom de la fenêtre. S'applique aux onglets ouverts à partir de maintenant.",
   "session.tooltip_tags": "Étiquettes : {{tags}}",
-  "session.tooltip_vault": "Coffre : {{name}}"
+  "session.tooltip_vault": "Coffre : {{name}}",
+  "bulk.section_connection": "Connexion",
+  "bulk.section_server": "Sur le serveur",
+  "bulk.jump_hosts": "Hôtes de rebond",
+  "bulk.jump_replace": "Remplacer par ces sauts",
+  "bulk.jump_none": "Aucun hôte de rebond",
+  "bulk.hop_copy": "Copier depuis une session enregistrée…",
+  "bulk.proxy": "Proxy",
+  "bulk.proxy_set": "Utiliser ce proxy",
+  "bulk.proxy_none": "Aucun proxy",
+  "bulk.shell": "Shell de connexion",
+  "bulk.shell_default": "Par défaut du serveur",
+  "bulk.fields_add": "Définir un champ",
+  "bulk.fields_remove": "Retirer des champs (noms séparés par des virgules)",
+  "bulk.tmux_folder": "Comme le dossier",
+  "bulk.key_needed": "Choisissez une clé importée ou un fichier de clé.",
+  "bulk.auth_password_hint": "Les sessions passées au mot de passe prennent celui saisi plus haut ; vide, il est demandé à la connexion.",
+  "bulk.agent_keys": "Clés de l'agent aussi"
 }

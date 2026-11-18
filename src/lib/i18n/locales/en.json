@@ -3229,5 +3229,22 @@
   "settings.tmux_hide_status": "Hide tmux's status bar",
   "settings.tmux_hide_status_desc": "In tmux tabs only, where the tab shows the window's name. Applies to tabs opened from now on.",
   "session.tooltip_tags": "Tags: {{tags}}",
-  "session.tooltip_vault": "Vault: {{name}}"
+  "session.tooltip_vault": "Vault: {{name}}",
+  "bulk.section_connection": "Connection",
+  "bulk.section_server": "On the server",
+  "bulk.jump_hosts": "Jump hosts",
+  "bulk.jump_replace": "Replace with these hops",
+  "bulk.jump_none": "No jump host",
+  "bulk.hop_copy": "Copy from a saved session…",
+  "bulk.proxy": "Proxy",
+  "bulk.proxy_set": "Use this proxy",
+  "bulk.proxy_none": "No proxy",
+  "bulk.shell": "Login shell",
+  "bulk.shell_default": "Server's default",
+  "bulk.fields_add": "Set a field",
+  "bulk.fields_remove": "Remove fields (names, comma-separated)",
+  "bulk.tmux_folder": "As the folder says",
+  "bulk.key_needed": "Pick an imported key or a key file.",
+  "bulk.auth_password_hint": "Sessions switched to a password take the Password above; left empty, they ask when you connect.",
+  "bulk.agent_keys": "Agent's keys too"
 }

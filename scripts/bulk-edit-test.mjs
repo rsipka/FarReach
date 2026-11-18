@@ -52,6 +52,22 @@ check("choosing the session's own login frees the username", appliesTo('username
 check('linking a credential takes the username', !appliesTo('username', ssh, { set: 'c9' }) && appliesTo('username', vnc, { set: 'c9' }));
 check('a missing credential leaves the own login', appliesTo('username', { ...linked, credential: { ...linked.credential, missing: true } }));
 
+console.log('Phase 2 fields');
+check('login method, jump hosts, proxy and shell are SSH only', ['auth', 'jump_chain', 'proxy', 'shell'].every((f) => appliesTo(f, ssh) && !appliesTo(f, rdp) && !appliesTo(f, wsl)));
+check('a credential keeps its login method', !appliesTo('auth', linked));
+check('agent keys only for key sessions', appliesTo('try_agent_keys', keyed) && !appliesTo('try_agent_keys', ssh));
+check('switching to a key makes agent keys apply', appliesTo('try_agent_keys', ssh, undefined, 'Key'));
+check('switching to a password makes the password apply', appliesTo('password', keyed, undefined, 'Password') && !appliesTo('password', keyed));
+check('a switch does not reach a credential login', !appliesTo('password', linked, undefined, 'Password'));
+check('monitoring and tmux on SSH and WSL', appliesTo('tmux', wsl) && appliesTo('monitoring', ssh) && !appliesTo('tmux', rdp));
+check('VNC tunnel on VNC only', appliesTo('via_session', vnc) && !appliesTo('via_session', ssh));
+check('Telnet options on Telnet only', appliesTo('telnet', { ...base, kind: 'telnet' }) && !appliesTo('telnet', ssh));
+check('custom fields everywhere', countApplying('custom_fields', all) === all.length);
+check(
+	'phase 2 changes are listed',
+	changedFields({ auth: { type: 'Agent' }, fields_remove: ['x'], telnet: {}, tmux: { mouse: true }, via_session: 'clear' }).join() === 'auth,custom_fields,tmux,via_session'
+);
+
 console.log('Summaries');
 const users = summarize([ssh, rdp, linked, { ...base, username: '' }], (s) => s.username);
 check('mixed values have no common value', users.same === null);

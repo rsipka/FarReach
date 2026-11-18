@@ -3229,5 +3229,22 @@
   "settings.tmux_hide_status": "Ocultar la barra de estado de tmux",
   "settings.tmux_hide_status_desc": "Solo en pestañas tmux, donde la pestaña muestra el nombre de la ventana. Se aplica a las pestañas abiertas a partir de ahora.",
   "session.tooltip_tags": "Etiquetas: {{tags}}",
-  "session.tooltip_vault": "Bóveda: {{name}}"
+  "session.tooltip_vault": "Bóveda: {{name}}",
+  "bulk.section_connection": "Conexión",
+  "bulk.section_server": "En el servidor",
+  "bulk.jump_hosts": "Hosts de salto",
+  "bulk.jump_replace": "Reemplazar por estos saltos",
+  "bulk.jump_none": "Sin host de salto",
+  "bulk.hop_copy": "Copiar de una sesión guardada…",
+  "bulk.proxy": "Proxy",
+  "bulk.proxy_set": "Usar este proxy",
+  "bulk.proxy_none": "Sin proxy",
+  "bulk.shell": "Shell de inicio",
+  "bulk.shell_default": "Predeterminado del servidor",
+  "bulk.fields_add": "Poner un campo",
+  "bulk.fields_remove": "Quitar campos (nombres separados por comas)",
+  "bulk.tmux_folder": "Como diga la carpeta",
+  "bulk.key_needed": "Elige una clave importada o un archivo de clave.",
+  "bulk.auth_password_hint": "Las sesiones cambiadas a contraseña toman la de arriba; si está vacía, se pide al conectar.",
+  "bulk.agent_keys": "También claves del agente"
 }

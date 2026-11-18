@@ -3229,5 +3229,22 @@
   "settings.tmux_hide_status": "Скрыть строку состояния tmux",
   "settings.tmux_hide_status_desc": "Только во вкладках tmux, где вкладка показывает имя окна. Действует для вкладок, открытых с этого момента.",
   "session.tooltip_tags": "Теги: {{tags}}",
-  "session.tooltip_vault": "Хранилище: {{name}}"
+  "session.tooltip_vault": "Хранилище: {{name}}",
+  "bulk.section_connection": "Подключение",
+  "bulk.section_server": "На сервере",
+  "bulk.jump_hosts": "Промежуточные хосты",
+  "bulk.jump_replace": "Заменить этими переходами",
+  "bulk.jump_none": "Без промежуточного хоста",
+  "bulk.hop_copy": "Взять из сохранённой сессии…",
+  "bulk.proxy": "Прокси",
+  "bulk.proxy_set": "Использовать этот прокси",
+  "bulk.proxy_none": "Без прокси",
+  "bulk.shell": "Оболочка входа",
+  "bulk.shell_default": "По умолчанию на сервере",
+  "bulk.fields_add": "Задать поле",
+  "bulk.fields_remove": "Удалить поля (имена через запятую)",
+  "bulk.tmux_folder": "Как в папке",
+  "bulk.key_needed": "Выберите импортированный ключ или файл ключа.",
+  "bulk.auth_password_hint": "Сессии, переведённые на пароль, получат пароль выше; если он пуст, его спросят при подключении.",
+  "bulk.agent_keys": "Также ключи агента"
 }

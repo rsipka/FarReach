@@ -3229,5 +3229,22 @@
   "settings.tmux_hide_status": "Nascondi la barra di stato di tmux",
   "settings.tmux_hide_status_desc": "Solo nelle schede tmux, dove la scheda mostra il nome della finestra. Vale per le schede aperte da ora in poi.",
   "session.tooltip_tags": "Tag: {{tags}}",
-  "session.tooltip_vault": "Vault: {{name}}"
+  "session.tooltip_vault": "Vault: {{name}}",
+  "bulk.section_connection": "Connessione",
+  "bulk.section_server": "Sul server",
+  "bulk.jump_hosts": "Jump host",
+  "bulk.jump_replace": "Sostituisci con questi salti",
+  "bulk.jump_none": "Nessun jump host",
+  "bulk.hop_copy": "Copia da una sessione salvata…",
+  "bulk.proxy": "Proxy",
+  "bulk.proxy_set": "Usa questo proxy",
+  "bulk.proxy_none": "Nessun proxy",
+  "bulk.shell": "Shell di login",
+  "bulk.shell_default": "Predefinita del server",
+  "bulk.fields_add": "Imposta un campo",
+  "bulk.fields_remove": "Rimuovi campi (nomi separati da virgole)",
+  "bulk.tmux_folder": "Come dice la cartella",
+  "bulk.key_needed": "Scegli una chiave importata o un file di chiave.",
+  "bulk.auth_password_hint": "Le sessioni passate a password prendono quella sopra; se vuota, viene chiesta alla connessione.",
+  "bulk.agent_keys": "Anche chiavi dell'agent"
 }

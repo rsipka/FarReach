@@ -3229,5 +3229,22 @@
   "settings.tmux_hide_status": "Απόκρυψη της γραμμής κατάστασης του tmux",
   "settings.tmux_hide_status_desc": "Μόνο σε καρτέλες tmux, όπου η καρτέλα δείχνει το όνομα του παραθύρου. Ισχύει για καρτέλες που ανοίγουν από τώρα και στο εξής.",
   "session.tooltip_tags": "Ετικέτες: {{tags}}",
-  "session.tooltip_vault": "Θησαυροφυλάκιο: {{name}}"
+  "session.tooltip_vault": "Θησαυροφυλάκιο: {{name}}",
+  "bulk.section_connection": "Σύνδεση",
+  "bulk.section_server": "Στον διακομιστή",
+  "bulk.jump_hosts": "Ενδιάμεσοι διακομιστές",
+  "bulk.jump_replace": "Αντικατάσταση με αυτά τα βήματα",
+  "bulk.jump_none": "Χωρίς ενδιάμεσο διακομιστή",
+  "bulk.hop_copy": "Αντιγραφή από αποθηκευμένη συνεδρία…",
+  "bulk.proxy": "Διακομιστής μεσολάβησης",
+  "bulk.proxy_set": "Χρήση αυτού του proxy",
+  "bulk.proxy_none": "Χωρίς proxy",
+  "bulk.shell": "Κέλυφος σύνδεσης",
+  "bulk.shell_default": "Προεπιλογή διακομιστή",
+  "bulk.fields_add": "Ορισμός πεδίου",
+  "bulk.fields_remove": "Αφαίρεση πεδίων (ονόματα με κόμμα)",
+  "bulk.tmux_folder": "Όπως ο φάκελος",
+  "bulk.key_needed": "Επιλέξτε εισαγμένο κλειδί ή αρχείο κλειδιού.",
+  "bulk.auth_password_hint": "Οι συνεδρίες που αλλάζουν σε κωδικό παίρνουν τον παραπάνω· αν είναι κενός, ζητείται στη σύνδεση.",
+  "bulk.agent_keys": "Και κλειδιά του agent"
 }
