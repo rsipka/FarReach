@@ -197,6 +197,12 @@ jobs:
           targets: ${{ matrix.platform == 'macos' && 'x86_64-apple-darwin' || '' }}
           components: clippy
 
+      # A self-hosted Mac may have another Rust ahead of rustup's in PATH
+      # (MacPorts, Homebrew), which lacks the cross targets installed above.
+      - name: Use rustup's Rust on a self-hosted Mac
+        if: runner.environment == 'self-hosted'
+        run: echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
+
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:

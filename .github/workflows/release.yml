@@ -89,6 +89,10 @@ jobs:
 
     # "macos" is not a runner name: see MACOS_RUNNER_LABEL in .github/ci-runners.md.
     runs-on: ${{ matrix.platform == 'macos' && (github.event_name != 'pull_request' && vars.MACOS_RUNNER_LABEL || 'macos-15') || matrix.platform }}
+    # GitHub's runners set CI=true; the self-hosted Mac did not (its DMG
+    # build drove Finder and timed out). Tauri skips the Finder step on CI.
+    env:
+      CI: 'true'
     steps:
       - uses: actions/checkout@v7
 
@@ -106,6 +110,12 @@ jobs:
         uses: dtolnay/rust-toolchain@1.99.1
         with:
           targets: ${{ matrix.platform == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      # A self-hosted Mac may have another Rust ahead of rustup's in PATH
+      # (MacPorts, Homebrew), which lacks the cross targets installed above.
+      - name: Use rustup's Rust on a self-hosted Mac
+        if: runner.environment == 'self-hosted'
+        run: echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -543,6 +553,12 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
+      # A self-hosted Mac may have another Rust ahead of rustup's in PATH
+      # (MacPorts, Homebrew), which lacks the cross targets installed above.
+      - name: Use rustup's Rust on a self-hosted Mac
+        if: runner.environment == 'self-hosted'
+        run: echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
+
       - run: |
           npm ci
           brew list xcodegen >/dev/null 2>&1 || brew install xcodegen

@@ -40,6 +40,8 @@ power.
 2. Install **Homebrew** (https://brew.sh) and then `brew install xcodegen`.
 3. Install **Rust** with rustup (https://rustup.rs). The workflows pick the
    Rust version and targets; Node is downloaded by the workflow.
+   The jobs put rustup's `~/.cargo/bin` first in PATH, so another Rust
+   (MacPorts, Homebrew) on the Mac does not get in the way.
 4. On GitHub: repository **Settings > Actions > Runners > New self-hosted
    runner**, choose macOS and your architecture (x64 for Intel). Run the
    *Download* commands it shows in Terminal, in a folder such as
