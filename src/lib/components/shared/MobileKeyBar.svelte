@@ -16,6 +16,7 @@
 		| 'ctrl-alt-del'
 		| 'smaller'
 		| 'larger'
+		| { fn: number }
 		| { char: string };
 </script>
 
@@ -32,6 +33,8 @@
 	 */
 	import type { Snippet } from 'svelte';
 	import { t } from '#lib/state/i18n.svelte.js';
+	import { getSettings } from '#lib/state/settings.svelte.js';
+	import { barKeys, barKeyLabel } from '#lib/terminal/bar-keys.js';
 
 	interface Props {
 		/** Sticky Ctrl, bound so the owner can apply it to typed text. */
@@ -49,7 +52,19 @@
 
 	let { ctrl = $bindable(false), alt = $bindable(false), desktop = false, zoom = false, onkey, leading }: Props = $props();
 
-	const SYMBOLS = ['|', '~', '/', '-', ':', '_'];
+	const settings = getSettings();
+	/** The user's keys, in their order (Settings > Terminal > Phone keys). */
+	let keys = $derived(barKeys(settings.mobileBarKeys));
+
+	const ARIA: Record<string, string> = { left: 'keys.left', up: 'keys.up', down: 'keys.down', right: 'keys.right' };
+
+	function send(id: string): void {
+		if (id === 'ctrl') ctrl = !ctrl;
+		else if (id === 'alt') alt = !alt;
+		else if (id.startsWith('sym:')) onkey({ char: id.slice(4) });
+		else if (/^f\d+$/.test(id)) onkey({ fn: Number(id.slice(1)) });
+		else onkey(id as BarKey);
+	}
 
 	function press(e: PointerEvent, action: () => void): void {
 		e.preventDefault();
@@ -62,41 +77,29 @@
 		{@render leading()}
 		<span class="divider" aria-hidden="true"></span>
 	{/if}
-	<button type="button" tabindex="-1" onpointerdown={(e) => press(e, () => onkey('esc'))}>Esc</button>
-	<button type="button" tabindex="-1" onpointerdown={(e) => press(e, () => onkey('tab'))}>Tab</button>
-	<button
-		type="button"
-		tabindex="-1"
-		class:on={ctrl}
-		aria-pressed={ctrl}
-		onpointerdown={(e) => press(e, () => (ctrl = !ctrl))}>Ctrl</button
-	>
-	<button
-		type="button"
-		tabindex="-1"
-		class:on={alt}
-		aria-pressed={alt}
-		onpointerdown={(e) => press(e, () => (alt = !alt))}>Alt</button
-	>
-	{#if desktop}
-		<button type="button" tabindex="-1" onpointerdown={(e) => press(e, () => onkey('win'))}>Win</button>
-	{/if}
-	<button type="button" tabindex="-1" aria-label={t('keys.left')} onpointerdown={(e) => press(e, () => onkey('left'))}>←</button>
-	<button type="button" tabindex="-1" aria-label={t('keys.up')} onpointerdown={(e) => press(e, () => onkey('up'))}>↑</button>
-	<button type="button" tabindex="-1" aria-label={t('keys.down')} onpointerdown={(e) => press(e, () => onkey('down'))}>↓</button>
-	<button type="button" tabindex="-1" aria-label={t('keys.right')} onpointerdown={(e) => press(e, () => onkey('right'))}>→</button>
-	<button type="button" tabindex="-1" onpointerdown={(e) => press(e, () => onkey('home'))}>Home</button>
-	<button type="button" tabindex="-1" onpointerdown={(e) => press(e, () => onkey('end'))}>End</button>
-	<button type="button" tabindex="-1" onpointerdown={(e) => press(e, () => onkey('pgup'))}>PgUp</button>
-	<button type="button" tabindex="-1" onpointerdown={(e) => press(e, () => onkey('pgdn'))}>PgDn</button>
-	{#if desktop}
-		<button type="button" tabindex="-1" onpointerdown={(e) => press(e, () => onkey('del'))}>Del</button>
-		<button type="button" tabindex="-1" onpointerdown={(e) => press(e, () => onkey('ctrl-alt-del'))}>Ctrl+Alt+Del</button>
-	{/if}
-	{#each SYMBOLS as char (char)}
-		<button type="button" tabindex="-1" class="symbol" onpointerdown={(e) => press(e, () => onkey({ char }))}
-			>{char}</button
+	{#each keys as id, i (id)}
+		<button
+			type="button"
+			tabindex="-1"
+			class:symbol={id.startsWith('sym:')}
+			class:on={(id === 'ctrl' && ctrl) || (id === 'alt' && alt)}
+			aria-pressed={id === 'ctrl' ? ctrl : id === 'alt' ? alt : undefined}
+			aria-label={ARIA[id] ? t(ARIA[id]) : undefined}
+			onpointerdown={(e) => press(e, () => send(id))}>{barKeyLabel(id)}</button
 		>
+		<!-- Remote desktop's Win sits after Alt, where it is on a keyboard. -->
+		{#if desktop && id === 'alt'}
+			<button type="button" tabindex="-1" onpointerdown={(e) => press(e, () => onkey('win'))}>Win</button>
+		{/if}
+		{#if desktop && i === keys.length - 1}
+			{#if !keys.includes('alt')}
+				<button type="button" tabindex="-1" onpointerdown={(e) => press(e, () => onkey('win'))}>Win</button>
+			{/if}
+			{#if !keys.includes('del')}
+				<button type="button" tabindex="-1" onpointerdown={(e) => press(e, () => onkey('del'))}>Del</button>
+			{/if}
+			<button type="button" tabindex="-1" onpointerdown={(e) => press(e, () => onkey('ctrl-alt-del'))}>Ctrl+Alt+Del</button>
+		{/if}
 	{/each}
 	{#if zoom}
 		<span class="divider" aria-hidden="true"></span>

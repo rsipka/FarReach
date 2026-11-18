@@ -32,15 +32,15 @@ export interface NewFeature {
 }
 
 export const NEW_FEATURES: NewFeature[] = [
-	{ id: 'x11-server', since: '0.7.5', surface: { kind: 'settings', tab: 'general' } },
+	{ id: 'x11-server', since: '0.7.5', surface: { kind: 'settings', tab: 'sessions' } },
 	{ id: 'containers-k8s', since: '0.7.4', surface: { kind: 'settings', tab: 'devops' } },
 	{ id: 'devops', since: '0.6.8', surface: { kind: 'settings', tab: 'devops' } },
 	{ id: 'vault', since: '0.5.4', surface: { kind: 'sidebar', section: 'vault' } },
 	{ id: 'recipes', since: '0.5.2', surface: { kind: 'sidebar', section: 'recipes' } },
-	{ id: 'mcp', since: '0.5.2', surface: { kind: 'settings', tab: 'mcp' } },
+	{ id: 'mcp', since: '0.5.2', surface: { kind: 'settings', tab: 'ai' } },
 	// Hidden with the rest of the community parts (SHOW_COMMUNITY in brand.ts).
 	...(SHOW_COMMUNITY
-		? [{ id: 'community', since: '0.5.2', surface: { kind: 'settings', tab: 'general' } } as NewFeature]
+		? [{ id: 'community', since: '0.5.2', surface: { kind: 'settings', tab: 'about' } } as NewFeature]
 		: []),
 	{ id: 'sharing', since: '0.5.2', surface: { kind: 'settings', tab: 'sharing' } }
 ];
