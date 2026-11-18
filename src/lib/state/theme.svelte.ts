@@ -244,7 +244,10 @@ export const LIGHT: Theme = {
 		brightBlue: '#007aff',
 		brightMagenta: '#af52de',
 		brightCyan: '#55bef0',
-		brightWhite: '#1d1d1f'
+		// Kept light: TUI apps (gdu and other tview apps, mc, dialog) draw
+		// white text on ANSI black, so a dark brightWhite made their dialogs
+		// solid black boxes (upstream issue #174).
+		brightWhite: '#e5e5ea'
 	}
 };
 

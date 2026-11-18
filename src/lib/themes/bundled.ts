@@ -188,7 +188,7 @@ export const SOLARIZED_LIGHT = theme(
 		brightBlue: '#839496',
 		brightMagenta: '#6c71c4',
 		brightCyan: '#93a1a1',
-		brightWhite: '#073642'
+		brightWhite: '#fdf6e3'
 	}
 );
 
@@ -611,7 +611,7 @@ export const ONE_LIGHT = theme(
 		brightBlue: '#61afef',
 		brightMagenta: '#c678dd',
 		brightCyan: '#56b6c2',
-		brightWhite: '#202227'
+		brightWhite: '#ffffff'
 	}
 );
 
@@ -905,7 +905,7 @@ export const HIGH_CONTRAST_LIGHT = theme(
 		brightBlue: '#0050c8',
 		brightMagenta: '#a3009a',
 		brightCyan: '#00738a',
-		brightWhite: '#1a1a1a'
+		brightWhite: '#f2f2f2'
 	}
 );
 

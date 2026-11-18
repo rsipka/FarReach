@@ -87,6 +87,12 @@ for (const t of BUNDLED) {
 	check(`white on accent-fill ≥ 4.5:1 (${fill.toFixed(2)})`, fill >= 4.5);
 	const term = contrast(t.terminal.foreground, t.terminal.background);
 	check(`terminal text ≥ 4.5:1 (${term.toFixed(2)})`, term >= 4.5);
+	// Full-screen TUI apps (gdu and other tview apps, mc, dialog) draw bright
+	// white text on ANSI black; if the two collapse, their dialogs go blank
+	// (upstream Reach issue #174). Some light palettes swap them on purpose,
+	// which is fine as long as they stay apart.
+	const tui = contrast(t.terminal.brightWhite, t.terminal.black);
+	check(`brightWhite on black ≥ 2.5:1 (${tui.toFixed(2)})`, tui >= 2.5);
 	const dark = lum(rgba(c['bg-primary'])) < 0.2;
 	check('background matches appearance', dark === (t.appearance === 'dark'));
 }
