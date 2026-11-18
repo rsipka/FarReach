@@ -3,6 +3,7 @@
 All notable changes to Reacher CM are documented here. Reacher CM is a personal fork of [Reach](https://github.com/alexandrosnt/Reach) with additional features, written with the help of AI coding tools; the entries from v0.9.1 down are Reach's own.
 
 ## Reacher CM (unreleased, based on Reach v0.9.2)
+- **Release script** — `npm run release -- dev` (or `stable`, or a version) bumps the version in every file that has it, sets the Windows and Android build numbers, adds the release to the Linux metainfo, drafts `.github/release-notes.md` from the CHANGELOG entries added since the last tag, and opens a pull request; after it is merged, `npm run release -- tag` checks main and the full Build check and pushes the tag that starts the release builds. `--dry-run` shows what would change; `--direct` skips the pull request. A stable release now takes build number 999 for Windows and Android, so it installs over its dev builds; release.yml checks this. Steps in `.github/dev-release.md`.
 - **tmux windows as tabs** — Each tmux tab now shows a tmux window of its own, so one tmux session can fill several tabs:
   - On a tmux tab, *Ctrl+T* and *+* open a new tmux window in a new tab. The tab's name shows the window's name.
   - *tmux windows…* in the tab's menu lists the session's windows: click one to show it in the tab, or open it in a new tab, rename it or close it. *New window* and *New tmux window in new tab* are there too.
