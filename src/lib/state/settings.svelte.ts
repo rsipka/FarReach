@@ -41,6 +41,9 @@ export interface Settings {
 	compactLayout: boolean;
 	/** The bar over each terminal: always, when the pointer is over it, or never. */
 	terminalBar: 'always' | 'hover' | 'hidden';
+	/** The extra-keys bar above a phone's keyboard, in order (see
+	 *  #lib/terminal/bar-keys); null is the built-in set. */
+	mobileBarKeys: string[] | null;
 	/** Sessions in the list open on a double click; a single click only
 	 *  focuses the row. Off: one click connects, as before. */
 	doubleClickToOpen: boolean;
@@ -195,6 +198,7 @@ const defaults: Settings = {
 	uiZoom: 1,
 	compactLayout: false,
 	terminalBar: 'always',
+	mobileBarKeys: null,
 	doubleClickToOpen: false,
 	closeTabOnExit: false,
 	serverMonitoring: true,
@@ -309,6 +313,9 @@ export function loadSettings(): void {
 			settings.fontSize = parsed.fontSize ?? defaults.fontSize;
 			settings.uiZoom = parsed.uiZoom ?? defaults.uiZoom;
 			settings.compactLayout = parsed.compactLayout ?? defaults.compactLayout;
+			settings.mobileBarKeys = Array.isArray(parsed.mobileBarKeys)
+				? parsed.mobileBarKeys.filter((k: unknown): k is string => typeof k === 'string')
+				: null;
 			settings.terminalBar = parsed.terminalBar === 'hover' || parsed.terminalBar === 'hidden' ? parsed.terminalBar : defaults.terminalBar;
 			settings.doubleClickToOpen = parsed.doubleClickToOpen ?? defaults.doubleClickToOpen;
 			settings.closeTabOnExit = parsed.closeTabOnExit ?? defaults.closeTabOnExit;

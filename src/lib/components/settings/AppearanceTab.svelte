@@ -21,6 +21,11 @@
 	import { fontsListInstalled, type InstalledFont } from '#lib/ipc/fonts.js';
 	import { cssFontFamily } from '#lib/utils/font.js';
 
+	/** Which slice of these rows to show: Settings arranges them by topic,
+	 *  so one tab file feeds several pages (see settings-pages.ts). */
+	type Part = 'appearance' | 'text' | 'term-adv' | 'logging' | 'history' | 'rdp' | 'rdp-adv';
+	let { part }: { part: Part } = $props();
+
 	const settings = getSettings();
 	let cursorStyleOptions = $derived(CURSOR_STYLES.map((s) => ({ label: t(`cursor.style_${s}`), value: s })));
 	let cursorInactiveOptions = $derived(
@@ -146,11 +151,14 @@
 	}
 
 	onMount(() => {
-		sessionLogDefaultDir().then((d) => (logDefaultDir = d)).catch(() => {});
-		historyStats().then((s) => (historyInfo = s)).catch(() => {});
-		// Re-read from disk in case a theme was installed or edited since startup.
-		loadInstalledThemes();
-		loadRegistry();
+		// Each page loads only what its rows show.
+		if (part === 'logging') sessionLogDefaultDir().then((d) => (logDefaultDir = d)).catch(() => {});
+		if (part === 'history') historyStats().then((s) => (historyInfo = s)).catch(() => {});
+		if (part === 'appearance') {
+			// Re-read from disk in case a theme was installed or edited since startup.
+			loadInstalledThemes();
+			loadRegistry();
+		}
 	});
 
 	/** "System" follows the OS; every other entry is a real theme. */
@@ -283,6 +291,8 @@
 </script>
 
 <div class="tab-content">
+
+	{#if part === 'appearance'}
 	<div class="setting-section">
 		<span class="section-label">{t('settings.theme')}</span>
 		<div class="theme-cards">
@@ -383,20 +393,6 @@
 		{/if}
 	</div>
 
-	<TerminalThemeSettings />
-
-	<div class="setting-row">
-		<div class="setting-info">
-			<span class="setting-label">{t('settings.font_size')}</span>
-			<span class="setting-description">{t('settings.font_size_hint')}</span>
-		</div>
-		<div class="setting-control size-stepper">
-			<button class="size-btn" aria-label={t('keys.smaller')} disabled={currentSize <= 8} onclick={() => stepFontSize(-1)}>A−</button>
-			<span class="font-size-badge">{currentSize}px</span>
-			<button class="size-btn" aria-label={t('keys.larger')} disabled={currentSize >= 32} onclick={() => stepFontSize(1)}>A+</button>
-		</div>
-	</div>
-
 	<!-- The whole interface, not only the terminal: a laptop screen or a 4K
 	     one at the wrong scale. A phone follows its own text size instead. -->
 	{#if !isMobile()}
@@ -441,7 +437,9 @@
 			</select>
 		</div>
 	</div>
+	{/if}
 
+	{#if part === 'text'}
 	<div class="setting-row font-row">
 		<div class="setting-info">
 			<span class="setting-label">{t('settings.terminal_font')}</span>
@@ -532,10 +530,24 @@
 		</div>
 	</div>
 
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.font_size')}</span>
+			<span class="setting-description">{t('settings.font_size_hint')}</span>
+		</div>
+		<div class="setting-control size-stepper">
+			<button class="size-btn" aria-label={t('keys.smaller')} disabled={currentSize <= 8} onclick={() => stepFontSize(-1)}>A−</button>
+			<span class="font-size-badge">{currentSize}px</span>
+			<button class="size-btn" aria-label={t('keys.larger')} disabled={currentSize >= 32} onclick={() => stepFontSize(1)}>A+</button>
+		</div>
+	</div>
+
 	<div class="font-preview-box">
 		<span class="preview-label">{t('settings.preview')} — {currentFont} @ {currentSize}px</span>
 		<pre class="preview-pre" style:font-family={cssFontFamily(currentFont)} style:font-size="{currentSize}px">{PREVIEW_TEXT}</pre>
 	</div>
+
+	<TerminalThemeSettings />
 
 	<div class="setting-row">
 		<div class="setting-info">
@@ -595,7 +607,9 @@
 			/>
 		</div>
 	</div>
+	{/if}
 
+	{#if part === 'term-adv'}
 	<div class="setting-row">
 		<div class="setting-info">
 			<span class="setting-label">{t('settings.shell_colors')}</span>
@@ -625,9 +639,9 @@
 			/>
 		</div>
 	</div>
+	{/if}
 
-	<h3 class="section-title">{t('settings.log_section')}</h3>
-
+	{#if part === 'logging'}
 	<div class="setting-row">
 		<div class="setting-info">
 			<span class="setting-label">{t('settings.log_mode')}</span>
@@ -725,9 +739,9 @@
 			</div>
 		</div>
 	{/if}
+	{/if}
 
-	<h3 class="section-title">{t('history.settings_section')}</h3>
-
+	{#if part === 'history'}
 	<div class="setting-row">
 		<div class="setting-info">
 			<span class="setting-label">{t('history.settings_mode')}</span>
@@ -806,9 +820,9 @@
 			</button>
 		</div>
 	</div>
+	{/if}
 
-	<h3 class="section-title">{t('settings.rdp_section')}</h3>
-
+	{#if part === 'rdp'}
 	<div class="setting-row">
 		<div class="setting-info">
 			<span class="setting-label">{t('settings.rdp_hw_render')}</span>
@@ -821,16 +835,6 @@
 
 	<div class="setting-row">
 		<div class="setting-info">
-			<span class="setting-label">{t('settings.rdp_gfx')}</span>
-			<span class="setting-description">{t('settings.rdp_gfx_desc')}</span>
-		</div>
-		<div class="setting-control">
-			<Toggle hideLabel checked={settings.rdpGraphicsPipeline} label={t('settings.rdp_gfx')} onchange={(v) => updateSetting('rdpGraphicsPipeline', v)} />
-		</div>
-	</div>
-
-	<div class="setting-row">
-		<div class="setting-info">
 			<span class="setting-label">{t('settings.rdp_fs_button')}</span>
 			<span class="setting-description">{t('settings.rdp_fs_button_desc')}</span>
 		</div>
@@ -838,6 +842,20 @@
 			<Toggle hideLabel checked={settings.rdpFullscreenButton} label={t('settings.rdp_fs_button')} onchange={(v) => updateSetting('rdpFullscreenButton', v)} />
 		</div>
 	</div>
+	{/if}
+
+	{#if part === 'rdp-adv'}
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.rdp_gfx')}</span>
+			<span class="setting-description">{t('settings.rdp_gfx_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle hideLabel checked={settings.rdpGraphicsPipeline} label={t('settings.rdp_gfx')} onchange={(v) => updateSetting('rdpGraphicsPipeline', v)} />
+		</div>
+	</div>
+	{/if}
+
 </div>
 
 <style>

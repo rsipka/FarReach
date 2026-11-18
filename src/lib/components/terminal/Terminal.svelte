@@ -40,6 +40,7 @@
 	import { openUrl } from '@tauri-apps/plugin-opener';
 	import { URL_PATTERN } from '#lib/terminal/links.js';
 	import Modal from '#lib/components/shared/Modal.svelte';
+	import { openSettings } from '#lib/state/shortcuts.svelte.js';
 	import MobileKeyBar, { type BarKey } from '#lib/components/shared/MobileKeyBar.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
 	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
@@ -299,7 +300,16 @@
 			mod ? `\x1b[1;${mod + 1}${letter}` : appCursor ? `\x1bO${letter}` : `\x1b[${letter}`;
 		const tilde = (n: number): string => (mod ? `\x1b[${n};${mod + 1}~` : `\x1b[${n}~`);
 		let seq: string;
-		if (typeof key === 'object') {
+		if (typeof key === 'object' && 'fn' in key) {
+			// F1-F4 are SS3 P-S (CSI 1;m P-S with a modifier); F5 and up are
+			// CSI n ~ with xterm's numbers, which skip 16 and 22.
+			const n = key.fn;
+			seq = n <= 4
+				? mod ? `\x1b[1;${mod + 1}${'PQRS'[n - 1]}` : `\x1bO${'PQRS'[n - 1]}`
+				: tilde([15, 17, 18, 19, 20, 21, 23, 24][n - 5]);
+			barCtrl = false;
+			barAlt = false;
+		} else if (typeof key === 'object') {
 			seq = applyBarModifiers(key.char);
 		} else {
 			switch (key) {
@@ -313,6 +323,7 @@
 				case 'end': seq = cursor('F'); break;
 				case 'pgup': seq = tilde(5); break;
 				case 'pgdn': seq = tilde(6); break;
+				case 'del': seq = tilde(3); break;
 				default: return;
 			}
 			barCtrl = false;
@@ -626,7 +637,10 @@
 			if (!getSettings().terminalOsc52) {
 				if (!osc52Told) {
 					osc52Told = true;
-					addToast(t('osc52.blocked'), 'info', 8000);
+					addToast(t('osc52.blocked'), 'info', 8000, {
+						label: t('settings.open_setting'),
+						run: () => openSettings('settings.term_osc52')
+					});
 				}
 				return true;
 			}
