@@ -7,6 +7,7 @@
 	import { sessionAddress } from '#lib/utils/address.js';
 	import { isMobile, isWindows } from '#lib/platform.js';
 	import { getSettings } from '#lib/state/settings.svelte.js';
+	import { tooltip } from '#lib/utils/tooltip.js';
 
 	const settings = getSettings();
 
@@ -81,6 +82,7 @@
 	/** Compact layout shows the name alone; on desktop everything else the
 	 *  full row shows is in the row's tooltip instead. */
 	let compact = $derived(settings.compactLayout);
+	let showDetails = $derived(compact && !isMobile());
 	let detailsTooltip = $derived.by(() => {
 		const kind = session.kind ?? 'ssh';
 		const lines: string[] = [session.favorite ? `${session.name} ★` : session.name];
@@ -130,7 +132,7 @@
 			<circle cx="2" cy="10" r="1.2"/><circle cx="6" cy="10" r="1.2"/>
 		</svg>
 	</span>
-	<button class="card-main" onclick={onMain} ondblclick={onMainDouble} disabled={unavailable && !selecting} aria-pressed={selecting ? selected : undefined} title={compact && !isMobile() ? detailsTooltip : mainTitle} >
+	<button class="card-main" onclick={onMain} ondblclick={onMainDouble} disabled={unavailable && !selecting} aria-pressed={selecting ? selected : undefined} title={showDetails ? undefined : mainTitle} use:tooltip={showDetails ? detailsTooltip : ''} >
 		<!-- Every row has the icon's place, so names line up whether or not the
 		     OS is known yet: its logo once detected, until then a quiet mark for
 		     the kind of session. -->
