@@ -3,7 +3,7 @@
 	import Dropdown from '#lib/components/shared/Dropdown.svelte';
 	import { CURSOR_STYLES, CURSOR_WIDTHS, INACTIVE_CURSOR_STYLES, cursorStyle, cursorWidth, inactiveCursorStyle } from '#lib/terminal/cursor.js';
 	import TerminalThemeSettings from './TerminalThemeSettings.svelte';
-	import { themeState, applyTheme, loadInstalledThemes, DARK, LIGHT } from '#lib/state/theme.svelte.js';
+	import { themeState, applyTheme, loadInstalledThemes, DARK, LIGHT, BUILT_IN_IDS, BUNDLED_IDS } from '#lib/state/theme.svelte.js';
 	import { onMount } from 'svelte';
 	import { themeFetchRegistry, themeInstall, themeUninstall, type ThemeEntry } from '#lib/ipc/theme.js';
 	import { validateTheme } from '#lib/state/theme.svelte.js';
@@ -80,7 +80,8 @@
 		loadingRegistry = true;
 		registryError = null;
 		try {
-			registry = await themeFetchRegistry();
+			// A theme the app already ships is not offered again.
+			registry = (await themeFetchRegistry()).filter((e) => !BUILT_IN_IDS.has(e.id));
 		} catch (err) {
 			registryError = String(err);
 		} finally {
@@ -168,6 +169,15 @@
 		{ id: SYSTEM, name: t('settings.theme_system'), swatch: null },
 		...themeState.all.map((th) => ({ id: th.id, name: th.name, swatch: th }))
 	]);
+
+	/** The bundled themes stay folded until asked for; the one in use always shows. */
+	let showAllThemes = $state(false);
+	let shownChoices = $derived(
+		showAllThemes ? choices : choices.filter((c) => !BUNDLED_IDS.has(c.id) || c.id === selectedId)
+	);
+	let foldedCount = $derived(
+		choices.filter((c) => BUNDLED_IDS.has(c.id) && c.id !== selectedId).length
+	);
 
 	// Settings from before themes had ids say only dark or light: that is
 	// Reach's own, and its card is the one marked.
@@ -296,7 +306,7 @@
 	<div class="setting-section">
 		<span class="section-label">{t('settings.theme')}</span>
 		<div class="theme-cards">
-			{#each choices as choice (choice.id)}
+			{#each shownChoices as choice (choice.id)}
 				<button
 					class="theme-card"
 					class:active={selectedId === choice.id}
@@ -325,6 +335,16 @@
 				</button>
 			{/each}
 		</div>
+		{#if foldedCount > 0}
+			<button
+				type="button"
+				class="link-btn more-themes"
+				aria-expanded={showAllThemes}
+				onclick={() => (showAllThemes = !showAllThemes)}
+			>
+				{showAllThemes ? t('themes.fewer_builtin') : t('themes.more_builtin', { count: foldedCount })}
+			</button>
+		{/if}
 	</div>
 
 	<div class="setting-section">
@@ -1100,9 +1120,13 @@
 		cursor: default;
 	}
 
+	.more-themes { display: inline-block; margin-top: 10px; font-size: var(--text-sm); }
+
 	.theme-cards {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		/* 20-odd themes ship now: as many across as fit, rather than a tall
+		   column of threes. */
+		grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
 		gap: 10px;
 	}
 

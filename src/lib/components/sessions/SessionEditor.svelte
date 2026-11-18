@@ -88,6 +88,12 @@
 	let credentialId = $state('');
 	let allCredentials = $state<SavedCredential[]>([]);
 	let sessionVault = $derived(editSession ? (editSession.vault_id ?? null) : vaultId);
+	/** The folders this session can go in: its own vault's. One it is
+	 *  already in from another vault (older versions allowed that) stays
+	 *  listed so saving does not move it out unasked. */
+	let vaultFolders = $derived(
+		folders.filter((f) => (f.vault_id ?? null) === sessionVault || (!!editSession?.folder_id && f.id === editSession.folder_id))
+	);
 	let credentials = $derived(credentialsFor(allCredentials, sessionVault));
 
 	$effect(() => {
@@ -1225,12 +1231,12 @@
 			</div>
 		{/if}
 
-		{#if folders.length > 0}
+		{#if vaultFolders.length > 0}
 			<div class="folder-section">
 				<span class="folder-label">{t('session.folder')}</span>
 				<select class="folder-select" bind:value={folderIdStr} disabled={saving}>
 					<option value="">{t('session.no_folder')}</option>
-					{#each folders as folder (folder.id)}
+					{#each vaultFolders as folder (folder.id)}
 						<option value={folder.id}>{folderPath(folder.id, folders)}</option>
 					{/each}
 				</select>
