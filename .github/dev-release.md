@@ -2,11 +2,26 @@
 
 `release.yml` builds a release for every tag that starts with `v`:
 
-- `vX.Y.Z-dev.N` makes **Reacher CM Dev**, published as a GitHub pre-release.
-- `vX.Y.Z` makes a stable release, published as the latest release. Only a
+- `vYY.M.D-dev.N` makes **Reacher CM Dev**, published as a GitHub pre-release.
+- `vYY.M.D` makes a stable release, published as the latest release. Only a
   stable release signs the apt and dnf repositories (secrets
   `APT_GPG_PRIVATE_KEY`, `APT_GPG_PASSPHRASE`) and then redeploys the website,
   which hosts the dnf repository.
+
+## Version numbers
+
+Versions are dates: `YY.M.D` for a stable release (`26.11.18` is
+18 November 2026) and `YY.M.D-dev.N` for dev builds. Semver allows no
+leading zeros, so 5 January 2027 is `27.1.5`. The year has two digits
+because the Windows installer allows at most 255 in the first part. Every
+date version sorts above the old `0.9.x` ones, so the updaters move on to
+it. Below, `X.Y.Z` means such a date.
+
+The script takes today's date on the computer it runs on. `dev` gives
+today's next dev number (`26.11.18-dev.1`, `-dev.2`, ...; the next day starts
+again at `26.11.19-dev.1`), `stable` gives today's date. A dev build sorts
+before the stable release of its own date, so there is one stable release a
+day, and a dev build made after it takes tomorrow's date.
 
 ## With the script
 
@@ -17,7 +32,7 @@
 npm run release -- dev --dry-run   # show what would change, change nothing
 npm run release -- dev             # next dev build: bump, draft notes, open a PR
 npm run release -- stable          # stable release (dates the CHANGELOG section)
-npm run release -- 0.10.0-dev.1    # any version; --minor/--major with dev or stable
+npm run release -- 26.11.20-dev.1  # any version
 # merge the pull request, then:
 npm run release -- tag             # checks main, the full Build check, tags and pushes
 ```
@@ -42,7 +57,7 @@ that version's dev builds; release.yml checks this too.
    `src-tauri/linux/com.reachercm.client.metainfo.xml` (a Rust test checks it).
 2. In `src-tauri/tauri.conf.json` set `bundle.windows.wix.version` to
    `X.Y.Z.N` and `bundle.android.versionCode` to
-   `X*10000000 + Y*100000 + Z*1000 + N` (0.9.2-dev.4 is `902004`). Windows and
+   `X*10000000 + Y*100000 + Z*1000 + N` (26.11.18-dev.2 is `261118002`). Windows and
    Android refuse to install a build whose number did not go up. The workflow
    stops at once if any of these does not match the tag.
 3. Merge that to main. Pull requests check Linux only, so make sure the

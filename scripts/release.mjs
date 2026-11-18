@@ -2,16 +2,24 @@
 // Cuts a Reacher CM release or dev pre-release. It does the steps in
 // .github/dev-release.md; release.yml does the rest once the tag is pushed.
 //
-//   npm run release -- dev                next dev build (0.9.2-dev.4 -> 0.9.2-dev.5,
-//                                         0.9.2 -> 0.9.3-dev.1)
-//   npm run release -- stable             stable release (0.9.2-dev.4 -> 0.9.2,
-//                                         0.9.2 -> 0.9.3)
-//   npm run release -- 1.0.0-dev.1        any version
+// Versions are dates: YY.M.D for a stable release (26.11.18 on 18 November
+// 2026) and YY.M.D-dev.N for dev builds, both from today's date on this
+// computer. Semver allows no leading zeros, so 5 January 2027 is 27.1.5.
+//
+//   npm run release -- dev                next dev build: today's date, and the
+//                                         next dev number if today already has one
+//                                         (26.11.18-dev.1 -> 26.11.18-dev.2; on the
+//                                         19th -> 26.11.19-dev.1)
+//   npm run release -- stable             stable release of today (26.11.18-dev.2
+//                                         -> 26.11.18)
+//   npm run release -- 26.11.20-dev.1     any version
 //   npm run release -- tag                after the release PR is merged: tag main
 //                                         and push the tag, which starts the builds
 //
+// One stable release a day. A dev build after today's stable release takes
+// tomorrow's date, since 26.11.18-dev.3 would sort before 26.11.18.
+//
 // Options:
-//   --minor, --major   with dev or stable from a stable version: bump that part
 //   --direct           commit the bump straight to main, push it and tag it
 //                      (no pull request; needs main to accept pushes)
 //   --dry-run          show what would change and which commands would run,
@@ -63,26 +71,39 @@ export function parseVersion(v) {
 	const [major, minor, patch] = [m[1], m[2], m[3]].map(Number);
 	const dev = m[4] ? Number(m[4]) : null;
 	if (dev !== null && dev >= STABLE_BUILD) throw new Error(`dev number must be below ${STABLE_BUILD}`);
+	// Android's versionCode must stay below 2100000000 (the Windows installer allows up to 255).
+	if (major > 209) throw new Error('the first part must be at most 209 (Android versionCode)');
 	if (minor > 99 || patch > 99) throw new Error('minor and patch must be below 100 (Android versionCode)');
 	return { major, minor, patch, dev };
 }
 
 const base = ({ major, minor, patch }) => `${major}.${minor}.${patch}`;
 
-export function nextVersion(current, kind, bump = 'patch') {
+/** The stable version for a day: YY.M.D. */
+export function dateVersion(date) {
+	return `${date.getFullYear() % 100}.${date.getMonth() + 1}.${date.getDate()}`;
+}
+
+/** The version after `current` for a `dev` or `stable` release made on `date`, or `kind` itself when it is a version. */
+export function nextVersion(current, kind, date = new Date()) {
 	const v = parseVersion(current);
-	const next = () => {
-		if (bump === 'major') return `${v.major + 1}.0.0`;
-		if (bump === 'minor') return `${v.major}.${v.minor + 1}.0`;
-		return `${v.major}.${v.minor}.${v.patch + 1}`;
-	};
 	if (kind === 'dev') {
-		if (v.dev !== null && bump === 'patch') return `${base(v)}-dev.${v.dev + 1}`;
-		return `${next()}-dev.1`;
+		// The next dev build on that day, or none when the day's stable release is out.
+		const devOn = (day) => {
+			if (v.dev !== null && base(v) === day) return `${day}-dev.${v.dev + 1}`;
+			return compareVersions(current, day) < 0 ? `${day}-dev.1` : null;
+		};
+		const tomorrow = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+		const next = devOn(dateVersion(date)) ?? devOn(dateVersion(tomorrow));
+		if (!next) throw new Error(`${current} is newer than tomorrow's date; give the version, e.g. npm run release -- X.Y.Z-dev.1`);
+		return next;
 	}
 	if (kind === 'stable') {
-		if (v.dev !== null && bump === 'patch') return base(v);
-		return next();
+		const day = dateVersion(date);
+		if (compareVersions(day, current) <= 0) {
+			throw new Error(`${current} is not older than today's ${day}: one stable release a day; give a version to make another, e.g. npm run release -- X.Y.Z`);
+		}
+		return day;
 	}
 	parseVersion(kind);
 	return kind;
@@ -126,7 +147,7 @@ export const edit = {
 	},
 	metainfo: (t, v, { date, repo }) => {
 		if (t.includes(`<release version="${v}"`)) {
-			throw new Error(`the metainfo already lists ${v} (a release of that number exists, maybe Reach's own); pick a newer version, e.g. npm run release -- stable --minor or -- X.Y.Z`);
+			throw new Error(`the metainfo already lists ${v} (a release of that number exists, maybe Reach's own); pick a newer version, e.g. npm run release -- X.Y.Z`);
 		}
 		const type = parseVersion(v).dev !== null ? ' type="development"' : '';
 		const entry =
@@ -214,7 +235,7 @@ export function draftNotes(version, previousTag, titles) {
 class Abort extends Error {}
 
 function parseArgs(argv) {
-	const opts = { remote: 'origin', bump: 'patch' };
+	const opts = { remote: 'origin' };
 	const rest = [];
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i];
@@ -224,13 +245,12 @@ function parseArgs(argv) {
 		else if (a === '--no-edit') opts.noEdit = true;
 		else if (a === '--skip-ci-check') opts.skipCi = true;
 		else if (a === '--run-ci') opts.runCi = true;
-		else if (a === '--minor' || a === '--major') opts.bump = a.slice(2);
 		else if (a === '--remote') opts.remote = argv[++i];
 		else if (a === '--help' || a === '-h') opts.help = true;
 		else if (a.startsWith('-')) throw new Abort(`unknown option ${a}`);
 		else rest.push(a);
 	}
-	if (rest.length !== 1 && !opts.help) throw new Abort('say what to release: dev, stable, X.Y.Z[-dev.N] or tag (--help for more)');
+	if (rest.length !== 1 && !opts.help) throw new Abort('say what to release: dev, stable, YY.M.D[-dev.N] or tag (--help for more)');
 	opts.what = rest[0];
 	return opts;
 }
@@ -324,7 +344,12 @@ async function bump(opts) {
 	const { remote } = opts;
 	const read = (f) => readFileSync(join(ROOT, f), 'utf8');
 	const { version: current, problems } = checkVersions(read);
-	const version = nextVersion(current, opts.what, opts.bump);
+	let version;
+	try {
+		version = nextVersion(current, opts.what);
+	} catch (e) {
+		throw new Abort(e.message);
+	}
 	const tag = `v${version}`;
 	if (compareVersions(version, current) <= 0) throw new Abort(`${version} is not newer than the current ${current}`);
 	const stable = parseVersion(version).dev === null;
@@ -479,7 +504,7 @@ async function main() {
 		return;
 	}
 	if (opts.what === 'tag') return tagAndPush(opts);
-	if (opts.what !== 'dev' && opts.what !== 'stable' && !VERSION_RE.test(opts.what)) throw new Abort(`unknown release ${opts.what}: use dev, stable, X.Y.Z[-dev.N] or tag`);
+	if (opts.what !== 'dev' && opts.what !== 'stable' && !VERSION_RE.test(opts.what)) throw new Abort(`unknown release ${opts.what}: use dev, stable, YY.M.D[-dev.N] or tag`);
 	return bump(opts);
 }
 

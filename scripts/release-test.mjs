@@ -13,6 +13,7 @@ import {
 	edit,
 	nextVersion,
 	platformNumbers,
+	dateVersion,
 } from './release.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,17 +24,29 @@ const test = (name, fn) => {
 	n++;
 };
 
-test('next versions', () => {
-	assert.equal(nextVersion('0.9.2-dev.4', 'dev'), '0.9.2-dev.5');
-	assert.equal(nextVersion('0.9.2', 'dev'), '0.9.3-dev.1');
-	assert.equal(nextVersion('0.9.2-dev.4', 'dev', 'minor'), '0.10.0-dev.1');
-	assert.equal(nextVersion('0.9.2', 'dev', 'major'), '1.0.0-dev.1');
-	assert.equal(nextVersion('0.9.2-dev.4', 'stable'), '0.9.2');
-	assert.equal(nextVersion('0.9.2', 'stable'), '0.9.3');
-	assert.equal(nextVersion('0.9.2-dev.4', 'stable', 'minor'), '0.10.0');
-	assert.equal(nextVersion('0.9.2', '1.0.0-dev.1'), '1.0.0-dev.1');
+test('next versions are dates', () => {
+	const nov18 = new Date(2026, 10, 18, 23, 30);
+	const nov19 = new Date(2026, 10, 19, 0, 10);
+	assert.equal(nextVersion('0.9.2-dev.6', 'dev', nov18), '26.11.18-dev.1');
+	assert.equal(nextVersion('0.9.2-dev.6', 'stable', nov18), '26.11.18');
+	assert.equal(nextVersion('26.11.18-dev.1', 'dev', nov18), '26.11.18-dev.2');
+	assert.equal(nextVersion('26.11.18-dev.2', 'dev', nov19), '26.11.19-dev.1');
+	assert.equal(nextVersion('26.11.18-dev.2', 'stable', nov18), '26.11.18');
+	assert.equal(nextVersion('26.11.18-dev.2', 'stable', nov19), '26.11.19');
+	// After the day's stable release, dev builds take tomorrow's date.
+	assert.equal(nextVersion('26.11.18', 'dev', nov18), '26.11.19-dev.1');
+	assert.equal(nextVersion('26.11.19-dev.1', 'dev', nov18), '26.11.19-dev.2');
+	assert.throws(() => nextVersion('26.11.18', 'stable', nov18), /one stable release a day/);
+	assert.throws(() => nextVersion('26.11.19-dev.1', 'stable', nov18), /one stable release a day/);
+	assert.throws(() => nextVersion('26.11.25', 'dev', nov18), /newer than tomorrow/);
+	// Month and year ends, no leading zeros.
+	assert.equal(nextVersion('26.12.31', 'dev', new Date(2026, 11, 31)), '27.1.1-dev.1');
+	assert.equal(nextVersion('26.12.31', 'stable', new Date(2027, 0, 5)), '27.1.5');
+	assert.equal(dateVersion(new Date(2030, 0, 1)), '30.1.1');
+	assert.equal(nextVersion('26.11.18', '26.11.20-dev.1'), '26.11.20-dev.1');
 	assert.throws(() => nextVersion('0.9.2', '1.0'));
 	assert.throws(() => nextVersion('0.9.2', '1.0.0-beta.1'));
+	assert.throws(() => nextVersion('0.9.2', '2026.11.18'), /209/);
 });
 
 test('ordering', () => {
@@ -41,12 +54,19 @@ test('ordering', () => {
 	assert.ok(compareVersions('0.9.2-dev.9', '0.9.2') < 0);
 	assert.ok(compareVersions('0.9.2', '0.9.3-dev.1') < 0);
 	assert.equal(compareVersions('1.0.0', '1.0.0'), 0);
+	// The first date version installs over every 0.9.x build.
+	assert.ok(compareVersions('0.9.2-dev.6', '26.11.18-dev.1') < 0);
+	assert.ok(compareVersions('26.11.18-dev.9', '26.11.18') < 0);
+	assert.ok(compareVersions('26.11.18', '26.11.19-dev.1') < 0);
+	assert.ok(compareVersions('26.11.30', '26.12.1-dev.1') < 0);
 });
 
 test('Windows and Android numbers match release.yml and keep going up', () => {
 	assert.deepEqual(platformNumbers('0.9.2-dev.4'), { wix: '0.9.2.4', versionCode: 902004 });
 	assert.deepEqual(platformNumbers('0.9.2'), { wix: '0.9.2.999', versionCode: 902999 });
-	const order = ['0.9.2-dev.4', '0.9.2-dev.5', '0.9.2', '0.9.3-dev.1', '0.10.0', '1.0.0-dev.1'];
+	assert.deepEqual(platformNumbers('26.11.18-dev.2'), { wix: '26.11.18.2', versionCode: 261118002 });
+	assert.deepEqual(platformNumbers('26.11.18'), { wix: '26.11.18.999', versionCode: 261118999 });
+	const order = ['0.9.2-dev.4', '0.9.2-dev.5', '0.9.2', '0.9.3-dev.1', '0.10.0', '26.11.18-dev.1', '26.11.18', '26.12.31', '27.1.1-dev.1', '99.12.31'];
 	for (let i = 1; i < order.length; i++) {
 		assert.ok(platformNumbers(order[i]).versionCode > platformNumbers(order[i - 1]).versionCode, order[i]);
 	}
@@ -62,7 +82,7 @@ test('a bump edits every file and passes the same checks', () => {
 	// release branch, where the next version is already in the metainfo.
 	const current = checkVersions(read).version;
 	const v = nextVersion(current, 'dev');
-	const stable = nextVersion(current, 'stable', 'minor');
+	const stable = nextVersion(current, 'stable', new Date(2099, 0, 1));
 	const ctx = { date: '2026-11-18', repo: 'rsipka/ReacherCM' };
 	const out = new Map();
 	for (const key of ['packageJson', 'packageLock', 'cargoToml', 'cargoLock', 'tauriConf', 'metainfo']) {
