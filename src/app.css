@@ -456,6 +456,28 @@ select:not([multiple]):disabled {
   .settings-content .setting-row > :not(.setting-info):not(.setting-control) {
     justify-self: start;
   }
+
+  /* ...except a switch, which sits on the right of its label on the same
+     line, as in a phone's own settings. */
+  .settings-content .setting-row:has(> .setting-control > .toggle-wrapper:only-child) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 14px;
+  }
+
+  .settings-content .setting-row:has(> .setting-control > .toggle-wrapper:only-child) > .setting-control {
+    justify-content: flex-end;
+  }
+}
+
+/* A row Settings search (or a link into Settings) points at. */
+.settings-content .settings-flash {
+  animation: settings-flash 1.8s ease-out;
+  border-radius: 6px;
+}
+
+@keyframes settings-flash {
+  0%, 35% { background-color: color-mix(in srgb, var(--color-accent) 22%, transparent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 22%, transparent); }
+  100% { background-color: transparent; box-shadow: 0 0 0 6px transparent; }
 }
 
 /* Fields fill the column; buttons and toggles keep their size at its edge. */
