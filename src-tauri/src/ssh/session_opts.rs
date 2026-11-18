@@ -169,7 +169,10 @@ pub async fn setup_channel(
 ) -> Result<bool, String> {
     let shell = reach_shell.map(str::trim).filter(|s| !s.is_empty());
     let command = shell.map(|s| if s.split_whitespace().nth(1).is_some() { format!("exec {s}") } else { format!("exec {s} -l") }).or(p.remote_command.clone());
-    let tty = p.wants_tty(command.is_some());
+    // Reach's login shell setting (tmux's start command among them) is an
+    // interactive shell, so it gets a terminal like no command at all; only
+    // RemoteCommand counts as a command for RequestTTY auto.
+    let tty = p.wants_tty(shell.is_none() && command.is_some());
     if tty {
         channel
             .request_pty(false, "xterm-256color", cols as u32, rows as u32, 0, 0, &[])

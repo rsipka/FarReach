@@ -96,6 +96,9 @@ export interface Settings {
 	terminalRightClick: RightClickMode;
 	/** Selecting text in the terminal copies it, as in PuTTY. */
 	terminalCopyOnSelect: boolean;
+	/** A program on the server may put text on the clipboard (OSC 52:
+	 *  tmux copy mode, vim). Never read. See #lib/terminal/osc52. */
+	terminalOsc52: boolean;
 	/** A middle click in the terminal pastes. */
 	terminalMiddleClickPaste: boolean;
 	/** The characters that end a word on a double click, besides the space. */
@@ -195,6 +198,7 @@ const defaults: Settings = {
 	multilinePasteThreshold: DEFAULT_PASTE_THRESHOLD,
 	terminalRightClick: DEFAULT_RIGHT_CLICK,
 	terminalCopyOnSelect: false,
+	terminalOsc52: false,
 	terminalMiddleClickPaste: true,
 	terminalWordSeparators: DEFAULT_WORD_SEPARATORS,
 	setupComplete: false,
@@ -306,6 +310,7 @@ export function loadSettings(): void {
 			settings.multilinePasteThreshold = parsed.multilinePasteThreshold ?? defaults.multilinePasteThreshold;
 			settings.terminalRightClick = rightClickMode(parsed.terminalRightClick);
 			settings.terminalCopyOnSelect = parsed.terminalCopyOnSelect ?? defaults.terminalCopyOnSelect;
+			settings.terminalOsc52 = parsed.terminalOsc52 ?? defaults.terminalOsc52;
 			settings.terminalMiddleClickPaste = parsed.terminalMiddleClickPaste ?? defaults.terminalMiddleClickPaste;
 			settings.terminalWordSeparators = parsed.terminalWordSeparators ?? defaults.terminalWordSeparators;
 			settings.pendingTursoOrg = parsed.pendingTursoOrg ?? defaults.pendingTursoOrg;

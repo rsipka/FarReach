@@ -4,8 +4,21 @@ import type { SecretRef } from './pwmanager';
 
 /** What a connect asks of tmux on the server (see #lib/terminal/tmux). */
 export interface TmuxStart {
-  /** The tmux session to attach to, or create. */
+  /** The tmux session to attach to, or create (a new one, when asking). */
   name: string;
+  /** Ask first, from the server's tmux sessions (see sshTmuxChosen). */
+  ask?: boolean;
+  /** tmux's mouse mode on for this session. */
+  mouse?: boolean;
+}
+
+/** One of the server's tmux sessions. */
+export interface TmuxListed {
+  name: string;
+  windows: number;
+  attached: number;
+  /** Last activity, Unix seconds. */
+  activity: number;
 }
 
 export interface JumpHostConnectParams {
@@ -122,6 +135,23 @@ export async function sshConnect(params: SshConnectParams): Promise<string> {
     sessionId: params.sessionId ?? null,
     tmux: params.tmux ?? null,
   });
+}
+
+/** What the tmux picker chose while connection `id` opened: a name, null
+ *  for no tmux; undefined when nothing was asked. */
+export async function sshTmuxChosen(id: string): Promise<string | null | undefined> {
+  const r = await invoke<{ name: string | null } | null>('ssh_tmux_chosen', { connectionId: id });
+  return r ? r.name : undefined;
+}
+
+/** The server's tmux sessions, on a tab's connection. */
+export async function sshTmuxList(connectionId: string): Promise<TmuxListed[]> {
+  return invoke<TmuxListed[]>('ssh_tmux_list', { connectionId });
+}
+
+/** The tmux start script, for a WSL tab to run with `wsl.exe -e sh -c`. */
+export async function tmuxStartScript(start: TmuxStart): Promise<string> {
+  return invoke<string>('tmux_start_script', { start });
 }
 
 /** End a tab's tmux session for good, with the ones other tabs joined it as. */
