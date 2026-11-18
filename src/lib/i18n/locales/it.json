@@ -2964,6 +2964,7 @@
   "termtheme.session_hint": "Crea o modifica i tuoi temi in Impostazioni → Aspetto → Colori del terminale.",
   "termtheme.missing": "Tema non trovato: usato il predefinito",
   "history.search_menu": "Cerca nella cronologia",
+  "history.button": "Cronologia",
   "history.session_menu": "Cronologia…",
   "history.session_label": "Cronologia della sessione",
   "history.session_default": "Come nelle Impostazioni",

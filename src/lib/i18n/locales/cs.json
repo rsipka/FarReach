@@ -2964,6 +2964,7 @@
   "termtheme.session_hint": "Vlastní motivy vytvoříte a upravíte v Nastavení → Vzhled → Barvy terminálu.",
   "termtheme.missing": "Motiv nenalezen: použije se výchozí",
   "history.search_menu": "Hledat v historii",
+  "history.button": "Historie",
   "history.session_menu": "Historie…",
   "history.session_label": "Historie relace",
   "history.session_default": "Podle Nastavení",

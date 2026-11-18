@@ -2964,6 +2964,7 @@
   "termtheme.session_hint": "Make or edit your own themes in Settings → Appearance → Terminal colors.",
   "termtheme.missing": "Theme not found: default used",
   "history.search_menu": "Search history",
+  "history.button": "History",
   "history.session_menu": "History…",
   "history.session_label": "Session history",
   "history.session_default": "As in Settings",

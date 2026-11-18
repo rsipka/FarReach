@@ -2964,6 +2964,7 @@
   "termtheme.session_hint": "Créez ou modifiez vos thèmes dans Paramètres → Apparence → Couleurs du terminal.",
   "termtheme.missing": "Thème introuvable : thème par défaut utilisé",
   "history.search_menu": "Rechercher dans l'historique",
+  "history.button": "Historique",
   "history.session_menu": "Historique…",
   "history.session_label": "Historique de session",
   "history.session_default": "Comme dans les Paramètres",
