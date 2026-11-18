@@ -1,12 +1,10 @@
 <script lang="ts">
 	import { openHistoryPanel } from '#lib/state/history.svelte.js';
 	import QuickConnect, { type QuickConnectPrefill } from './QuickConnect.svelte';
-	import RdpQuickConnect from '#lib/components/rdp/RdpQuickConnect.svelte';
 	import FaIcon from '#lib/components/shared/FaIcon.svelte';
 	import {
 		faPlus,
 		faBolt,
-		faDesktop,
 		faServer,
 		faFolderPlus,
 		faFileImport,
@@ -73,7 +71,6 @@
 	import { openOtherWindows, tmuxView } from '#lib/terminal/tmux-tabs.js';
 
 	let showQuickConnect = $state(false);
-	let showRdpConnect = $state(false);
 	let showEditor = $state(false);
 	/** The import dialog open now, by source; null when none is. */
 	let importSource = $state<AnyImportSource | null>(null);
@@ -1686,10 +1683,6 @@
 							<span>{t('session.quick_connect')}</span>
 							<kbd>{shortcutLabel('n', { ctrl: true, shift: true })}</kbd>
 						</button>
-						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => { showRdpConnect = true; })}>
-							<FaIcon icon={faDesktop} size={12} />
-							<span>{t('session.rdp_connect')}</span>
-						</button>
 						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => contextNewFolder())}>
 							<FaIcon icon={faFolderPlus} size={12} />
 							<span>{t('session.new_folder')}</span>
@@ -2031,7 +2024,6 @@
 {/if}
 
 <QuickConnect bind:open={showQuickConnect} prefill={quickPrefill} />
-<RdpQuickConnect bind:open={showRdpConnect} />
 <SessionEditor bind:open={showEditor} editSession={editingSession} vaultId={targetVaultId} {folders} onsave={handleEditorSave} />
 <SshConfigImport bind:open={() => importOpen('ssh_config'), (v) => setImportOpen('ssh_config', v)} vaultId={targetVaultId} onsave={handleEditorSave} onsource={openImport} />
 <RdpImport bind:open={() => importOpen('rdp'), (v) => setImportOpen('rdp', v)} vaultId={targetVaultId} onsave={handleEditorSave} onsource={openImport} />

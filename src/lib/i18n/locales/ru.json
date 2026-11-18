@@ -303,7 +303,6 @@
   "session.update_session": "Update Session",
   "session.save_session": "Save Session",
   "session.quick_connect": "Quick Connect",
-  "session.rdp_connect": "Remote desktop (RDP)",
   "session.protocol": "Протокол",
   "session.protocol_ssh": "SSH",
   "session.protocol_rdp": "Remote desktop (RDP)",

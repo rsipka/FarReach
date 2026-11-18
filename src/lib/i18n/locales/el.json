@@ -303,7 +303,6 @@
   "session.update_session": "Ενημέρωση Συνεδρίας",
   "session.save_session": "Αποθήκευση Συνεδρίας",
   "session.quick_connect": "Γρήγορη Σύνδεση",
-  "session.rdp_connect": "Remote desktop (RDP)",
   "session.protocol": "Πρωτόκολλο",
   "session.protocol_ssh": "SSH",
   "session.protocol_rdp": "Remote desktop (RDP)",

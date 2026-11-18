@@ -29,10 +29,12 @@
 
 	let { open = $bindable(), prefill = null }: Props = $props();
 
-	type Protocol = 'ssh' | 'telnet' | 'serial';
-	const DEFAULT_PORT: Record<Exclude<Protocol, 'serial'>, string> = { ssh: '22', telnet: '23' };
+	type Protocol = 'ssh' | 'rdp' | 'telnet' | 'serial';
+	const DEFAULT_PORT: Record<Exclude<Protocol, 'serial'>, string> = { ssh: '22', rdp: '3389', telnet: '23' };
 	/** Serial ports open only in the desktop app. */
-	const protocols: Protocol[] = isMobile() ? ['ssh', 'telnet'] : ['ssh', 'telnet', 'serial'];
+	const protocols: Protocol[] = isMobile() ? ['ssh', 'rdp', 'telnet'] : ['ssh', 'rdp', 'telnet', 'serial'];
+	/** Short names for the switch; the editor's long "Remote desktop (RDP)" does not fit. */
+	const PROTOCOL_LABEL: Record<Protocol, string> = { ssh: 'SSH', rdp: 'RDP', telnet: 'Telnet', serial: '' };
 
 	let protocol = $state<Protocol>('ssh');
 	let serialPort = $state('');
@@ -40,6 +42,7 @@
 	let serialPortsLoading = $state(false);
 	let serialPortTyped = $state(false);
 	let baudRate = $state(DEFAULT_SERIAL_OPTIONS.baud_rate);
+	let domain = $state('');
 
 	let host = $state('');
 	let portStr = $state('22');
@@ -69,7 +72,7 @@
 	/** The connection being made, for its steps (ConnectSteps). */
 	let attemptId = $state<string | undefined>();
 
-	let port = $derived(parseInt(portStr, 10) || (protocol === 'telnet' ? 23 : 22));
+	let port = $derived(parseInt(portStr, 10) || (protocol === 'serial' ? 22 : parseInt(DEFAULT_PORT[protocol], 10)));
 
 	function pickProtocol(next: Protocol): void {
 		if (next === protocol) return;
@@ -78,7 +81,7 @@
 			portStr = DEFAULT_PORT[next];
 		}
 		// SSH's default user means nothing to a switch's login prompt.
-		if (next === 'telnet' && username === 'root') username = '';
+		if (next !== 'ssh' && username === 'root') username = '';
 		if (next === 'ssh' && username === '') username = 'root';
 		protocol = next;
 		error = undefined;
@@ -118,10 +121,26 @@
 			: host.trim().length > 0 && (protocol === 'telnet' || username.trim().length > 0))
 	);
 
-	/** Telnet and serial tabs connect by themselves once their terminal listens. */
+	/**
+	 * Telnet and serial tabs connect by themselves once their terminal
+	 * listens; an RDP tab once its panel knows its size.
+	 */
 	function openTerminalTab(): void {
 		setActivePage('terminal');
-		if (protocol === 'telnet') {
+		if (protocol === 'rdp') {
+			const tab = createTab('rdp', `${username.trim()}@${host.trim()}`);
+			tab.rdpConnectParams = {
+				id: tab.id,
+				host: host.trim(),
+				port,
+				username: username.trim(),
+				password,
+				domain: domain.trim() || undefined,
+				// Filled in by the panel from its own size.
+				width: 0,
+				height: 0,
+			};
+		} else if (protocol === 'telnet') {
 			const tab = createTab('telnet', host.trim());
 			tab.telnetConnectParams = {
 				host: host.trim(),
@@ -251,7 +270,7 @@
 						disabled={connecting}
 						onclick={() => pickProtocol(p)}
 					>
-						{t(`session.protocol_${p}`)}
+						{p === 'serial' ? t('session.protocol_serial') : PROTOCOL_LABEL[p]}
 					</button>
 				{/each}
 			</div>
@@ -305,7 +324,11 @@
 			</div>
 		</div>
 
-		{#if protocol === 'telnet'}
+		{#if protocol === 'rdp'}
+			<Input label={t('session.username')} bind:value={username} placeholder="Administrator" />
+			<Input label={t('session.password')} bind:value={password} type="password" />
+			<Input label={t('session.rdp_domain')} bind:value={domain} />
+		{:else if protocol === 'telnet'}
 			<Input label={t('session.username_optional')} bind:value={username} placeholder="admin" />
 			<Input label={t('session.password_optional')} bind:value={password} type="password" />
 			<p class="shell-hint">{t('quick_connect.telnet_hint')}</p>

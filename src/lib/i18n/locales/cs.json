@@ -302,7 +302,6 @@
   "session.update_session": "Aktualizovat relaci",
   "session.save_session": "Uložit relaci",
   "session.quick_connect": "Rychlé připojení",
-  "session.rdp_connect": "Vzdálená plocha (RDP)",
   "session.protocol": "Protokol",
   "session.protocol_ssh": "SSH",
   "session.protocol_rdp": "Vzdálená plocha (RDP)",

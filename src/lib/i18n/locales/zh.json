@@ -303,7 +303,6 @@
   "session.update_session": "更新会话",
   "session.save_session": "保存会话",
   "session.quick_connect": "快速连接",
-  "session.rdp_connect": "Remote desktop (RDP)",
   "session.protocol": "协议",
   "session.protocol_ssh": "SSH",
   "session.protocol_rdp": "Remote desktop (RDP)",
