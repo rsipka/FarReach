@@ -1309,6 +1309,7 @@
   "session.move_n": "移动（{{count}}）",
   "session.move_filter": "查找文件夹",
   "session.move_to_folder": "移动到文件夹",
+  "session.move_mixed_vaults": "这些会话位于不同的保险库中，一个文件夹只能包含同一保险库的会话。",
   "session.remove_from_folder": "从文件夹移除",
   "nav.terminal": "终端",
   "nav.ansible": "Ansible",

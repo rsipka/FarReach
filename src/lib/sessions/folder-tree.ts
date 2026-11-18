@@ -15,6 +15,26 @@ export interface FolderTree {
 
 type ShowEmpty = (folder: Folder) => boolean;
 
+/** The vault a folder or session lives in: null for this device's Private one. */
+export function vaultOf(item: { vault_id?: string | null }): string | null {
+	return item.vault_id ?? null;
+}
+
+/** The folders of one vault (null: Private). */
+export function foldersInVault(folders: Folder[], vault: string | null): Folder[] {
+	return folders.filter((folder) => vaultOf(folder) === vault);
+}
+
+/**
+ * The one vault all these sessions are in, or undefined when they are in
+ * several (or there are none): a session can only be filed in a folder of
+ * its own vault, so sessions from several vaults share no folder.
+ */
+export function commonVault(sessions: { vault_id?: string | null }[]): string | null | undefined {
+	const vaults = new Set(sessions.map(vaultOf));
+	return vaults.size === 1 ? [...vaults][0] : undefined;
+}
+
 function hasParentCycle(folderId: string, parentId: string, folders: Map<string, Folder>): boolean {
 	const seen = new Set<string>();
 	let current: string | null = parentId;
@@ -39,7 +59,10 @@ export function buildFolderTree(
 
 	for (const session of sessions) {
 		const node = session.folder_id ? nodes.get(session.folder_id) : undefined;
-		if (node) node.sessions.push(session);
+		// A session filed in another vault's folder (older versions allowed
+		// it) shows ungrouped in its own vault rather than pulling that
+		// folder into the list.
+		if (node && vaultOf(node.folder) === vaultOf(session)) node.sessions.push(session);
 		else ungrouped.push(session);
 	}
 

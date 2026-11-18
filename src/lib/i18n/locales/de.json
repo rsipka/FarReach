@@ -1309,6 +1309,7 @@
   "session.move_n": "Verschieben ({{count}})",
   "session.move_filter": "Ordner suchen",
   "session.move_to_folder": "In Ordner verschieben",
+  "session.move_mixed_vaults": "Diese Sitzungen liegen in verschiedenen Tresoren, ein Ordner enthält nur Sitzungen eines Tresors.",
   "session.remove_from_folder": "Aus Ordner entfernen",
   "nav.terminal": "Terminal",
   "nav.ansible": "Ansible",

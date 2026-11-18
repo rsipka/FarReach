@@ -1309,6 +1309,7 @@
   "session.move_n": "Sposta ({{count}})",
   "session.move_filter": "Trova una cartella",
   "session.move_to_folder": "Sposta nella cartella",
+  "session.move_mixed_vaults": "Queste sessioni sono in vault diversi e una cartella contiene solo sessioni di un vault.",
   "session.remove_from_folder": "Rimuovi dalla cartella",
   "nav.terminal": "Terminale",
   "nav.ansible": "Ansible",

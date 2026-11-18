@@ -1309,6 +1309,7 @@
   "session.move_n": "Move ({{count}})",
   "session.move_filter": "Find a folder",
   "session.move_to_folder": "Move to folder",
+  "session.move_mixed_vaults": "These sessions are in different vaults, and a folder holds sessions of one vault only.",
   "session.remove_from_folder": "Remove from folder",
   "nav.terminal": "Terminal",
   "nav.ansible": "Ansible",
