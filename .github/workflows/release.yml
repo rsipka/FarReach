@@ -41,19 +41,20 @@ jobs:
             echo "::error::The tag must be v plus the app version (src-tauri/tauri.conf.json): vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-dev.N."
             exit 1
           fi
-          # Dev builds need their own Windows and Android version numbers too,
-          # or Windows and Android refuse to install them over the last one.
-          if [[ "$version" == *-dev.* ]]; then
-            IFS=. read -r major minor patch <<< "${version%-dev.*}"
-            n="${version##*.}"
-            want_wix="${version%-dev.*}.$n"
-            want_code=$(( major * 10000000 + minor * 100000 + patch * 1000 + n ))
-            wix=$(jq -r .bundle.windows.wix.version src-tauri/tauri.conf.json)
-            code=$(jq -r .bundle.android.versionCode src-tauri/tauri.conf.json)
-            if [[ "$wix" != "$want_wix" || "$code" != "$want_code" ]]; then
-              echo "::error::For $version set bundle.windows.wix.version to $want_wix (is $wix) and bundle.android.versionCode to $want_code (is $code) in src-tauri/tauri.conf.json."
-              exit 1
-            fi
+          # Every build needs its own Windows and Android version number,
+          # or Windows and Android refuse to install it over the last one.
+          # A stable release takes build number 999, so it installs over the
+          # same version's dev builds (scripts/release.mjs sets these).
+          IFS=. read -r major minor patch <<< "${version%-dev.*}"
+          n=999
+          [[ "$version" != *-dev.* ]] || n="${version##*.}"
+          want_wix="${version%-dev.*}.$n"
+          want_code=$(( major * 10000000 + minor * 100000 + patch * 1000 + n ))
+          wix=$(jq -r .bundle.windows.wix.version src-tauri/tauri.conf.json)
+          code=$(jq -r .bundle.android.versionCode src-tauri/tauri.conf.json)
+          if [[ "$wix" != "$want_wix" || "$code" != "$want_code" ]]; then
+            echo "::error::For $version set bundle.windows.wix.version to $want_wix (is $wix) and bundle.android.versionCode to $want_code (is $code) in src-tauri/tauri.conf.json, or run npm run release."
+            exit 1
           fi
           name="Reacher CM $GITHUB_REF_NAME"
           [[ "$version" != *-dev.* ]] || name="Reacher CM Dev $GITHUB_REF_NAME"
