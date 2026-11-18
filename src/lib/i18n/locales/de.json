@@ -1,6 +1,6 @@
 {
   "settings.compact_layout": "Kompaktes Layout",
-  "settings.compact_layout_desc": "Engere Zeilen, mit Name und Adresse einer Sitzung in einer Zeile, damit mehr auf den Bildschirm passt. Die Schrift bleibt gleich groß.",
+  "settings.compact_layout_desc": "Engere Zeilen, die nur den Namen jeder Sitzung zeigen, damit mehr auf den Bildschirm passt. Am Desktop zeigt das Überfahren mit der Maus Adresse, Typ, Tags und mehr. Die Schrift bleibt gleich groß.",
   "sidebar.resize": "Seitenleiste in der Breite ändern",
   "security.locked_desc": "Zugangsdaten sind gesperrt und verschlüsselt.",
   "security.unlocked_desc": "Zugangsdaten sind derzeit zugänglich.",
@@ -3227,5 +3227,7 @@
   "settings.tmux_windows_last": "Das zuletzt benutzte",
   "settings.tmux_windows_all": "Alle Fenster",
   "settings.tmux_hide_status": "Statusleiste von tmux ausblenden",
-  "settings.tmux_hide_status_desc": "Nur in tmux-Tabs, wo der Tab den Fensternamen zeigt. Gilt für ab jetzt geöffnete Tabs."
+  "settings.tmux_hide_status_desc": "Nur in tmux-Tabs, wo der Tab den Fensternamen zeigt. Gilt für ab jetzt geöffnete Tabs.",
+  "session.tooltip_tags": "Tags: {{tags}}",
+  "session.tooltip_vault": "Tresor: {{name}}"
 }

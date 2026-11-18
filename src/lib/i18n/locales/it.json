@@ -1,6 +1,6 @@
 {
   "settings.compact_layout": "Layout compatto",
-  "settings.compact_layout_desc": "Righe più strette, con nome e indirizzo della sessione su una riga, così ne entrano di più sullo schermo. Il testo resta della stessa dimensione.",
+  "settings.compact_layout_desc": "Righe più compatte che mostrano solo il nome di ogni sessione, così ne entrano di più sullo schermo. Su desktop, passa il mouse su una sessione per vederne indirizzo, tipo, tag e il resto. Il testo resta della stessa dimensione.",
   "sidebar.resize": "Ridimensiona la barra laterale",
   "security.locked_desc": "Le credenziali sono bloccate e cifrate.",
   "security.unlocked_desc": "Le credenziali sono al momento accessibili.",
@@ -3227,5 +3227,7 @@
   "settings.tmux_windows_last": "L'ultima usata",
   "settings.tmux_windows_all": "Tutte le finestre",
   "settings.tmux_hide_status": "Nascondi la barra di stato di tmux",
-  "settings.tmux_hide_status_desc": "Solo nelle schede tmux, dove la scheda mostra il nome della finestra. Vale per le schede aperte da ora in poi."
+  "settings.tmux_hide_status_desc": "Solo nelle schede tmux, dove la scheda mostra il nome della finestra. Vale per le schede aperte da ora in poi.",
+  "session.tooltip_tags": "Tag: {{tags}}",
+  "session.tooltip_vault": "Vault: {{name}}"
 }

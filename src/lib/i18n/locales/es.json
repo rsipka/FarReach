@@ -1,6 +1,6 @@
 {
   "settings.compact_layout": "Diseño compacto",
-  "settings.compact_layout_desc": "Filas más ajustadas, con el nombre y la dirección de la sesión en una línea, para que quepan más en pantalla. El texto mantiene su tamaño.",
+  "settings.compact_layout_desc": "Filas más compactas que solo muestran el nombre de cada sesión, para que quepan más en pantalla. En escritorio, pasa el ratón sobre una sesión para ver su dirección, tipo, etiquetas y lo demás. El texto mantiene su tamaño.",
   "sidebar.resize": "Cambiar el ancho de la barra lateral",
   "security.locked_desc": "Las credenciales están bloqueadas y cifradas.",
   "security.unlocked_desc": "Las credenciales están accesibles ahora.",
@@ -3227,5 +3227,7 @@
   "settings.tmux_windows_last": "La última usada",
   "settings.tmux_windows_all": "Todas las ventanas",
   "settings.tmux_hide_status": "Ocultar la barra de estado de tmux",
-  "settings.tmux_hide_status_desc": "Solo en pestañas tmux, donde la pestaña muestra el nombre de la ventana. Se aplica a las pestañas abiertas a partir de ahora."
+  "settings.tmux_hide_status_desc": "Solo en pestañas tmux, donde la pestaña muestra el nombre de la ventana. Se aplica a las pestañas abiertas a partir de ahora.",
+  "session.tooltip_tags": "Etiquetas: {{tags}}",
+  "session.tooltip_vault": "Bóveda: {{name}}"
 }
