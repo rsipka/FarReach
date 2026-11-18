@@ -111,11 +111,19 @@ jobs:
         with:
           targets: ${{ matrix.platform == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      # A self-hosted Mac may have another Rust ahead of rustup's in PATH
-      # (MacPorts, Homebrew), which lacks the cross targets installed above.
-      - name: Use rustup's Rust on a self-hosted Mac
+      # Keep the Mac's own tools out of the build. MacPorts (/opt/local) has
+      # its own Rust, without the cross targets installed above, and its own
+      # pkg-config, through which the app was linked to MacPorts' libz: the
+      # released app then would not start on any other Mac (0.9.2-dev.7).
+      - name: Build with rustup's Rust and macOS's own libraries
         if: runner.environment == 'self-hosted'
-        run: echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
+        run: |
+          echo "PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '^/opt/local' | paste -sd: -)" >> "$GITHUB_ENV"
+          echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
+          for v in PKG_CONFIG_PATH LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH \
+                   DYLD_LIBRARY_PATH DYLD_FALLBACK_LIBRARY_PATH; do
+            echo "$v=" >> "$GITHUB_ENV"
+          done
 
       # On a self-hosted Mac the build stays on its own disk instead of going
       # through GitHub's cache: saving and restoring that cache moved about
@@ -124,7 +132,8 @@ jobs:
       - name: Keep Rust builds on the self-hosted Mac
         if: runner.environment == 'self-hosted'
         run: |
-          keep="$RUNNER_TOOL_CACHE/reachercm-target"
+          # -2: build scripts in the first folder remembered MacPorts' libz.
+          keep="$RUNNER_TOOL_CACHE/reachercm-target-2"
           mkdir -p "$keep"
           rm -rf src-tauri/target
           ln -s "$keep" src-tauri/target
@@ -308,6 +317,33 @@ jobs:
             exit 1
           fi
           echo "Bundle signature verified."
+
+      # An app linked to a library outside macOS and its own bundle starts
+      # only on the Mac that built it (dyld "Library not loaded" on every
+      # other one). Fail the release before it is published instead.
+      - name: Check the app uses only macOS's libraries and its own
+        if: matrix.platform == 'macos'
+        run: |
+          set -euo pipefail
+          bad=0 found=0
+          for app in src-tauri/target/*/release/bundle/macos/*.app; do
+            [ -d "$app" ] || continue
+            while IFS= read -r -d '' bin; do
+              file "$bin" | grep -q 'Mach-O' || continue
+              found=1
+              echo "::group::$bin"
+              otool -L "$bin"
+              echo "::endgroup::"
+              outside=$(otool -L "$bin" | tail -n +2 | awk '{print $1}' \
+                | grep -vE '^(/System/Library/|/usr/lib/|@rpath/|@executable_path/|@loader_path/)' || true)
+              if [ -n "$outside" ]; then
+                echo "::error::$bin links libraries outside macOS and the app: $(echo $outside)"
+                bad=1
+              fi
+            done < <(find "$app/Contents" -type f \( -perm -u+x -o -name '*.dylib' \) -print0)
+          done
+          [ "$found" -eq 1 ] || { echo "::error::No app binary found to check."; exit 1; }
+          [ "$bad" -eq 0 ]
 
       # The pinned Tauri CLI passes the app version through to RPM as-is.
       # RPM reserves hyphens, so put the dev suffix in its Release field.
@@ -574,17 +610,26 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      # A self-hosted Mac may have another Rust ahead of rustup's in PATH
-      # (MacPorts, Homebrew), which lacks the cross targets installed above.
-      - name: Use rustup's Rust on a self-hosted Mac
+      # Keep the Mac's own tools out of the build. MacPorts (/opt/local) has
+      # its own Rust, without the cross targets installed above, and its own
+      # pkg-config, through which the app was linked to MacPorts' libz: the
+      # released app then would not start on any other Mac (0.9.2-dev.7).
+      - name: Build with rustup's Rust and macOS's own libraries
         if: runner.environment == 'self-hosted'
-        run: echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
+        run: |
+          echo "PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '^/opt/local' | paste -sd: -)" >> "$GITHUB_ENV"
+          echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
+          for v in PKG_CONFIG_PATH LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH \
+                   DYLD_LIBRARY_PATH DYLD_FALLBACK_LIBRARY_PATH; do
+            echo "$v=" >> "$GITHUB_ENV"
+          done
 
       # As in build-desktop: the Rust build stays on the self-hosted Mac.
       - name: Keep Rust builds on the self-hosted Mac
         if: runner.environment == 'self-hosted'
         run: |
-          keep="$RUNNER_TOOL_CACHE/reachercm-target"
+          # -2: build scripts in the first folder remembered MacPorts' libz.
+          keep="$RUNNER_TOOL_CACHE/reachercm-target-2"
           mkdir -p "$keep"
           rm -rf src-tauri/target
           ln -s "$keep" src-tauri/target
