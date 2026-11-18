@@ -53,6 +53,7 @@
 		type Transfer
 	} from '#lib/state/transfers.svelte.js';
 	import { runTransfer } from '#lib/explorer/run-transfer.js';
+	import { shellQuote } from '#lib/utils/shell.js';
 
 	interface Props {
 		connectionId?: string;
@@ -140,7 +141,7 @@
 
 	function cdToFolder(entry: FileEntry): void {
 		if (!connectionId || !entry.isDirectory) return;
-		const cmd = `cd ${entry.path}\n`;
+		const cmd = `cd ${shellQuote(entry.path)}\n`;
 		sshSend(connectionId, Array.from(new TextEncoder().encode(cmd)));
 		addToast(t('explorer.cd_sent', { path: entry.path }), 'success');
 	}
