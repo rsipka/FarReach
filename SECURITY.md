@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Reach is released often, and fixes go into the next release rather than being
+Reacher CM is released often, and fixes go into the next release rather than being
 backported. Only the latest release gets security fixes, so please update
 before reporting.
 
@@ -24,7 +24,7 @@ Only the maintainer can see the report.
 Please include:
 
 - what the problem is and what an attacker could do with it,
-- the Reach version and platform (Windows, macOS, Linux or Android),
+- the Reacher CM version and platform (Windows, macOS, Linux, Android or iOS),
 - steps to reproduce it, or a proof of concept.
 
 ## What happens next
@@ -40,11 +40,11 @@ Please include:
 
 ## Scope
 
-In scope: the Reach app on every platform, its vault and sync, its SSH, SFTP,
-RDP and database connections, the MCP server, plugins as run by Reach, and the
+In scope: the Reacher CM app on every platform, its vault and sync, its SSH, SFTP,
+RDP and database connections, the MCP server, plugins as run by Reacher CM, and the
 release and update process.
 
-Out of scope: problems in servers or services Reach connects to, and issues
+Out of scope: problems in servers or services Reacher CM connects to, and issues
 that need an attacker to already control your device or your unlocked vault.
 
 ## Plugins, recipes and themes come from Reach's registries

@@ -1,7 +1,7 @@
-# Building Reach for iOS
+# Building Reacher CM for iOS
 
-Reach builds for iPhone and iPad with Tauri 2's iOS support. This needs a Mac
-with Xcode; an Intel Mac works. A free Apple account is enough to run Reach on
+Reacher CM builds for iPhone and iPad with Tauri 2's iOS support. This needs a Mac
+with Xcode; an Intel Mac works. A free Apple account is enough to run Reacher CM on
 your own devices, with the limits listed at the end.
 
 ## What works on iOS
@@ -17,7 +17,7 @@ Face ID unlock is not there yet: it needs an iOS half of the
 `reach-unlock` plugin.
 
 iOS suspends an app shortly after it leaves the screen, so open sessions drop
-when you switch away from Reach for more than a few seconds.
+when you switch away from Reacher CM for more than a few seconds.
 
 ## One-time setup on the Mac
 
@@ -58,7 +58,7 @@ npm ci
 ```
 
 `ios-init.sh` runs `tauri ios init`, which writes the Xcode project to
-`src-tauri/gen/apple` (not committed), and puts Reach's icons in it. If init
+`src-tauri/gen/apple` (not committed), and puts Reacher CM's icons in it. If init
 does not find your team on its own, set it first:
 
 ```sh
@@ -110,14 +110,15 @@ no Apple account is needed:
 npx tauri ios build --no-sign --target aarch64
 ```
 
-writes `src-tauri/gen/apple/build/arm64/Reach.ipa`; import it in LiveContainer.
+writes `src-tauri/gen/apple/build/arm64/ReacherCM.ipa`; import it in LiveContainer.
 Inside LiveContainer the local network permission and the keychain are
 LiveContainer's own.
 
 Without a Mac: the **iOS build** workflow (`.github/workflows/ios-build.yml`)
 builds the same unsigned IPA on a GitHub macOS runner. Run it from the Actions
-tab, or it runs on every pull request; the IPA is the run's
-`Reach-ios-unsigned` artifact (a zip holding the `.ipa`).
+tab; it also runs on every push to main and on pull requests in the full CI
+tier (see `build-check.yml`); the IPA is the run's
+`ReacherCM-ios-unsigned` artifact (a zip holding the `.ipa`).
 
 ### Updates through a LiveContainer source
 
