@@ -39,6 +39,7 @@ const all = [ssh, rdp, wsl, vnc, keyed, linked, viaFolder];
 console.log('Fields by kind');
 check('domain is RDP only', countApplying('domain', all) === 1 && appliesTo('domain', rdp));
 check('terminal colours skip RDP and VNC', !appliesTo('terminal_theme', rdp) && !appliesTo('terminal_theme', vnc) && appliesTo('terminal_theme', wsl));
+check('the cursor skips RDP and VNC', !appliesTo('cursor_style', rdp) && !appliesTo('cursor_blink', vnc) && appliesTo('cursor_blink', wsl));
 check('WSL has no login or port', !appliesTo('username', wsl) && !appliesTo('port', wsl) && !appliesTo('password', wsl));
 check('a credential is offered for SSH, RDP and Telnet, not VNC', appliesTo('credential', ssh) && appliesTo('credential', rdp) && !appliesTo('credential', vnc));
 check('tags and notes apply to every session', countApplying('tags', all) === all.length && countApplying('notes', all) === all.length);
@@ -64,6 +65,7 @@ console.log('Patches');
 check('tags split on commas and spaces', JSON.stringify(parseTags(' prod, web  eu,prod ')) === '["prod","web","eu"]');
 check('an empty patch changes nothing', changedFields({}).length === 0);
 check('changed fields in order', changedFields({ history: 'clear', username: 'u', tags_remove: ['a'] }).join() === 'username,tags,history');
+check('cursor fields come last', changedFields({ cursor_blink: 'clear', cursor_style: { set: 'bar' }, history: 'clear' }).join() === 'history,cursor_style,cursor_blink');
 check('empty tag lists are not a change', !changedFields({ tags_add: [], tags_remove: [] }).includes('tags'));
 check('vaults are told apart', vaultsOf(all).length === 2 && vaultsOf([ssh, keyed]).length === 1);
 

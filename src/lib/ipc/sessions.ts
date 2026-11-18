@@ -427,6 +427,8 @@ export interface SessionPatch {
   notes?: { op: 'replace' | 'append'; text: string } | { op: 'clear' };
   terminal_theme?: BulkChange<string>;
   history?: BulkChange<HistoryMode>;
+  cursor_style?: BulkChange<CursorStyle>;
+  cursor_blink?: BulkChange<boolean>;
 }
 
 export interface BulkOutcome {
