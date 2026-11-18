@@ -8,7 +8,32 @@
   `APT_GPG_PRIVATE_KEY`, `APT_GPG_PASSPHRASE`) and then redeploys the website,
   which hosts the dnf repository.
 
-## Making a dev build
+## With the script
+
+`npm run release` does the steps below (run it on an up-to-date, clean main;
+`gh` signed in lets it open the pull request and check the Build check):
+
+```sh
+npm run release -- dev --dry-run   # show what would change, change nothing
+npm run release -- dev             # next dev build: bump, draft notes, open a PR
+npm run release -- stable          # stable release (dates the CHANGELOG section)
+npm run release -- 0.10.0-dev.1    # any version; --minor/--major with dev or stable
+# merge the pull request, then:
+npm run release -- tag             # checks main, the full Build check, tags and pushes
+```
+
+`--direct` commits the bump to main and tags in one go, without a pull
+request. `tag --run-ci` starts the full Build check on main when the last
+green one is older than the code. `npm run release -- --help` lists all
+options. The release notes are drafted from the CHANGELOG entries added since
+the last tag; edit them when the script asks, or in the pull request.
+
+A stable release takes build number 999 for Windows and Android
+(`X.Y.Z.999`, `X*10000000 + Y*100000 + Z*1000 + 999`), so it installs over
+that version's dev builds; release.yml checks this too.
+
+## Making a dev build by hand
+
 
 1. Set the version to `X.Y.Z-dev.N` in `package.json`, `package-lock.json`
    (twice), `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` and
