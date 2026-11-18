@@ -521,3 +521,32 @@ select:not([multiple]):disabled {
   gap: 8px;
   padding: 8px 0 4px;
 }
+
+/* The app's own tooltip (lib/utils/tooltip.ts), in the theme's colours
+   rather than the system's. */
+.app-tooltip {
+  position: fixed;
+  z-index: 10000;
+  max-width: min(420px, calc(100vw - 16px));
+  padding: 7px 10px;
+  background-color: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-strong, var(--color-border));
+  border-radius: 6px;
+  box-shadow: var(--shadow-elevated);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+  overflow-wrap: anywhere;
+}
+
+.app-tooltip-head {
+  font-weight: 600;
+}
+
+.app-tooltip-body {
+  margin-top: 3px;
+  color: var(--color-text-secondary);
+  white-space: pre-line;
+}

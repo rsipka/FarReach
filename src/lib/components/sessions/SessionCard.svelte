@@ -7,6 +7,7 @@
 	import { sessionAddress } from '#lib/utils/address.js';
 	import { isMobile, isWindows } from '#lib/platform.js';
 	import { getSettings } from '#lib/state/settings.svelte.js';
+	import { tooltip } from '#lib/utils/tooltip.js';
 
 	const settings = getSettings();
 
@@ -81,6 +82,7 @@
 	/** Compact layout shows the name alone; on desktop everything else the
 	 *  full row shows is in the row's tooltip instead. */
 	let compact = $derived(settings.compactLayout);
+	let showDetails = $derived(compact && !isMobile());
 	let detailsTooltip = $derived.by(() => {
 		const kind = session.kind ?? 'ssh';
 		const lines: string[] = [session.favorite ? `${session.name} ★` : session.name];
@@ -130,7 +132,7 @@
 			<circle cx="2" cy="10" r="1.2"/><circle cx="6" cy="10" r="1.2"/>
 		</svg>
 	</span>
-	<button class="card-main" onclick={onMain} ondblclick={onMainDouble} disabled={unavailable && !selecting} aria-pressed={selecting ? selected : undefined} title={compact && !isMobile() ? detailsTooltip : mainTitle} >
+	<button class="card-main" onclick={onMain} ondblclick={onMainDouble} disabled={unavailable && !selecting} aria-pressed={selecting ? selected : undefined} title={showDetails ? undefined : mainTitle} use:tooltip={showDetails ? detailsTooltip : ''} >
 		<!-- Every row has the icon's place, so names line up whether or not the
 		     OS is known yet: its logo once detected, until then a quiet mark for
 		     the kind of session. -->
@@ -159,10 +161,9 @@
 			<span class="session-name-row">
 				<span class="session-name">{session.name}</span>
 				{#if session.favorite}
-					<svg class="fav-mark" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label={t('session.favorite')}>
-						<title>{t('session.favorite')}</title>
+					<span class="mark-tip" title={t('session.favorite')}><svg class="fav-mark" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label={t('session.favorite')}>
 						<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
-					</svg>
+					</svg></span>
 				{/if}
 				<!-- Beside the name, which is short, so the address below has the
 				     row's width to itself. -->
@@ -649,5 +650,10 @@
 	.fav-mark {
 		flex-shrink: 0;
 		color: var(--color-accent);
+	}
+
+	.mark-tip {
+		display: inline-flex;
+		flex-shrink: 0;
 	}
 </style>

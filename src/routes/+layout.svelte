@@ -28,6 +28,7 @@
 	import * as share from '#lib/state/share.svelte.js';
 	import { unlockCredentialKeys, setKeysUnlockEnabled } from '#lib/ipc/savedCredentials.js';
 	import { installSelectMenus } from '#lib/utils/selectMenu.js';
+	import { installTooltips } from '#lib/utils/tooltip.js';
 	import { initScreenEdges } from '#lib/edges.js';
 	import { onMount } from 'svelte';
 
@@ -73,6 +74,8 @@
 		initShortcuts();
 		// Every <select> opens a theme-drawn list, not the platform popup (#110).
 		const stopSelectMenus = installSelectMenus();
+		// Every title shows in a theme-drawn tooltip, not the platform's yellow one.
+		const stopTooltips = installTooltips();
 		// Android's status bar, navigation bar and camera cutout, for --safe-*.
 		initScreenEdges();
 		startupUpdateCheck();
@@ -85,6 +88,7 @@
 		return () => {
 			cleanupShortcuts();
 			stopSelectMenus();
+			stopTooltips();
 			stopPeriodicChecks();
 		};
 	});
