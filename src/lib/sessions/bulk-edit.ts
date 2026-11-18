@@ -16,7 +16,9 @@ export type BulkField =
 	| 'tags'
 	| 'notes'
 	| 'terminal_theme'
-	| 'history';
+	| 'history'
+	| 'cursor_style'
+	| 'cursor_blink';
 
 /** The value meaning "the session's own login" in `credential_id`. */
 export const OWN_LOGIN = 'own';
@@ -59,6 +61,8 @@ export function appliesTo(field: BulkField, s: SessionConfig, credential?: Sessi
 			return k === 'rdp';
 		case 'terminal_theme':
 		case 'history':
+		case 'cursor_style':
+		case 'cursor_blink':
 			return k === 'ssh' || k === 'telnet' || k === 'wsl';
 		case 'tags':
 		case 'notes':
@@ -119,6 +123,8 @@ export function changedFields(p: SessionPatch): BulkField[] {
 	if (p.notes !== undefined) out.push('notes');
 	if (p.terminal_theme !== undefined) out.push('terminal_theme');
 	if (p.history !== undefined) out.push('history');
+	if (p.cursor_style !== undefined) out.push('cursor_style');
+	if (p.cursor_blink !== undefined) out.push('cursor_blink');
 	return out;
 }
 

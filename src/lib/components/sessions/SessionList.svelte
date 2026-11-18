@@ -955,6 +955,8 @@
 		const tab = createTab('telnet', session.host, undefined, session.name, session.detected_os ?? null);
 		tab.sessionId = session.id;
 		tab.terminalTheme = session.terminal_theme ?? null;
+		tab.cursorStyle = session.cursor_style ?? null;
+		tab.cursorBlink = session.cursor_blink ?? null;
 		tab.historyMode = session.history ?? null;
 		tab.telnetConnectParams = {
 			host: session.host,
@@ -997,6 +999,8 @@
 		);
 		tab.sessionId = session.id;
 		tab.terminalTheme = session.terminal_theme ?? null;
+		tab.cursorStyle = session.cursor_style ?? null;
+		tab.cursorBlink = session.cursor_blink ?? null;
 		tab.monitoring = session.monitoring ?? null;
 		tab.historyMode = session.history ?? null;
 		addToast(t('session.connected_toast', { name: session.name }), 'success');
@@ -1262,6 +1266,8 @@
 			tab.sshConnectParams = connectParams;
 			tab.sessionId = session.id;
 			tab.terminalTheme = session.terminal_theme ?? null;
+			tab.cursorStyle = session.cursor_style ?? null;
+			tab.cursorBlink = session.cursor_blink ?? null;
 			tab.monitoring = session.monitoring ?? null;
 			tab.historyMode = session.history ?? null;
 			addToast(t('session.connected_toast', { name: session.name }), 'success');

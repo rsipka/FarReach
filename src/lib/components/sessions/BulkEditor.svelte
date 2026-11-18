@@ -17,6 +17,7 @@
 	} from '#lib/ipc/sessions.js';
 	import { savedCredentialCreate, credentialsFor, type SavedCredential } from '#lib/ipc/savedCredentials.js';
 	import type { HistoryMode } from '#lib/ipc/history.js';
+	import type { CursorStyle } from '#lib/terminal/cursor.js';
 	import {
 		OWN_LOGIN,
 		appliesTo,
@@ -60,6 +61,8 @@
 	let notesText = $state('');
 	let theme = $state<string | null>(null);
 	let history = $state(KEEP);
+	let cursor = $state(KEEP);
+	let blink = $state(KEEP);
 
 	let phase = $state<'edit' | 'confirm' | 'saving' | 'report'>('edit');
 	let error = $state('');
@@ -71,7 +74,7 @@
 		passwordClear = domainClear = false;
 		saveAsCredential = true;
 		credentialName = '';
-		credential = history = KEEP;
+		credential = history = cursor = blink = KEEP;
 		tagsAdd = tagsRemove = notesText = '';
 		notesOp = 'keep';
 		phase = 'edit';
@@ -120,6 +123,12 @@
 		summarize(sessions.filter((s) => appliesTo('terminal_theme', s)), (s) => (s.terminal_theme ? (findTerminalTheme(s.terminal_theme)?.name ?? t('termtheme.missing')) : ''))
 	);
 	let histories = $derived(summarize(sessions.filter((s) => appliesTo('history', s)), (s) => s.history ?? ''));
+	let cursors = $derived(summarize(sessions.filter((s) => appliesTo('cursor_style', s)), (s) => s.cursor_style ?? ''));
+	let blinks = $derived(
+		summarize(sessions.filter((s) => appliesTo('cursor_blink', s)), (s) => (s.cursor_blink == null ? '' : s.cursor_blink ? 'on' : 'off'))
+	);
+	const cursorName = (v: string): string => (v ? t(`cursor.style_${v}`) : t('history.session_default'));
+	const blinkName = (v: string): string => (v ? t(`cursor.blink_${v}`) : t('history.session_default'));
 	let withPassword = $derived(sessions.filter((s) => appliesTo('password', s) && hasOwnPassword(s)).length);
 	let withNotes = $derived(sessions.filter((s) => s.notes?.trim()).length);
 	let allTags = $derived(summarize(sessions.flatMap((s) => s.tags.map((tag) => ({ tag }))), (x) => x.tag));
@@ -155,6 +164,8 @@
 		else if (notesOp !== 'keep' && notesText.trim()) p.notes = { op: notesOp, text: notesText };
 		if (theme !== null) p.terminal_theme = theme ? { set: theme } : 'clear';
 		if (history !== KEEP) p.history = history ? { set: history as HistoryMode } : 'clear';
+		if (cursor !== KEEP) p.cursor_style = cursor ? { set: cursor as CursorStyle } : 'clear';
+		if (blink !== KEEP) p.cursor_blink = blink ? { set: blink === 'on' } : 'clear';
 		return p;
 	});
 	let fields = $derived(changedFields(patch));
@@ -178,7 +189,9 @@
 			tags: t('bulk.tags'),
 			notes: t('session.notes'),
 			terminal_theme: t('termtheme.session_title'),
-			history: t('history.session_label')
+			history: t('history.session_label'),
+			cursor_style: t('cursor.session_label'),
+			cursor_blink: t('cursor.blink')
 		})[f];
 
 	function describeChange(f: BulkField): string {
@@ -205,6 +218,10 @@
 				return p.terminal_theme === 'clear' ? t('termtheme.session_default') : (findTerminalTheme(p.terminal_theme?.set)?.name ?? '');
 			case 'history':
 				return p.history === 'clear' ? t('history.session_default') : t(`history.mode_${p.history?.set}`);
+			case 'cursor_style':
+				return p.cursor_style === 'clear' ? t('history.session_default') : cursorName(p.cursor_style?.set ?? '');
+			case 'cursor_blink':
+				return p.cursor_blink === 'clear' ? t('history.session_default') : blinkName(p.cursor_blink?.set ? 'on' : 'off');
 		}
 	}
 
@@ -408,7 +425,7 @@
 				</div>
 			{/if}
 
-			{#if shows('terminal_theme') || shows('history')}
+			{#if shows('terminal_theme') || shows('history') || shows('cursor_style')}
 				<h3 class="section">{t('bulk.section_terminal')}</h3>
 			{/if}
 
@@ -454,6 +471,43 @@
 					</div>
 					{#if history !== KEEP}
 						<button class="revert" type="button" onclick={() => (history = KEEP)} title={t('bulk.revert')} aria-label={t('bulk.revert')}>↺</button>
+					{/if}
+				</div>
+			{/if}
+
+			{#if shows('cursor_style')}
+				<div class="row" class:changed={cursor !== KEEP}>
+					<label class="label" for="bulk-cursor">{t('cursor.session_label')}</label>
+					<div class="field">
+						<select id="bulk-cursor" bind:value={cursor} title={tooltipOf(cursors, t('history.session_default'))}>
+							<option value={KEEP}>{t('bulk.keep_value', { value: cursors.same === null ? t('bulk.mixed') : cursorName(cursors.same) })}</option>
+							<option value="">{t('history.session_default')}</option>
+							<option value="block">{t('cursor.style_block')}</option>
+							<option value="underline">{t('cursor.style_underline')}</option>
+							<option value="bar">{t('cursor.style_bar')}</option>
+						</select>
+						<p class="applies">{t('bulk.applies', { count: String(count('cursor_style')), total: String(total) })}</p>
+					</div>
+					{#if cursor !== KEEP}
+						<button class="revert" type="button" onclick={() => (cursor = KEEP)} title={t('bulk.revert')} aria-label={t('bulk.revert')}>↺</button>
+					{/if}
+				</div>
+			{/if}
+
+			{#if shows('cursor_blink')}
+				<div class="row" class:changed={blink !== KEEP}>
+					<label class="label" for="bulk-blink">{t('cursor.blink')}</label>
+					<div class="field">
+						<select id="bulk-blink" bind:value={blink} title={tooltipOf(blinks, t('history.session_default'))}>
+							<option value={KEEP}>{t('bulk.keep_value', { value: blinks.same === null ? t('bulk.mixed') : blinkName(blinks.same) })}</option>
+							<option value="">{t('history.session_default')}</option>
+							<option value="on">{t('cursor.blink_on')}</option>
+							<option value="off">{t('cursor.blink_off')}</option>
+						</select>
+						<p class="applies">{t('bulk.applies', { count: String(count('cursor_blink')), total: String(total) })}</p>
+					</div>
+					{#if blink !== KEEP}
+						<button class="revert" type="button" onclick={() => (blink = KEEP)} title={t('bulk.revert')} aria-label={t('bulk.revert')}>↺</button>
 					{/if}
 				</div>
 			{/if}

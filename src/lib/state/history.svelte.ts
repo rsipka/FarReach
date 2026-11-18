@@ -57,3 +57,8 @@ export function pushHistoryRetention(): void {
 	const s = getSettings();
 	void historyConfigure({ outputDays: s.historyOutputDays, commandDays: s.historyCommandDays, maxMb: s.historyMaxMb }).catch(() => {});
 }
+
+/** Opens the search on a tab's session, pasting back into that tab. */
+export function openTabHistory(tab: { id: string; sessionId?: string | null; sessionName?: string | null } | undefined, text?: string): void {
+	openHistoryPanel({ text, sessionId: tab?.sessionId ?? null, sessionName: tab?.sessionName ?? null, tabId: tab?.id ?? null });
+}

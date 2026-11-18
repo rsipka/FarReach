@@ -12,6 +12,7 @@
 		getBroadcastTargets, isTerminalTab, toggleBroadcastTarget, broadcastToAll, stopBroadcast
 	} from '#lib/state/broadcast.svelte.js';
 	import { BROADCAST_ICON } from '#lib/terminal/broadcast.js';
+	import { openTabHistory } from '#lib/state/history.svelte.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
 	import Modal from '#lib/components/shared/Modal.svelte';
@@ -148,6 +149,9 @@
 		if (tab?.groupId) items.push({ label: t('tabs.group_remove'), action: () => removeFromGroup(id) });
 
 		items.push(...broadcastItems(tab));
+		if (tab && tab.type !== 'rdp' && tab.type !== 'vnc') {
+			items.push({ label: '', separator: true }, { label: t('history.search_menu'), hint: `${mod}H`, action: () => openTabHistory(tab) });
+		}
 
 		// Duplicate and close, as a browser's tab menu has them (#160).
 		items.push(

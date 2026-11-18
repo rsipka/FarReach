@@ -2964,6 +2964,7 @@
   "termtheme.session_hint": "Създавайте и редактирайте свои теми в Настройки → Външен вид → Цветове на терминала.",
   "termtheme.missing": "Темата не е намерена: използва се по подразбиране",
   "history.search_menu": "Търсене в историята",
+  "history.button": "История",
   "history.session_menu": "История…",
   "history.session_label": "История на сесията",
   "history.session_default": "Както в Настройки",
@@ -3102,6 +3103,7 @@
   "osc52.blocked": "Програма на сървъра опита да копира в клипборда ви. Разрешете го в Настройки > Общи > Сървърът може да копира в клипборда.",
   "settings.term_osc52": "Сървърът може да копира в клипборда",
   "settings.term_osc52_desc": "Програми на сървъра (режим на копиране в tmux, vim) могат да поставят текст в клипборда на този компютър чрез OSC 52. Никога не могат да го четат.",
+<<<<<<< HEAD
   "session.list_tools": "Инструменти на списъка със сесии",
   "session.collapse_all": "Свий всички папки",
   "session.expand_all": "Разгъни всички папки",
@@ -3134,4 +3136,26 @@
   "termbar.files": "Файлове на този сървър",
   "termbar.history": "Търсене в историята",
   "termbar.more": "Още"
+=======
+  "cursor.style": "Форма на курсора",
+  "cursor.style_desc": "Как изглежда курсорът на терминала. Цветът му идва от темата на терминала. Сесията може да избере своя, а програми като vim все още могат да я променят, докато работят.",
+  "cursor.style_block": "Блок",
+  "cursor.style_underline": "Подчертаване",
+  "cursor.style_bar": "Вертикална черта",
+  "cursor.blink": "Мигащ курсор",
+  "cursor.blink_desc": "Курсорът мига. Сесията може да избере друго.",
+  "cursor.width": "Дебелина на чертата",
+  "cursor.width_desc": "Колко широк е курсорът във вид на черта.",
+  "cursor.width_px": "{{count}} px",
+  "cursor.inactive": "Курсор без фокус",
+  "cursor.inactive_desc": "Как изглежда курсорът в терминал без клавиатурата: другият панел на разделяне или когато прозорецът е на заден план.",
+  "cursor.inactive_outline": "Контур",
+  "cursor.inactive_none": "Скрит",
+  "cursor.session_label": "Курсор",
+  "cursor.session_default": "По подразбиране ({{style}})",
+  "cursor.blink_default_on": "Мига (по подразбиране)",
+  "cursor.blink_default_off": "Не мига (по подразбиране)",
+  "cursor.blink_on": "Мига",
+  "cursor.blink_off": "Не мига"
+>>>>>>> origin/main
 }

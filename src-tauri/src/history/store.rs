@@ -128,6 +128,8 @@ pub struct Stats {
 
 const MAX_HITS: u32 = 500;
 const SNIPPET_CHARS: usize = 240;
+/// Output blocks unpacked to look for text too short for the index.
+const SHORT_SCAN_BLOCKS: i64 = 2000;
 
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS runs (
@@ -191,6 +193,12 @@ fn phrase(text: &str) -> String {
 
 /// The lines of `body` around the first match of `needle`.
 pub fn snippet(body: &str, needle: &str) -> String {
+    if needle.is_empty() {
+        // The block's first lines, cut at a line end where one fits.
+        let head: String = body.chars().take(SNIPPET_CHARS).collect();
+        let cut = if head.len() < body.len() { head.rfind('\n').unwrap_or(head.len()) } else { head.len() };
+        return head[..cut].trim().to_string();
+    }
     let lower = body.to_lowercase();
     let at = if needle.is_empty() { None } else { lower.find(&needle.to_lowercase()) };
     // to_lowercase can change byte lengths; map back by characters.
@@ -294,8 +302,8 @@ impl Store {
         let text = q.text.trim();
         let limit = q.limit.unwrap_or(200).min(MAX_HITS) as i64;
         let mut hits = Vec::new();
-        // Trigrams need three characters; shorter text is looked for in
-        // commands only, by a plain scan.
+        // Trigrams need three characters; shorter text is looked for by a
+        // plain scan.
         let short = text.chars().count() < 3;
         if q.kind != Kind::Output {
             let (filter, m) = if text.is_empty() {
@@ -334,26 +342,46 @@ impl Store {
                 });
             }
         }
-        if q.kind != Kind::Commands && !short {
-            let sql = "SELECT o.id, o.run, o.first, o.body, o.redacted, r.session_id, r.name, r.host, r.protocol
+        if q.kind != Kind::Commands {
+            // Empty text lists the newest blocks; text too short for trigrams
+            // is looked for in the newest blocks, unpacked here; longer text
+            // goes through the index.
+            let (filter, m, take) = if text.is_empty() {
+                ("1 = 1", String::new(), limit)
+            } else if short {
+                ("1 = 1", String::new(), SHORT_SCAN_BLOCKS)
+            } else {
+                ("o.id IN (SELECT rowid FROM output_fts WHERE output_fts MATCH ?1)", phrase(text), limit)
+            };
+            let sql = format!(
+                "SELECT o.id, o.run, o.first, o.body, o.redacted, r.session_id, r.name, r.host, r.protocol
                  FROM output o JOIN runs r ON r.id = o.run
-                 WHERE o.id IN (SELECT rowid FROM output_fts WHERE output_fts MATCH ?1)
-                   AND (?2 IS NULL OR r.session_id = ?2) AND (?3 IS NULL OR r.host = ?3)
+                 WHERE {filter} AND (?2 IS NULL OR r.session_id = ?2) AND (?3 IS NULL OR r.host = ?3)
                    AND (?4 IS NULL OR o.last >= ?4) AND (?5 IS NULL OR o.first <= ?5)
-                 ORDER BY o.first DESC, o.id DESC LIMIT ?6";
+                 ORDER BY o.first DESC, o.id DESC LIMIT ?6"
+            );
             let mut rows = self
                 .conn
-                .query(sql, libsql::params![phrase(text), q.session_id.clone(), q.host.clone(), q.from, q.to, limit])
+                .query(&sql, libsql::params![m, q.session_id.clone(), q.host.clone(), q.from, q.to, take])
                 .await
                 .map_err(err)?;
+            let lower = text.to_lowercase();
+            let mut found = 0;
             while let Some(row) = rows.next().await.map_err(err)? {
-                let body: Vec<u8> = row.get(3).map_err(err)?;
+                if found >= limit {
+                    break;
+                }
+                let body = inflate(&row.get::<Vec<u8>>(3).map_err(err)?);
+                if short && !text.is_empty() && !body.to_lowercase().contains(&lower) {
+                    continue;
+                }
+                found += 1;
                 hits.push(Hit {
                     kind: "output".into(),
                     id: row.get(0).map_err(err)?,
                     run: row.get(1).map_err(err)?,
                     at: row.get(2).map_err(err)?,
-                    text: snippet(&inflate(&body), text),
+                    text: snippet(&body, text),
                     cwd: None,
                     exit: None,
                     redacted: row.get::<i64>(4).map_err(err)? != 0,

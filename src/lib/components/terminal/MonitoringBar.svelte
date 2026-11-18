@@ -4,6 +4,7 @@
 	import McpSessionBar from './McpSessionBar.svelte';
 	import ShareBar from '#lib/components/share/ShareBar.svelte';
 	import Clock from '#lib/components/layout/Clock.svelte';
+	import HistoryIndicator from '#lib/components/layout/HistoryIndicator.svelte';
 	import { getActiveTab } from '#lib/state/tabs.svelte.js';
 
 	interface Props {
@@ -185,6 +186,7 @@
 				</div>
 			{/if}
 		</div>
+		<HistoryIndicator />
 		<Clock />
 	</div>
 {:else}
@@ -194,6 +196,7 @@
 		{@render linkState()}
 		<span class="disconnected-text">{monitoringOff && connectionId ? t('monitoring.off') : t('monitoring.not_connected')}</span>
 		<ShareBar />
+		<HistoryIndicator />
 		<Clock />
 	</div>
 {/if}
