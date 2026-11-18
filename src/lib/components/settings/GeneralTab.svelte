@@ -22,7 +22,7 @@
 
 	/** Which slice of these rows to show: Settings arranges them by topic,
 	 *  so one tab file feeds several pages (see settings-pages.ts). */
-	type Part = 'general' | 'shell' | 'paste' | 'paste-adv' | 'sessions' | 'about';
+	type Part = 'general' | 'shell' | 'paste' | 'paste-adv' | 'sessions' | 'tmux' | 'about';
 	let { part }: { part: Part } = $props();
 
 	const settings = getSettings();
@@ -67,6 +67,11 @@
 		{ label: t('settings.term_right_click_menu'), value: 'menu' },
 		{ label: t('settings.term_right_click_paste'), value: 'paste' },
 		{ label: t('settings.term_right_click_copy_paste'), value: 'copy-paste' }
+	]);
+
+	let tmuxWindowOptions = $derived([
+		{ label: t('settings.tmux_windows_last'), value: 'last' },
+		{ label: t('settings.tmux_windows_all'), value: 'all' }
 	]);
 
 	function onLastSessionChange(checked: boolean) {
@@ -389,6 +394,54 @@
 	{#if !isMobile()}
 		<X11ServerSetting />
 	{/if}
+
+	{/if}
+
+	{#if part === 'tmux'}
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.tmux_new_tab')}</span>
+			<span class="setting-description">{t('settings.tmux_new_tab_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.tmuxNewTabWindow}
+				label={t('settings.tmux_new_tab')}
+				onchange={(v) => updateSetting('tmuxNewTabWindow', v)}
+			/>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.tmux_connect_windows')}</span>
+			<span class="setting-description">{t('settings.tmux_connect_windows_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Dropdown
+				options={tmuxWindowOptions}
+				selected={settings.tmuxConnectWindows}
+				onchange={(v) => updateSetting('tmuxConnectWindows', v === 'all' ? 'all' : 'last')}
+			/>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.tmux_hide_status')}</span>
+			<span class="setting-description">{t('settings.tmux_hide_status_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.tmuxHideStatus}
+				label={t('settings.tmux_hide_status')}
+				onchange={(v) => updateSetting('tmuxHideStatus', v)}
+			/>
+		</div>
+	</div>
 
 	{/if}
 

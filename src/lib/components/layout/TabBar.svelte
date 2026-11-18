@@ -6,8 +6,9 @@
 		tabsBeside, requestCloseBeside, getPendingClose, confirmPendingClose, cancelPendingClose
 	} from '#lib/state/tabs.svelte.js';
 	import { canDuplicate, duplicateTab } from '#lib/terminal/duplicate-tab.js';
-	import { sshTmuxKill, sshTmuxList, type TmuxListed } from '#lib/ipc/ssh.js';
-	import { validTmuxName } from '#lib/terminal/tmux.js';
+	import { sshTmuxKill, sshTmuxList, sshTmuxWindows, sshTmuxWindow, type TmuxListed, type TmuxWindow, type TmuxWindowOp } from '#lib/ipc/ssh.js';
+	import { validTmuxName, newViewTag } from '#lib/terminal/tmux.js';
+	import { newTab, isTmuxViewTab, openTmuxWindowTab } from '#lib/terminal/tmux-tabs.js';
 	import {
 		getBroadcastTargets, isTerminalTab, toggleBroadcastTarget, broadcastToAll, stopBroadcast
 	} from '#lib/state/broadcast.svelte.js';
@@ -81,7 +82,7 @@
 	}
 
 	function handleNewTab(): void {
-		createTab('local');
+		newTab();
 	}
 
 	function handleCloseTab(e: MouseEvent, id: string): void {
@@ -158,6 +159,8 @@
 			{ label: '', separator: true },
 			{ label: t('tabs.duplicate'), disabled: !canDuplicate(tab), action: () => duplicate(id) },
 			...(tab && tmuxOf(tab) ? [{ label: t('tmux.switch'), disabled: !tab.connectionId || tab.link === 'down', action: () => void openSwitch(tab) }] : []),
+			...(isTmuxViewTab(tab) ? [{ label: t('tmux.windows_menu'), action: () => void openWindows(tab) }] : []),
+			...(isTmuxViewTab(tab) ? [{ label: t('tmux.window_new_tab'), action: () => void windowTab(tab, 'new') }] : []),
 			...(tab && tmuxOf(tab) ? [{ label: t('tmux.kill'), disabled: !tab.connectionId || tab.link === 'down', action: () => (confirmKill = tab) }] : []),
 			{ label: '', separator: true },
 			{ label: t('common.close'), action: () => closeTab(id) },
@@ -203,8 +206,56 @@
 			return;
 		}
 		if (name === params.tmux.name) return;
-		tab.sshConnectParams = { ...params, tmux: { ...params.tmux, name, ask: false } };
+		// A tab in a view of its own gets a new view, of the new session.
+		tab.sshConnectParams = { ...params, tmux: { ...params.tmux, name, ask: false, view: params.tmux.view ? newViewTag() : undefined, window: undefined } };
+		tab.tmuxWindow = undefined;
 		tab.tmuxSwitch = (tab.tmuxSwitch ?? 0) + 1;
+	}
+
+	/** tmux windows: the tab's session's windows, to switch, open in a tab,
+	 *  rename or close (see #lib/terminal/tmux-tabs). */
+	let windowsTab = $state<Tab | null>(null);
+	let windowsList = $state<TmuxWindow[] | null>(null);
+	let winRename = $state<{ id: string; name: string } | null>(null);
+	let closing = $state<string | null>(null);
+
+	async function loadWindows(tab: Tab): Promise<void> {
+		const start = tab.sshConnectParams?.tmux;
+		if (!tab.connectionId || !start) return;
+		try {
+			const list = await sshTmuxWindows(tab.connectionId, start);
+			if (windowsTab === tab) windowsList = list;
+		} catch (err) {
+			windowsTab = null;
+			addToast(t('tmux.window_failed', { error: String(err) }), 'error');
+		}
+	}
+
+	async function openWindows(tab: Tab): Promise<void> {
+		windowsTab = tab;
+		windowsList = null;
+		winRename = null;
+		closing = null;
+		await loadWindows(tab);
+	}
+
+	/** Something done to a window of the open dialog's tab; the list is read again. */
+	async function windowOp(op: TmuxWindowOp, thenClose = false): Promise<void> {
+		const tab = windowsTab;
+		const start = tab?.sshConnectParams?.tmux;
+		if (!tab?.connectionId || !start) return;
+		try {
+			await sshTmuxWindow(tab.connectionId, start, op, tab.sshConnectParams?.shell);
+		} catch (err) {
+			addToast(t('tmux.window_failed', { error: String(err) }), 'error');
+		}
+		if (thenClose) windowsTab = null;
+		else await loadWindows(tab);
+	}
+
+	function windowTab(tab: Tab, window: string): void {
+		windowsTab = null;
+		openTmuxWindowTab(tab, window).catch((err) => addToast(t('tmux.window_failed', { error: String(err) }), 'error'));
 	}
 
 	/** A tab whose tmux session is about to be ended for good. */
@@ -426,7 +477,7 @@
 						</svg>
 					{/if}
 
-					<span class="tab-title">{tab.sessionName || tab.title}</span>
+					<span class="tab-title">{tab.sessionName || tab.title}{#if tab.tmuxWindow?.name}<span class="tab-tmux-window"> · {tab.tmuxWindow.name}</span>{/if}</span>
 					{#if broadcastTargets.includes(tab.id)}
 						<!-- Typing into one of the marked tabs goes to all of them. -->
 						<svg class="broadcast-mark" width="13" height="13" viewBox="0 0 24 24" fill="none" role="img" aria-label={t('broadcast.tab_mark')}>
@@ -547,6 +598,45 @@
 			</form>
 		{/if}
 	{/if}
+</Modal>
+
+<Modal open={windowsTab !== null} onclose={() => (windowsTab = null)} title={t('tmux.windows_title')} maxWidth="480px">
+	{#if windowsTab}
+		{#if windowsList === null}
+			<p class="confirm-text">{t('tmux.listing')}</p>
+		{:else}
+			<div class="tmux-switch">
+				{#if windowsList.length === 0}
+					<p class="confirm-text">{t('tmux.no_windows')}</p>
+				{/if}
+				{#each windowsList as w (w.id)}
+					<div class="tmux-window-row" class:current={w.active}>
+						{#if winRename?.id === w.id}
+							<form class="tmux-switch-new" onsubmit={(e) => { e.preventDefault(); const r = winRename; winRename = null; if (r && r.name.trim()) void windowOp({ kind: 'rename', window: w.id, name: r.name.trim() }); }}>
+								<!-- svelte-ignore a11y_autofocus -->
+								<input class="tmux-switch-input" bind:value={winRename.name} spellcheck="false" autocomplete="off" autofocus />
+								<Button variant="primary" type="submit">{t('tmux.window_rename')}</Button>
+							</form>
+						{:else}
+							<button type="button" class="tmux-switch-row" class:current={w.active} onclick={() => void windowOp({ kind: 'select', window: w.id }, true)}>
+								<span class="tmux-switch-name">{w.index}: {w.name}</span>
+								<span class="tmux-switch-meta">{w.command}{#if w.panes > 1} · {t('tmux.window_panes', { count: String(w.panes) })}{/if}</span>
+							</button>
+							<div class="tmux-window-actions">
+								<button type="button" class="tmux-window-action" disabled={w.active} onclick={() => windowsTab && windowTab(windowsTab, w.id)}>{t('tmux.window_open_tab')}</button>
+								<button type="button" class="tmux-window-action" onclick={() => (winRename = { id: w.id, name: w.name })}>{t('tmux.window_rename')}</button>
+								<button type="button" class="tmux-window-action danger" onclick={() => { if (closing === w.id) { closing = null; void windowOp({ kind: 'close', window: w.id }); } else closing = w.id; }}>{closing === w.id ? t('tmux.window_close_confirm') : t('tmux.window_close')}</button>
+							</div>
+						{/if}
+					</div>
+				{/each}
+			</div>
+		{/if}
+	{/if}
+	{#snippet actions()}
+		<Button variant="secondary" disabled={windowsList === null} onclick={() => windowsTab && windowTab(windowsTab, 'new')}>{t('tmux.window_new_tab')}</Button>
+		<Button variant="primary" disabled={windowsList === null} onclick={() => void windowOp({ kind: 'new' }, true)}>{t('tmux.window_new')}</Button>
+	{/snippet}
 </Modal>
 
 <Modal open={confirmKill !== null} onclose={() => (confirmKill = null)} title={t('tmux.kill')} maxWidth="420px">
@@ -683,6 +773,52 @@
 	.tmux-switch-meta {
 		font-size: 0.6875rem;
 		color: var(--color-text-secondary);
+	}
+
+	.tab-tmux-window {
+		opacity: 0.7;
+	}
+
+	.tmux-window-row {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding-bottom: 4px;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.tmux-window-row:last-child {
+		border-bottom: none;
+	}
+
+	.tmux-window-actions {
+		display: flex;
+		gap: 4px;
+		padding: 0 8px;
+	}
+
+	.tmux-window-action {
+		border: none;
+		background: none;
+		padding: 2px 6px;
+		border-radius: var(--radius-sm, 4px);
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+	}
+
+	.tmux-window-action:hover:not(:disabled) {
+		background: var(--color-bg-elevated);
+		color: var(--color-text-primary);
+	}
+
+	.tmux-window-action:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+
+	.tmux-window-action.danger {
+		color: var(--color-danger);
 	}
 
 	.tmux-switch-new {

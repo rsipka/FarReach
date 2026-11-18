@@ -244,6 +244,7 @@
 		<SettingsCard><GeneralTab part="sessions" /></SettingsCard>
 		<SettingsCard title={t('settings.log_section')}><AppearanceTab part="logging" /></SettingsCard>
 		<SettingsCard title={t('history.settings_section')}><AppearanceTab part="history" /></SettingsCard>
+		<SettingsCard title={t('settings.tmux_section')}><GeneralTab part="tmux" /></SettingsCard>
 	{:else if id === 'remote'}
 		<SettingsCard><AppearanceTab part="rdp" /></SettingsCard>
 		<Advanced><AppearanceTab part="rdp-adv" /></Advanced>

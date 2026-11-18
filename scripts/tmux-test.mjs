@@ -12,7 +12,9 @@ import {
 	tmuxFor,
 	autoReconnectDelay,
 	needsUser,
-	AUTO_RECONNECT_FOR_MS
+	AUTO_RECONNECT_FOR_MS,
+	newViewTag,
+	tmuxWindowFromTitle
 } from '../src/lib/terminal/tmux.ts';
 import { osc52Text, MAX_OSC52_BASE64 } from '../src/lib/terminal/osc52.ts';
 
@@ -79,6 +81,17 @@ check('a clear does nothing', osc52Text('c;') === null);
 check('not base64: nothing', osc52Text('c;%%%') === null && osc52Text('no-semicolon') === null);
 check('too long: nothing', osc52Text('c;' + 'A'.repeat(MAX_OSC52_BASE64 + 4)) === null);
 check('broken UTF-8: nothing', osc52Text('c;' + Buffer.from([0xff, 0xfe]).toString('base64')) === null);
+
+// Window tabs: a view's tag and the title it sets.
+{
+	const tags = new Set(Array.from({ length: 50 }, () => newViewTag()));
+	check('view tags are lowercase letters and digits', [...tags].every((x) => /^[a-z0-9]{1,16}$/.test(x)), [...tags].join(' '));
+	check('view tags differ', tags.size > 45, String(tags.size));
+	const w = tmuxWindowFromTitle('@12 logs: app');
+	check('a view title names its window', w?.id === '@12' && w?.name === 'logs: app', JSON.stringify(w));
+	check('a shell title is not a window', tmuxWindowFromTitle('radek@web: ~') === null);
+	check('an empty window name is kept', tmuxWindowFromTitle('@3 ')?.name === '');
+}
 
 console.log(failures ? `\n${failures} failed` : '\nAll passed');
 process.exit(failures ? 1 : 0);

@@ -70,6 +70,7 @@
 	import { canScanLinkCode, scanLinkCode } from '#lib/state/link-scan.js';
 	import { vaultState, checkState, initIdentity, importIdentity, linkDevice, ALL_VAULTS, loadVaultFilter, type VaultFilter } from '#lib/state/vault.svelte.js';
 	import { tmuxFor } from '#lib/terminal/tmux.js';
+	import { openOtherWindows, tmuxView } from '#lib/terminal/tmux-tabs.js';
 
 	let showQuickConnect = $state(false);
 	let showRdpConnect = $state(false);
@@ -1254,7 +1255,7 @@
 				cols: 80,
 				rows: 24,
 				shell: session.shell ?? undefined,
-				tmux: tmuxFor(session, folders),
+				tmux: tmuxView(tmuxFor(session, folders)),
 				injectColors: getSettings().typeShellSetup,
 				sessionLog: sessionLogConfig(),
 				showLoginMessage: getSettings().showLoginMessage,
@@ -1297,6 +1298,7 @@
 			tab.monitoring = session.monitoring ?? null;
 			tab.historyMode = session.history ?? null;
 			addToast(t('session.connected_toast', { name: session.name }), 'success');
+			void openOtherWindows(tab);
 			connectSession = undefined;
 			passwordFallback = false;
 			fallbackPassword = '';

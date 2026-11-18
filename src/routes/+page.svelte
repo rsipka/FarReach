@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { takeTmuxTitle } from '#lib/terminal/tmux-tabs.js';
 	import { getTabs, getActiveTab, updateTabTitle, updateTabConnection, setTelnetConnection, setSerialConnection, createTab, activateTab, getSplit, setSplitRatio, getDraggedTab, setDraggedTab, splitWith, unsplit } from '#lib/state/tabs.svelte.js';
 	import { paneOf, paneStyle, dividerStyle, dropZone, neighbour, type Direction } from '#lib/terminal/split.js';
 	import { getActivePage } from '#lib/state/navigation.svelte.js';
@@ -39,6 +40,7 @@
 	function handleTerminalTitleChange(tabId: string, terminalTitle: string): void {
 		const tab = getTabs().find((t) => t.id === tabId);
 		if (!tab || tab.type !== 'ssh') return;
+		if (takeTmuxTitle(tab, terminalTitle)) return;
 
 		// Terminal titles from bash are typically: "user@hostname: dir"
 		// Extract the username from before the first @
