@@ -2513,8 +2513,9 @@ async fn into_active_connection(
     // that there is none.
     let log = login.log.as_ref().and_then(|cfg| {
         match crate::ssh::session_log::SessionLog::open(cfg, &info.host, info.port) {
-            Ok(log) => {
+            Ok(mut log) => {
                 tracing::info!("SSH '{}' logging to {}", info.id, log.path().display());
+                log.register(&info.id);
                 Some(log)
             }
             Err(e) => {
