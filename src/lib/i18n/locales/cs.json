@@ -683,6 +683,8 @@
   "themes.showing_n_of_m": "{{shown}} z {{total}}",
   "themes.more_in_settings": "Další motivy v Nastavení > Vzhled",
   "themes.show_more": "Zobrazit další ({{shown}} z {{total}})",
+  "themes.more_builtin": "Další vestavěné motivy ({{count}})",
+  "themes.fewer_builtin": "Méně motivů",
   "themes.install": "Nainstalovat",
   "themes.installing": "Instalace...",
   "themes.installed": "Nainstalováno",

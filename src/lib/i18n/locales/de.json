@@ -684,6 +684,8 @@
   "themes.showing_n_of_m": "{{shown}} von {{total}}",
   "themes.more_in_settings": "Mehr Designs unter Einstellungen > Erscheinungsbild",
   "themes.show_more": "Mehr anzeigen ({{shown}} von {{total}})",
+  "themes.more_builtin": "Weitere integrierte Themes ({{count}})",
+  "themes.fewer_builtin": "Weniger Themes",
   "themes.install": "Installieren",
   "themes.installing": "Wird installiert...",
   "themes.installed": "Installiert",

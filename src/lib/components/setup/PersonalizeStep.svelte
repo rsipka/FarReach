@@ -20,6 +20,7 @@
 		validateTheme,
 		DARK,
 		LIGHT,
+		BUNDLED_IDS,
 		type Theme
 	} from '#lib/state/theme.svelte.js';
 	import { themeFetchRegistry, themeInstall, type ThemeEntry } from '#lib/ipc/theme.js';
@@ -63,6 +64,16 @@
 		{ id: SYSTEM, name: t('settings.theme_system'), theme: null as Theme | null, entry: null },
 		...themeState.all.map((th) => ({ id: th.id, name: th.name, theme: th, entry: null }))
 	]);
+
+	/** The bundled themes stay folded until asked for; the one picked always
+	 *  shows. Twenty-odd cards would push Next below the fold. */
+	let showAllThemes = $state(false);
+	let shownReady = $derived(
+		showAllThemes ? ready : ready.filter((c) => !BUNDLED_IDS.has(c.id) || c.id === selectedTheme)
+	);
+	let foldedCount = $derived(
+		ready.filter((c) => BUNDLED_IDS.has(c.id) && c.id !== selectedTheme).length
+	);
 
 	/**
 	 * How many marketplace themes this step will ever render at once.
@@ -160,10 +171,8 @@
 
 		<div class="field">
 			<span class="field-label">{t('settings.theme')}</span>
-			<!-- With the bundled themes there are 20-odd of these: one row that
-			     scrolls sideways, like the marketplace below, keeps Next on screen. -->
-			<div class={ready.length > 6 ? 'theme-strip' : 'theme-grid'}>
-				{#each ready as choice (choice.id)}
+			<div class="theme-grid">
+				{#each shownReady as choice (choice.id)}
 					<button
 						type="button"
 						class="theme-card"
@@ -176,6 +185,16 @@
 					</button>
 				{/each}
 			</div>
+			{#if foldedCount > 0}
+				<button
+					type="button"
+					class="more-themes"
+					aria-expanded={showAllThemes}
+					onclick={() => (showAllThemes = !showAllThemes)}
+				>
+					{showAllThemes ? t('themes.fewer_builtin') : t('themes.more_builtin', { count: foldedCount })}
+				</button>
+			{/if}
 		</div>
 
 		{#if themeSearchable || installable.length > 0}
@@ -342,6 +361,22 @@
 	.theme-strip .theme-card {
 		flex: 0 0 124px;
 		scroll-snap-align: start;
+	}
+
+	.more-themes {
+		align-self: flex-start;
+		padding: 0;
+		margin-top: var(--space-1);
+		font-family: var(--font-sans);
+		font-size: var(--text-sm);
+		color: var(--color-accent);
+		background: none;
+		border: none;
+		cursor: pointer;
+	}
+
+	.more-themes:hover {
+		text-decoration: underline;
 	}
 
 	.theme-grid {

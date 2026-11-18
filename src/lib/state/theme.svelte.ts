@@ -256,6 +256,11 @@ export const BUILT_IN: Theme[] = [DARK, LIGHT, ...BUNDLED];
  *  and the registry copy is neither listed nor offered. */
 export const BUILT_IN_IDS = new Set(BUILT_IN.map((t) => t.id));
 
+/** The bundled palettes, beyond Reach's own pair. Theme pickers keep these
+ *  folded under "More built-in themes" (all but the one in use), so the list
+ *  opens short. */
+export const BUNDLED_IDS = new Set(BUNDLED.map((t) => t.id));
+
 class ThemeState {
 	current = $state<Theme>(DARK);
 	/** Themes beyond the built-ins, e.g. installed from the marketplace. */

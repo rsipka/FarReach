@@ -684,6 +684,8 @@
   "themes.showing_n_of_m": "{{shown}} из {{total}}",
   "themes.more_in_settings": "Больше тем в Настройках > Внешний вид",
   "themes.show_more": "Показать ещё ({{shown}} из {{total}})",
+  "themes.more_builtin": "Другие встроенные темы ({{count}})",
+  "themes.fewer_builtin": "Меньше тем",
   "themes.install": "Установить",
   "themes.installing": "Установка...",
   "themes.installed": "Установлена",
