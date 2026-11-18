@@ -219,6 +219,8 @@
   "session.host": "Host",
   "session.port": "Porta",
   "session.username": "Nome utente",
+  "session.username_optional": "Nome utente (facoltativo)",
+  "quick_connect.telnet_hint": "Viene digitato quando il dispositivo chiede l'accesso. Per altre impostazioni Telnet, salvalo come sessione.",
   "session.password": "Password",
   "session.private_key": "Chiave Privata",
   "session.auth_method": "Autenticazione",

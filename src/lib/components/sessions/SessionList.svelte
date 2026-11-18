@@ -1694,10 +1694,6 @@
 							<FaIcon icon={faFolderPlus} size={12} />
 							<span>{t('session.new_folder')}</span>
 						</button>
-						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => { selectMode = true; })}>
-							<FaIcon icon={faListCheck} size={12} />
-							<span>{t('session.select_sessions')}</span>
-						</button>
 						<div class="menu-sep"></div>
 						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => openImport(lastImportSource))}>
 							<FaIcon icon={faFileImport} size={12} />

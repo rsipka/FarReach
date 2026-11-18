@@ -7,6 +7,10 @@
 	import KeyPicker from '#lib/components/sessions/KeyPicker.svelte';
 	import ConnectSteps from '#lib/components/sessions/ConnectSteps.svelte';
 	import { sshConnect, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
+	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
+	import { DEFAULT_SERIAL_OPTIONS, SERIAL_BAUD_RATES, serialListPorts, type SerialPortInfo } from '#lib/ipc/serial.js';
+	import { isMobile, isWindows } from '#lib/platform.js';
+	import { setActivePage } from '#lib/state/navigation.svelte.js';
 	import { createTab } from '#lib/state/tabs.svelte.js';
 	import { getSettings, sessionLogConfig } from '#lib/state/settings.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -24,6 +28,18 @@
 	}
 
 	let { open = $bindable(), prefill = null }: Props = $props();
+
+	type Protocol = 'ssh' | 'telnet' | 'serial';
+	const DEFAULT_PORT: Record<Exclude<Protocol, 'serial'>, string> = { ssh: '22', telnet: '23' };
+	/** Serial ports open only in the desktop app. */
+	const protocols: Protocol[] = isMobile() ? ['ssh', 'telnet'] : ['ssh', 'telnet', 'serial'];
+
+	let protocol = $state<Protocol>('ssh');
+	let serialPort = $state('');
+	let serialPorts = $state<SerialPortInfo[]>([]);
+	let serialPortsLoading = $state(false);
+	let serialPortTyped = $state(false);
+	let baudRate = $state(DEFAULT_SERIAL_OPTIONS.baud_rate);
 
 	let host = $state('');
 	let portStr = $state('22');
@@ -53,22 +69,86 @@
 	/** The connection being made, for its steps (ConnectSteps). */
 	let attemptId = $state<string | undefined>();
 
-	let port = $derived(parseInt(portStr, 10) || 22);
+	let port = $derived(parseInt(portStr, 10) || (protocol === 'telnet' ? 23 : 22));
+
+	function pickProtocol(next: Protocol): void {
+		if (next === protocol) return;
+		// Follow the protocol's usual port unless one was typed.
+		if (next !== 'serial' && (portStr === '' || Object.values(DEFAULT_PORT).includes(portStr))) {
+			portStr = DEFAULT_PORT[next];
+		}
+		// SSH's default user means nothing to a switch's login prompt.
+		if (next === 'telnet' && username === 'root') username = '';
+		if (next === 'ssh' && username === '') username = 'root';
+		protocol = next;
+		error = undefined;
+		if (next === 'serial' && serialPorts.length === 0) void loadSerialPorts();
+	}
+
+	async function loadSerialPorts(): Promise<void> {
+		serialPortsLoading = true;
+		try {
+			serialPorts = await serialListPorts();
+		} catch {
+			serialPorts = [];
+		} finally {
+			serialPortsLoading = false;
+		}
+		untrack(() => {
+			if (!serialPort.trim() && serialPorts.length > 0) serialPort = serialPorts[0].name;
+			serialPortTyped = serialPorts.length === 0 || (!!serialPort.trim() && !serialPorts.some((p) => p.name === serialPort));
+		});
+	}
 
 	// Opening with an address already typed elsewhere: take it, leave the rest.
 	$effect(() => {
 		if (!open || !prefill) return;
 		const p = prefill;
 		untrack(() => {
+			protocol = 'ssh';
 			host = p.host;
 			if (p.username) username = p.username;
 			if (p.port) portStr = String(p.port);
 		});
 	});
-	let canConnect = $derived(host.trim().length > 0 && username.trim().length > 0 && !connecting);
+	let canConnect = $derived(
+		!connecting &&
+		(protocol === 'serial'
+			? serialPort.trim().length > 0
+			: host.trim().length > 0 && (protocol === 'telnet' || username.trim().length > 0))
+	);
+
+	/** Telnet and serial tabs connect by themselves once their terminal listens. */
+	function openTerminalTab(): void {
+		setActivePage('terminal');
+		if (protocol === 'telnet') {
+			const tab = createTab('telnet', host.trim());
+			tab.telnetConnectParams = {
+				host: host.trim(),
+				port,
+				options: { ...DEFAULT_TELNET_OPTIONS },
+				username: username.trim() || null,
+				password: password || null,
+			};
+		} else {
+			const tab = createTab('serial', serialPort.trim());
+			tab.serialConnectParams = {
+				port: serialPort.trim(),
+				options: { ...DEFAULT_SERIAL_OPTIONS, baud_rate: baudRate },
+			};
+		}
+		host = '';
+		password = '';
+		error = undefined;
+		open = false;
+	}
 
 	async function handleConnect(): Promise<void> {
 		if (!canConnect) return;
+		if (protocol !== 'ssh') {
+			openTerminalTab();
+			return;
+		}
 		connecting = true;
 		error = undefined;
 
@@ -158,15 +238,78 @@
 
 <Modal {open} onclose={handleClose} title={t('session.quick_connect')}>
 	<form class="form" onsubmit={(e) => { e.preventDefault(); handleConnect(); }}>
+		<div class="auth-section">
+			<span class="auth-label">{t('session.protocol')}</span>
+			<div class="auth-toggle" role="radiogroup" aria-label={t('session.protocol')}>
+				{#each protocols as p (p)}
+					<button
+						type="button"
+						role="radio"
+						aria-checked={protocol === p}
+						class="auth-btn"
+						class:active={protocol === p}
+						disabled={connecting}
+						onclick={() => pickProtocol(p)}
+					>
+						{t(`session.protocol_${p}`)}
+					</button>
+				{/each}
+			</div>
+		</div>
+
+		{#if protocol === 'serial'}
+			<div class="shell-field">
+				<label class="auth-label" for="qc-serial-port">{t('serial.port')}</label>
+				<div class="port-row">
+					<div class="field-host">
+						{#if serialPortTyped}
+							<Input bind:value={serialPort} placeholder={isWindows() ? 'COM3' : '/dev/ttyUSB0'} />
+						{:else}
+							<select id="qc-serial-port" class="qc-select" bind:value={serialPort}>
+								{#each serialPorts as p (p.name)}
+									<option value={p.name}>{p.description ? `${p.name} · ${p.description}` : p.name}</option>
+								{/each}
+							</select>
+						{/if}
+					</div>
+					<Button variant="secondary" size="sm" onclick={loadSerialPorts} disabled={serialPortsLoading}>
+						{t('serial.refresh')}
+					</Button>
+				</div>
+				<p class="shell-hint">
+					{#if serialPorts.length === 0 && !serialPortsLoading}
+						{t('serial.no_ports')}
+					{:else if serialPorts.length > 0}
+						<button type="button" class="link-btn" onclick={() => (serialPortTyped = !serialPortTyped)}>
+							{serialPortTyped ? t('serial.pick_port') : t('serial.type_port')}
+						</button>
+					{/if}
+				</p>
+			</div>
+			<div class="shell-field">
+				<label class="auth-label" for="qc-serial-baud">{t('serial.speed')}</label>
+				<select id="qc-serial-baud" class="qc-select" bind:value={baudRate}>
+					{#each SERIAL_BAUD_RATES as rate (rate)}
+						<option value={rate}>{rate}</option>
+					{/each}
+				</select>
+				<p class="shell-hint">{t('serial.hint')}</p>
+			</div>
+		{:else}
 		<div class="row">
 			<div class="field-host">
 				<Input label={t('session.host')} bind:value={host} placeholder="192.168.1.1" disabled={connecting} />
 			</div>
 			<div class="field-port">
-				<Input label={t('session.port')} bind:value={portStr} type="number" placeholder="22" disabled={connecting} />
+				<Input label={t('session.port')} bind:value={portStr} type="number" placeholder={DEFAULT_PORT[protocol]} disabled={connecting} />
 			</div>
 		</div>
 
+		{#if protocol === 'telnet'}
+			<Input label={t('session.username_optional')} bind:value={username} placeholder="admin" />
+			<Input label={t('session.password_optional')} bind:value={password} type="password" />
+			<p class="shell-hint">{t('quick_connect.telnet_hint')}</p>
+		{:else}
 		<Input label={t('session.username')} bind:value={username} placeholder="root" disabled={connecting} />
 
 		<div class="auth-section">
@@ -283,6 +426,8 @@
 				</div>
 			{/if}
 		</div>
+		{/if}
+		{/if}
 
 		<ConnectSteps id={attemptId} active={connecting} failed={!connecting && !!error} />
 
@@ -353,6 +498,46 @@
 		margin: 0;
 		font-size: 0.6875rem;
 		color: var(--color-text-secondary);
+	}
+
+	.shell-hint:empty {
+		display: none;
+	}
+
+	.port-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.qc-select {
+		width: 100%;
+		padding: 10px 12px;
+		font-family: var(--font-sans);
+		font-size: 0.875rem;
+		color: var(--color-text-primary);
+		background-color: var(--color-bg-elevated);
+		border: 1px solid var(--color-border-strong);
+		border-radius: var(--radius-btn);
+		outline: none;
+		box-sizing: border-box;
+	}
+
+	.qc-select:focus {
+		border-color: var(--color-accent);
+	}
+
+	.link-btn {
+		background: none;
+		border: none;
+		padding: 0;
+		color: var(--color-accent);
+		font: inherit;
+		cursor: pointer;
+	}
+
+	.link-btn:hover {
+		text-decoration: underline;
 	}
 
 	/* The same segmented control as the session editor's. */

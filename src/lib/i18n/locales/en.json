@@ -219,6 +219,8 @@
   "session.host": "Host",
   "session.port": "Port",
   "session.username": "Username",
+  "session.username_optional": "Username (optional)",
+  "quick_connect.telnet_hint": "Typed in when the device asks to log in. To keep other Telnet settings, save it as a session.",
   "session.password": "Password",
   "session.private_key": "Private key",
   "session.auth_method": "Authentication",

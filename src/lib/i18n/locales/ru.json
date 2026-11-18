@@ -219,6 +219,8 @@
   "session.host": "Хост",
   "session.port": "Порт",
   "session.username": "Имя пользователя",
+  "session.username_optional": "Имя пользователя (необязательно)",
+  "quick_connect.telnet_hint": "Вводится, когда устройство запросит вход. Для других настроек Telnet сохраните его как сеанс.",
   "session.password": "Пароль",
   "session.private_key": "Приватный ключ",
   "session.auth_method": "Аутентификация",

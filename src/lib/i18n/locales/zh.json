@@ -219,6 +219,8 @@
   "session.host": "主机",
   "session.port": "端口",
   "session.username": "用户名",
+  "session.username_optional": "用户名（可选）",
+  "quick_connect.telnet_hint": "设备要求登录时自动输入。如需其他 Telnet 设置，请保存为会话。",
   "session.password": "密码",
   "session.private_key": "私钥",
   "session.auth_method": "认证方式",

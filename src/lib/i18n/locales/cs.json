@@ -219,6 +219,8 @@
   "session.host": "Hostitel",
   "session.port": "Port",
   "session.username": "Uživatelské jméno",
+  "session.username_optional": "Uživatelské jméno (volitelné)",
+  "quick_connect.telnet_hint": "Zadá se, až se zařízení zeptá na přihlášení. Další nastavení Telnetu uložíte, když z připojení uděláte relaci.",
   "session.password": "Heslo",
   "session.private_key": "Soukromý klíč",
   "session.auth_method": "Ověření",
