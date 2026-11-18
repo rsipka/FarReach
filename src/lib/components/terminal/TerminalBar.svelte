@@ -45,7 +45,7 @@
 	);
 	let tmuxName = $derived(tab.type === 'ssh' ? (tab.sshConnectParams?.tmux?.name ?? null) : null);
 	let tap = $derived(tabHistory(tab.id));
-	let logging = $derived(!!tap?.status.logFile || !!tap?.sshLog);
+	let log = $derived(tap?.log ?? null);
 	let linkState = $derived(tab.link === 'down' ? 'down' : tab.link === 'reconnecting' ? 'reconnecting' : remote ? 'up' : 'local');
 	let stateLabel = $derived(
 		linkState === 'down' ? t('tabs.disconnected') : linkState === 'reconnecting' ? t('terminal.reconnecting') : linkState === 'up' ? t('termbar.connected') : t('termbar.local')
@@ -135,7 +135,7 @@
 	{#if address}<span class="address">{address}</span>{/if}
 	{#if remote || tab.wslDistro}<span class="badge">{protocol}</span>{/if}
 	{#if tmuxName}<span class="badge" title={tmuxName}>tmux</span>{/if}
-	{#if logging}<span class="rec" title={t('termbar.logging')}>{t('termbar.log')}</span>{/if}
+	{#if log}<span class="rec" class:paused={log.paused} title={log.paused ? t('history.log_paused_hint') : t('termbar.logging')}>{t('termbar.log')}</span>{/if}
 
 	<span class="grow"></span>
 
@@ -252,6 +252,11 @@
 		line-height: 18px;
 		color: var(--color-danger);
 		background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+	}
+
+	.rec.paused {
+		color: var(--color-text-secondary);
+		background: color-mix(in srgb, var(--color-text-secondary) 12%, transparent);
 	}
 
 	.rec::before {

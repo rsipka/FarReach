@@ -146,7 +146,9 @@ pub fn start(stream: &str, cfg: TapConfig) -> Result<TapStatus, String> {
     let log = match &cfg.log {
         Some(l) => {
             let host = if cfg.meta.host.is_empty() { cfg.meta.protocol.as_str() } else { cfg.meta.host.as_str() };
-            Some(crate::ssh::session_log::SessionLog::open(l, host, 0).map_err(|e| format!("Session log: {e}"))?)
+            let mut log = crate::ssh::session_log::SessionLog::open(l, host, 0).map_err(|e| format!("Session log: {e}"))?;
+            log.register(stream);
+            Some(log)
         }
         None => None,
     };
@@ -193,7 +195,7 @@ pub fn pause(stream: &str, paused: bool) -> Option<TapStatus> {
 }
 
 fn status_of(tap: &Tap) -> TapStatus {
-    TapStatus { recording: tap.level, paused: tap.paused, log_file: tap.log.as_ref().map(|l| l.path().display().to_string()) }
+    TapStatus { recording: tap.level, paused: tap.paused, log_file: tap.log.as_ref().filter(|l| l.is_open()).map(|l| l.path().display().to_string()) }
 }
 
 pub fn status(stream: &str) -> Option<TapStatus> {

@@ -137,6 +137,25 @@ export async function sessionLogDefaultDir(): Promise<string> {
   return invoke<string>('session_log_default_dir');
 }
 
+/** A terminal's file log, while it is writing or paused. */
+export interface SessionLogStatus {
+  path: string;
+  paused: boolean;
+}
+
+export function sessionLogStatus(stream: string): Promise<SessionLogStatus | null> {
+  return invoke<SessionLogStatus | null>('session_log_status', { stream });
+}
+
+export function sessionLogPause(stream: string, paused: boolean): Promise<SessionLogStatus | null> {
+  return invoke<SessionLogStatus | null>('session_log_pause', { stream, paused });
+}
+
+/** Stops the log and closes its file; false when there was none. */
+export function sessionLogStop(stream: string): Promise<boolean> {
+  return invoke<boolean>('session_log_stop', { stream });
+}
+
 export async function sshConnect(params: SshConnectParams): Promise<string> {
   return invoke<string>('ssh_connect', {
     id: params.id,
