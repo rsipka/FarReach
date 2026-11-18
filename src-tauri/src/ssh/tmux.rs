@@ -233,13 +233,15 @@ const NO_TMUX: &str = "tmux was not found on this server, so a normal shell was 
 
 /// The command the channel runs for `start`, given the session's login
 /// shell. Run by the account's login shell as `$SHELL -c`, so it is one
-/// `exec sh -c '…'`, valid in sh, bash, zsh, fish and csh alike.
+/// `sh -c '…'`, valid in sh, bash, zsh, fish and csh alike.
 pub fn start_command(start: &TmuxStart, shell: Option<&str>) -> Result<String, String> {
     let script = start_script(start, shell)?;
     // Single quotes hold the script as it is in every shell above; it has
     // none of its own.
     debug_assert!(!script.contains('\''));
-    Ok(format!("exec sh -c '{script}'"))
+    // No `exec` of its own: the channel adds it to every login shell
+    // setting (client.rs, session_opts.rs), and `exec exec` fails in bash.
+    Ok(format!("sh -c '{script}'"))
 }
 
 /// The script itself, for `sh -c` (a WSL tab runs it with `wsl.exe -e`).
@@ -342,7 +344,7 @@ mod tests {
     #[test]
     fn the_command_is_one_quoted_script() {
         let c = start_command(&start("reacher-web"), None).unwrap();
-        assert!(c.starts_with("exec sh -c '"), "{c}");
+        assert!(c.starts_with("sh -c '"), "{c}");
         assert!(c.ends_with('\''));
         assert_eq!(c.matches('\'').count(), 2, "{c}");
         assert!(c.contains("new-session -A -s reacher-web;"), "{c}");
@@ -397,9 +399,10 @@ mod tests {
             std::fs::set_permissions(&shim, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
         let cmd = start_command(&start("w"), Some("say")).unwrap();
+        // As the channel sends it: every login shell setting gets an `exec`.
         let out = Command::new("sh")
             .arg("-c")
-            .arg(&cmd)
+            .arg(format!("exec {cmd}"))
             .env("PATH", &dir)
             .output()
             .unwrap();
