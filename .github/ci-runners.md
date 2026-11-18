@@ -40,8 +40,10 @@ power.
 2. Install **Homebrew** (https://brew.sh) and then `brew install xcodegen`.
 3. Install **Rust** with rustup (https://rustup.rs). The workflows pick the
    Rust version and targets; Node is downloaded by the workflow.
-   The jobs put rustup's `~/.cargo/bin` first in PATH, so another Rust
-   (MacPorts, Homebrew) on the Mac does not get in the way.
+   The jobs put rustup's `~/.cargo/bin` first in PATH and leave MacPorts
+   (`/opt/local`) out of it, so neither its Rust nor its libraries end up in
+   the app. The release checks with `otool -L` that the app links nothing
+   outside macOS and its own bundle.
 4. On GitHub: repository **Settings > Actions > Runners > New self-hosted
    runner**, choose macOS and your architecture (x64 for Intel). Run the
    *Download* commands it shows in Terminal, in a folder such as
@@ -58,8 +60,9 @@ power.
 9. Try it: **Actions > iOS build > Run workflow** on main. The job should
    show the runner name `my-mac`.
 
-On the Mac the Rust build is kept in `~/actions-runner/_work/_tool/reachercm-target`
+On the Mac the Rust build is kept in `~/actions-runner/_work/_tool/reachercm-target-2`
 instead of GitHub's build cache, so nothing large goes over its connection.
+(`reachercm-target` without the -2 is no longer used and can be deleted.)
 It grows over time; delete the folder whenever you like (the next build is
 then a full one, about 15 minutes on an Intel Mac).
 
