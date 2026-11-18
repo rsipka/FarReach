@@ -86,6 +86,10 @@ jobs:
               - src-tauri/src/**/*_tests.rs
               # Modules whose tests sit in a tests.rs beside them.
               - src-tauri/src/**/tests.rs
+              # Script tests rebuild other apps' weak formats on purpose
+              # (mRemoteNG's MD5 key, test passwords) to check the importers.
+              - scripts/*-test.mjs
+              - scripts/script-tests.mjs
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
