@@ -80,14 +80,15 @@ jobs:
         include:
           - platform: windows-latest
             args: ''
-          - platform: macos-latest
+          - platform: macos
             args: '--target aarch64-apple-darwin'
-          - platform: macos-latest
+          - platform: macos
             args: '--target x86_64-apple-darwin'
           - platform: ubuntu-22.04
             args: '--bundles deb,appimage'
 
-    runs-on: ${{ matrix.platform }}
+    # "macos" is not a runner name: see MACOS_RUNNER_LABEL in .github/ci-runners.md.
+    runs-on: ${{ matrix.platform == 'macos' && (github.event_name != 'pull_request' && vars.MACOS_RUNNER_LABEL || 'macos-15') || matrix.platform }}
     steps:
       - uses: actions/checkout@v7
 
@@ -104,7 +105,7 @@ jobs:
         # forward on purpose, here and in release.yml together.
         uses: dtolnay/rust-toolchain@1.99.1
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -144,7 +145,7 @@ jobs:
       # because an empty APPLE_SIGNING_IDENTITY would be taken as an identity
       # and make codesign fail with "no identity found".
       - name: Enable macOS signing when credentials are present
-        if: matrix.platform == 'macos-latest'
+        if: matrix.platform == 'macos'
         env:
           IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -255,7 +256,7 @@ jobs:
       # issue #47, and it is invisible until someone runs codesign on an
       # installed copy. Fail the build here instead.
       - name: Verify the macOS bundle signature
-        if: matrix.platform == 'macos-latest'
+        if: matrix.platform == 'macos'
         run: |
           set -euo pipefail
           found=0
@@ -294,7 +295,7 @@ jobs:
 
   publish-release:
     needs: [create-release, build-desktop, build-android, build-ios]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # First: checking out later would clean away the files below.
       - uses: actions/checkout@v7
@@ -414,7 +415,7 @@ jobs:
 
   build-android:
     needs: create-release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -532,7 +533,7 @@ jobs:
 
   build-ios:
     needs: create-release
-    runs-on: macos-latest
+    runs-on: ${{ github.event_name != 'pull_request' && vars.MACOS_RUNNER_LABEL || 'macos-15' }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7

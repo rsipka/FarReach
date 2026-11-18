@@ -138,7 +138,7 @@ jobs:
           done
           echo "full=$full" | tee -a "$GITHUB_OUTPUT"
           if [ "$full" = true ]; then
-            echo 'platforms=["macos-latest", "ubuntu-22.04", "windows-latest"]'
+            echo 'platforms=["macos", "ubuntu-22.04", "windows-latest"]'
           else
             echo 'platforms=["ubuntu-22.04"]'
           fi | tee -a "$GITHUB_OUTPUT"
@@ -176,7 +176,8 @@ jobs:
         # Linux only in the fast tier.
         platform: ${{ fromJSON(needs.changes.outputs.platforms) }}
 
-    runs-on: ${{ matrix.platform }}
+    # "macos" is not a runner name: see MACOS_RUNNER_LABEL in .github/ci-runners.md.
+    runs-on: ${{ matrix.platform == 'macos' && (github.event_name != 'pull_request' && vars.MACOS_RUNNER_LABEL || 'macos-15') || matrix.platform }}
     steps:
       - uses: actions/checkout@v7
 
@@ -193,7 +194,7 @@ jobs:
         # forward on purpose, here and in release.yml together.
         uses: dtolnay/rust-toolchain@1.99.1
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos' && 'x86_64-apple-darwin' || '' }}
           components: clippy
 
       - name: Rust cache
@@ -227,9 +228,9 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy --lib --tests -- -D warnings
 
-      # The runner is Apple silicon; Intel Macs get their own release build.
+      # GitHub's runner is Apple silicon; Intel Macs get their own release build.
       - name: Build for Intel Macs
-        if: matrix.platform == 'macos-latest'
+        if: matrix.platform == 'macos'
         working-directory: src-tauri
         run: cargo build --lib --target x86_64-apple-darwin
 
@@ -239,7 +240,7 @@ jobs:
   android:
     needs: changes
     if: needs.changes.outputs.rust == 'true' && needs.changes.outputs.full == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -312,7 +313,7 @@ jobs:
   android-apk:
     needs: changes
     if: needs.changes.outputs.mobile == 'true' && needs.changes.outputs.full == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 

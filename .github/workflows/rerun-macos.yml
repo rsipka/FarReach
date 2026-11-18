@@ -1,0 +1,43 @@
+name: Rerun macOS once
+
+# GitHub's macOS runners are often busy, and a job now and then fails before
+# any of its steps ran ("not acquired by Runner", "lost communication with
+# the server"). Such a run gets its failed jobs started once more here.
+#
+# Only a first attempt is retried, and only when every failed job was meant
+# for a Mac and none of its steps failed: a real build or test failure fails
+# the same way again, and is left for a person to look at (Re-run failed jobs
+# then covers both).
+on:
+  workflow_run:
+    workflows: [Build check, iOS build, WebKit input, Release]
+    types: [completed]
+
+permissions:
+  actions: write
+
+jobs:
+  rerun:
+    if: github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.run_attempt == 1
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rerun when only macOS jobs failed without running
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          MAC_LABEL: ${{ vars.MACOS_RUNNER_LABEL }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/attempts/1/jobs?per_page=100" \
+            --jq '.jobs[]' > jobs.json
+          failed=$(jq -s '[.[] | select(.conclusion == "failure")]' jobs.json)
+          infra=$(jq --arg mac "$MAC_LABEL" '[.[]
+            | select(any(.labels[]; startswith("macos") or ($mac != "" and . == $mac)))
+            | select(all(.steps[]?; .conclusion != "failure"))]' <<< "$failed")
+          jq -r '.[].name' <<< "$failed"
+          if [ "$(jq length <<< "$failed")" -eq 0 ] || [ "$(jq length <<< "$failed")" -ne "$(jq length <<< "$infra")" ]; then
+            echo "Not only macOS jobs that never really ran failed: leaving it to a person."
+            exit 0
+          fi
+          echo "Rerunning the failed jobs above once."
+          gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/rerun-failed-jobs" --silent
