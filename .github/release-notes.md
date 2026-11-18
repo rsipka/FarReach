@@ -1,71 +1,8 @@
-Reacher CM Dev 0.9.2-dev.5, a pre-release built from the fork's main.
+Reacher CM Dev 0.9.2-dev.6, a pre-release built from the fork's main.
 
-New since v0.9.2-dev.3:
+New since v0.9.2-dev.5:
 
-- Folders stay in their vault
-- 18 more app themes built in
-- Tooltips in the theme's colours
-- Compact layout shows names only
-- Release script
-- Stale docs and names cleaned up
-- tmux windows as tabs
-- Code scanning clean-up
-- Settings, regrouped and searchable
-- Settings on a phone
-- Choose the extra keys on a phone
-- Serial port sessions
-- Easier to read in light and dark
-- Controls you can tell apart
-- Session list toolbar
-- Terminal bar
-- Terminal cursor your way
-- tmux: pick a session, switch, copy, scroll, WSL
-- Rust crate renamed to `reacher-cm`
-- Dependency updates: cpal 0.18, kube 5.1, libloading 0.9
-- Faster pull request checks
-- Sessions that survive in tmux
-- Edit many sessions at once
-- Sync to an S3 bucket
-- Update checks can be turned off
-- Link a second device to the same vaults
-- Windows hosts recognised, no more guessed penguin
-- Own website
-- apt install reacher-cm and dnf install reacher-cm
-- Server monitoring on or off, per session too
-- Theme and recipe registries can be changed
-- Searchable session history
-- File logging for every terminal
-- License names the fork's author
-- Your installed fonts in the font picker
-- File explorer over SFTP
-- Terminal colors of your own
-- Terminal copy and paste, your way
-- Sponsor row hidden, problem reports go to the fork
-- Reacher CM
-- Installs next to Reach on Linux
-- Own app icon
-- Import from mRemoteNG, MobaXterm, PuTTY, WinSCP and Tabby
-- Close the tab when a session ends
-- Quitting no longer counts ended sessions
-- Cancelling a connection really cancels it
-- Local-first sync
-- Sync through a folder, SFTP, Git or SMB
-- Smaller security fixes
-- Czech translation
-- Dev builds as pre-releases
-- iOS updates in LiveContainer
-- Known hosts are no longer lost
-- Dragged and pasted files stay private on Linux
-- Content Security Policy
-- Where plugins, recipes and themes come from
-- Unlock credential keys at start
-- Password manager entries in saved credentials
-- KeePass
-- Bitwarden
-- Password manager CLIs in a group-writable folder
-- Right-click shows the app's menu, not the browser's
-- 1Password
-- Connect to a Mac with its macOS login
+- CI ready for Ubuntu 26 and busy macOS runners
 
 iPhone and iPad: add https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/apps.json as a source in LiveContainer to get updates.
 Full list of changes: https://github.com/rsipka/ReacherCM/blob/main/CHANGELOG.md
