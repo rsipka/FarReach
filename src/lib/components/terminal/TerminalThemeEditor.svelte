@@ -159,7 +159,7 @@
 		font-size: 0.8125rem;
 		color: var(--color-text-primary);
 		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn, 6px);
 		outline: none;
 	}
@@ -236,7 +236,7 @@
 		width: 28px;
 		height: 24px;
 		padding: 0;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 4px;
 		background: none;
 		cursor: pointer;

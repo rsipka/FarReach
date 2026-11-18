@@ -15,28 +15,38 @@
 
 @theme {
   /* Dark mode colors (default) */
-  --color-bg-primary: #0a0a0a;
-  --color-bg-secondary: #141414;
-  --color-bg-elevated: #1c1c1e;
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-text-primary: #f5f5f7;
-  --color-text-secondary: #86868b;
-  --color-accent: #0a84ff;
-  --color-accent-hover: #409cff;
-  --color-success: #30d158;
-  --color-warning: #ffd60a;
-  --color-danger: #ff453a;
+  --color-bg-primary: #0e0f12;
+  --color-bg-secondary: #1a1b20;
+  --color-bg-elevated: #24252b;
+  --color-border: #2e3037;
+  --color-text-primary: #ececef;
+  --color-text-secondary: #a3a6ad;
+  --color-accent: #4c9dff;
+  --color-accent-hover: #74b3ff;
+  --color-success: #3fcf6a;
+  --color-warning: #e8b730;
+  --color-danger: #ff6b61;
+
+  /* Edges of fields and outlined buttons: the divider colour above is for
+     separating areas and is too faint to show where a control ends. */
+  --color-border-strong: #555963;
+  /* A filled button with white text; --color-accent is for text and icons,
+     and white on it is below 4.5:1. */
+  --color-accent-fill: #2563eb;
+  /* Behind a selected row and the active rail item. */
+  --color-accent-subtle: rgba(76, 157, 255, 0.16);
+  --color-focus: #4c9dff;
 
   /* Surfaces — components previously hardcoded rgba(255,255,255,x) overlays for
      these, which are invisible against a white background in light mode. */
-  --color-surface-hover: rgba(255, 255, 255, 0.06);
-  --color-surface-active: rgba(255, 255, 255, 0.10);
-  --color-surface-sunken: rgba(0, 0, 0, 0.20);
-  --color-surface-strong: rgba(255, 255, 255, 0.18);
+  --color-surface-hover: rgba(255, 255, 255, 0.07);
+  --color-surface-active: rgba(255, 255, 255, 0.12);
+  --color-surface-sunken: rgba(0, 0, 0, 0.25);
+  --color-surface-strong: rgba(255, 255, 255, 0.22);
 
   /* A third text level. Two were not enough, so components reached for opacity
      or ad-hoc greys to express "less important than secondary". */
-  --color-text-tertiary: #6e6e73;
+  --color-text-tertiary: #868a93;
 
   /* Type scale. The old floor was 9px with 11px body, which is not readable for
      a tool people keep open all day. 11px is now the smallest permitted size and
@@ -135,29 +145,35 @@ p {
 
 /* Light mode overrides */
 .light body {
-  background-color: #ffffff;
-  color: #1d1d1f;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
 }
 
 .light {
+  /* Every text colour here is at least 4.5:1 on both the white content
+     and the grey sidebar; the old greys were 3.0 to 3.6:1. */
   --color-bg-primary: #ffffff;
-  --color-bg-secondary: #f5f5f7;
+  --color-bg-secondary: #eff1f4;
   --color-bg-elevated: #ffffff;
-  --color-border: rgba(0, 0, 0, 0.06);
-  --color-text-primary: #1d1d1f;
-  --color-text-secondary: #86868b;
-  --color-accent: #007aff;
-  --color-accent-hover: #0071e3;
-  --color-success: #34c759;
-  --color-warning: #ff9f0a;
-  --color-danger: #ff3b30;
+  --color-border: #d5d9df;
+  --color-border-strong: #8c929c;
+  --color-text-primary: #17191c;
+  --color-text-secondary: #50565f;
+  --color-accent: #0b63ce;
+  --color-accent-hover: #0a56b3;
+  --color-accent-fill: #0b63ce;
+  --color-accent-subtle: rgba(11, 99, 206, 0.10);
+  --color-focus: #0b63ce;
+  --color-success: #1a7f37;
+  --color-warning: #9a6700;
+  --color-danger: #cf222e;
   --shadow-subtle: 0 2px 8px rgba(0, 0, 0, 0.08);
   --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.12);
-  --color-surface-hover: rgba(0, 0, 0, 0.04);
-  --color-surface-active: rgba(0, 0, 0, 0.08);
+  --color-surface-hover: rgba(0, 0, 0, 0.05);
+  --color-surface-active: rgba(0, 0, 0, 0.09);
   --color-surface-sunken: rgba(0, 0, 0, 0.03);
-  --color-surface-strong: rgba(0, 0, 0, 0.16);
-  --color-text-tertiary: #8e8e93;
+  --color-surface-strong: rgba(0, 0, 0, 0.22);
+  --color-text-tertiary: #656b75;
 }
 
 /* ─── Select menus ─── */
@@ -345,7 +361,7 @@ select:not([multiple]):disabled {
 /* ─── Focus Ring ─── */
 
 *:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
   border-radius: var(--radius-btn);
 }
@@ -353,7 +369,7 @@ select:not([multiple]):disabled {
 /* ─── Selection ─── */
 
 ::selection {
-  background: rgba(10, 132, 255, 0.3);
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
 
 /* ─── Settings rows ───

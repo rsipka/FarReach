@@ -315,7 +315,7 @@
 
 	.form-group input {
 		padding: 10px 12px;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 8px;
 		background: var(--color-bg-primary);
 		color: var(--color-text-primary);
@@ -356,7 +356,7 @@
 	}
 
 	.primary-btn {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		border: none;
 		color: white;
 	}

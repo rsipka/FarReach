@@ -135,7 +135,7 @@
 		width: 4px;
 		height: 4px;
 		border-radius: 50%;
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 	}
 
 	.never {

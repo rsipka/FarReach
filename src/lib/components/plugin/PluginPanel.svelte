@@ -307,7 +307,7 @@
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		color: #fff;
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		border-radius: 3px;
 	}
 

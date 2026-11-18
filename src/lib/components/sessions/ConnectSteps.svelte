@@ -91,7 +91,7 @@
 	.step.done::before,
 	.step.current::before,
 	.step.failed::before {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 	}
 
 	.mark {
@@ -110,7 +110,7 @@
 	}
 
 	.done .mark {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		border-color: var(--color-accent);
 	}
 

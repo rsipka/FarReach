@@ -114,7 +114,7 @@
 		font-size: 0.875rem;
 		color: var(--color-text-secondary);
 		background-color: var(--color-bg-elevated);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		cursor: pointer;
 		transition:
@@ -157,7 +157,7 @@
 		padding: 4px;
 		list-style: none;
 		background-color: var(--color-bg-elevated);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		box-shadow: var(--shadow-elevated);
 		max-height: 200px;

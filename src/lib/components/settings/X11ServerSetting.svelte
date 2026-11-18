@@ -122,7 +122,7 @@
 
 	.fill {
 		height: 100%;
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		transition: width 0.2s ease;
 	}
 

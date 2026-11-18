@@ -14,13 +14,17 @@
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 
+	import ImportSourcePicker, { type AnyImportSource } from './ImportSourcePicker.svelte';
+
 	interface Props {
 		open: boolean;
 		vaultId?: string | null;
 		onsave?: () => void;
+		/** Another source picked in the "Import from" select. */
+		onsource?: (source: AnyImportSource) => void;
 	}
 
-	let { open = $bindable(), vaultId = null, onsave }: Props = $props();
+	let { open = $bindable(), vaultId = null, onsave, onsource }: Props = $props();
 
 	let raw = $state('');
 	let parsed = $state(false);
@@ -164,15 +168,16 @@
 	}
 </script>
 
-<Modal {open} onclose={close} title={t('session.import_rdp')} maxWidth="600px">
+<Modal {open} onclose={close} title={t('session.import_sessions')} maxWidth="600px">
 	<div class="import-content">
+		{#if onsource}<ImportSourcePicker value="rdp" onchange={onsource} disabled={importing} />{/if}
 		<p class="import-desc">{t('session.rdp_import_desc')}</p>
 
 		{#if !parsed}
 			<textarea
 				class="tool-input json-input"
 				bind:value={raw}
-				aria-label={t('session.import_rdp')}
+				aria-label={t('session.import_sessions')}
 				placeholder={'[\n  { "name": "DC01", "ip": "10.0.0.10", "port": 3389, "username": "admin", "domain": "CORP", "folder": "HQ" }\n]'}
 				spellcheck="false"
 				disabled={busy}
@@ -276,7 +281,7 @@
 		width: 100%;
 		padding: 6px 8px;
 		border-radius: 6px;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		background: var(--color-bg-secondary);
 		color: var(--color-text-primary);
 		font: inherit;
@@ -337,7 +342,7 @@
 		font-weight: 500;
 		color: var(--color-text-secondary);
 		background: transparent;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 4px;
 		cursor: pointer;
 	}

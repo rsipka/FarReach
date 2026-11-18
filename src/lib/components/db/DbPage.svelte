@@ -454,7 +454,7 @@
 		padding: 8px 16px;
 		border-radius: var(--radius-btn);
 		border: 1px solid var(--color-accent);
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		color: white;
 		font-size: var(--text-sm);
 		cursor: pointer;

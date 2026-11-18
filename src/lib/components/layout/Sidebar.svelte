@@ -43,6 +43,19 @@
 		activeSection = 'sessions';
 		collapsed = false;
 	});
+	// A section asked for from elsewhere (the terminal bar's Files and
+	// Snippets): shown, and the sidebar opened if it was folded.
+	$effect(() => {
+		function onSection(e: Event): void {
+			const id = (e as CustomEvent<Section>).detail;
+			if (!sections.some((s) => s.id === id)) return;
+			markSidebarSeen(id);
+			activeSection = id;
+			collapsed = false;
+		}
+		window.addEventListener('reach:sidebar-section', onSection);
+		return () => window.removeEventListener('reach:sidebar-section', onSection);
+	});
 	let sidebarWidth = $state(loadWidth());
 	let dragging = $state(false);
 
@@ -360,21 +373,11 @@
 		margin-top: auto;
 	}
 
-	/* A dot alone is easy to miss on a 48px rail, so the icon itself takes the
-	   accent colour and a tinted ground. Steady, not animated: this has to sit
-	   there until someone gets round to it, and a pulsing icon in the corner of
-	   a terminal is a reason to close the app. */
+	/* Something new behind a button: the dot alone. A tinted tile here read as
+	   a second selected item, so the rail looked to have two or three active
+	   sections at once; the tile is for the active one only. */
 	.nav-btn.has-new:not(.active) {
-		color: var(--color-accent);
-		background: color-mix(in srgb, var(--color-accent) 14%, transparent);
-		/* The dot's ring has to match what is actually painted behind it, which
-		   here is the tint above rather than the bare rail colour. Same blend,
-		   made opaque. */
-		--new-dot-ring: color-mix(in srgb, var(--color-accent) 14%, var(--color-bg-secondary));
-	}
-
-	.nav-btn.has-new:not(.active):hover {
-		background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+		--new-dot-ring: var(--color-bg-secondary);
 	}
 
 	.nav-btn {
@@ -401,8 +404,8 @@
 	}
 
 	.nav-btn.active {
-		background-color: var(--color-surface-active);
-		color: var(--color-text-primary);
+		background-color: var(--color-accent-subtle);
+		color: var(--color-accent);
 	}
 
 	.nav-btn.active::before {
@@ -414,7 +417,7 @@
 		width: 3px;
 		height: 20px;
 		border-radius: 0 2px 2px 0;
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 	}
 
 

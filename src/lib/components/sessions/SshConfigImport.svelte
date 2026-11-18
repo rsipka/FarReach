@@ -13,14 +13,17 @@
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { folderPath } from '#lib/sessions/folder-tree.js';
+	import ImportSourcePicker, { type AnyImportSource } from './ImportSourcePicker.svelte';
 
 	interface Props {
 		open: boolean;
 		vaultId?: string | null;
 		onsave?: () => void;
+		/** Another source picked in the "Import from" select. */
+		onsource?: (source: AnyImportSource) => void;
 	}
 
-	let { open = $bindable(), vaultId = null, onsave }: Props = $props();
+	let { open = $bindable(), vaultId = null, onsave, onsource }: Props = $props();
 
 	let hosts = $state<HostImport[]>([]);
 	let files = $state<string[]>([]);
@@ -191,8 +194,9 @@
 	}
 </script>
 
-<Modal {open} onclose={handleClose} title={t('session.import_title')}>
+<Modal {open} onclose={handleClose} title={t('session.import_sessions')}>
 	<div class="import-content">
+		{#if onsource}<ImportSourcePicker value="ssh_config" onchange={onsource} disabled={importing} />{/if}
 		<p class="import-desc">{t('sshopt.import_desc')}</p>
 
 		{#if loading}
@@ -382,7 +386,7 @@
 		min-height: 30px;
 		padding: 4px 8px;
 		border-radius: 6px;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		background: var(--color-bg-secondary);
 		color: var(--color-text-primary);
 		font: inherit;
@@ -432,7 +436,7 @@
 		font-weight: 500;
 		color: var(--color-text-secondary);
 		background: transparent;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 4px;
 		cursor: pointer;
 	}

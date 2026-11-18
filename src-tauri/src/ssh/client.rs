@@ -677,6 +677,8 @@ pub struct LoginOptions {
     /// Write the session to a text file (Settings → Terminal). `None` logs
     /// nothing, which is the default.
     pub log: Option<crate::ssh::session_log::SessionLogConfig>,
+    /// Ask which tmux session to start in, once logged in (`ssh::tmux::Ask`).
+    pub tmux_ask: Option<crate::ssh::tmux::Ask>,
 }
 
 /// Getting the server's login message past the init's clear. The init is
@@ -1072,7 +1074,7 @@ impl SshManager {
             tracing::info!("SSH authenticated for {}@{}:{}", username, host, port);
 
             stage.begin("shell");
-            let (channel, tty) = open_session(&handle, &opts, cols, rows, shell.as_deref()).await?;
+            let (channel, tty) = open_session(&handle, &opts, cols, rows, shell.as_deref(), login.tmux_ask.as_ref()).await?;
 
             tracing::info!("SSH shell opened for {}@{}:{}", username, host, port);
 
@@ -1298,7 +1300,7 @@ impl SshManager {
         );
 
         // Open session, request PTY and the (optionally overridden) shell on target
-        let (channel, tty) = open_session(&target_handle, &opts, cols, rows, shell.as_deref()).await?;
+        let (channel, tty) = open_session(&target_handle, &opts, cols, rows, shell.as_deref(), login.tmux_ask.as_ref()).await?;
 
         tracing::info!(
             "SSH shell opened for {}@{}:{} (via jump)",
@@ -2402,8 +2404,18 @@ async fn open_session(
     cols: u16,
     rows: u16,
     shell: Option<&str>,
+    tmux_ask: Option<&crate::ssh::tmux::Ask>,
 ) -> Result<(Option<russh::Channel<russh::client::Msg>>, bool), SshError> {
     use crate::ssh::session_opts::{setup_channel, SessionType};
+    // The tmux picker: what it chose replaces the shell.
+    let picked;
+    let shell = match tmux_ask {
+        Some(ask) => {
+            picked = ask.resolve(handle).await?;
+            picked.as_deref()
+        }
+        None => shell,
+    };
     if let Some(p) = &opts.session {
         if p.session_type == SessionType::None {
             return Ok((None, false));
@@ -2449,7 +2461,7 @@ async fn shared_session(
     tracing::info!("ControlMaster: {}@{}:{} shares the connection at {}", info.username, info.host, info.port, cp.path);
     let opened = {
         let h = shared.lock().await;
-        open_session(&h, opts, cols, rows, shell).await
+        open_session(&h, opts, cols, rows, shell, login.tmux_ask.as_ref()).await
     };
     let (channel, tty) = match opened {
         Ok(x) => x,

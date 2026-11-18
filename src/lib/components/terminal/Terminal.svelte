@@ -4,11 +4,13 @@
 	import { FitAddon } from '@xterm/addon-fit';
 	import { WebglAddon } from '@xterm/addon-webgl';
 	import { WebLinksAddon } from '@xterm/addon-web-links';
+	import { SearchAddon } from '@xterm/addon-search';
+	import { registerFinder, requestFind } from '#lib/state/terminal-find.svelte.js';
 	import { Unicode11Addon } from '@xterm/addon-unicode11';
 	import '@xterm/xterm/css/xterm.css';
 	import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 	import { ptyWrite, ptyResize } from '#lib/ipc/pty.js';
-	import { sshSend, sshResize, sshConnect, sshReady, type SshConnectParams } from '#lib/ipc/ssh.js';
+	import { sshSend, sshResize, sshConnect, sshReady, sshDisconnect, type SshConnectParams } from '#lib/ipc/ssh.js';
 	import { telnetConnect, telnetDisconnect, telnetSend, telnetResize, type TelnetConnectParams } from '#lib/ipc/telnet.js';
 	import { serialConnect, serialDisconnect, serialSend, serialBreak, serialSummary as serialLabel, type SerialConnectParams } from '#lib/ipc/serial.js';
 	import { untrustedRefsFromError } from '#lib/ipc/sessions.js';
@@ -20,6 +22,7 @@
 	import { setTabHistory, openHistoryPanel } from '#lib/state/history.svelte.js';
 	import { countPasteLines, shouldWarnOnPaste } from '#lib/terminal/paste.js';
 	import { autoReconnectDelay, needsUser } from '#lib/terminal/tmux.js';
+	import { osc52Text } from '#lib/terminal/osc52.js';
 	import { rightClickAction, wordSeparator, MIDDLE_CLICK_PASTE_MS } from '#lib/terminal/mouse.js';
 	import { shouldRearmIme, nudgeCaret, REARM_SETTLE_MS } from '#lib/terminal/ime.js';
 	import { installWebkitInputFix } from '#lib/terminal/webkit-input-fix.js';
@@ -32,6 +35,7 @@
 	import { broadcastInput, getBroadcastTargets } from '#lib/state/broadcast.svelte.js';
 	import { isTerminalReply, TYPED_WINDOW_MS } from '#lib/terminal/broadcast.js';
 	import { t } from '#lib/state/i18n.svelte.js';
+	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { readText as clipboardReadText, writeText as clipboardWriteText } from '@tauri-apps/plugin-clipboard-manager';
 	import { openUrl } from '@tauri-apps/plugin-opener';
 	import { URL_PATTERN } from '#lib/terminal/links.js';
@@ -40,6 +44,7 @@
 	import Button from '#lib/components/shared/Button.svelte';
 	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
 	import { cssFontFamily } from '#lib/utils/font.js';
+	import { cursorOptions } from '#lib/terminal/cursor.js';
 
 	interface Props {
 		ptyId: string;
@@ -51,6 +56,9 @@
 		visible?: boolean;
 		onTitleChange?: (title: string) => void;
 		sshConnectParams?: SshConnectParams;
+		/** Bumped by Switch tmux session: connect again, into the tmux
+		 *  session sshConnectParams now names. */
+		tmuxSwitch?: number;
 		/** Telnet: where to connect. The terminal connects once it listens. */
 		telnetConnectParams?: TelnetConnectParams;
 		/** Serial: the port to open. The terminal opens it once it listens. */
@@ -59,6 +67,9 @@
 		onReady?: () => void;
 		/** The session's terminal theme id; unset: the default from Settings. */
 		terminalTheme?: string | null;
+		/** The session's cursor shape and blink; unset: the defaults from Settings. */
+		cursorStyle?: string | null;
+		cursorBlink?: boolean | null;
 		/** The saved session the tab came from, for its history. */
 		sessionId?: string | null;
 		sessionName?: string | null;
@@ -68,7 +79,7 @@
 		wslDistro?: string | null;
 	}
 
-	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, telnetConnectParams, serialConnectParams, onReconnected, onReady, terminalTheme, sessionId, sessionName, historyMode, wslDistro }: Props = $props();
+	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, tmuxSwitch, telnetConnectParams, serialConnectParams, onReconnected, onReady, terminalTheme, cursorStyle, cursorBlink, sessionId, sessionName, historyMode, wslDistro }: Props = $props();
 
 	/**
 	 * Start recording this tab's stream into the session history (and, for
@@ -108,6 +119,8 @@
 
 	/** The colours this terminal paints with. */
 	let palette = $derived(terminalPalette(terminalTheme));
+	/** The cursor it draws: the session's choice over Settings'. */
+	let cursorLook = $derived(cursorOptions(getSettings(), { style: cursorStyle, blink: cursorBlink }));
 	/** A connection made by Reach (SSH, Telnet, a serial port) that can drop and be made again. */
 	let remote = $derived(termType === 'ssh' || termType === 'telnet' || termType === 'serial');
 	/** Telnet and serial: the terminal makes the connection itself, once it listens. */
@@ -170,6 +183,32 @@
 		const error = await handleReconnect();
 		if (error === null || needsUser(error)) stopAutoReconnect();
 		else scheduleAutoReconnect();
+	}
+
+	// Switch tmux session: this connection is closed on purpose (its exit
+	// is not listened to, so nothing reconnects it) and a new one opens
+	// into the session now named.
+	let lastSwitch: number | undefined;
+	$effect(() => {
+		const n = tmuxSwitch;
+		if (lastSwitch === undefined || n === undefined || n === lastSwitch) {
+			lastSwitch = n ?? 0;
+			return;
+		}
+		lastSwitch = n;
+		untrack(() => void switchTmux());
+	});
+
+	async function switchTmux(): Promise<void> {
+		if (!terminal || termType !== 'ssh' || reconnecting) return;
+		stopAutoReconnect();
+		const old = currentConnectionId;
+		unlistenData?.();
+		unlistenExit?.();
+		if (old) await sshDisconnect(old).catch(() => {});
+		disconnected = true;
+		cleanEnd = false;
+		await handleReconnect();
 	}
 
 	$effect(() => {
@@ -541,8 +580,7 @@
 		return new Terminal({
 			fontFamily: terminalFont(appSettings.fontFamily),
 			fontSize: appSettings.fontSize ?? 14,
-			cursorBlink: true,
-			cursorStyle: 'bar',
+			...cursorLook,
 			scrollback: 10000,
 			wordSeparator: wordSeparator(appSettings.terminalWordSeparators),
 			allowProposedApi: true,
@@ -562,8 +600,39 @@
 		}
 	});
 
+	// The cursor follows Settings and the session's choice while open. A
+	// program's own shape (vim's insert mode) lasts until it asks again.
+	$effect(() => {
+		const c = cursorLook;
+		const term = terminal;
+		if (!term) return;
+		if (term.options.cursorStyle !== c.cursorStyle) term.options.cursorStyle = c.cursorStyle;
+		if (term.options.cursorBlink !== c.cursorBlink) term.options.cursorBlink = c.cursorBlink;
+		if (term.options.cursorInactiveStyle !== c.cursorInactiveStyle) term.options.cursorInactiveStyle = c.cursorInactiveStyle;
+		if (term.options.cursorWidth !== c.cursorWidth) term.options.cursorWidth = c.cursorWidth;
+	});
+
+	/** A server tried OSC 52 while it is off: said once per tab. */
+	let osc52Told = false;
+	let unregisterFinder: (() => void) | undefined;
+
 	function loadAddons(term: Terminal, fit: FitAddon, host: HTMLElement): void {
 		term.loadAddon(fit);
+		// OSC 52: the server copies to this computer's clipboard (tmux copy
+		// mode, vim). Writes only, and only when Settings allow it.
+		term.parser.registerOscHandler(52, (data) => {
+			const text = osc52Text(data);
+			if (text === null) return true;
+			if (!getSettings().terminalOsc52) {
+				if (!osc52Told) {
+					osc52Told = true;
+					addToast(t('osc52.blocked'), 'info', 8000);
+				}
+				return true;
+			}
+			clipboardWriteText(text).catch((e) => console.error('Clipboard write failed:', e));
+			return true;
+		});
 		// Open links in the OS default browser (Windows/macOS/Linux) via Tauri's
 		// shell, not inside the WebView. Our pattern, not the addon's: its own
 		// cut long links short at ! * ' ( ) (#lib/terminal/links).
@@ -575,6 +644,26 @@
 				{ urlRegex: URL_PATTERN }
 			)
 		);
+
+		// Find in the scrollback, for the terminal bar's search field.
+		const search = new SearchAddon();
+		term.loadAddon(search);
+		const decorations = {
+			matchBackground: '#e8b73066',
+			activeMatchBackground: '#ff9f0a',
+			matchOverviewRuler: '#e8b730',
+			activeMatchColorOverviewRuler: '#ff9f0a'
+		};
+		unregisterFinder?.();
+		unregisterFinder = registerFinder(ptyId, {
+			next: (q, caseSensitive) => search.findNext(q, { caseSensitive, decorations }),
+			previous: (q, caseSensitive) => search.findPrevious(q, { caseSensitive, decorations }),
+			clear: () => {
+				search.clearDecorations();
+				term.clearSelection();
+				term.focus();
+			}
+		});
 
 		const unicode11 = new Unicode11Addon();
 		term.loadAddon(unicode11);
@@ -818,6 +907,13 @@
 				inputBuffer = '';
 				clearGhostDecoration();
 				return true;
+			}
+
+			// Ctrl+Shift+F (Cmd+Shift+F): find in this terminal, in its bar.
+			if ((event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'f') {
+				event.preventDefault();
+				requestFind(ptyId);
+				return false;
 			}
 
 			// Ctrl+Shift+H (Cmd+Shift+H): search history, from this session.
@@ -1293,6 +1389,8 @@
 			disposeWebkitInputFix = undefined;
 			clearTimeout(rearmTimer);
 			resizeObserver?.disconnect();
+			unregisterFinder?.();
+			unregisterFinder = undefined;
 			term.dispose();
 			terminal = undefined;
 			fitAddon = undefined;

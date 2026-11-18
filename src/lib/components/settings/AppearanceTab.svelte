@@ -1,5 +1,7 @@
 <script lang="ts">
 	import Toggle from '#lib/components/shared/Toggle.svelte';
+	import Dropdown from '#lib/components/shared/Dropdown.svelte';
+	import { CURSOR_STYLES, CURSOR_WIDTHS, INACTIVE_CURSOR_STYLES, cursorStyle, cursorWidth, inactiveCursorStyle } from '#lib/terminal/cursor.js';
 	import TerminalThemeSettings from './TerminalThemeSettings.svelte';
 	import { themeState, applyTheme, loadInstalledThemes, DARK, LIGHT } from '#lib/state/theme.svelte.js';
 	import { onMount } from 'svelte';
@@ -20,6 +22,14 @@
 	import { cssFontFamily } from '#lib/utils/font.js';
 
 	const settings = getSettings();
+	let cursorStyleOptions = $derived(CURSOR_STYLES.map((s) => ({ label: t(`cursor.style_${s}`), value: s })));
+	let cursorInactiveOptions = $derived(
+		INACTIVE_CURSOR_STYLES.map((s) => ({
+			label: s === 'outline' || s === 'none' ? t(`cursor.inactive_${s}`) : t(`cursor.style_${s}`),
+			value: s
+		}))
+	);
+	let cursorWidthOptions = $derived(CURSOR_WIDTHS.map((w) => ({ label: t('cursor.width_px', { count: w }), value: String(w) })));
 	let currentFont = $derived(settings.fontFamily || 'monospace');
 	let currentSize = $derived(settings.fontSize || 14);
 	let uiZoom = $derived(settings.uiZoom || 1);
@@ -418,6 +428,20 @@
 		</div>
 	</div>
 
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('termbar.setting')}</span>
+			<span class="setting-description">{t('termbar.setting_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<select class="log-field" value={settings.terminalBar} aria-label={t('termbar.setting')} onchange={(e) => updateSetting('terminalBar', (e.currentTarget as HTMLSelectElement).value as 'always' | 'hover' | 'hidden')}>
+				<option value="always">{t('termbar.always')}</option>
+				<option value="hover">{t('termbar.hover')}</option>
+				<option value="hidden">{t('termbar.hidden')}</option>
+			</select>
+		</div>
+	</div>
+
 	<div class="setting-row font-row">
 		<div class="setting-info">
 			<span class="setting-label">{t('settings.terminal_font')}</span>
@@ -511,6 +535,65 @@
 	<div class="font-preview-box">
 		<span class="preview-label">{t('settings.preview')} — {currentFont} @ {currentSize}px</span>
 		<pre class="preview-pre" style:font-family={cssFontFamily(currentFont)} style:font-size="{currentSize}px">{PREVIEW_TEXT}</pre>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('cursor.style')}</span>
+			<span class="setting-description">{t('cursor.style_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Dropdown
+				options={cursorStyleOptions}
+				selected={settings.terminalCursorStyle}
+				onchange={(v) => updateSetting('terminalCursorStyle', cursorStyle(v))}
+			/>
+		</div>
+	</div>
+
+	{#if settings.terminalCursorStyle === 'bar'}
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('cursor.width')}</span>
+				<span class="setting-description">{t('cursor.width_desc')}</span>
+			</div>
+			<div class="setting-control">
+				<Dropdown
+					options={cursorWidthOptions}
+					selected={String(settings.terminalCursorWidth)}
+					onchange={(v) => updateSetting('terminalCursorWidth', cursorWidth(Number(v)))}
+				/>
+			</div>
+		</div>
+	{/if}
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('cursor.blink')}</span>
+			<span class="setting-description">{t('cursor.blink_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.terminalCursorBlink}
+				label={t('cursor.blink')}
+				onchange={(v) => updateSetting('terminalCursorBlink', v)}
+			/>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('cursor.inactive')}</span>
+			<span class="setting-description">{t('cursor.inactive_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Dropdown
+				options={cursorInactiveOptions}
+				selected={settings.terminalCursorInactive}
+				onchange={(v) => updateSetting('terminalCursorInactive', inactiveCursorStyle(v))}
+			/>
+		</div>
 	</div>
 
 	<div class="setting-row">
@@ -785,7 +868,7 @@
 		min-width: 0;
 		padding: 7px 10px;
 		border-radius: var(--radius-btn);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		background: var(--color-bg-primary);
 		color: var(--color-text-primary);
 		font-family: inherit;

@@ -61,6 +61,10 @@ pub struct SessionPatch {
     pub terminal_theme: Option<Change<String>>,
     /// `off`, `commands` or `output`; `Clear`: the default from Settings.
     pub history: Option<Change<String>>,
+    /// `block`, `underline` or `bar`; `Clear`: the default from Settings.
+    pub cursor_style: Option<Change<String>>,
+    /// The cursor blinks or not; `Clear`: the default from Settings.
+    pub cursor_blink: Option<Change<bool>>,
 }
 
 impl SessionPatch {
@@ -68,6 +72,11 @@ impl SessionPatch {
         if let Some(Change::Set(h)) = &self.history {
             if !matches!(h.as_str(), "off" | "commands" | "output") {
                 return Err(format!("Unknown history mode: {h}"));
+            }
+        }
+        if let Some(Change::Set(c)) = &self.cursor_style {
+            if !matches!(c.as_str(), "block" | "underline" | "bar") {
+                return Err(format!("Unknown cursor shape: {c}"));
             }
         }
         if self.port == Some(0) {
@@ -189,6 +198,26 @@ fn apply_patch(s: &mut SessionConfig, patch: &SessionPatch, uses_credential: imp
             };
         } else {
             skipped.push("history");
+        }
+    }
+    if let Some(c) = &patch.cursor_style {
+        if terminal {
+            s.cursor_style = match c {
+                Change::Set(c) => Some(c.clone()),
+                Change::Clear => None,
+            };
+        } else {
+            skipped.push("cursor_style");
+        }
+    }
+    if let Some(b) = &patch.cursor_blink {
+        if terminal {
+            s.cursor_blink = match b {
+                Change::Set(b) => Some(*b),
+                Change::Clear => None,
+            };
+        } else {
+            skipped.push("cursor_blink");
         }
     }
     s.tidy_documentation();
@@ -487,6 +516,21 @@ mod tests {
         let c = patch(serde_json::json!({ "credential": { "set": "c1" }, "username": "x" }));
         assert_eq!(apply_patch(&mut vnc, &c, NO_CREDENTIAL), vec!["credential"]);
         assert_eq!((vnc.credential_id, vnc.username.as_str()), (None, "x"));
+    }
+
+    #[test]
+    fn a_cursor_is_set_and_cleared_on_terminals_only() {
+        let p = patch(serde_json::json!({ "cursor_style": { "set": "block" }, "cursor_blink": { "set": false } }));
+        assert!(p.check().is_ok());
+        let mut s = session(serde_json::json!({}));
+        assert!(apply_patch(&mut s, &p, NO_CREDENTIAL).is_empty());
+        assert_eq!((s.cursor_style.as_deref(), s.cursor_blink), (Some("block"), Some(false)));
+        let clear = patch(serde_json::json!({ "cursor_style": "clear", "cursor_blink": "clear" }));
+        apply_patch(&mut s, &clear, NO_CREDENTIAL);
+        assert!(s.cursor_style.is_none() && s.cursor_blink.is_none());
+        let mut rdp = session(serde_json::json!({ "kind": "rdp" }));
+        assert_eq!(apply_patch(&mut rdp, &p, NO_CREDENTIAL), vec!["cursor_style", "cursor_blink"]);
+        assert!(patch(serde_json::json!({ "cursor_style": { "set": "beam" } })).check().is_err());
     }
 
     #[test]

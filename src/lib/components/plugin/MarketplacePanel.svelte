@@ -341,7 +341,7 @@
 		font-family: inherit;
 		color: var(--color-text-primary);
 		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 4px;
 	}
 
@@ -498,14 +498,14 @@
 		font-size: 0.6875rem;
 		font-weight: 500;
 		color: #fff;
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		border: none;
 		border-radius: 4px;
 		cursor: pointer;
 	}
 
 	.install-btn:hover:not(:disabled) {
-		background-color: var(--color-accent-hover);
+		background-color: color-mix(in srgb, var(--color-accent-fill) 88%, black);
 	}
 
 	.install-btn:disabled {
@@ -527,7 +527,7 @@
 		align-items: center;
 		gap: 6px;
 		padding: 0 8px;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 6px;
 		background: var(--color-bg-secondary);
 	}

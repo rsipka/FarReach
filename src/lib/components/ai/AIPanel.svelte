@@ -374,7 +374,7 @@
 	}
 
 	.message-user {
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		color: #fff;
 	}
 
@@ -491,7 +491,7 @@
 		font-family: inherit;
 		color: var(--color-text-primary);
 		background-color: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 16px;
 		outline: none;
 		resize: none;
@@ -516,7 +516,7 @@
 		height: 34px;
 		border: none;
 		border-radius: 50%;
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		color: #fff;
 		cursor: pointer;
 		flex-shrink: 0;

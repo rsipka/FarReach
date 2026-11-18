@@ -511,6 +511,9 @@ pub fn run() {
             ssh_list_connections,
             ssh_detect_os,
             ssh_tmux_kill,
+            ssh_tmux_chosen,
+            tmux_start_script,
+            ssh_tmux_list,
             inspect_key_file,
             // SSH Config commands
             sshconfig_scan,
@@ -963,6 +966,9 @@ pub fn run() {
             ssh_list_connections,
             ssh_detect_os,
             ssh_tmux_kill,
+            ssh_tmux_chosen,
+            tmux_start_script,
+            ssh_tmux_list,
             inspect_key_file,
             // SSH Config commands
             sshconfig_scan,

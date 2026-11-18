@@ -270,7 +270,7 @@
 
 	.field-input {
 		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		color: var(--color-text-primary);
 		border-radius: var(--radius-btn);
 		padding: 8px 10px;
@@ -327,7 +327,7 @@
 	}
 
 	.toggle-input:checked + .toggle-track {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 	}
 
 	.toggle-thumb {

@@ -520,7 +520,7 @@
 	.field-input {
 		padding: 6px 8px;
 		border-radius: var(--radius-btn);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		background: var(--color-bg-elevated);
 		color: var(--color-text-primary);
 		font-size: 0.8125rem;

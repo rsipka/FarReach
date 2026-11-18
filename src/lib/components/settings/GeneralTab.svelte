@@ -272,6 +272,21 @@
 
 		<div class="setting-row">
 			<div class="setting-info">
+				<span class="setting-label">{t('settings.term_osc52')}</span>
+				<span class="setting-description">{t('settings.term_osc52_desc')}</span>
+			</div>
+			<div class="setting-control">
+				<Toggle
+					hideLabel
+					checked={settings.terminalOsc52}
+					label={t('settings.term_osc52')}
+					onchange={(v) => updateSetting('terminalOsc52', v)}
+				/>
+			</div>
+		</div>
+
+		<div class="setting-row">
+			<div class="setting-info">
 				<span class="setting-label">{t('settings.term_middle_click')}</span>
 				<span class="setting-description">{t('settings.term_middle_click_desc')}</span>
 			</div>
@@ -449,7 +464,7 @@
 	.threshold-input {
 		padding: 9px 12px;
 		border-radius: var(--radius-btn);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		background: var(--color-bg-elevated);
 		color: var(--color-text-primary);
 		font-family: inherit;

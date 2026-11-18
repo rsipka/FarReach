@@ -184,7 +184,7 @@
 		font-size: 0.8125rem;
 		color: var(--color-text-primary);
 		background-color: var(--color-bg-elevated);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		outline: none;
 		transition: border-color var(--duration-default) var(--ease-default);
@@ -246,7 +246,7 @@
 	}
 
 	.toggle-input:checked + .toggle-track {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 	}
 
 	.toggle-thumb {

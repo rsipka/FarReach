@@ -3,6 +3,7 @@ import type { SecretRef } from './pwmanager';
 import type { TelnetOptions } from './telnet';
 import type { SerialOptions } from './serial';
 import type { HistoryMode } from './history';
+import type { CursorStyle } from '#lib/terminal/cursor.js';
 import { t } from '#lib/state/i18n.svelte.js';
 
 export interface AuthMethod {
@@ -81,6 +82,11 @@ export interface SessionConfig {
   /** The terminal colours its tabs use, by terminal theme id; unset: the
    *  default from Settings (see #lib/state/terminal-themes). */
   terminal_theme?: string | null;
+  /** The terminal cursor's shape in its tabs; unset: the default from
+   *  Settings (see #lib/terminal/cursor). */
+  cursor_style?: CursorStyle | null;
+  /** Whether that cursor blinks; unset: the default from Settings. */
+  cursor_blink?: boolean | null;
   /** Server monitoring for its tabs, on or off; unset: the default from
    *  Settings. */
   monitoring?: boolean | null;
@@ -94,11 +100,14 @@ export interface SessionConfig {
 
 /** A session's own tmux choice. */
 export interface TmuxSetting {
-  /** `attach`: attach to the named tmux session, or create it; `inherit`:
-   *  as the folder says (kept to hold a name). */
-  mode: 'off' | 'attach' | 'inherit';
+  /** `attach`: attach to the named tmux session, or create it; `ask`: pick
+   *  from the server's tmux sessions at connect; `inherit`: as the folder
+   *  says (kept to hold a name). */
+  mode: 'off' | 'attach' | 'ask' | 'inherit';
   /** The tmux session's name; unset: made from the session's name. */
   name?: string | null;
+  /** tmux's mouse mode for this session: the wheel scrolls tmux's history. */
+  mouse?: boolean;
 }
 
 /** One named value of a session's documentation. */
@@ -207,6 +216,8 @@ export async function sessionCreate(params: {
   notes?: string | null;
   customFields?: CustomField[] | null;
   terminalTheme?: string | null;
+  cursorStyle?: CursorStyle | null;
+  cursorBlink?: boolean | null;
   monitoring?: boolean | null;
   history?: HistoryMode | null;
   tmux?: TmuxSetting | null;
@@ -238,6 +249,8 @@ export async function sessionCreate(params: {
     notes: params.notes?.trim() ? params.notes : null,
     customFields: params.customFields?.length ? params.customFields : null,
     terminalTheme: params.terminalTheme || null,
+    cursorStyle: params.cursorStyle || null,
+    cursorBlink: params.cursorBlink ?? null,
     monitoring: params.monitoring ?? null,
     history: params.history || null,
     tmux: params.tmux ?? null,
@@ -419,6 +432,8 @@ export interface SessionPatch {
   notes?: { op: 'replace' | 'append'; text: string } | { op: 'clear' };
   terminal_theme?: BulkChange<string>;
   history?: BulkChange<HistoryMode>;
+  cursor_style?: BulkChange<CursorStyle>;
+  cursor_blink?: BulkChange<boolean>;
 }
 
 export interface BulkOutcome {

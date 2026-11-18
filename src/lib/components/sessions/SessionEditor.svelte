@@ -13,7 +13,7 @@
 	import Disclosure from '#lib/components/shared/Disclosure.svelte';
 	import TerminalThemeList from '#lib/components/terminal/TerminalThemeList.svelte';
 	import { findTerminalTheme, terminalPalette } from '#lib/state/terminal-themes.svelte.js';
-	import { setSessionTerminalTheme, setSessionMonitoring } from '#lib/state/tabs.svelte.js';
+	import { setSessionTerminalTheme, setSessionMonitoring, setSessionCursor } from '#lib/state/tabs.svelte.js';
 	import { getSettings } from '#lib/state/settings.svelte.js';
 	import SecretRefField from '#lib/components/pwmanager/SecretRefField.svelte';
 	import type { EntrySummary, SecretRef } from '#lib/ipc/pwmanager.js';
@@ -24,6 +24,7 @@
 	import { DEFAULT_TELNET_OPTIONS, type TelnetOptions } from '#lib/ipc/telnet.js';
 	import { DEFAULT_SERIAL_OPTIONS, SERIAL_BAUD_RATES, serialListPorts, type SerialOptions, type SerialPortInfo } from '#lib/ipc/serial.js';
 	import type { HistoryMode } from '#lib/ipc/history.js';
+	import type { CursorStyle } from '#lib/terminal/cursor.js';
 
 	interface Props {
 		open: boolean;
@@ -243,15 +244,21 @@
 	});
 	/** The terminal theme its tabs use; empty: the default from Settings. */
 	let terminalTheme = $state('');
+	/** The cursor in its tabs: '' the default from Settings. */
+	let cursorChoice = $state<'' | CursorStyle>('');
+	let blinkChoice = $state<'' | 'on' | 'off'>('');
 	/** Server monitoring for its tabs: '' the default from Settings. */
 	let monitoringChoice = $state<'' | 'on' | 'off'>('');
 	/** What its tabs record into the session history; empty: the default from Settings. */
 	let historyChoice = $state<'' | HistoryMode>('');
 	/** tmux on the server: '' as the folder says. See #lib/terminal/tmux. */
-	let tmuxChoice = $state<'' | 'attach' | 'off'>('');
+	let tmuxChoice = $state<'' | 'attach' | 'ask' | 'off'>('');
+	let tmuxMouse = $state(false);
 	let tmuxName = $state('');
 	let tmuxFolderOn = $derived(folderTmux(folderIdStr || null, folders) === true);
-	let tmuxOn = $derived(tmuxChoice === 'attach' || (tmuxChoice === '' && tmuxFolderOn));
+	let tmuxOn = $derived(tmuxChoice === 'attach' || tmuxChoice === 'ask' || (tmuxChoice === '' && tmuxFolderOn));
+	/** tmux runs on an SSH server, or inside a WSL distribution. */
+	let tmuxKind = $derived(kind === 'ssh' || kind === 'wsl');
 	let colorsOpen = $state(false);
 	let colorsSummary = $derived(
 		findTerminalTheme(terminalTheme)?.name ?? (terminalTheme ? t('termtheme.missing') : t('termtheme.session_default'))
@@ -326,8 +333,11 @@
 			docsOpen = !!notes.trim() || customFields.length > 0;
 			terminalTheme = editSession.terminal_theme ?? '';
 			monitoringChoice = editSession.monitoring == null ? '' : editSession.monitoring ? 'on' : 'off';
+			cursorChoice = editSession.cursor_style ?? '';
+			blinkChoice = editSession.cursor_blink == null ? '' : editSession.cursor_blink ? 'on' : 'off';
 			historyChoice = editSession.history ?? '';
-			tmuxChoice = editSession.tmux?.mode === 'attach' || editSession.tmux?.mode === 'off' ? editSession.tmux.mode : '';
+			tmuxChoice = editSession.tmux?.mode === 'attach' || editSession.tmux?.mode === 'ask' || editSession.tmux?.mode === 'off' ? editSession.tmux.mode : '';
+			tmuxMouse = !!editSession.tmux?.mouse;
 			tmuxName = editSession.tmux?.name ?? '';
 			colorsOpen = false;
 			if (editSession.jump_chain && editSession.jump_chain.length > 0) {
@@ -391,8 +401,11 @@
 			docsOpen = false;
 			terminalTheme = '';
 			monitoringChoice = '';
+			cursorChoice = '';
+			blinkChoice = '';
 			historyChoice = '';
 			tmuxChoice = '';
+			tmuxMouse = false;
 			tmuxName = '';
 			colorsOpen = false;
 			jumpEnabled = false;
@@ -460,20 +473,27 @@
 		const notesToSave = notes.trim() ? notes : null;
 		// Remote desktops paint their own screen: no terminal colours.
 		const themeToSave = kind === 'rdp' || kind === 'vnc' ? null : terminalTheme || null;
+		const cursorToSave = kind === 'rdp' || kind === 'vnc' ? null : cursorChoice || null;
+		const blinkToSave = kind === 'rdp' || kind === 'vnc' || !blinkChoice ? null : blinkChoice === 'on';
 		// Only SSH and WSL sessions have a server to monitor.
 		const monitoringToSave = (kind === 'ssh' || kind === 'wsl') && monitoringChoice ? monitoringChoice === 'on' : null;
 		const historyToSave = kind === 'rdp' || kind === 'vnc' ? null : historyChoice || null;
 		// tmux runs on an SSH server only. A name is kept only beside a choice
 		// or a folder that turns it on.
 		const tmuxNameToSave = tmuxName.trim();
-		if (kind === 'ssh' && tmuxOn && tmuxNameToSave && !validTmuxName(tmuxNameToSave)) {
+		if (tmuxKind && tmuxOn && tmuxNameToSave && !validTmuxName(tmuxNameToSave)) {
 			error = t('tmux.name_invalid');
 			saving = false;
 			return;
 		}
 		const tmuxToSave: TmuxSetting | null =
-			kind === 'ssh' && (tmuxChoice || tmuxNameToSave)
-				? { mode: tmuxChoice || 'inherit', name: tmuxNameToSave || null }
+			tmuxKind && (tmuxChoice || tmuxNameToSave || tmuxMouse)
+				? {
+						// WSL has no picker: asking there means attach.
+						mode: tmuxChoice === 'ask' && kind !== 'ssh' ? 'attach' : tmuxChoice || 'inherit',
+						name: tmuxNameToSave || null,
+						...(tmuxMouse ? { mouse: true } : {})
+					}
 				: null;
 		const fieldsToSave: CustomField[] = customFields
 			.filter((f) => f.name.trim() || f.value.trim())
@@ -559,6 +579,8 @@
 					notes: notesToSave,
 					custom_fields: fieldsToSave.length ? fieldsToSave : null,
 					terminal_theme: themeToSave,
+					cursor_style: cursorToSave,
+					cursor_blink: blinkToSave,
 					monitoring: monitoringToSave,
 					history: historyToSave,
 					tmux: tmuxToSave,
@@ -566,6 +588,7 @@
 				// Its open tabs take the new colours (and monitoring choice) at once.
 				setSessionTerminalTheme(editSession.id, themeToSave);
 				setSessionMonitoring(editSession.id, monitoringToSave);
+				setSessionCursor(editSession.id, cursorToSave, blinkToSave);
 			} else {
 				await sessionCreate({
 					name: name.trim(),
@@ -594,6 +617,8 @@
 					notes: notesToSave,
 					customFields: fieldsToSave,
 					terminalTheme: themeToSave,
+					cursorStyle: cursorToSave,
+					cursorBlink: blinkToSave,
 					monitoring: monitoringToSave,
 					history: historyToSave,
 					tmux: tmuxToSave
@@ -1224,6 +1249,22 @@
 				<p class="colors-hint">{t('termtheme.session_hint')}</p>
 			</Disclosure>
 			<div class="folder-section">
+				<span class="folder-label">{t('cursor.session_label')}</span>
+				<div class="cursor-choices">
+					<select class="folder-select" bind:value={cursorChoice} disabled={saving} aria-label={t('cursor.session_label')}>
+						<option value="">{t('cursor.session_default', { style: t(`cursor.style_${getSettings().terminalCursorStyle}`) })}</option>
+						<option value="block">{t('cursor.style_block')}</option>
+						<option value="underline">{t('cursor.style_underline')}</option>
+						<option value="bar">{t('cursor.style_bar')}</option>
+					</select>
+					<select class="folder-select" bind:value={blinkChoice} disabled={saving} aria-label={t('cursor.blink')}>
+						<option value="">{getSettings().terminalCursorBlink ? t('cursor.blink_default_on') : t('cursor.blink_default_off')}</option>
+						<option value="on">{t('cursor.blink_on')}</option>
+						<option value="off">{t('cursor.blink_off')}</option>
+					</select>
+				</div>
+			</div>
+			<div class="folder-section">
 				<span class="folder-label">{t('history.session_label')}</span>
 				<select class="folder-select" bind:value={historyChoice} disabled={saving}>
 					<option value="">{t('history.session_default')}</option>
@@ -1245,12 +1286,13 @@
 			</div>
 		{/if}
 
-		{#if kind === 'ssh'}
+		{#if tmuxKind}
 			<div class="folder-section">
-				<span class="folder-label">{t('tmux.session_label')}</span>
+				<span class="folder-label">{kind === 'wsl' ? t('tmux.session_label_wsl') : t('tmux.session_label')}</span>
 				<select class="folder-select" bind:value={tmuxChoice} disabled={saving}>
 					<option value="">{tmuxFolderOn ? t('tmux.session_folder_on') : t('tmux.session_folder_off')}</option>
 					<option value="attach">{t('tmux.mode_attach')}</option>
+					{#if kind === 'ssh'}<option value="ask">{t('tmux.mode_ask')}</option>{/if}
 					<option value="off">{t('tmux.mode_off')}</option>
 				</select>
 			</div>
@@ -1258,7 +1300,14 @@
 				<div class="shell-field">
 					<label class="via-label" for="session-tmux-name">{t('tmux.name_label')}</label>
 					<input id="session-tmux-name" class="field-input" bind:value={tmuxName} placeholder={defaultTmuxName(name.trim())} spellcheck="false" autocomplete="off" disabled={saving} />
-					<p class="shell-hint">{t('tmux.session_hint')}</p>
+					<p class="shell-hint">{tmuxChoice === 'ask' ? t('tmux.ask_hint') : t('tmux.session_hint')}</p>
+				</div>
+				<div class="shell-field">
+					<label class="jump-toggle">
+						<input type="checkbox" bind:checked={tmuxMouse} disabled={saving} />
+						<span class="jump-toggle-text">{t('tmux.mouse')}</span>
+					</label>
+					<p class="shell-hint">{t('tmux.mouse_hint')}</p>
 				</div>
 			{/if}
 		{/if}
@@ -1412,12 +1461,22 @@
 	.folder-select {
 		padding: 6px 10px;
 		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		color: var(--color-text-primary);
 		font-family: var(--font-sans);
 		font-size: 0.75rem;
 		outline: none;
+	}
+
+	.cursor-choices {
+		display: flex;
+		gap: 6px;
+	}
+
+	.cursor-choices .folder-select {
+		flex: 1;
+		min-width: 0;
 	}
 
 	.folder-select:focus {
@@ -1460,7 +1519,7 @@
 	.field-input {
 		padding: 6px 10px;
 		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		color: var(--color-text-primary);
 		font-family: var(--font-sans);
@@ -1664,7 +1723,7 @@
 	}
 
 	.proxy-type-btn.active {
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		color: #fff;
 	}
 
@@ -1694,7 +1753,7 @@
 		font-size: 0.875rem;
 		color: var(--color-text-primary);
 		background-color: var(--color-bg-elevated);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		outline: none;
 		box-sizing: border-box;

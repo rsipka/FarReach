@@ -149,7 +149,7 @@
 		width: min(360px, 40vw);
 		height: 26px;
 		padding: 0 var(--space-2) 0 var(--space-3);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		background: var(--color-bg-primary);
 		color: var(--color-text-tertiary);

@@ -77,7 +77,7 @@ pub fn redact(log: &str, home: Option<&str>, private: &[Private]) -> String {
 }
 
 /// IPv6 addresses out of `text`. Times (12:34:56) and Rust paths
-/// (reach_lib::ssh) look alike: an address has "::" or at least four colons,
+/// (reacher_cm_lib::ssh) look alike: an address has "::" or at least four colons,
 /// and is not glued to a letter, digit or underscore on either side.
 fn redact_ipv6(text: &str) -> String {
     let glued = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');

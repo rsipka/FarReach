@@ -4,6 +4,17 @@ import { invoke } from '@tauri-apps/api/core';
 import * as settingsIpc from '#lib/ipc/settings.js';
 import type { AppSettings } from '#lib/ipc/settings.js';
 import type { SessionLogConfig } from '#lib/ipc/ssh.js';
+import {
+	cursorStyle,
+	inactiveCursorStyle,
+	cursorWidth,
+	DEFAULT_CURSOR_STYLE,
+	DEFAULT_CURSOR_BLINK,
+	DEFAULT_INACTIVE_CURSOR,
+	DEFAULT_CURSOR_WIDTH,
+	type CursorStyle,
+	type InactiveCursorStyle
+} from '#lib/terminal/cursor.js';
 import { NEW_FEATURE_IDS } from '#lib/data/whats-new.js';
 
 export interface Settings {
@@ -13,12 +24,23 @@ export interface Settings {
 	/** The terminal colours, by terminal theme id (#lib/state/terminal-themes);
 	 *  empty: the app theme's own. A session can name its own instead. */
 	terminalThemeId: string;
+	/** The terminal cursor's shape, unless the session chooses its own
+	 *  (see #lib/terminal/cursor). */
+	terminalCursorStyle: CursorStyle;
+	/** The cursor blinks, unless the session chooses otherwise. */
+	terminalCursorBlink: boolean;
+	/** The cursor in a terminal without the keyboard. */
+	terminalCursorInactive: InactiveCursorStyle;
+	/** A bar cursor's thickness, in CSS pixels. */
+	terminalCursorWidth: number;
 	fontSize: number;
 	/** The whole interface's size on a desktop, as a browser's zoom: 1 is 100%.
 	 *  See #lib/state/ui-zoom. */
 	uiZoom: number;
 	/** Tighter rows (a session on one line): space over air. Text stays its size. */
 	compactLayout: boolean;
+	/** The bar over each terminal: always, when the pointer is over it, or never. */
+	terminalBar: 'always' | 'hover' | 'hidden';
 	/** Sessions in the list open on a double click; a single click only
 	 *  focuses the row. Off: one click connects, as before. */
 	doubleClickToOpen: boolean;
@@ -96,6 +118,9 @@ export interface Settings {
 	terminalRightClick: RightClickMode;
 	/** Selecting text in the terminal copies it, as in PuTTY. */
 	terminalCopyOnSelect: boolean;
+	/** A program on the server may put text on the clipboard (OSC 52:
+	 *  tmux copy mode, vim). Never read. See #lib/terminal/osc52. */
+	terminalOsc52: boolean;
 	/** A middle click in the terminal pastes. */
 	terminalMiddleClickPaste: boolean;
 	/** The characters that end a word on a double click, besides the space. */
@@ -162,9 +187,14 @@ const defaults: Settings = {
 	theme: 'dark',
 	themeId: undefined,
 	terminalThemeId: '',
+	terminalCursorStyle: DEFAULT_CURSOR_STYLE,
+	terminalCursorBlink: DEFAULT_CURSOR_BLINK,
+	terminalCursorInactive: DEFAULT_INACTIVE_CURSOR,
+	terminalCursorWidth: DEFAULT_CURSOR_WIDTH,
 	fontSize: 14,
 	uiZoom: 1,
 	compactLayout: false,
+	terminalBar: 'always',
 	doubleClickToOpen: false,
 	closeTabOnExit: false,
 	serverMonitoring: true,
@@ -195,6 +225,7 @@ const defaults: Settings = {
 	multilinePasteThreshold: DEFAULT_PASTE_THRESHOLD,
 	terminalRightClick: DEFAULT_RIGHT_CLICK,
 	terminalCopyOnSelect: false,
+	terminalOsc52: false,
 	terminalMiddleClickPaste: true,
 	terminalWordSeparators: DEFAULT_WORD_SEPARATORS,
 	setupComplete: false,
@@ -271,9 +302,14 @@ export function loadSettings(): void {
 			if (parsed.pendingTursoApiToken) queueMicrotask(saveSettings);
 			settings.theme = parsed.theme ?? defaults.theme;
 			settings.terminalThemeId = parsed.terminalThemeId ?? defaults.terminalThemeId;
+			settings.terminalCursorStyle = cursorStyle(parsed.terminalCursorStyle);
+			settings.terminalCursorBlink = parsed.terminalCursorBlink ?? defaults.terminalCursorBlink;
+			settings.terminalCursorInactive = inactiveCursorStyle(parsed.terminalCursorInactive);
+			settings.terminalCursorWidth = cursorWidth(parsed.terminalCursorWidth);
 			settings.fontSize = parsed.fontSize ?? defaults.fontSize;
 			settings.uiZoom = parsed.uiZoom ?? defaults.uiZoom;
 			settings.compactLayout = parsed.compactLayout ?? defaults.compactLayout;
+			settings.terminalBar = parsed.terminalBar === 'hover' || parsed.terminalBar === 'hidden' ? parsed.terminalBar : defaults.terminalBar;
 			settings.doubleClickToOpen = parsed.doubleClickToOpen ?? defaults.doubleClickToOpen;
 			settings.closeTabOnExit = parsed.closeTabOnExit ?? defaults.closeTabOnExit;
 			settings.serverMonitoring = parsed.serverMonitoring ?? defaults.serverMonitoring;
@@ -306,6 +342,7 @@ export function loadSettings(): void {
 			settings.multilinePasteThreshold = parsed.multilinePasteThreshold ?? defaults.multilinePasteThreshold;
 			settings.terminalRightClick = rightClickMode(parsed.terminalRightClick);
 			settings.terminalCopyOnSelect = parsed.terminalCopyOnSelect ?? defaults.terminalCopyOnSelect;
+			settings.terminalOsc52 = parsed.terminalOsc52 ?? defaults.terminalOsc52;
 			settings.terminalMiddleClickPaste = parsed.terminalMiddleClickPaste ?? defaults.terminalMiddleClickPaste;
 			settings.terminalWordSeparators = parsed.terminalWordSeparators ?? defaults.terminalWordSeparators;
 			settings.pendingTursoOrg = parsed.pendingTursoOrg ?? defaults.pendingTursoOrg;

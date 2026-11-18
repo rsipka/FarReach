@@ -243,8 +243,10 @@
 
 	{#if !monitorBarShown()}
 		<StatusBar />
-		<HistoryPanel />
 	{/if}
+	<!-- Outside the bar's condition: an SSH or WSL tab swaps the status bar
+	     for the monitor bar, and the panel must open over those too. -->
+	<HistoryPanel />
 	<Toast />
 	<UpdateBanner />
 	<UpdateDialog open={updater.startupBlocking} />

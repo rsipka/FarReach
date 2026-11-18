@@ -431,7 +431,7 @@
 
 	select {
 		background: var(--color-bg-elevated);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		color: var(--color-text-primary);
 		border-radius: var(--radius-btn);
 		padding: 4px 8px;
@@ -440,7 +440,7 @@
 	}
 
 	.save-btn {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		color: white;
 		border: none;
 		border-radius: var(--radius-btn);
