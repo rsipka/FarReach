@@ -589,6 +589,10 @@
 
 	function onBarKey(key: BarKey): void {
 		if (phase !== 'connected') return;
+		if (typeof key === 'object' && 'fn' in key) {
+			sendInput(withModifiers(async () => tapKey(`F${key.fn}`)));
+			return;
+		}
 		if (typeof key === 'object') {
 			sendText(key.char);
 			return;

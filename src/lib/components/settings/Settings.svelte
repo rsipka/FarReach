@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tick } from 'svelte';
+	import { MediaQuery } from 'svelte/reactivity';
 	import Modal from '#lib/components/shared/Modal.svelte';
 	import GeneralTab from './GeneralTab.svelte';
 	import AppearanceTab from './AppearanceTab.svelte';
@@ -11,108 +13,328 @@
 	import PluginsTab from './PluginsTab.svelte';
 	import SharingTab from './SharingTab.svelte';
 	import PasswordManagersTab from './PasswordManagersTab.svelte';
+	import PhoneKeysSetting from './PhoneKeysSetting.svelte';
+	import SettingsCard from './SettingsCard.svelte';
+	import Advanced from './Advanced.svelte';
 	import NewIndicator from '#lib/components/shared/NewIndicator.svelte';
 	import { settingsTabHasNew, markSettingsTabSeen, newSince } from '#lib/state/whats-new.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
+	import { isMobile } from '#lib/platform.js';
+	import { __APP_VERSION__ } from '#lib/version.js';
+	import { GROUPS, PAGES, isPageId, type PageId, type SettingsPage } from './settings-pages.js';
+	import { SETTINGS_INDEX, searchSettings, type IndexedRow } from './settings-index.js';
 
 	interface Props {
 		open: boolean;
 		onclose: () => void;
+		/** A page id or a row's label key to show on opening (openSettings). */
+		target?: string;
 	}
 
-	let { open, onclose }: Props = $props();
+	let { open, onclose, target }: Props = $props();
 
-	type TabId = 'general' | 'appearance' | 'security' | 'sync' | 'backup' | 'ai' | 'mcp' | 'devops' | 'plugins' | 'sharing' | 'pwmanagers';
+	/** A phone, upright or on its side: one screen at a time, iOS style. */
+	const phoneLayout = new MediaQuery('(max-width: 640px), (max-height: 480px)');
+	let phone = $derived(phoneLayout.current);
+	const mobile = isMobile();
 
-	let tabs = $derived([
-		{ id: 'general' as TabId, label: t('settings.general'), icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z' },
-		{ id: 'appearance' as TabId, label: t('settings.appearance'), icon: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z' },
-		{ id: 'security' as TabId, label: t('settings.security'), icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' },
-		{ id: 'pwmanagers' as TabId, label: t('settings.password_managers'), icon: 'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4' },
-		{ id: 'ai' as TabId, label: t('settings.ai'), icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z' },
-		{ id: 'mcp' as TabId, label: t('settings.mcp'), icon: 'M9 3v2m6-2v2M4 7h16M6 7v11a2 2 0 002 2h8a2 2 0 002-2V7M9.5 12l2 2-2 2M13.5 16h2' },
-		{ id: 'devops' as TabId, label: t('settings.devops'), icon: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01' },
-		{ id: 'sync' as TabId, label: t('settings.sync'), icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' },
-		{ id: 'backup' as TabId, label: t('settings.backup'), icon: 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4' },
-		{ id: 'plugins' as TabId, label: t('settings.plugins'), icon: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z' },
-		{ id: 'sharing' as TabId, label: t('settings.sharing'), icon: 'M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4' },
-	]);
+	let pageId = $state<PageId>('general');
+	/** On a phone, the menu shows until a page is picked. */
+	let showingMenu = $state(true);
+	let query = $state('');
+	let searchEl = $state<HTMLInputElement | null>(null);
+	let contentEl = $state<HTMLElement | null>(null);
 
-	let activeTabId = $state<TabId>('general');
+	let page = $derived(PAGES.find((p) => p.id === pageId) ?? PAGES[0]);
+	let results = $derived(searchSettings(query, t, (id) => pageName(id), mobile));
+	let searching = $derived(query.trim().length > 0);
 
-	/**
-	 * Opening a tab is what clears its badge — there is nothing to dismiss.
-	 * Also runs for whichever tab is open when Settings mounts, since that tab
-	 * has been shown just as much as one arrived at by clicking.
-	 */
+	function pageName(id: PageId): string {
+		return t(PAGES.find((p) => p.id === id)?.label ?? id);
+	}
+
+	function pagesIn(group: string | null): SettingsPage[] {
+		return PAGES.filter((p) => p.group === group);
+	}
+
+	// Opening: a target goes straight to its page (and row); otherwise a
+	// desktop puts the cursor in search, so Ctrl+, then typing finds a
+	// setting, and a phone starts at the menu.
 	$effect(() => {
-		if (open) markSettingsTabSeen(activeTabId);
+		if (!open) return;
+		const wanted = target;
+		query = '';
+		if (wanted) {
+			void goTo(wanted);
+		} else if (phone) {
+			showingMenu = true;
+		} else {
+			void tick().then(() => searchEl?.focus());
+		}
 	});
+
+	// Opening a page is what clears its badge.
+	$effect(() => {
+		if (open && !(phone && showingMenu)) markSettingsTabSeen(pageId);
+	});
+
+	function showPage(id: PageId): void {
+		pageId = id;
+		showingMenu = false;
+		query = '';
+		contentEl?.scrollTo({ top: 0 });
+	}
+
+	/** Open a page, or the page of a row and point at the row. */
+	async function goTo(where: string): Promise<void> {
+		if (isPageId(where)) {
+			showPage(where);
+			return;
+		}
+		const row = SETTINGS_INDEX.find((r) => r.label === where);
+		if (!row) return;
+		showPage(row.page);
+		await tick();
+		highlight(row);
+	}
+
+	/** Find a row by the text of its label, open its Advanced section if it
+	 *  is shut, bring it into view and flash it. */
+	async function highlight(row: IndexedRow): Promise<void> {
+		const text = t(row.label).trim();
+		let el: HTMLElement | null = null;
+		for (let tries = 0; tries < 10 && !el; tries++) {
+			const labels = contentEl?.querySelectorAll<HTMLElement>('.setting-label, .section-title, .section-label, .card-title') ?? [];
+			el = Array.from(labels).find((l) => l.textContent?.trim() === text) ?? null;
+			if (!el) await new Promise((r) => setTimeout(r, 50));
+		}
+		if (!el) return;
+		const details = el.closest('details');
+		if (details && !details.open) {
+			details.open = true;
+			await tick();
+		}
+		const target = el.closest<HTMLElement>('.setting-row, .setting-section, .settings-card') ?? el;
+		target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+		target.classList.remove('settings-flash');
+		void target.offsetWidth;
+		target.classList.add('settings-flash');
+		setTimeout(() => target.classList.remove('settings-flash'), 1800);
+	}
+
+	function onSearchKeydown(e: KeyboardEvent): void {
+		if (e.key === 'Enter' && results.length > 0) {
+			e.preventDefault();
+			void goTo(results[0].label);
+		} else if (e.key === 'Escape' && query) {
+			// The first Escape clears the search; the next closes Settings.
+			e.preventDefault();
+			e.stopPropagation();
+			query = '';
+		}
+	}
 </script>
 
-<Modal {open} {onclose} title={t('settings.title')} maxWidth="720px" height="min(680px, 88vh)" padded={false}>
-	{#snippet children()}
-		<div class="settings-layout">
-			<nav class="settings-menu">
-				{#each tabs as tab (tab.id)}
-					<button
-						class="menu-item"
-						class:active={activeTabId === tab.id}
-						class:has-new={settingsTabHasNew(tab.id)}
-						onclick={() => (activeTabId = tab.id)}
-					>
-						<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-							<path
-								d={tab.icon}
-								stroke="currentColor"
-								stroke-width="1.8"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							/>
-						</svg>
-						<span>{tab.label}</span>
-						{#if settingsTabHasNew(tab.id)}
-							<NewIndicator variant="badge" since={newSince({ kind: 'settings', tab: tab.id })} />
-						{/if}
-					</button>
-				{/each}
-			</nav>
+{#snippet icon(path: string)}
+	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+		<path d={path} stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+	</svg>
+{/snippet}
 
-			<div class="settings-content">
-				{#if activeTabId === 'general'}
-					<GeneralTab />
-				{:else if activeTabId === 'appearance'}
-					<AppearanceTab />
-				{:else if activeTabId === 'security'}
-					<SecurityTab />
-				{:else if activeTabId === 'sync'}
-					<SyncTab />
-				{:else if activeTabId === 'backup'}
-					<BackupTab />
-				{:else if activeTabId === 'ai'}
-					<AITab />
-				{:else if activeTabId === 'mcp'}
-					<McpTab />
-				{:else if activeTabId === 'devops'}
-					<DevopsTab />
-				{:else if activeTabId === 'plugins'}
-					<PluginsTab />
-				{:else if activeTabId === 'sharing'}
-					<SharingTab />
-				{:else if activeTabId === 'pwmanagers'}
-					<PasswordManagersTab />
-				{/if}
+{#snippet searchBox()}
+	<div class="search">
+		<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+			<path d="M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+		</svg>
+		<input
+			bind:this={searchEl}
+			bind:value={query}
+			type="search"
+			placeholder={t('settings.search_placeholder')}
+			aria-label={t('settings.search_placeholder')}
+			spellcheck="false"
+			autocomplete="off"
+			onkeydown={onSearchKeydown}
+		/>
+	</div>
+{/snippet}
+
+{#snippet resultList()}
+	<div class="results">
+		{#if results.length === 0}
+			<p class="no-results">{t('settings.search_none', { query })}</p>
+		{:else}
+			{#each results as row (row.page + row.label)}
+				<button class="result" onclick={() => goTo(row.label)}>
+					<span class="result-label">{t(row.label)}</span>
+					<span class="result-path">
+						{pageName(row.page)}{#if row.advanced}{' › '}{t('settings.advanced')}{/if}
+					</span>
+				</button>
+			{/each}
+		{/if}
+	</div>
+{/snippet}
+
+{#snippet menuItem(p: SettingsPage)}
+	<button
+		class="menu-item"
+		class:active={!phone && pageId === p.id}
+		class:has-new={settingsTabHasNew(p.id)}
+		aria-current={!phone && pageId === p.id ? 'page' : undefined}
+		onclick={() => showPage(p.id)}
+	>
+		{@render icon(p.icon)}
+		<span class="menu-label">{t(p.label)}</span>
+		{#if settingsTabHasNew(p.id)}
+			<NewIndicator variant="badge" since={newSince({ kind: 'settings', tab: p.id })} />
+		{/if}
+		{#if phone}
+			<svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+				<path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+			</svg>
+		{/if}
+	</button>
+{/snippet}
+
+{#snippet menu()}
+	<nav class="settings-menu" aria-label={t('settings.title')}>
+		{@render searchBox()}
+		{#if !(phone && searching)}
+			{#each GROUPS as group (group.id)}
+				<div class="menu-group">
+					<span class="group-label">{t(group.label)}</span>
+					<div class="group-items">
+						{#each pagesIn(group.id) as p (p.id)}
+							{@render menuItem(p)}
+						{/each}
+					</div>
+				</div>
+			{/each}
+			<div class="menu-group">
+				<div class="group-items">
+					{#each pagesIn(null) as p (p.id)}
+						{@render menuItem(p)}
+					{/each}
+				</div>
 			</div>
-		</div>
+		{:else}
+			{@render resultList()}
+		{/if}
+	</nav>
+{/snippet}
+
+{#snippet pageBody(id: PageId)}
+	{#if id === 'general'}
+		<SettingsCard><GeneralTab part="general" /></SettingsCard>
+	{:else if id === 'appearance'}
+		<SettingsCard><AppearanceTab part="appearance" /></SettingsCard>
+	{:else if id === 'terminal'}
+		<SettingsCard title={t('settings.section_text')}><AppearanceTab part="text" /></SettingsCard>
+		<SettingsCard title={t('settings.section_paste')}><GeneralTab part="paste" /></SettingsCard>
+		<SettingsCard title={t('settings.section_shell')}><GeneralTab part="shell" /></SettingsCard>
+		{#if mobile}
+			<SettingsCard title={t('settings.section_phone')}><PhoneKeysSetting /></SettingsCard>
+		{/if}
+		<Advanced>
+			<GeneralTab part="paste-adv" />
+			<AppearanceTab part="term-adv" />
+		</Advanced>
+	{:else if id === 'sessions'}
+		<SettingsCard><GeneralTab part="sessions" /></SettingsCard>
+		<SettingsCard title={t('settings.log_section')}><AppearanceTab part="logging" /></SettingsCard>
+		<SettingsCard title={t('history.settings_section')}><AppearanceTab part="history" /></SettingsCard>
+		<SettingsCard title={t('settings.tmux_section')}><GeneralTab part="tmux" /></SettingsCard>
+	{:else if id === 'remote'}
+		<SettingsCard><AppearanceTab part="rdp" /></SettingsCard>
+		<Advanced><AppearanceTab part="rdp-adv" /></Advanced>
+	{:else if id === 'security'}
+		<SettingsCard><SecurityTab /></SettingsCard>
+	{:else if id === 'pwmanagers'}
+		<PasswordManagersTab />
+	{:else if id === 'sync'}
+		<SyncTab />
+		<SettingsCard title={t('settings.backup')}><BackupTab /></SettingsCard>
+	{:else if id === 'ai'}
+		<SettingsCard title={t('settings.ai')}><AITab /></SettingsCard>
+		<SettingsCard title={t('settings.mcp')}><McpTab /></SettingsCard>
+	{:else if id === 'devops'}
+		<SettingsCard title={t('settings.devops')}><DevopsTab /></SettingsCard>
+		<SettingsCard title={t('settings.plugins')}><PluginsTab /></SettingsCard>
+	{:else if id === 'sharing'}
+		<SettingsCard><SharingTab /></SettingsCard>
+	{:else if id === 'about'}
+		<SettingsCard>
+			<div class="tab-content">
+				<div class="setting-row">
+					<div class="setting-info">
+						<span class="setting-label">{t('settings.version')}</span>
+					</div>
+					<div class="setting-control"><span class="version">v{__APP_VERSION__}</span></div>
+				</div>
+			</div>
+		</SettingsCard>
+		<SettingsCard><GeneralTab part="about" /></SettingsCard>
+	{/if}
+{/snippet}
+
+<Modal
+	{open}
+	{onclose}
+	title={phone ? '' : t('settings.title')}
+	maxWidth="960px"
+	height="min(680px, 90vh)"
+	padded={false}
+	fullOnPhone
+>
+	{#snippet children()}
+		{#if phone}
+			<!-- One screen at a time: the menu, or a page with a way back. -->
+			<header class="phone-head">
+				{#if !showingMenu}
+					<button class="back" onclick={() => (showingMenu = true)}>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+							<path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+						</svg>
+						{t('settings.title')}
+					</button>
+				{/if}
+				<h2 class="phone-title">{showingMenu ? t('settings.title') : t(page.label)}</h2>
+				<button class="close" onclick={onclose} aria-label={t('common.close_dialog')}>
+					<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+						<path d="M1 1L13 13M13 1L1 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+					</svg>
+				</button>
+			</header>
+			{#if showingMenu}
+				<div class="phone-scroll">{@render menu()}</div>
+			{:else}
+				<div class="settings-content phone-scroll" bind:this={contentEl}>
+					{@render pageBody(pageId)}
+				</div>
+			{/if}
+		{:else}
+			<div class="settings-layout">
+				{@render menu()}
+				<div class="settings-content" bind:this={contentEl}>
+					{#if searching}
+						<h2 class="page-title">{t('settings.search_results')}</h2>
+						{@render resultList()}
+					{:else}
+						<h2 class="page-title">{t(page.label)}</h2>
+						{@render pageBody(pageId)}
+					{/if}
+				</div>
+			</div>
+		{/if}
 	{/snippet}
 </Modal>
 
 <style>
 	/* The frame is fixed by the Modal; the two columns fill it and the content
-	   column scrolls on its own. Switching tabs never moves an edge. */
+	   column scrolls on its own. Switching pages never moves an edge. */
 	.settings-layout {
 		display: flex;
-		gap: 0;
 		flex: 1;
 		min-height: 0;
 	}
@@ -120,9 +342,9 @@
 	.settings-menu {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
-		padding: 8px;
-		width: 188px;
+		gap: 10px;
+		padding: 10px 8px 12px;
+		width: 212px;
 		flex-shrink: 0;
 		overflow-y: auto;
 		border-right: 1px solid var(--color-border);
@@ -130,15 +352,70 @@
 		border-radius: 0 0 0 var(--radius-modal, 12px);
 	}
 
+	.search {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 0 8px;
+		height: 30px;
+		color: var(--color-text-tertiary);
+		background: var(--color-bg-elevated);
+		border: 1px solid var(--color-border-strong, var(--color-border));
+		border-radius: 7px;
+	}
+
+	.search:focus-within {
+		border-color: var(--color-focus, var(--color-accent));
+	}
+
+	.search input {
+		flex: 1;
+		min-width: 0;
+		height: 100%;
+		padding: 0;
+		font-family: inherit;
+		font-size: 0.8125rem;
+		color: var(--color-text-primary);
+		background: transparent;
+		border: none;
+		outline: none;
+	}
+
+	.search input::-webkit-search-cancel-button {
+		cursor: pointer;
+	}
+
+	.menu-group {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.group-label {
+		padding: 0 10px 2px;
+		font-size: 0.6875rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--color-text-tertiary);
+	}
+
+	.group-items {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+	}
+
 	.menu-item {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 9px;
 		width: 100%;
-		padding: 7px 10px;
+		padding: 6px 10px;
 		font-family: var(--font-sans);
 		font-size: 0.8125rem;
 		font-weight: 500;
+		text-align: left;
 		color: var(--color-text-secondary);
 		background: transparent;
 		border: none;
@@ -157,28 +434,18 @@
 
 	.menu-item.active {
 		color: var(--color-text-primary);
-		background-color: var(--color-surface-active);
+		background-color: var(--color-accent-subtle, var(--color-surface-active));
+		box-shadow: inset 2px 0 0 var(--color-accent);
 	}
 
-	/* A tab with something new in it takes the accent colour and a tinted
-	   ground, so the row reads as new before you get to the badge on the end.
-	   Not while it is the open tab: at that point you are looking at it, and
-	   the effect is about to clear anyway. */
+	/* A page with something new in it takes the accent colour, so the row
+	   reads as new before you get to the badge on the end. */
 	.menu-item.has-new:not(.active) {
 		color: var(--color-accent);
-		background-color: color-mix(in srgb, var(--color-accent) 10%, transparent);
 	}
 
-	.menu-item.has-new:not(.active) svg {
-		opacity: 1;
-	}
-
-	.menu-item.has-new:not(.active):hover {
-		background-color: color-mix(in srgb, var(--color-accent) 18%, transparent);
-	}
-
-	/* The label should not shove the badge off the end of a 160px column. */
-	.menu-item span {
+	.menu-label {
+		flex: 1;
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -186,7 +453,7 @@
 
 	.menu-item svg {
 		flex-shrink: 0;
-		opacity: 0.7;
+		opacity: 0.75;
 	}
 
 	.menu-item.active svg {
@@ -195,38 +462,200 @@
 
 	.settings-content {
 		flex: 1;
-		padding: 20px 24px 24px;
+		padding: 18px 24px 24px;
 		overflow-y: auto;
 		min-width: 0;
-		/* A tab that scrolls must not sit 10px left of one that does not. */
+		/* A page that scrolls must not sit 10px left of one that does not. */
 		scrollbar-gutter: stable;
 	}
 
-	/* A phone, upright or on its side: the menu becomes a row of tabs across
-	   the top that scrolls sideways, and the settings get the full width
-	   below it. */
-	@media (max-width: 640px), (max-height: 480px) {
-		.settings-layout {
-			flex-direction: column;
-		}
+	.page-title {
+		margin: 0 0 14px;
+		font-size: 1.125rem;
+		font-weight: 600;
+		color: var(--color-text-primary);
+	}
 
-		.settings-menu {
-			flex-direction: row;
-			width: auto;
-			overflow-x: auto;
-			scrollbar-width: none;
-			border-right: none;
-			border-bottom: 1px solid var(--color-border);
-			border-radius: 0;
-		}
+	.version {
+		font-family: var(--font-mono, monospace);
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
+	}
 
-		.menu-item {
-			width: auto;
-			flex-shrink: 0;
-		}
+	.results {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
 
-		.settings-content {
-			padding: 14px 16px 20px;
-		}
+	.result {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 2px;
+		padding: 8px 12px;
+		text-align: left;
+		font-family: inherit;
+		background: transparent;
+		border: none;
+		border-radius: 8px;
+		cursor: pointer;
+	}
+
+	.result:hover,
+	.result:focus-visible {
+		background: var(--color-surface-hover);
+	}
+
+	.result-label {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--color-text-primary);
+	}
+
+	.result-path {
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
+	}
+
+	.no-results {
+		margin: 8px 12px;
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
+	}
+
+	/* ─── Phone ─── */
+
+	.phone-head {
+		display: grid;
+		grid-template-columns: 1fr auto 1fr;
+		align-items: center;
+		height: 48px;
+		padding: 0 8px;
+		flex-shrink: 0;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-bg-secondary);
+	}
+
+	.phone-title {
+		grid-column: 2;
+		margin: 0;
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--color-text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.back {
+		grid-column: 1;
+		justify-self: start;
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		padding: 8px 6px;
+		font-family: inherit;
+		font-size: 0.9375rem;
+		color: var(--color-accent);
+		background: none;
+		border: none;
+		cursor: pointer;
+	}
+
+	.close {
+		grid-column: 3;
+		justify-self: end;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		color: var(--color-text-secondary);
+		background: none;
+		border: none;
+		cursor: pointer;
+	}
+
+	.phone-scroll {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+	}
+
+	.phone-scroll .settings-menu {
+		width: auto;
+		gap: 18px;
+		padding: 12px 16px 24px;
+		overflow: visible;
+		border: none;
+		border-radius: 0;
+		background: var(--color-bg-primary);
+	}
+
+	.phone-scroll .search {
+		height: 38px;
+		border-radius: 10px;
+	}
+
+	.phone-scroll .search input {
+		font-size: 1rem;
+	}
+
+	/* iOS-style grouped list: one rounded box per heading, rows divided by
+	   hairlines, a chevron on the end of each. */
+	.phone-scroll .group-items {
+		gap: 0;
+		overflow: hidden;
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-border);
+		border-radius: 12px;
+	}
+
+	.phone-scroll .group-label {
+		padding: 0 14px 6px;
+	}
+
+	.phone-scroll .menu-item {
+		padding: 12px 14px;
+		gap: 12px;
+		font-size: 0.9375rem;
+		color: var(--color-text-primary);
+		border-radius: 0;
+	}
+
+	.phone-scroll .menu-item + .menu-item {
+		border-top: 1px solid var(--color-border);
+	}
+
+	.phone-scroll .menu-item svg {
+		opacity: 0.85;
+		color: var(--color-accent);
+	}
+
+	.phone-scroll .menu-item .chevron {
+		color: var(--color-text-tertiary);
+	}
+
+	.phone-scroll.settings-content {
+		padding: 14px 14px 28px;
+		background: var(--color-bg-primary);
+	}
+
+	.phone-scroll .results {
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-border);
+		border-radius: 12px;
+		overflow: hidden;
+		gap: 0;
+	}
+
+	.phone-scroll .result {
+		padding: 11px 14px;
+		border-radius: 0;
+	}
+
+	.phone-scroll .result + .result {
+		border-top: 1px solid var(--color-border);
 	}
 </style>

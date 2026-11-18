@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test:scripts": "node scripts/script-tests.mjs",
+    "release": "node scripts/release.mjs",
     "verify": "npm run check && npm run i18n:check && npm run test:scripts && npm run build && cd src-tauri && cargo test --lib && cargo clippy --lib --tests -- -D warnings",
     "tauri": "tauri",
     "i18n:check": "node scripts/i18n-check.js",
@@ -37,6 +38,7 @@
     "logsource:test": "node scripts/logsource-test.mjs",
     "split:test": "node scripts/split-test.mjs",
     "broadcast:test": "node scripts/broadcast-test.mjs",
+    "release:test": "node scripts/release-test.mjs",
     "webkit:test": "node --import ./scripts/resolve-lib.mjs scripts/webkit-input-test.mjs",
     "webkit:live": "node scripts/webkit-live-test.mjs",
     "archive:test": "node --import ./scripts/resolve-lib.mjs scripts/archive-progress-test.mjs",
@@ -45,6 +47,7 @@
     "bulk-edit:test": "node --import ./scripts/resolve-lib.mjs scripts/bulk-edit-test.mjs",
     "folder-tree:test": "node --import ./scripts/resolve-lib.mjs scripts/folder-tree-test.mjs",
     "color-schemes:test": "node scripts/color-schemes-test.mjs",
+    "app-themes:test": "node scripts/app-themes-test.mjs",
     "ansible:test": "node scripts/ansible-recap-test.mjs && node scripts/ansible-sessions-test.mjs",
     "session-folders:test": "node --import ./scripts/resolve-lib.mjs scripts/session-folders-test.mjs"
   },

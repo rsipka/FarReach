@@ -80,3 +80,17 @@ export function autoReconnectDelay(attempt: number, sinceDropMs: number): number
 export function needsUser(error: string): boolean {
 	return /auth|password|passphrase|host key|host identity|permission denied|denied|approv|refused the key|locked/i.test(error);
 }
+
+/** A tag for a tab's own view of a tmux session (see TmuxStart.view). */
+export function newViewTag(): string {
+	const bytes = crypto.getRandomValues(new Uint8Array(4));
+	return Array.from(bytes, (b) => b.toString(36).padStart(2, '0').slice(-2)).join('');
+}
+
+/** A view tab sets the terminal title to its window's id and name
+ *  ("@3 logs"): which window the tab shows. */
+export function tmuxWindowFromTitle(title: string): { id: string; name: string } | null {
+	const m = /^(@\d+) ([\s\S]*)$/.exec(title);
+	return m ? { id: m[1], name: m[2] } : null;
+}
+

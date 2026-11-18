@@ -231,7 +231,7 @@
 				group: t('palette.group_actions'),
 				label: t('titlebar.open_settings'),
 				hint: shortcutLabel(',', { ctrl: true }),
-				run: openSettings
+				run: () => openSettings()
 			},
 			{
 				id: 'action:lock',

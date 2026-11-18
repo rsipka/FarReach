@@ -41,6 +41,9 @@ export interface Settings {
 	compactLayout: boolean;
 	/** The bar over each terminal: always, when the pointer is over it, or never. */
 	terminalBar: 'always' | 'hover' | 'hidden';
+	/** The extra-keys bar above a phone's keyboard, in order (see
+	 *  #lib/terminal/bar-keys); null is the built-in set. */
+	mobileBarKeys: string[] | null;
 	/** Sessions in the list open on a double click; a single click only
 	 *  focuses the row. Off: one click connects, as before. */
 	doubleClickToOpen: boolean;
@@ -121,6 +124,13 @@ export interface Settings {
 	/** A program on the server may put text on the clipboard (OSC 52:
 	 *  tmux copy mode, vim). Never read. See #lib/terminal/osc52. */
 	terminalOsc52: boolean;
+	/** On a tmux tab, Ctrl+T and + open a new tmux window in a new tab. */
+	tmuxNewTabWindow: boolean;
+	/** Connecting to a tmux session opens the last used window, or every
+	 *  window in a tab of its own. See #lib/terminal/tmux-tabs. */
+	tmuxConnectWindows: 'last' | 'all';
+	/** tmux's status line off in tmux tabs. */
+	tmuxHideStatus: boolean;
 	/** A middle click in the terminal pastes. */
 	terminalMiddleClickPaste: boolean;
 	/** The characters that end a word on a double click, besides the space. */
@@ -195,6 +205,7 @@ const defaults: Settings = {
 	uiZoom: 1,
 	compactLayout: false,
 	terminalBar: 'always',
+	mobileBarKeys: null,
 	doubleClickToOpen: false,
 	closeTabOnExit: false,
 	serverMonitoring: true,
@@ -226,6 +237,9 @@ const defaults: Settings = {
 	terminalRightClick: DEFAULT_RIGHT_CLICK,
 	terminalCopyOnSelect: false,
 	terminalOsc52: false,
+	tmuxNewTabWindow: true,
+	tmuxConnectWindows: 'last',
+	tmuxHideStatus: false,
 	terminalMiddleClickPaste: true,
 	terminalWordSeparators: DEFAULT_WORD_SEPARATORS,
 	setupComplete: false,
@@ -309,6 +323,9 @@ export function loadSettings(): void {
 			settings.fontSize = parsed.fontSize ?? defaults.fontSize;
 			settings.uiZoom = parsed.uiZoom ?? defaults.uiZoom;
 			settings.compactLayout = parsed.compactLayout ?? defaults.compactLayout;
+			settings.mobileBarKeys = Array.isArray(parsed.mobileBarKeys)
+				? parsed.mobileBarKeys.filter((k: unknown): k is string => typeof k === 'string')
+				: null;
 			settings.terminalBar = parsed.terminalBar === 'hover' || parsed.terminalBar === 'hidden' ? parsed.terminalBar : defaults.terminalBar;
 			settings.doubleClickToOpen = parsed.doubleClickToOpen ?? defaults.doubleClickToOpen;
 			settings.closeTabOnExit = parsed.closeTabOnExit ?? defaults.closeTabOnExit;
@@ -343,6 +360,9 @@ export function loadSettings(): void {
 			settings.terminalRightClick = rightClickMode(parsed.terminalRightClick);
 			settings.terminalCopyOnSelect = parsed.terminalCopyOnSelect ?? defaults.terminalCopyOnSelect;
 			settings.terminalOsc52 = parsed.terminalOsc52 ?? defaults.terminalOsc52;
+			settings.tmuxNewTabWindow = parsed.tmuxNewTabWindow ?? defaults.tmuxNewTabWindow;
+			settings.tmuxConnectWindows = parsed.tmuxConnectWindows === 'all' ? 'all' : 'last';
+			settings.tmuxHideStatus = parsed.tmuxHideStatus ?? defaults.tmuxHideStatus;
 			settings.terminalMiddleClickPaste = parsed.terminalMiddleClickPaste ?? defaults.terminalMiddleClickPaste;
 			settings.terminalWordSeparators = parsed.terminalWordSeparators ?? defaults.terminalWordSeparators;
 			settings.pendingTursoOrg = parsed.pendingTursoOrg ?? defaults.pendingTursoOrg;
