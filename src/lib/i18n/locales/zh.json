@@ -3101,5 +3101,19 @@
   "authprompt.title_tmux": "{{host}} 上的 tmux",
   "osc52.blocked": "服务器上的程序试图复制到你的剪贴板。可在 设置 > 常规 > 允许服务器复制到剪贴板 中允许。",
   "settings.term_osc52": "允许服务器复制到剪贴板",
-  "settings.term_osc52_desc": "服务器上的程序（tmux 复制模式、vim）可以通过 OSC 52 把文本放到这台电脑的剪贴板。它们永远无法读取剪贴板。"
+  "settings.term_osc52_desc": "服务器上的程序（tmux 复制模式、vim）可以通过 OSC 52 把文本放到这台电脑的剪贴板。它们永远无法读取剪贴板。",
+  "session.list_tools": "会话列表工具",
+  "session.collapse_all": "折叠所有文件夹",
+  "session.expand_all": "展开所有文件夹",
+  "session.sort_by": "排序方式",
+  "session.sort_default": "保存的顺序",
+  "session.sort_name": "名称",
+  "session.sort_host": "主机",
+  "session.sort_recent": "最近使用",
+  "session.filter": "筛选",
+  "session.filter_favorites": "仅收藏",
+  "session.filter_type": "类型",
+  "session.filter_tags": "标签",
+  "session.filter_clear": "清除筛选",
+  "session.filter_on": "已筛选：显示 {{count}} 个"
 }

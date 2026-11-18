@@ -3101,5 +3101,19 @@
   "authprompt.title_tmux": "tmux on {{host}}",
   "osc52.blocked": "A program on the server tried to copy to your clipboard. Allow it in Settings > General > Server may copy to the clipboard.",
   "settings.term_osc52": "Server may copy to the clipboard",
-  "settings.term_osc52_desc": "Programs on the server (tmux copy mode, vim) can put text on this computer's clipboard with OSC 52. They can never read it."
+  "settings.term_osc52_desc": "Programs on the server (tmux copy mode, vim) can put text on this computer's clipboard with OSC 52. They can never read it.",
+  "session.list_tools": "Session list tools",
+  "session.collapse_all": "Collapse all folders",
+  "session.expand_all": "Expand all folders",
+  "session.sort_by": "Sort by",
+  "session.sort_default": "Saved order",
+  "session.sort_name": "Name",
+  "session.sort_host": "Host",
+  "session.sort_recent": "Recently used",
+  "session.filter": "Filter",
+  "session.filter_favorites": "Favorites only",
+  "session.filter_type": "Type",
+  "session.filter_tags": "Tags",
+  "session.filter_clear": "Clear filter",
+  "session.filter_on": "Filtered: {{count}} shown"
 }

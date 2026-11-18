@@ -3101,5 +3101,19 @@
   "authprompt.title_tmux": "tmux su {{host}}",
   "osc52.blocked": "Un programma sul server ha provato a copiare negli appunti. Consentilo in Impostazioni > Generale > Il server può copiare negli appunti.",
   "settings.term_osc52": "Il server può copiare negli appunti",
-  "settings.term_osc52_desc": "I programmi sul server (modalità copia di tmux, vim) possono mettere testo negli appunti di questo computer con OSC 52. Non possono mai leggerli."
+  "settings.term_osc52_desc": "I programmi sul server (modalità copia di tmux, vim) possono mettere testo negli appunti di questo computer con OSC 52. Non possono mai leggerli.",
+  "session.list_tools": "Strumenti dell'elenco sessioni",
+  "session.collapse_all": "Comprimi tutte le cartelle",
+  "session.expand_all": "Espandi tutte le cartelle",
+  "session.sort_by": "Ordina per",
+  "session.sort_default": "Ordine salvato",
+  "session.sort_name": "Nome",
+  "session.sort_host": "Host",
+  "session.sort_recent": "Usate di recente",
+  "session.filter": "Filtro",
+  "session.filter_favorites": "Solo preferiti",
+  "session.filter_type": "Tipo",
+  "session.filter_tags": "Tag",
+  "session.filter_clear": "Rimuovi filtro",
+  "session.filter_on": "Filtrato: {{count}} visibili"
 }

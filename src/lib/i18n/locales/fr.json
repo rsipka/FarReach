@@ -3101,5 +3101,19 @@
   "authprompt.title_tmux": "tmux sur {{host}}",
   "osc52.blocked": "Un programme du serveur a voulu copier dans votre presse-papiers. Autorisez-le dans Paramètres > Général > Le serveur peut copier dans le presse-papiers.",
   "settings.term_osc52": "Le serveur peut copier dans le presse-papiers",
-  "settings.term_osc52_desc": "Les programmes du serveur (mode copie de tmux, vim) peuvent mettre du texte dans le presse-papiers de cet ordinateur via OSC 52. Ils ne peuvent jamais le lire."
+  "settings.term_osc52_desc": "Les programmes du serveur (mode copie de tmux, vim) peuvent mettre du texte dans le presse-papiers de cet ordinateur via OSC 52. Ils ne peuvent jamais le lire.",
+  "session.list_tools": "Outils de la liste des sessions",
+  "session.collapse_all": "Replier tous les dossiers",
+  "session.expand_all": "Déplier tous les dossiers",
+  "session.sort_by": "Trier par",
+  "session.sort_default": "Ordre enregistré",
+  "session.sort_name": "Nom",
+  "session.sort_host": "Hôte",
+  "session.sort_recent": "Utilisées récemment",
+  "session.filter": "Filtre",
+  "session.filter_favorites": "Favoris uniquement",
+  "session.filter_type": "Type",
+  "session.filter_tags": "Étiquettes",
+  "session.filter_clear": "Effacer le filtre",
+  "session.filter_on": "Filtré : {{count}} affichées"
 }

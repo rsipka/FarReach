@@ -3101,5 +3101,19 @@
   "authprompt.title_tmux": "tmux auf {{host}}",
   "osc52.blocked": "Ein Programm auf dem Server wollte in Ihre Zwischenablage kopieren. Erlauben Sie es unter Einstellungen > Allgemein > Server darf in die Zwischenablage kopieren.",
   "settings.term_osc52": "Server darf in die Zwischenablage kopieren",
-  "settings.term_osc52_desc": "Programme auf dem Server (tmux-Kopiermodus, vim) können per OSC 52 Text in die Zwischenablage dieses Computers legen. Lesen können sie sie nie."
+  "settings.term_osc52_desc": "Programme auf dem Server (tmux-Kopiermodus, vim) können per OSC 52 Text in die Zwischenablage dieses Computers legen. Lesen können sie sie nie.",
+  "session.list_tools": "Werkzeuge der Sitzungsliste",
+  "session.collapse_all": "Alle Ordner einklappen",
+  "session.expand_all": "Alle Ordner ausklappen",
+  "session.sort_by": "Sortieren nach",
+  "session.sort_default": "Gespeicherte Reihenfolge",
+  "session.sort_name": "Name",
+  "session.sort_host": "Host",
+  "session.sort_recent": "Zuletzt verwendet",
+  "session.filter": "Filter",
+  "session.filter_favorites": "Nur Favoriten",
+  "session.filter_type": "Typ",
+  "session.filter_tags": "Tags",
+  "session.filter_clear": "Filter aufheben",
+  "session.filter_on": "Gefiltert: {{count}} angezeigt"
 }

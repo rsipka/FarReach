@@ -3101,5 +3101,19 @@
   "authprompt.title_tmux": "tmux en {{host}}",
   "osc52.blocked": "Un programa del servidor intentó copiar en tu portapapeles. Permítelo en Ajustes > General > El servidor puede copiar al portapapeles.",
   "settings.term_osc52": "El servidor puede copiar al portapapeles",
-  "settings.term_osc52_desc": "Los programas del servidor (modo copia de tmux, vim) pueden poner texto en el portapapeles de este equipo con OSC 52. Nunca pueden leerlo."
+  "settings.term_osc52_desc": "Los programas del servidor (modo copia de tmux, vim) pueden poner texto en el portapapeles de este equipo con OSC 52. Nunca pueden leerlo.",
+  "session.list_tools": "Herramientas de la lista de sesiones",
+  "session.collapse_all": "Contraer todas las carpetas",
+  "session.expand_all": "Expandir todas las carpetas",
+  "session.sort_by": "Ordenar por",
+  "session.sort_default": "Orden guardado",
+  "session.sort_name": "Nombre",
+  "session.sort_host": "Host",
+  "session.sort_recent": "Usadas recientemente",
+  "session.filter": "Filtro",
+  "session.filter_favorites": "Solo favoritas",
+  "session.filter_type": "Tipo",
+  "session.filter_tags": "Etiquetas",
+  "session.filter_clear": "Quitar filtro",
+  "session.filter_on": "Filtrado: {{count}} visibles"
 }

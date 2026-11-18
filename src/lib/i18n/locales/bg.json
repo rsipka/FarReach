@@ -3101,5 +3101,19 @@
   "authprompt.title_tmux": "tmux на {{host}}",
   "osc52.blocked": "Програма на сървъра опита да копира в клипборда ви. Разрешете го в Настройки > Общи > Сървърът може да копира в клипборда.",
   "settings.term_osc52": "Сървърът може да копира в клипборда",
-  "settings.term_osc52_desc": "Програми на сървъра (режим на копиране в tmux, vim) могат да поставят текст в клипборда на този компютър чрез OSC 52. Никога не могат да го четат."
+  "settings.term_osc52_desc": "Програми на сървъра (режим на копиране в tmux, vim) могат да поставят текст в клипборда на този компютър чрез OSC 52. Никога не могат да го четат.",
+  "session.list_tools": "Инструменти на списъка със сесии",
+  "session.collapse_all": "Свий всички папки",
+  "session.expand_all": "Разгъни всички папки",
+  "session.sort_by": "Подреди по",
+  "session.sort_default": "Запазен ред",
+  "session.sort_name": "Име",
+  "session.sort_host": "Хост",
+  "session.sort_recent": "Скоро използвани",
+  "session.filter": "Филтър",
+  "session.filter_favorites": "Само любими",
+  "session.filter_type": "Тип",
+  "session.filter_tags": "Етикети",
+  "session.filter_clear": "Изчисти филтъра",
+  "session.filter_on": "Филтрирано: показани {{count}}"
 }

@@ -3101,5 +3101,19 @@
   "authprompt.title_tmux": "tmux на {{host}}",
   "osc52.blocked": "Программа на сервере попыталась скопировать в буфер обмена. Разрешите это в Настройки > Общие > Сервер может копировать в буфер обмена.",
   "settings.term_osc52": "Сервер может копировать в буфер обмена",
-  "settings.term_osc52_desc": "Программы на сервере (режим копирования tmux, vim) могут помещать текст в буфер обмена этого компьютера через OSC 52. Читать его они не могут никогда."
+  "settings.term_osc52_desc": "Программы на сервере (режим копирования tmux, vim) могут помещать текст в буфер обмена этого компьютера через OSC 52. Читать его они не могут никогда.",
+  "session.list_tools": "Инструменты списка сеансов",
+  "session.collapse_all": "Свернуть все папки",
+  "session.expand_all": "Развернуть все папки",
+  "session.sort_by": "Сортировать по",
+  "session.sort_default": "Сохранённый порядок",
+  "session.sort_name": "Имя",
+  "session.sort_host": "Хост",
+  "session.sort_recent": "Недавно использованные",
+  "session.filter": "Фильтр",
+  "session.filter_favorites": "Только избранное",
+  "session.filter_type": "Тип",
+  "session.filter_tags": "Теги",
+  "session.filter_clear": "Сбросить фильтр",
+  "session.filter_on": "Отфильтровано: показано {{count}}"
 }
