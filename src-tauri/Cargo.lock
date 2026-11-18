@@ -7270,7 +7270,7 @@ dependencies = [
 
 [[package]]
 name = "reacher-cm"
-version = "0.9.2-dev.5"
+version = "0.9.2-dev.6"
 dependencies = [
  "aes 0.8.4",
  "anyhow",
