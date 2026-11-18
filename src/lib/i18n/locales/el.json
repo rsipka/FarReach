@@ -684,6 +684,8 @@
   "themes.showing_n_of_m": "{{shown}} από {{total}}",
   "themes.more_in_settings": "Περισσότερα θέματα στις Ρυθμίσεις > Εμφάνιση",
   "themes.show_more": "Εμφάνιση περισσότερων ({{shown}} από {{total}})",
+  "themes.more_builtin": "Περισσότερα ενσωματωμένα θέματα ({{count}})",
+  "themes.fewer_builtin": "Λιγότερα θέματα",
   "themes.install": "Εγκατάσταση",
   "themes.installing": "Εγκατάσταση...",
   "themes.installed": "Εγκατεστημένο",

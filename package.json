@@ -46,6 +46,7 @@
     "tofu:test": "node scripts/tofu-json-test.mjs",
     "bulk-edit:test": "node --import ./scripts/resolve-lib.mjs scripts/bulk-edit-test.mjs",
     "color-schemes:test": "node scripts/color-schemes-test.mjs",
+    "app-themes:test": "node scripts/app-themes-test.mjs",
     "ansible:test": "node scripts/ansible-recap-test.mjs && node scripts/ansible-sessions-test.mjs",
     "session-folders:test": "node --import ./scripts/resolve-lib.mjs scripts/session-folders-test.mjs"
   },

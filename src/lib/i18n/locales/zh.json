@@ -684,6 +684,8 @@
   "themes.showing_n_of_m": "{{total}} 个中的 {{shown}} 个",
   "themes.more_in_settings": "更多主题见设置 > 外观",
   "themes.show_more": "显示更多（{{total}} 个中的 {{shown}} 个）",
+  "themes.more_builtin": "更多内置主题（{{count}}）",
+  "themes.fewer_builtin": "收起主题",
   "themes.install": "安装",
   "themes.installing": "安装中...",
   "themes.installed": "已安装",

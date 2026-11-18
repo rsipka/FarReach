@@ -1,4 +1,5 @@
 import { themeListInstalled } from '#lib/ipc/theme.js';
+import { BUNDLED } from '#lib/themes/bundled.js';
 
 /**
  * Theme engine.
@@ -247,7 +248,18 @@ export const LIGHT: Theme = {
 	}
 };
 
-export const BUILT_IN: Theme[] = [DARK, LIGHT];
+/** Reach's own pair, then the bundled palettes (src/lib/themes/bundled.ts). */
+export const BUILT_IN: Theme[] = [DARK, LIGHT, ...BUNDLED];
+
+/** Ids that ship with the app. A registry theme with one of these ids (upstream
+ *  Reach's Nord and Solarized Light) is the same theme: the built-in one wins
+ *  and the registry copy is neither listed nor offered. */
+export const BUILT_IN_IDS = new Set(BUILT_IN.map((t) => t.id));
+
+/** The bundled palettes, beyond Reach's own pair. Theme pickers keep these
+ *  folded under "More built-in themes" (all but the one in use), so the list
+ *  opens short. */
+export const BUNDLED_IDS = new Set(BUNDLED.map((t) => t.id));
 
 class ThemeState {
 	current = $state<Theme>(DARK);
@@ -255,7 +267,7 @@ class ThemeState {
 	installed = $state<Theme[]>([]);
 
 	get all(): Theme[] {
-		return [...BUILT_IN, ...this.installed];
+		return [...BUILT_IN, ...this.installed.filter((t) => !BUILT_IN_IDS.has(t.id))];
 	}
 }
 

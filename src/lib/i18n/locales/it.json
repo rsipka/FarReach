@@ -684,6 +684,8 @@
   "themes.showing_n_of_m": "{{shown}} di {{total}}",
   "themes.more_in_settings": "Altri temi in Impostazioni > Aspetto",
   "themes.show_more": "Mostra altri ({{shown}} di {{total}})",
+  "themes.more_builtin": "Altri temi integrati ({{count}})",
+  "themes.fewer_builtin": "Meno temi",
   "themes.install": "Installa",
   "themes.installing": "Installazione...",
   "themes.installed": "Installato",
