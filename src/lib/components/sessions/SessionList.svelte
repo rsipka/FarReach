@@ -1884,10 +1884,13 @@
 
 
 <style>
+	/* A segmented switch: the chosen side is raised out of a sunken track,
+	   so which list is showing reads at a glance in both themes. */
 	.list-tabs {
 		display: flex;
 		gap: 2px;
 		padding: 2px;
+		background: var(--color-surface-active);
 		border: 1px solid var(--color-border);
 		border-radius: 6px;
 	}
@@ -1904,9 +1907,10 @@
 	}
 
 	.list-tab.active {
-		background-color: var(--color-surface-hover);
+		background-color: var(--color-bg-elevated);
 		color: var(--color-text-primary);
-		font-weight: 500;
+		font-weight: 600;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 0 0 1px var(--color-border);
 	}
 
 	.context-current {
@@ -2062,7 +2066,7 @@
 		gap: 6px;
 		padding: 4px 8px;
 		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 6px;
 	}
 
@@ -2153,7 +2157,7 @@
 		width: 0;
 		min-width: 0;
 		padding: 5px 10px;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 5px;
 		background: var(--color-bg-primary);
 		color: var(--color-text-primary);
@@ -2582,7 +2586,7 @@
 		font-size: var(--text-md);
 		color: var(--color-text-primary);
 		background-color: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 6px;
 		outline: none;
 		box-sizing: border-box;
@@ -2703,7 +2707,7 @@
 		font-size: var(--text-sm);
 		color: var(--color-text-primary);
 		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 6px;
 		outline: none;
 	}

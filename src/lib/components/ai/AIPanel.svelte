@@ -491,7 +491,7 @@
 		font-family: inherit;
 		color: var(--color-text-primary);
 		background-color: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 16px;
 		outline: none;
 		resize: none;

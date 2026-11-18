@@ -648,7 +648,7 @@
 		width: 180px;
 		padding: 4px 8px;
 		border-radius: var(--radius-sm);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		background: var(--color-bg-primary);
 		color: var(--color-text-primary);
 		font-family: var(--font-mono);
@@ -1007,7 +1007,7 @@
 		min-height: 160px;
 		padding: 8px;
 		border-radius: var(--radius-sm);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		background: var(--color-surface-sunken, var(--color-bg-primary));
 		color: var(--color-text-primary);
 		font-size: var(--text-xs);

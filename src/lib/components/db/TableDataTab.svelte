@@ -372,7 +372,7 @@
 	select {
 		padding: 3px 6px;
 		border-radius: var(--radius-sm);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		background: var(--color-bg-primary);
 		color: var(--color-text-primary);
 		font-size: var(--text-xs);

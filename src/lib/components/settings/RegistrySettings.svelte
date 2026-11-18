@@ -142,7 +142,7 @@
 		font-family: var(--font-mono);
 		color: var(--color-text-primary);
 		background-color: var(--color-bg-secondary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-input, 6px);
 		outline: none;
 	}

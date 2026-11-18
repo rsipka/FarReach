@@ -77,7 +77,9 @@
 	.btn-secondary {
 		background-color: var(--color-bg-elevated);
 		color: var(--color-text-primary);
-		border: 1px solid var(--color-border);
+		/* An outline people can see: the divider colour left a secondary
+		   button looking like plain text on a white dialog. */
+		border: 1px solid var(--color-border-strong);
 	}
 	.btn-secondary:hover:not(:disabled) {
 		background-color: var(--color-surface-active);
@@ -98,6 +100,6 @@
 		color: #fff;
 	}
 	.btn-danger:hover:not(:disabled) {
-		background-color: #ff6961;
+		background-color: color-mix(in srgb, var(--color-danger) 88%, black);
 	}
 </style>

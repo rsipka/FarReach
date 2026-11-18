@@ -123,7 +123,7 @@
 		font-size: 0.8125rem;
 		color: var(--color-text-primary);
 		background: var(--color-surface-sunken, transparent);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-sm);
 		outline: none;
 	}

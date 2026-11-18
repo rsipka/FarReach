@@ -281,7 +281,7 @@
 		width: 100%;
 		padding: 6px 8px;
 		border-radius: 6px;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		background: var(--color-bg-secondary);
 		color: var(--color-text-primary);
 		font: inherit;
@@ -342,7 +342,7 @@
 		font-weight: 500;
 		color: var(--color-text-secondary);
 		background: transparent;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 4px;
 		cursor: pointer;
 	}

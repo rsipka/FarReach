@@ -341,7 +341,7 @@
 		font-family: inherit;
 		color: var(--color-text-primary);
 		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 4px;
 	}
 
@@ -527,7 +527,7 @@
 		align-items: center;
 		gap: 6px;
 		padding: 0 8px;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 6px;
 		background: var(--color-bg-secondary);
 	}

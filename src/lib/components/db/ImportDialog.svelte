@@ -165,7 +165,7 @@
 		flex: 1;
 		padding: 6px 8px;
 		border-radius: var(--radius-sm);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		background: var(--color-bg-primary);
 		color: var(--color-text-primary);
 		font-family: var(--font-mono);
@@ -189,7 +189,7 @@
 	select {
 		padding: 3px 6px;
 		border-radius: var(--radius-sm);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		background: var(--color-bg-primary);
 		color: var(--color-text-primary);
 		font-size: var(--text-xs);

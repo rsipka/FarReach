@@ -286,9 +286,12 @@
 		background-color: var(--color-surface-hover);
 	}
 
+	/* Selected: tinted, with a bar on the left, so it differs from a hover
+	   by more than a shade. */
 	.session-card.selected,
 	.session-card.selected:hover {
-		background-color: color-mix(in srgb, var(--color-accent) 18%, transparent);
+		background-color: var(--color-accent-subtle);
+		box-shadow: inset 2px 0 0 var(--color-accent);
 	}
 
 	.select-box {
@@ -432,16 +435,19 @@
 		max-width: 80px;
 		padding: 0 5px;
 		border-radius: 999px;
-		background: var(--color-surface-hover);
+		/* Outlined, not filled: a filled grey chip read as a button. */
+		border: 1px solid var(--color-border-strong);
+		background: transparent;
 		color: var(--color-text-secondary);
-		font-size: 10px;
-		line-height: 16px;
+		font-size: var(--text-2xs);
+		line-height: 15px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
 	.tag-chip.more {
+		border-color: transparent;
 		background: transparent;
 		color: var(--color-text-tertiary);
 	}
@@ -452,6 +458,13 @@
 		align-items: center;
 		color: var(--color-text-tertiary);
 		opacity: 0.8;
+	}
+
+	/* How a session logs in is the same on most rows, so a lock on each of
+	   fifty rows is noise: it shows on the row under the pointer, and stays
+	   in the tooltip and the editor. The notes mark stays, as it differs. */
+	.session-card:not(:hover):not(:focus-within) .auth-mark:not(.docs-mark) {
+		display: none;
 	}
 
 	.auth-badge {

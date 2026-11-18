@@ -242,7 +242,7 @@
 		font-size: 0.75rem;
 		background: var(--color-bg-primary);
 		color: var(--color-text-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-sm, 4px);
 	}
 

@@ -250,7 +250,7 @@
 		min-width: 0;
 		height: 40px;
 		padding: 0 var(--space-3);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		background: var(--color-bg-secondary);
 		color: var(--color-text-primary);

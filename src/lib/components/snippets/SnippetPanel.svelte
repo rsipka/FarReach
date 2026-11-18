@@ -221,7 +221,7 @@
 		gap: 6px;
 		padding: 4px 8px;
 		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 6px;
 		cursor: text;
 	}
@@ -288,7 +288,7 @@
 
 	.form-input {
 		padding: 5px 8px;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 5px;
 		background: var(--color-bg-primary);
 		color: var(--color-text-primary);

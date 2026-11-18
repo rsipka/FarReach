@@ -258,7 +258,7 @@
 		font-size: 0.8125rem;
 		background: var(--color-bg-elevated);
 		color: var(--color-text-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		outline: none;
 		cursor: pointer;
@@ -280,7 +280,7 @@
 		font-size: 0.8125rem;
 		background: var(--color-bg-elevated);
 		color: var(--color-text-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		outline: none;
 		font-family: var(--font-sans);
@@ -406,7 +406,7 @@
 		font-size: 0.8125rem;
 		background: var(--color-bg-primary);
 		color: var(--color-text-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		outline: none;
 		font-family: var(--font-sans);

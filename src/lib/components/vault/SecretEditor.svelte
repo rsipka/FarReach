@@ -327,7 +327,7 @@
 		font-size: 0.8125rem;
 		color: var(--color-text-primary);
 		background-color: var(--color-bg-elevated);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		resize: none;
 		min-height: 100px;

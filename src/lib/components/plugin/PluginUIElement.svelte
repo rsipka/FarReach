@@ -216,7 +216,7 @@
 
 	.ui-input {
 		padding: 6px 10px;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		background: var(--color-bg-secondary);
 		color: var(--color-text-primary);
@@ -284,7 +284,7 @@
 	/* Select */
 	.ui-select {
 		padding: 6px 10px;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		background: var(--color-bg-secondary);
 		color: var(--color-text-primary);
