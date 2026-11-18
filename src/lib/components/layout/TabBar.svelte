@@ -480,10 +480,9 @@
 					<span class="tab-title">{tab.sessionName || tab.title}{#if tab.tmuxWindow?.name}<span class="tab-tmux-window"> · {tab.tmuxWindow.name}</span>{/if}</span>
 					{#if broadcastTargets.includes(tab.id)}
 						<!-- Typing into one of the marked tabs goes to all of them. -->
-						<svg class="broadcast-mark" width="13" height="13" viewBox="0 0 24 24" fill="none" role="img" aria-label={t('broadcast.tab_mark')}>
-							<title>{t('broadcast.tab_mark')}</title>
+						<span class="mark-tip" title={t('broadcast.tab_mark')}><svg class="broadcast-mark" width="13" height="13" viewBox="0 0 24 24" fill="none" role="img" aria-label={t('broadcast.tab_mark')}>
 							<path d={BROADCAST_ICON} stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
-						</svg>
+						</svg></span>
 					{/if}
 					{#if tab.link}
 						<!-- Seen from any tab: this session dropped, or is coming back. -->
@@ -1142,5 +1141,10 @@
 			width: 24px;
 			height: 24px;
 		}
+	}
+
+	.mark-tip {
+		display: inline-flex;
+		flex-shrink: 0;
 	}
 </style>
