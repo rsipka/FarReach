@@ -213,7 +213,7 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: 1
           # AppImage update information (AppImageSpec, gh-releases-zsync):
           # linuxdeploy's AppImage plugin embeds it and writes the .zsync file,
-          # so AppImageUpdate, AppImageLauncher and Gear Lever can update Reach
+          # so AppImageUpdate, AppImageLauncher and Gear Lever can update Reacher CM
           # as well as its own updater. Read only by the Linux build.
           LDAI_UPDATE_INFORMATION: gh-releases-zsync|${{ github.repository_owner }}|ReacherCM|latest|ReacherCM_*_amd64.AppImage.zsync
         with:
@@ -456,7 +456,7 @@ jobs:
       - name: Initialize Android project
         run: |
           npx tauri android init
-          # init generates the project with Tauri's placeholder icon; Reach's
+          # init generates the project with Tauri's placeholder icon; Reacher CM's
           # launcher icons (adaptive included) replace it.
           cp -r src-tauri/icons/android/. src-tauri/gen/android/app/src/main/res/
           # Its activity also makes room for the phone keyboard (#127).

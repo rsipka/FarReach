@@ -15,7 +15,8 @@
 > **Reacher CM is built on Reach** by [Alexander Nt.](https://github.com/alexandrosnt) and the
 > [Reach contributors](https://github.com/alexandrosnt/Reach/graphs/contributors). Almost everything
 > here is their work. Reacher CM is a personal fork that adds features of its own on top. If you don't
-> need what Reacher CM adds, use [Reach](https://github.com/alexandrosnt/Reach) itself.
+> need what Reacher CM adds, use [Reach](https://github.com/alexandrosnt/Reach) itself. Some features
+> are based on the [ReachQ](https://github.com/CPTProgrammer/ReachQ) fork by CPTProgrammer.
 >
 > **AI-assisted:** most of the code Reacher CM adds is written with AI coding tools
 > ([Claude Code](https://claude.com/claude-code)), reviewed and tested by the maintainer.
@@ -29,19 +30,23 @@
 
 PuTTY hasn't changed in decades, MobaXterm is Windows-only, and Termius charges a subscription for the basics. Reach, which Reacher CM is built on, is an SSH client built from scratch: native Rust networking, a fast UI, encrypted storage, and the same app on Windows, macOS, Linux and Android. No Electron, no subscription, no account.
 
-Reacher CM adds what people moving from Remote Desktop Manager and similar tools miss most: importing from RDM, saved credentials shared by many sessions, session notes, Telnet, broadcast input, and sync through a folder, SFTP, Git, an SMB share or an S3 bucket.
+Reacher CM adds what people moving from Remote Desktop Manager and similar tools miss most: importing from RDM and other tools, saved credentials shared by many sessions, password managers, session notes, Telnet and serial sessions, broadcast input, and sync through a folder, SFTP, Git, an SMB share or an S3 bucket.
 
 ## Added in Reacher CM
 
-- **Import from Remote Desktop Manager**: RDP, SSH, VNC and Telnet entries, folders, logins and notes from an RDM export.
+- **Imports from other tools**: Remote Desktop Manager (RDP, SSH, VNC and Telnet entries, folders, logins and notes), mRemoteNG, MobaXterm, PuTTY, WinSCP and Tabby.
 - **Saved credentials**: one login kept once in a vault and used by many sessions, by every session in a folder, or by a jump host.
+- **Password managers**: take a password from Passbolt, 1Password, Bitwarden or KeePass instead of keeping a copy.
 - **Session notes and custom fields**, like RDM's Documentation tab, encrypted and synced with the session.
-- **Telnet sessions** for switches, routers and console servers, with automatic login.
+- **Edit many sessions at once**, and favorites on the start screen.
+- **Telnet and serial sessions** for switches, routers and console servers, and **macOS login** for Macs over VNC.
+- **tmux on the server**: sessions that survive a dropped connection, with tmux windows as tabs.
 - **Broadcast input**: type into several terminals at once.
-- **Favorites** on the start screen, and an option to open sessions with a double click.
+- **Searchable session history**, encrypted, with secrets masked.
+- **Terminal your way**: hundreds of color schemes and your own themes, cursor style, copy and paste behaviour, and your installed fonts.
 - **Local-first sync**: every vault works offline and syncs in the background, through Turso, a folder, SFTP, Git, an SMB share without mounting it, or an S3 bucket (Amazon, MinIO, Backblaze B2, Wasabi, R2). Conflicting edits are kept as copies, not lost.
-- **Update checks you can switch off**, with a *Check now* button for when you want one.
-- **Czech translation**, and early **iOS** builds.
+- **Settings regrouped and searchable**, on desktop and phone.
+- **Update checks you can switch off**, signed **apt and dnf repositories**, a **Czech translation**, and early **iOS** builds.
 
 See the [changelog](CHANGELOG.md) for details.
 
