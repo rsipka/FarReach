@@ -97,11 +97,14 @@ export interface SessionConfig {
 
 /** A session's own tmux choice. */
 export interface TmuxSetting {
-  /** `attach`: attach to the named tmux session, or create it; `inherit`:
-   *  as the folder says (kept to hold a name). */
-  mode: 'off' | 'attach' | 'inherit';
+  /** `attach`: attach to the named tmux session, or create it; `ask`: pick
+   *  from the server's tmux sessions at connect; `inherit`: as the folder
+   *  says (kept to hold a name). */
+  mode: 'off' | 'attach' | 'ask' | 'inherit';
   /** The tmux session's name; unset: made from the session's name. */
   name?: string | null;
+  /** tmux's mouse mode for this session: the wheel scrolls tmux's history. */
+  mouse?: boolean;
 }
 
 /** One named value of a session's documentation. */

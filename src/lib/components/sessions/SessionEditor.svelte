@@ -217,10 +217,13 @@
 	/** What its tabs record into the session history; empty: the default from Settings. */
 	let historyChoice = $state<'' | HistoryMode>('');
 	/** tmux on the server: '' as the folder says. See #lib/terminal/tmux. */
-	let tmuxChoice = $state<'' | 'attach' | 'off'>('');
+	let tmuxChoice = $state<'' | 'attach' | 'ask' | 'off'>('');
+	let tmuxMouse = $state(false);
 	let tmuxName = $state('');
 	let tmuxFolderOn = $derived(folderTmux(folderIdStr || null, folders) === true);
-	let tmuxOn = $derived(tmuxChoice === 'attach' || (tmuxChoice === '' && tmuxFolderOn));
+	let tmuxOn = $derived(tmuxChoice === 'attach' || tmuxChoice === 'ask' || (tmuxChoice === '' && tmuxFolderOn));
+	/** tmux runs on an SSH server, or inside a WSL distribution. */
+	let tmuxKind = $derived(kind === 'ssh' || kind === 'wsl');
 	let colorsOpen = $state(false);
 	let colorsSummary = $derived(
 		findTerminalTheme(terminalTheme)?.name ?? (terminalTheme ? t('termtheme.missing') : t('termtheme.session_default'))
@@ -297,7 +300,8 @@
 			cursorChoice = editSession.cursor_style ?? '';
 			blinkChoice = editSession.cursor_blink == null ? '' : editSession.cursor_blink ? 'on' : 'off';
 			historyChoice = editSession.history ?? '';
-			tmuxChoice = editSession.tmux?.mode === 'attach' || editSession.tmux?.mode === 'off' ? editSession.tmux.mode : '';
+			tmuxChoice = editSession.tmux?.mode === 'attach' || editSession.tmux?.mode === 'ask' || editSession.tmux?.mode === 'off' ? editSession.tmux.mode : '';
+			tmuxMouse = !!editSession.tmux?.mouse;
 			tmuxName = editSession.tmux?.name ?? '';
 			colorsOpen = false;
 			if (editSession.jump_chain && editSession.jump_chain.length > 0) {
@@ -364,6 +368,7 @@
 			blinkChoice = '';
 			historyChoice = '';
 			tmuxChoice = '';
+			tmuxMouse = false;
 			tmuxName = '';
 			colorsOpen = false;
 			jumpEnabled = false;
@@ -438,14 +443,19 @@
 		// tmux runs on an SSH server only. A name is kept only beside a choice
 		// or a folder that turns it on.
 		const tmuxNameToSave = tmuxName.trim();
-		if (kind === 'ssh' && tmuxOn && tmuxNameToSave && !validTmuxName(tmuxNameToSave)) {
+		if (tmuxKind && tmuxOn && tmuxNameToSave && !validTmuxName(tmuxNameToSave)) {
 			error = t('tmux.name_invalid');
 			saving = false;
 			return;
 		}
 		const tmuxToSave: TmuxSetting | null =
-			kind === 'ssh' && (tmuxChoice || tmuxNameToSave)
-				? { mode: tmuxChoice || 'inherit', name: tmuxNameToSave || null }
+			tmuxKind && (tmuxChoice || tmuxNameToSave || tmuxMouse)
+				? {
+						// WSL has no picker: asking there means attach.
+						mode: tmuxChoice === 'ask' && kind !== 'ssh' ? 'attach' : tmuxChoice || 'inherit',
+						name: tmuxNameToSave || null,
+						...(tmuxMouse ? { mouse: true } : {})
+					}
 				: null;
 		const fieldsToSave: CustomField[] = customFields
 			.filter((f) => f.name.trim() || f.value.trim())
@@ -1130,12 +1140,13 @@
 			</div>
 		{/if}
 
-		{#if kind === 'ssh'}
+		{#if tmuxKind}
 			<div class="folder-section">
-				<span class="folder-label">{t('tmux.session_label')}</span>
+				<span class="folder-label">{kind === 'wsl' ? t('tmux.session_label_wsl') : t('tmux.session_label')}</span>
 				<select class="folder-select" bind:value={tmuxChoice} disabled={saving}>
 					<option value="">{tmuxFolderOn ? t('tmux.session_folder_on') : t('tmux.session_folder_off')}</option>
 					<option value="attach">{t('tmux.mode_attach')}</option>
+					{#if kind === 'ssh'}<option value="ask">{t('tmux.mode_ask')}</option>{/if}
 					<option value="off">{t('tmux.mode_off')}</option>
 				</select>
 			</div>
@@ -1143,7 +1154,14 @@
 				<div class="shell-field">
 					<label class="via-label" for="session-tmux-name">{t('tmux.name_label')}</label>
 					<input id="session-tmux-name" class="field-input" bind:value={tmuxName} placeholder={defaultTmuxName(name.trim())} spellcheck="false" autocomplete="off" disabled={saving} />
-					<p class="shell-hint">{t('tmux.session_hint')}</p>
+					<p class="shell-hint">{tmuxChoice === 'ask' ? t('tmux.ask_hint') : t('tmux.session_hint')}</p>
+				</div>
+				<div class="shell-field">
+					<label class="jump-toggle">
+						<input type="checkbox" bind:checked={tmuxMouse} disabled={saving} />
+						<span class="jump-toggle-text">{t('tmux.mouse')}</span>
+					</label>
+					<p class="shell-hint">{t('tmux.mouse_hint')}</p>
 				</div>
 			{/if}
 		{/if}

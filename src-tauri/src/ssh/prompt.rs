@@ -37,6 +37,9 @@ pub(crate) enum Kind {
     Keyboard,
     /// A yes or no (AddKeysToAgent ask).
     Confirm,
+    /// Which tmux session to start in (`ssh::tmux::Ask`): the fields are
+    /// the server's sessions, the title the name a new one gets.
+    Tmux,
 }
 
 #[derive(Debug, Clone, Serialize)]

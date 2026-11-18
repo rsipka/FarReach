@@ -44,11 +44,17 @@ async fn search_commands_and_output_then_forget() {
     assert_eq!(hits[1].text, "systemctl restart nginx");
     assert_eq!(hits[1].exit, Some(0));
 
-    // Short text: commands only, by a scan.
+    // Short text: commands and output, by a scan.
     let hits = s.search(&Query { text: "ls".into(), ..Default::default() }).await.unwrap();
+    assert_eq!(hits.iter().map(|h| h.kind.as_str()).collect::<Vec<_>>(), vec!["command"]);
+    let hits = s.search(&Query { text: "Jo".into(), ..Default::default() }).await.unwrap();
     assert_eq!(hits.len(), 1);
-    // Empty text: newest commands of a session.
-    let hits = s.search(&Query { session_id: Some("s1".into()), ..Default::default() }).await.unwrap();
+    assert!(hits[0].text.starts_with("Job for"));
+    // Empty text: the newest of a session, output included.
+    let all = s.search(&Query { session_id: Some("s1".into()), ..Default::default() }).await.unwrap();
+    assert_eq!(all.iter().map(|h| h.kind.as_str()).collect::<Vec<_>>(), vec!["command", "output", "command"]);
+    assert!(all[1].text.starts_with("line one\nJob for"));
+    let hits = s.search(&Query { session_id: Some("s1".into()), kind: Kind::Commands, ..Default::default() }).await.unwrap();
     assert_eq!(hits.iter().map(|h| h.text.as_str()).collect::<Vec<_>>(), vec!["ls", "systemctl restart nginx"]);
     // Quotes in the query are text, not FTS syntax.
     assert!(s.search(&Query { text: "\"nginx OR".into(), ..Default::default() }).await.is_ok());

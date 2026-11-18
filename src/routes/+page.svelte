@@ -372,6 +372,7 @@
 									visible={focused || pane !== null}
 									onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
 									sshConnectParams={tab.sshConnectParams}
+									tmuxSwitch={tab.tmuxSwitch}
 									telnetConnectParams={tab.telnetConnectParams}
 									onReconnected={(newId) => (tab.type === 'telnet' ? setTelnetConnection(tab.id, newId) : updateTabConnection(tab.id, newId))}
 									onReady={() => handleTerminalReady(tab)}

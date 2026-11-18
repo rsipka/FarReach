@@ -56,6 +56,9 @@ export interface Tab {
 	/** That session's server monitoring choice; unset: the default from
 	 *  Settings (see monitoringWanted). */
 	monitoring?: boolean | null;
+	/** Bumped to make an SSH tab connect again into the tmux session its
+	 *  connect settings now name (Switch tmux session). */
+	tmuxSwitch?: number;
 	/** That session's history choice; unset: the default from Settings. */
 	historyMode?: HistoryMode | null;
 }

@@ -6,11 +6,13 @@
 		tabsBeside, requestCloseBeside, getPendingClose, confirmPendingClose, cancelPendingClose
 	} from '#lib/state/tabs.svelte.js';
 	import { canDuplicate, duplicateTab } from '#lib/terminal/duplicate-tab.js';
-	import { sshTmuxKill } from '#lib/ipc/ssh.js';
+	import { sshTmuxKill, sshTmuxList, type TmuxListed } from '#lib/ipc/ssh.js';
+	import { validTmuxName } from '#lib/terminal/tmux.js';
 	import {
 		getBroadcastTargets, isTerminalTab, toggleBroadcastTarget, broadcastToAll, stopBroadcast
 	} from '#lib/state/broadcast.svelte.js';
 	import { BROADCAST_ICON } from '#lib/terminal/broadcast.js';
+	import { openTabHistory } from '#lib/state/history.svelte.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
 	import Modal from '#lib/components/shared/Modal.svelte';
@@ -147,11 +149,15 @@
 		if (tab?.groupId) items.push({ label: t('tabs.group_remove'), action: () => removeFromGroup(id) });
 
 		items.push(...broadcastItems(tab));
+		if (tab && tab.type !== 'rdp' && tab.type !== 'vnc') {
+			items.push({ label: '', separator: true }, { label: t('history.search_menu'), hint: `${mod}H`, action: () => openTabHistory(tab) });
+		}
 
 		// Duplicate and close, as a browser's tab menu has them (#160).
 		items.push(
 			{ label: '', separator: true },
 			{ label: t('tabs.duplicate'), disabled: !canDuplicate(tab), action: () => duplicate(id) },
+			...(tab && tmuxOf(tab) ? [{ label: t('tmux.switch'), disabled: !tab.connectionId || tab.link === 'down', action: () => void openSwitch(tab) }] : []),
 			...(tab && tmuxOf(tab) ? [{ label: t('tmux.kill'), disabled: !tab.connectionId || tab.link === 'down', action: () => (confirmKill = tab) }] : []),
 			{ label: '', separator: true },
 			{ label: t('common.close'), action: () => closeTab(id) },
@@ -165,6 +171,40 @@
 	/** The tmux session an SSH tab runs in, if it does. */
 	function tmuxOf(tab: Tab): string | null {
 		return tab.type === 'ssh' ? (tab.sshConnectParams?.tmux?.name ?? null) : null;
+	}
+
+	/** Switch tmux session: the tab, the server's sessions, a new name. */
+	let switchTab = $state<Tab | null>(null);
+	let switchList = $state<TmuxListed[] | null>(null);
+	let switchNew = $state('');
+
+	async function openSwitch(tab: Tab): Promise<void> {
+		if (!tab.connectionId) return;
+		switchTab = tab;
+		switchList = null;
+		switchNew = '';
+		try {
+			const list = await sshTmuxList(tab.connectionId);
+			if (switchTab === tab) switchList = list;
+		} catch (err) {
+			switchTab = null;
+			addToast(String(err), 'error');
+		}
+	}
+
+	/** The tab connects again, into `name` (its terminal does it, see tmuxSwitch). */
+	function switchTo(name: string): void {
+		const tab = switchTab;
+		switchTab = null;
+		const params = tab?.sshConnectParams;
+		if (!tab || !params?.tmux) return;
+		if (!validTmuxName(name)) {
+			addToast(t('tmux.name_invalid'), 'error');
+			return;
+		}
+		if (name === params.tmux.name) return;
+		tab.sshConnectParams = { ...params, tmux: { ...params.tmux, name, ask: false } };
+		tab.tmuxSwitch = (tab.tmuxSwitch ?? 0) + 1;
 	}
 
 	/** A tab whose tmux session is about to be ended for good. */
@@ -487,6 +527,27 @@
 	{/snippet}
 </Modal>
 
+<Modal open={switchTab !== null} onclose={() => (switchTab = null)} title={t('tmux.switch')} maxWidth="440px">
+	{#if switchTab}
+		{#if switchList === null}
+			<p class="confirm-text">{t('tmux.listing')}</p>
+		{:else}
+			<div class="tmux-switch">
+				{#each switchList as s (s.name)}
+					<button type="button" class="tmux-switch-row" class:current={s.name === tmuxOf(switchTab)} disabled={!validTmuxName(s.name)} onclick={() => switchTo(s.name)}>
+						<span class="tmux-switch-name">{s.name}</span>
+						<span class="tmux-switch-meta">{t('tmux.windows', { count: String(s.windows) })}{#if s.attached > 0} · {t('tmux.attached', { count: String(s.attached) })}{/if}</span>
+					</button>
+				{/each}
+			</div>
+			<form class="tmux-switch-new" onsubmit={(e) => { e.preventDefault(); if (switchNew.trim()) switchTo(switchNew.trim()); }}>
+				<input class="tmux-switch-input" bind:value={switchNew} placeholder={t('tmux.new_session')} spellcheck="false" autocomplete="off" />
+				<Button variant="primary" type="submit" disabled={!switchNew.trim()}>{t('tmux.start_new')}</Button>
+			</form>
+		{/if}
+	{/if}
+</Modal>
+
 <Modal open={confirmKill !== null} onclose={() => (confirmKill = null)} title={t('tmux.kill')} maxWidth="420px">
 	{#if confirmKill}
 		<p class="confirm-text">{t('tmux.kill_confirm', { name: tmuxOf(confirmKill) ?? '' })}</p>
@@ -577,6 +638,66 @@
 	.tab.grouped {
 		box-shadow: inset 0 2px 0 color-mix(in srgb, var(--group) 80%, transparent);
 		background-color: color-mix(in srgb, var(--group) 5%, transparent);
+	}
+
+	.tmux-switch {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		max-height: 280px;
+		overflow-y: auto;
+		margin-bottom: 12px;
+	}
+
+	.tmux-switch-row {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 2px;
+		padding: 8px 10px;
+		font: inherit;
+		text-align: left;
+		color: var(--color-text-primary);
+		background: var(--color-bg-primary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-btn);
+		cursor: pointer;
+	}
+
+	.tmux-switch-row:hover:not(:disabled),
+	.tmux-switch-row.current {
+		border-color: var(--color-accent);
+	}
+
+	.tmux-switch-row:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+
+	.tmux-switch-name {
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-sm);
+	}
+
+	.tmux-switch-meta {
+		font-size: 0.6875rem;
+		color: var(--color-text-secondary);
+	}
+
+	.tmux-switch-new {
+		display: flex;
+		gap: 8px;
+	}
+
+	.tmux-switch-input {
+		flex: 1;
+		min-width: 0;
+		padding: 6px 10px;
+		font: inherit;
+		color: var(--color-text-primary);
+		background: var(--color-bg-primary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-btn);
 	}
 
 	.confirm-text {

@@ -10,6 +10,7 @@
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { closeHistoryPanel, historyPanel } from '#lib/state/history.svelte.js';
 	import { getTerminalInput } from '#lib/state/snippets.svelte.js';
+	import { getTabs } from '#lib/state/tabs.svelte.js';
 	import { historyForget, historySearch, historyTranscript, type HistoryHit } from '#lib/ipc/history.js';
 	import { writeText as clipboardWriteText } from '@tauri-apps/plugin-clipboard-manager';
 
@@ -26,6 +27,9 @@
 
 	let opened = $derived(historyPanel());
 	let sessionId = $derived(opened?.sessionId ?? null);
+	/** Opened from a tab running in tmux: its output is tmux's screen
+	 *  redraws, so lines there can be cut or repeated. */
+	let inTmux = $derived(!!getTabs().find((x) => x.id === opened?.tabId)?.sshConnectParams?.tmux);
 
 	// Each opening starts from what it was opened with.
 	$effect(() => {
@@ -75,6 +79,24 @@
 	function when(ms: number): string {
 		return new Date(ms).toLocaleString();
 	}
+
+	function clock(ms: number): string {
+		return new Date(ms).toLocaleTimeString();
+	}
+
+	/** The results in runs: what a run shares (session, host, start) is said
+	 *  once above its rows instead of on every row. */
+	let groups = $derived.by(() => {
+		const out: { run: number; first: HistoryHit; hits: HistoryHit[] }[] = [];
+		for (const h of hits) {
+			const last = out[out.length - 1];
+			if (last && last.run === h.run) last.hits.push(h);
+			else out.push({ run: h.run, first: h, hits: [h] });
+		}
+		return out;
+	});
+	/** Filtered to one session, its name is in the scope menu already. */
+	let oneSession = $derived(scope === 'session' && !!sessionId);
 
 	async function copy(hit: HistoryHit): Promise<void> {
 		await clipboardWriteText(hit.text).catch(() => {});
@@ -166,34 +188,42 @@
 					<option value="output">{t('history.kind_output')}</option>
 				</select>
 			</div>
+			{#if inTmux}
+				<p class="tmux-note">{t('tmux.history_note')}</p>
+			{/if}
 			{#if error}
 				<p class="error">{error}</p>
 			{:else if !busy && hits.length === 0}
 				<p class="empty">{text.trim() ? t('history.no_results') : t('history.empty')}</p>
 			{/if}
 			<ul class="hits">
-				{#each hits as h (h.kind + h.id)}
-					<li class="hit {h.kind}">
-						<div class="head">
-							<span class="badge">{h.kind === 'command' ? t('history.command') : t('history.output')}</span>
-							<span class="meta">{h.name || h.host} · {when(h.at)}{#if h.cwd} · {h.cwd}{/if}</span>
-							{#if h.exit !== null && h.exit !== 0}<span class="exit">exit {h.exit}</span>{/if}
-							{#if h.redacted}<span class="redacted" title={t('history.redacted_hint')}>{t('history.redacted')}</span>{/if}
-						</div>
-						{#if h.kind === 'command'}
-							<code class="text">{h.text}</code>
-						{:else}
-							<pre class="text">{h.text}</pre>
-						{/if}
-						<div class="actions">
-							<button type="button" onclick={() => void copy(h)}>{t('textmenu.copy')}</button>
-							{#if h.kind === 'command' && pasteable()}
-								<button type="button" onclick={() => paste(h)}>{t('history.paste')}</button>
-							{/if}
-							<button type="button" onclick={() => void showRun(h)}>{t('history.show_run')}</button>
-							<button type="button" class="danger" onclick={() => void forget(h)}>{t('history.forget')}</button>
-						</div>
+				{#each groups as g, i (g.run + ':' + i)}
+					<li class="run">
+						<span class="meta">{#if !oneSession}{g.first.name || g.first.host} · {/if}{#if oneSession || g.first.name}{g.first.host} · {/if}{new Date(g.first.at).toLocaleDateString()}</span>
 					</li>
+					{#each g.hits as h (h.kind + h.id)}
+						<li class="hit {h.kind}">
+							<div class="head">
+								<span class="badge">{h.kind === 'command' ? t('history.command') : t('history.output')}</span>
+								<span class="meta" title={when(h.at)}>{clock(h.at)}{#if h.cwd} · {h.cwd}{/if}</span>
+								{#if h.exit !== null && h.exit !== 0}<span class="exit">exit {h.exit}</span>{/if}
+								{#if h.redacted}<span class="redacted" title={t('history.redacted_hint')}>{t('history.redacted')}</span>{/if}
+							</div>
+							{#if h.kind === 'command'}
+								<code class="text">{h.text}</code>
+							{:else}
+								<pre class="text">{h.text}</pre>
+							{/if}
+							<div class="actions">
+								<button type="button" onclick={() => void copy(h)}>{t('textmenu.copy')}</button>
+								{#if h.kind === 'command' && pasteable()}
+									<button type="button" onclick={() => paste(h)}>{t('history.paste')}</button>
+								{/if}
+								<button type="button" onclick={() => void showRun(h)}>{t('history.show_run')}</button>
+								<button type="button" class="danger" onclick={() => void forget(h)}>{t('history.forget')}</button>
+							</div>
+						</li>
+					{/each}
 				{/each}
 			</ul>
 		{/if}
@@ -248,8 +278,14 @@
 		flex: 1;
 	}
 
+	.run {
+		padding: 10px 4px 2px;
+		border-bottom: 1px solid var(--color-border);
+		font-weight: 600;
+	}
+
 	.hit {
-		padding: 6px 4px;
+		padding: 6px 4px 6px 12px;
 		border-bottom: 1px solid var(--color-border);
 	}
 
@@ -340,5 +376,11 @@
 
 	.error {
 		color: var(--color-danger);
+	}
+
+	.tmux-note {
+		margin: 0 0 8px;
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
 	}
 </style>
