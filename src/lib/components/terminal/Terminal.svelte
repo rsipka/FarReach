@@ -39,6 +39,7 @@
 	import Button from '#lib/components/shared/Button.svelte';
 	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
 	import { cssFontFamily } from '#lib/utils/font.js';
+	import { cursorOptions } from '#lib/terminal/cursor.js';
 
 	interface Props {
 		ptyId: string;
@@ -56,6 +57,9 @@
 		onReady?: () => void;
 		/** The session's terminal theme id; unset: the default from Settings. */
 		terminalTheme?: string | null;
+		/** The session's cursor shape and blink; unset: the defaults from Settings. */
+		cursorStyle?: string | null;
+		cursorBlink?: boolean | null;
 		/** The saved session the tab came from, for its history. */
 		sessionId?: string | null;
 		sessionName?: string | null;
@@ -65,7 +69,7 @@
 		wslDistro?: string | null;
 	}
 
-	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, telnetConnectParams, onReconnected, onReady, terminalTheme, sessionId, sessionName, historyMode, wslDistro }: Props = $props();
+	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, telnetConnectParams, onReconnected, onReady, terminalTheme, cursorStyle, cursorBlink, sessionId, sessionName, historyMode, wslDistro }: Props = $props();
 
 	/**
 	 * Start recording this tab's stream into the session history (and, for
@@ -105,6 +109,8 @@
 
 	/** The colours this terminal paints with. */
 	let palette = $derived(terminalPalette(terminalTheme));
+	/** The cursor it draws: the session's choice over Settings'. */
+	let cursorLook = $derived(cursorOptions(getSettings(), { style: cursorStyle, blink: cursorBlink }));
 	/** A connection made by Reach (SSH, Telnet) that can drop and be made again. */
 	let remote = $derived(termType === 'ssh' || termType === 'telnet');
 	let shown = $derived(visible ?? active);
@@ -530,8 +536,7 @@
 		return new Terminal({
 			fontFamily: terminalFont(appSettings.fontFamily),
 			fontSize: appSettings.fontSize ?? 14,
-			cursorBlink: true,
-			cursorStyle: 'bar',
+			...cursorLook,
 			scrollback: 10000,
 			wordSeparator: wordSeparator(appSettings.terminalWordSeparators),
 			allowProposedApi: true,
@@ -549,6 +554,18 @@
 		if (terminal) {
 			terminal.options.theme = { ...p };
 		}
+	});
+
+	// The cursor follows Settings and the session's choice while open. A
+	// program's own shape (vim's insert mode) lasts until it asks again.
+	$effect(() => {
+		const c = cursorLook;
+		const term = terminal;
+		if (!term) return;
+		if (term.options.cursorStyle !== c.cursorStyle) term.options.cursorStyle = c.cursorStyle;
+		if (term.options.cursorBlink !== c.cursorBlink) term.options.cursorBlink = c.cursorBlink;
+		if (term.options.cursorInactiveStyle !== c.cursorInactiveStyle) term.options.cursorInactiveStyle = c.cursorInactiveStyle;
+		if (term.options.cursorWidth !== c.cursorWidth) term.options.cursorWidth = c.cursorWidth;
 	});
 
 	function loadAddons(term: Terminal, fit: FitAddon, host: HTMLElement): void {

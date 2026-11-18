@@ -13,7 +13,7 @@
 	import Disclosure from '#lib/components/shared/Disclosure.svelte';
 	import TerminalThemeList from '#lib/components/terminal/TerminalThemeList.svelte';
 	import { findTerminalTheme, terminalPalette } from '#lib/state/terminal-themes.svelte.js';
-	import { setSessionTerminalTheme, setSessionMonitoring } from '#lib/state/tabs.svelte.js';
+	import { setSessionTerminalTheme, setSessionMonitoring, setSessionCursor } from '#lib/state/tabs.svelte.js';
 	import { getSettings } from '#lib/state/settings.svelte.js';
 	import SecretRefField from '#lib/components/pwmanager/SecretRefField.svelte';
 	import type { EntrySummary, SecretRef } from '#lib/ipc/pwmanager.js';
@@ -23,6 +23,7 @@
 	import { savedCredentialList, credentialsFor, type SavedCredential } from '#lib/ipc/savedCredentials.js';
 	import { DEFAULT_TELNET_OPTIONS, type TelnetOptions } from '#lib/ipc/telnet.js';
 	import type { HistoryMode } from '#lib/ipc/history.js';
+	import type { CursorStyle } from '#lib/terminal/cursor.js';
 
 	interface Props {
 		open: boolean;
@@ -208,6 +209,9 @@
 	});
 	/** The terminal theme its tabs use; empty: the default from Settings. */
 	let terminalTheme = $state('');
+	/** The cursor in its tabs: '' the default from Settings. */
+	let cursorChoice = $state<'' | CursorStyle>('');
+	let blinkChoice = $state<'' | 'on' | 'off'>('');
 	/** Server monitoring for its tabs: '' the default from Settings. */
 	let monitoringChoice = $state<'' | 'on' | 'off'>('');
 	/** What its tabs record into the session history; empty: the default from Settings. */
@@ -290,6 +294,8 @@
 			docsOpen = !!notes.trim() || customFields.length > 0;
 			terminalTheme = editSession.terminal_theme ?? '';
 			monitoringChoice = editSession.monitoring == null ? '' : editSession.monitoring ? 'on' : 'off';
+			cursorChoice = editSession.cursor_style ?? '';
+			blinkChoice = editSession.cursor_blink == null ? '' : editSession.cursor_blink ? 'on' : 'off';
 			historyChoice = editSession.history ?? '';
 			tmuxChoice = editSession.tmux?.mode === 'attach' || editSession.tmux?.mode === 'off' ? editSession.tmux.mode : '';
 			tmuxName = editSession.tmux?.name ?? '';
@@ -354,6 +360,8 @@
 			docsOpen = false;
 			terminalTheme = '';
 			monitoringChoice = '';
+			cursorChoice = '';
+			blinkChoice = '';
 			historyChoice = '';
 			tmuxChoice = '';
 			tmuxName = '';
@@ -422,6 +430,8 @@
 		const notesToSave = notes.trim() ? notes : null;
 		// Remote desktops paint their own screen: no terminal colours.
 		const themeToSave = kind === 'rdp' || kind === 'vnc' ? null : terminalTheme || null;
+		const cursorToSave = kind === 'rdp' || kind === 'vnc' ? null : cursorChoice || null;
+		const blinkToSave = kind === 'rdp' || kind === 'vnc' || !blinkChoice ? null : blinkChoice === 'on';
 		// Only SSH and WSL sessions have a server to monitor.
 		const monitoringToSave = (kind === 'ssh' || kind === 'wsl') && monitoringChoice ? monitoringChoice === 'on' : null;
 		const historyToSave = kind === 'rdp' || kind === 'vnc' ? null : historyChoice || null;
@@ -520,6 +530,8 @@
 					notes: notesToSave,
 					custom_fields: fieldsToSave.length ? fieldsToSave : null,
 					terminal_theme: themeToSave,
+					cursor_style: cursorToSave,
+					cursor_blink: blinkToSave,
 					monitoring: monitoringToSave,
 					history: historyToSave,
 					tmux: tmuxToSave,
@@ -527,6 +539,7 @@
 				// Its open tabs take the new colours (and monitoring choice) at once.
 				setSessionTerminalTheme(editSession.id, themeToSave);
 				setSessionMonitoring(editSession.id, monitoringToSave);
+				setSessionCursor(editSession.id, cursorToSave, blinkToSave);
 			} else {
 				await sessionCreate({
 					name: name.trim(),
@@ -554,6 +567,8 @@
 					notes: notesToSave,
 					customFields: fieldsToSave,
 					terminalTheme: themeToSave,
+					cursorStyle: cursorToSave,
+					cursorBlink: blinkToSave,
 					monitoring: monitoringToSave,
 					history: historyToSave,
 					tmux: tmuxToSave
@@ -1078,6 +1093,22 @@
 				<p class="colors-hint">{t('termtheme.session_hint')}</p>
 			</Disclosure>
 			<div class="folder-section">
+				<span class="folder-label">{t('cursor.session_label')}</span>
+				<div class="cursor-choices">
+					<select class="folder-select" bind:value={cursorChoice} disabled={saving} aria-label={t('cursor.session_label')}>
+						<option value="">{t('cursor.session_default', { style: t(`cursor.style_${getSettings().terminalCursorStyle}`) })}</option>
+						<option value="block">{t('cursor.style_block')}</option>
+						<option value="underline">{t('cursor.style_underline')}</option>
+						<option value="bar">{t('cursor.style_bar')}</option>
+					</select>
+					<select class="folder-select" bind:value={blinkChoice} disabled={saving} aria-label={t('cursor.blink')}>
+						<option value="">{getSettings().terminalCursorBlink ? t('cursor.blink_default_on') : t('cursor.blink_default_off')}</option>
+						<option value="on">{t('cursor.blink_on')}</option>
+						<option value="off">{t('cursor.blink_off')}</option>
+					</select>
+				</div>
+			</div>
+			<div class="folder-section">
 				<span class="folder-label">{t('history.session_label')}</span>
 				<select class="folder-select" bind:value={historyChoice} disabled={saving}>
 					<option value="">{t('history.session_default')}</option>
@@ -1259,6 +1290,16 @@
 		font-family: var(--font-sans);
 		font-size: 0.75rem;
 		outline: none;
+	}
+
+	.cursor-choices {
+		display: flex;
+		gap: 6px;
+	}
+
+	.cursor-choices .folder-select {
+		flex: 1;
+		min-width: 0;
 	}
 
 	.folder-select:focus {

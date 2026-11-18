@@ -49,6 +49,10 @@ export interface Tab {
 	sessionId?: string;
 	/** That session's terminal theme id; unset: the default from Settings. */
 	terminalTheme?: string | null;
+	/** That session's cursor shape and blink; unset: the defaults from
+	 *  Settings (see #lib/terminal/cursor). */
+	cursorStyle?: string | null;
+	cursorBlink?: boolean | null;
 	/** That session's server monitoring choice; unset: the default from
 	 *  Settings (see monitoringWanted). */
 	monitoring?: boolean | null;
@@ -425,6 +429,15 @@ export function placeAfter(tabId: string, refId: string): void {
  * A session's terminal theme changed: its open tabs take the new colours at
  * once. Only the theme; the rest of a tab stays as it was opened.
  */
+/** A session's cursor choice changed: its open tabs follow at once. */
+export function setSessionCursor(sessionId: string, style: string | null | undefined, blink: boolean | null | undefined): void {
+	for (const tab of tabs) {
+		if (tab.sessionId !== sessionId) continue;
+		tab.cursorStyle = style ?? null;
+		tab.cursorBlink = blink ?? null;
+	}
+}
+
 /** A session's monitoring choice changed: its open tabs follow at once. */
 export function setSessionMonitoring(sessionId: string, monitoring: boolean | null | undefined): void {
 	for (const tab of tabs) {
