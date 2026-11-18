@@ -4,6 +4,8 @@
 	import { FitAddon } from '@xterm/addon-fit';
 	import { WebglAddon } from '@xterm/addon-webgl';
 	import { WebLinksAddon } from '@xterm/addon-web-links';
+	import { SearchAddon } from '@xterm/addon-search';
+	import { registerFinder, requestFind } from '#lib/state/terminal-find.svelte.js';
 	import { Unicode11Addon } from '@xterm/addon-unicode11';
 	import '@xterm/xterm/css/xterm.css';
 	import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -584,6 +586,7 @@
 
 	/** A server tried OSC 52 while it is off: said once per tab. */
 	let osc52Told = false;
+	let unregisterFinder: (() => void) | undefined;
 
 	function loadAddons(term: Terminal, fit: FitAddon, host: HTMLElement): void {
 		term.loadAddon(fit);
@@ -613,6 +616,26 @@
 				{ urlRegex: URL_PATTERN }
 			)
 		);
+
+		// Find in the scrollback, for the terminal bar's search field.
+		const search = new SearchAddon();
+		term.loadAddon(search);
+		const decorations = {
+			matchBackground: '#e8b73066',
+			activeMatchBackground: '#ff9f0a',
+			matchOverviewRuler: '#e8b730',
+			activeMatchColorOverviewRuler: '#ff9f0a'
+		};
+		unregisterFinder?.();
+		unregisterFinder = registerFinder(ptyId, {
+			next: (q, caseSensitive) => search.findNext(q, { caseSensitive, decorations }),
+			previous: (q, caseSensitive) => search.findPrevious(q, { caseSensitive, decorations }),
+			clear: () => {
+				search.clearDecorations();
+				term.clearSelection();
+				term.focus();
+			}
+		});
 
 		const unicode11 = new Unicode11Addon();
 		term.loadAddon(unicode11);
@@ -848,6 +871,13 @@
 				inputBuffer = '';
 				clearGhostDecoration();
 				return true;
+			}
+
+			// Ctrl+Shift+F (Cmd+Shift+F): find in this terminal, in its bar.
+			if ((event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'f') {
+				event.preventDefault();
+				requestFind(ptyId);
+				return false;
 			}
 
 			// Ctrl+Shift+H (Cmd+Shift+H): search history, from this session.
@@ -1278,6 +1308,8 @@
 			disposeWebkitInputFix = undefined;
 			clearTimeout(rearmTimer);
 			resizeObserver?.disconnect();
+			unregisterFinder?.();
+			unregisterFinder = undefined;
 			term.dispose();
 			terminal = undefined;
 			fitAddon = undefined;

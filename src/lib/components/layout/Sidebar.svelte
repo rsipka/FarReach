@@ -43,6 +43,19 @@
 		activeSection = 'sessions';
 		collapsed = false;
 	});
+	// A section asked for from elsewhere (the terminal bar's Files and
+	// Snippets): shown, and the sidebar opened if it was folded.
+	$effect(() => {
+		function onSection(e: Event): void {
+			const id = (e as CustomEvent<Section>).detail;
+			if (!sections.some((s) => s.id === id)) return;
+			markSidebarSeen(id);
+			activeSection = id;
+			collapsed = false;
+		}
+		window.addEventListener('reach:sidebar-section', onSection);
+		return () => window.removeEventListener('reach:sidebar-section', onSection);
+	});
 	let sidebarWidth = $state(loadWidth());
 	let dragging = $state(false);
 

@@ -389,6 +389,7 @@
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div
 					class="tab"
+					data-tab-id={tab.id}
 					class:grouped={!!tab.groupId}
 					style:--group={tab.groupId ? groupColor(groups.find((x) => x.id === tab.groupId)?.color ?? 'grey') : undefined}
 					class:active={tab.id === activeTab?.id}
