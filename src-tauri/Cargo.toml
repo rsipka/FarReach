@@ -1,6 +1,6 @@
 [package]
 name = "reacher-cm"
-version = "0.9.2-dev.6"
+version = "0.9.2-dev.7"
 description = "Cross-platform SSH & Remote Management Tool"
 authors = ["Reach Contributors", "Reacher CM contributors"]
 repository = "https://github.com/rsipka/ReacherCM"
