@@ -142,6 +142,13 @@ pub struct SessionConfig {
     /// chosen in Settings. Kept on the session, so it syncs with it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal_theme: Option<String>,
+    /// The terminal cursor's shape in this session's tabs: `block`,
+    /// `underline` or `bar`; unset: the default chosen in Settings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor_style: Option<String>,
+    /// Whether that cursor blinks; unset: the default chosen in Settings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor_blink: Option<bool>,
     /// Server monitoring (CPU, memory, disk, users in the bar under the
     /// terminal) for this session's tabs: on or off; unset: the default
     /// chosen in Settings. Kept on the session, so it syncs with it.
@@ -194,6 +201,9 @@ impl SessionConfig {
         }
         if self.terminal_theme.as_deref().is_some_and(|t| t.trim().is_empty()) {
             self.terminal_theme = None;
+        }
+        if !matches!(self.cursor_style.as_deref(), None | Some("block" | "underline" | "bar")) {
+            self.cursor_style = None;
         }
         if !matches!(self.history.as_deref(), None | Some("off" | "commands" | "output")) {
             self.history = None;

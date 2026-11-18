@@ -754,6 +754,8 @@ pub async fn session_create(
     notes: Option<String>,
     custom_fields: Option<Vec<crate::state::CustomField>>,
     terminal_theme: Option<String>,
+    cursor_style: Option<String>,
+    cursor_blink: Option<bool>,
     monitoring: Option<bool>,
     history: Option<String>,
     tmux: Option<crate::ssh::tmux::TmuxSetting>,
@@ -818,6 +820,8 @@ pub async fn session_create(
         notes,
         custom_fields,
         terminal_theme,
+        cursor_style,
+        cursor_blink,
         monitoring,
         history,
         tmux,
@@ -2417,6 +2421,20 @@ mod documentation_tests {
         let mut blank = session(serde_json::json!({ "terminal_theme": " " }));
         blank.tidy_documentation();
         assert!(blank.terminal_theme.is_none());
+    }
+
+    #[test]
+    fn a_cursor_choice_is_kept_and_an_unknown_shape_dropped() {
+        let mut s = session(serde_json::json!({ "cursor_style": "block", "cursor_blink": false }));
+        s.tidy_documentation();
+        let stored = serde_json::to_value(&s).unwrap();
+        assert_eq!(stored["cursor_style"], "block");
+        assert_eq!(stored["cursor_blink"], false);
+        let plain = serde_json::to_value(session(serde_json::json!({}))).unwrap();
+        assert!(plain.get("cursor_style").is_none() && plain.get("cursor_blink").is_none());
+        let mut odd = session(serde_json::json!({ "cursor_style": "beam" }));
+        odd.tidy_documentation();
+        assert!(odd.cursor_style.is_none());
     }
 
     #[test]

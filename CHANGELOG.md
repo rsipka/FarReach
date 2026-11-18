@@ -3,6 +3,7 @@
 All notable changes to Reacher CM are documented here. Reacher CM is a personal fork of [Reach](https://github.com/alexandrosnt/Reach) with additional features, written with the help of AI coding tools; the entries from v0.9.1 down are Reach's own.
 
 ## Reacher CM (unreleased, based on Reach v0.9.2)
+- **Terminal cursor your way** — Settings > Appearance now sets the terminal cursor's shape (block, underline or bar), whether it blinks, how thick a bar is (1 to 4 px), and how it looks in a terminal without the keyboard, such as the other pane of a split (outline, block, bar, underline or hidden). Each session can choose its own shape and blink (Edit session > *Cursor*, or many sessions at once in bulk edit); a change in Edit session reaches its open tabs at once. The default stays the blinking bar it always was. The cursor's color comes from the terminal theme, as before (*Copy and edit* a theme to change it). Programs such as vim can still change the shape while they run.
 - **tmux: pick a session, switch, copy, scroll, WSL** — Follow-up to *Sessions that survive in tmux*:
   - *Ask, from the server's sessions*, a third choice for a session's tmux setting, lists the tmux sessions running on the server at each connect. Each row shows its windows, who is attached and when it was last used. Pick one, start a new one, or open a normal shell; a reconnect goes straight back to the one picked.
   - *Switch tmux session…* in a tmux tab's menu moves the tab to another tmux session, or a new one.

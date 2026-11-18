@@ -377,6 +377,8 @@
 									onReconnected={(newId) => (tab.type === 'telnet' ? setTelnetConnection(tab.id, newId) : updateTabConnection(tab.id, newId))}
 									onReady={() => handleTerminalReady(tab)}
 									terminalTheme={tab.terminalTheme}
+									cursorStyle={tab.cursorStyle}
+									cursorBlink={tab.cursorBlink}
 									sessionId={tab.sessionId}
 									sessionName={tab.sessionName}
 									historyMode={tab.historyMode}

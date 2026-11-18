@@ -4,6 +4,17 @@ import { invoke } from '@tauri-apps/api/core';
 import * as settingsIpc from '#lib/ipc/settings.js';
 import type { AppSettings } from '#lib/ipc/settings.js';
 import type { SessionLogConfig } from '#lib/ipc/ssh.js';
+import {
+	cursorStyle,
+	inactiveCursorStyle,
+	cursorWidth,
+	DEFAULT_CURSOR_STYLE,
+	DEFAULT_CURSOR_BLINK,
+	DEFAULT_INACTIVE_CURSOR,
+	DEFAULT_CURSOR_WIDTH,
+	type CursorStyle,
+	type InactiveCursorStyle
+} from '#lib/terminal/cursor.js';
 import { NEW_FEATURE_IDS } from '#lib/data/whats-new.js';
 
 export interface Settings {
@@ -13,6 +24,15 @@ export interface Settings {
 	/** The terminal colours, by terminal theme id (#lib/state/terminal-themes);
 	 *  empty: the app theme's own. A session can name its own instead. */
 	terminalThemeId: string;
+	/** The terminal cursor's shape, unless the session chooses its own
+	 *  (see #lib/terminal/cursor). */
+	terminalCursorStyle: CursorStyle;
+	/** The cursor blinks, unless the session chooses otherwise. */
+	terminalCursorBlink: boolean;
+	/** The cursor in a terminal without the keyboard. */
+	terminalCursorInactive: InactiveCursorStyle;
+	/** A bar cursor's thickness, in CSS pixels. */
+	terminalCursorWidth: number;
 	fontSize: number;
 	/** The whole interface's size on a desktop, as a browser's zoom: 1 is 100%.
 	 *  See #lib/state/ui-zoom. */
@@ -165,6 +185,10 @@ const defaults: Settings = {
 	theme: 'dark',
 	themeId: undefined,
 	terminalThemeId: '',
+	terminalCursorStyle: DEFAULT_CURSOR_STYLE,
+	terminalCursorBlink: DEFAULT_CURSOR_BLINK,
+	terminalCursorInactive: DEFAULT_INACTIVE_CURSOR,
+	terminalCursorWidth: DEFAULT_CURSOR_WIDTH,
 	fontSize: 14,
 	uiZoom: 1,
 	compactLayout: false,
@@ -275,6 +299,10 @@ export function loadSettings(): void {
 			if (parsed.pendingTursoApiToken) queueMicrotask(saveSettings);
 			settings.theme = parsed.theme ?? defaults.theme;
 			settings.terminalThemeId = parsed.terminalThemeId ?? defaults.terminalThemeId;
+			settings.terminalCursorStyle = cursorStyle(parsed.terminalCursorStyle);
+			settings.terminalCursorBlink = parsed.terminalCursorBlink ?? defaults.terminalCursorBlink;
+			settings.terminalCursorInactive = inactiveCursorStyle(parsed.terminalCursorInactive);
+			settings.terminalCursorWidth = cursorWidth(parsed.terminalCursorWidth);
 			settings.fontSize = parsed.fontSize ?? defaults.fontSize;
 			settings.uiZoom = parsed.uiZoom ?? defaults.uiZoom;
 			settings.compactLayout = parsed.compactLayout ?? defaults.compactLayout;
