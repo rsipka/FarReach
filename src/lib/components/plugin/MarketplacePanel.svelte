@@ -498,14 +498,14 @@
 		font-size: 0.6875rem;
 		font-weight: 500;
 		color: #fff;
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		border: none;
 		border-radius: 4px;
 		cursor: pointer;
 	}
 
 	.install-btn:hover:not(:disabled) {
-		background-color: var(--color-accent-hover);
+		background-color: color-mix(in srgb, var(--color-accent-fill) 88%, black);
 	}
 
 	.install-btn:disabled {

@@ -385,7 +385,8 @@
 	.session-name {
 		flex: 0 1 auto;
 		min-width: 0;
-		font-size: var(--text-sm);
+		/* Half a step over body text: the name is what the eye scans for. */
+		font-size: 0.84375rem;
 		font-weight: 500;
 		color: var(--color-text-primary);
 		white-space: nowrap;
@@ -394,7 +395,7 @@
 	}
 
 	.session-detail {
-		font-size: var(--text-2xs);
+		font-size: var(--text-xs);
 		color: var(--color-text-secondary);
 		white-space: nowrap;
 		overflow: hidden;

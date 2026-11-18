@@ -2178,7 +2178,7 @@
 	}
 
 	.new-folder-save {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		color: #fff;
 	}
 
@@ -2667,12 +2667,12 @@
 	}
 
 	.prompt-connect {
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		color: #fff;
 	}
 
 	.prompt-connect:hover:not(:disabled) {
-		background-color: var(--color-accent-hover);
+		background-color: color-mix(in srgb, var(--color-accent-fill) 88%, black);
 	}
 
 	/* Init section (first run) */
@@ -2766,7 +2766,7 @@
 		font-size: var(--text-sm);
 		font-weight: 500;
 		color: #fff;
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		border: none;
 		border-radius: 6px;
 		cursor: pointer;
@@ -2774,7 +2774,7 @@
 	}
 
 	.init-btn:hover:not(:disabled) {
-		background-color: var(--color-accent-hover);
+		background-color: color-mix(in srgb, var(--color-accent-fill) 88%, black);
 	}
 
 	.init-btn:disabled {
@@ -2882,7 +2882,7 @@
 	}
 
 	.bulk-btn.primary {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		border-color: var(--color-accent);
 		color: #fff;
 	}

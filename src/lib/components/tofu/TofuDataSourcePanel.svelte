@@ -736,7 +736,7 @@
 	}
 
 	.pill.active {
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		border-color: var(--color-accent);
 		color: #fff;
 	}
@@ -937,7 +937,7 @@
 	}
 
 	.toggle-input:checked + .toggle-track {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 	}
 
 	.toggle-thumb {

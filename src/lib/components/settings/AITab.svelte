@@ -228,7 +228,7 @@
 		font-size: 0.8125rem;
 		font-weight: 500;
 		color: #fff;
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		border: none;
 		border-radius: var(--radius-btn);
 		cursor: pointer;

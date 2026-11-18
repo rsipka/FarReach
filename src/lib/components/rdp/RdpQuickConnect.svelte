@@ -161,13 +161,13 @@
 	}
 
 	.primary {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		border-color: var(--color-accent);
 		color: #fff;
 	}
 
 	.primary:hover:not(:disabled) {
-		background: var(--color-accent-hover);
+		background: color-mix(in srgb, var(--color-accent-fill) 88%, black);
 	}
 
 	.primary:disabled {

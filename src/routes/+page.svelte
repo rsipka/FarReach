@@ -561,7 +561,7 @@
 
 	.split-divider:hover::after,
 	.split-divider:focus-visible::after {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 	}
 
 	.split-divider:not(.down):hover::after,
@@ -605,7 +605,7 @@
 	.drop-zone span {
 		padding: 6px 12px;
 		border-radius: 999px;
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		color: #fff;
 		font-size: var(--text-sm);
 		font-weight: 600;

@@ -169,7 +169,7 @@
 
 	.divider:hover,
 	.divider.dragging {
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 	}
 
 	.divider:focus-visible {

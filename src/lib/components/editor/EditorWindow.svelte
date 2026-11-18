@@ -440,7 +440,7 @@
 	}
 
 	.save-btn {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		color: white;
 		border: none;
 		border-radius: var(--radius-btn);

@@ -153,7 +153,7 @@
 
 	.key-bar button.on {
 		color: var(--color-bg-primary);
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		border-color: var(--color-accent);
 	}
 

@@ -66,11 +66,11 @@
 
 	/* Primary */
 	.btn-primary {
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		color: #fff;
 	}
 	.btn-primary:hover:not(:disabled) {
-		background-color: var(--color-accent-hover);
+		background-color: color-mix(in srgb, var(--color-accent-fill) 88%, black);
 	}
 
 	/* Secondary */

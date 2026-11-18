@@ -294,7 +294,7 @@
 	}
 
 	.status-pending .st {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 25%, transparent);
 	}
 

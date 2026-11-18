@@ -1021,7 +1021,7 @@ Go to Settings > Sync > Accept Vault Invite`;
 	}
 
 	.type-btn.active {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		border-color: var(--color-accent);
 		color: white;
 	}
@@ -1053,7 +1053,7 @@ Go to Settings > Sync > Accept Vault Invite`;
 	}
 
 	.btn-primary {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		border: none;
 		color: white;
 	}

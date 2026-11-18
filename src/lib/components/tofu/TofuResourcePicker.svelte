@@ -333,7 +333,7 @@
 	}
 
 	.pill.active {
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		border-color: var(--color-accent);
 		color: #fff;
 	}

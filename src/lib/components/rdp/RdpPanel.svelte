@@ -1161,7 +1161,7 @@
 		font: inherit;
 		font-size: 0.75rem;
 		color: #fff;
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		border: none;
 		border-radius: var(--radius-btn);
 		cursor: pointer;

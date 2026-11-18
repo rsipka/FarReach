@@ -355,7 +355,7 @@
 	}
 
 	.toggle-input:checked + .toggle-track {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 	}
 
 	.toggle-thumb {

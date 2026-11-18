@@ -182,7 +182,7 @@
 	}
 
 	.ui-btn.primary {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		border-color: var(--color-accent);
 		color: #fff;
 	}
@@ -273,7 +273,7 @@
 	}
 
 	.ui-toggle input:checked + .toggle-track {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 	}
 
 	.ui-toggle input:checked + .toggle-track::after {
@@ -423,7 +423,7 @@
 	.progress-fill {
 		height: 100%;
 		border-radius: 3px;
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		transition: width var(--duration-default) var(--ease-default);
 	}
 </style>

@@ -322,7 +322,7 @@
 		cursor: pointer;
 	}
 
-	.form-save { background: var(--color-accent); color: #fff; }
+	.form-save { background: var(--color-accent-fill); color: #fff; }
 	.form-save:disabled { opacity: 0.4; cursor: default; }
 	.form-cancel { background: transparent; color: var(--color-text-secondary); }
 

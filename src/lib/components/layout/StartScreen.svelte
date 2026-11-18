@@ -275,7 +275,7 @@
 		padding: 0 var(--space-4);
 		border: none;
 		border-radius: var(--radius-btn);
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		color: #fff;
 		font-family: var(--font-sans);
 		font-size: var(--text-sm);

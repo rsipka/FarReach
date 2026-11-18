@@ -38,7 +38,7 @@
 		width: 7px;
 		height: 7px;
 		border-radius: 50%;
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		/* A ring in the surface colour keeps the dot legible over whatever icon
 		   it sits on, without needing to know what that icon looks like.
 

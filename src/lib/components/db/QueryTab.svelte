@@ -375,7 +375,7 @@
 	}
 
 	.btn.primary {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		border-color: var(--color-accent);
 		color: white;
 	}

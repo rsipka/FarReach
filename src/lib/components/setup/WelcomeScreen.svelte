@@ -116,7 +116,7 @@
 	}
 
 	.dot.active {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		transform: scale(1.25);
 	}
 

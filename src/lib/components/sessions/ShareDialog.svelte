@@ -356,7 +356,7 @@
 	}
 
 	.primary-btn {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		border: none;
 		color: white;
 	}

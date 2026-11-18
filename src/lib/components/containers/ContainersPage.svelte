@@ -815,7 +815,7 @@
 		padding: 0 22px;
 		border: none;
 		border-radius: var(--radius-btn);
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		color: #fff;
 		font: inherit;
 		font-weight: 600;
@@ -1074,7 +1074,7 @@
 	}
 
 	.act.primary {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		border-color: var(--color-accent);
 		color: #fff;
 	}
