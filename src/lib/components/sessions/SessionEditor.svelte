@@ -31,10 +31,12 @@
 		editSession?: SessionConfig;
 		vaultId?: string | null; // Which vault to save to (null = private)
 		folders?: Folder[];
+		/** The folder a new session starts in (a folder's "New session here"). */
+		folderId?: string | null;
 		onsave?: () => void;
 	}
 
-	let { open = $bindable(), editSession, vaultId = null, folders = [], onsave }: Props = $props();
+	let { open = $bindable(), editSession, vaultId = null, folders = [], folderId = null, onsave }: Props = $props();
 
 	/**
 	 * SSH or RDP. The two share a name, a host, a port and a username; RDP has
@@ -88,6 +90,12 @@
 	let credentialId = $state('');
 	let allCredentials = $state<SavedCredential[]>([]);
 	let sessionVault = $derived(editSession ? (editSession.vault_id ?? null) : vaultId);
+	/** The folders this session can go in: its own vault's. One it is
+	 *  already in from another vault (older versions allowed that) stays
+	 *  listed so saving does not move it out unasked. */
+	let vaultFolders = $derived(
+		folders.filter((f) => (f.vault_id ?? null) === sessionVault || (!!editSession?.folder_id && f.id === editSession.folder_id))
+	);
 	let credentials = $derived(credentialsFor(allCredentials, sessionVault));
 
 	$effect(() => {
@@ -395,7 +403,7 @@
 			shell = '';
 			sshOptions = {};
 			tagsStr = '';
-			folderIdStr = '';
+			folderIdStr = folderId ?? '';
 			notes = '';
 			customFields = [];
 			docsOpen = false;
@@ -1225,12 +1233,12 @@
 			</div>
 		{/if}
 
-		{#if folders.length > 0}
+		{#if vaultFolders.length > 0}
 			<div class="folder-section">
 				<span class="folder-label">{t('session.folder')}</span>
 				<select class="folder-select" bind:value={folderIdStr} disabled={saving}>
 					<option value="">{t('session.no_folder')}</option>
-					{#each folders as folder (folder.id)}
+					{#each vaultFolders as folder (folder.id)}
 						<option value={folder.id}>{folderPath(folder.id, folders)}</option>
 					{/each}
 				</select>

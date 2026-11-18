@@ -1,12 +1,10 @@
 <script lang="ts">
 	import { openHistoryPanel } from '#lib/state/history.svelte.js';
 	import QuickConnect, { type QuickConnectPrefill } from './QuickConnect.svelte';
-	import RdpQuickConnect from '#lib/components/rdp/RdpQuickConnect.svelte';
 	import FaIcon from '#lib/components/shared/FaIcon.svelte';
 	import {
 		faPlus,
 		faBolt,
-		faDesktop,
 		faServer,
 		faFolderPlus,
 		faFileImport,
@@ -23,7 +21,9 @@
 		faFilter,
 		faStar,
 		faTrashCan,
-		faCheck
+		faCheck,
+		faChevronLeft,
+		faChevronRight
 	} from '@fortawesome/free-solid-svg-icons';
 	import { registerSessionActions, shortcutLabel } from '#lib/state/shortcuts.svelte.js';
 	import { pendingSessionAction, takeSessionAction } from '#lib/state/palette.svelte.js';
@@ -48,7 +48,7 @@
 	import UntrustedRefsDialog from '#lib/components/pwmanager/UntrustedRefsDialog.svelte';
 	import { sessionUntrustedSecretRefs, sessionApproveSecretRefs, untrustedRefsFromError, type UntrustedRefs } from '#lib/ipc/sessions.js';
 	import type { SessionKind } from '#lib/ipc/sessions.js';
-	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetFolderCredential, sessionSetFolderTmux, sessionBulkUndo, type BulkResult, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
+	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionRenameFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetFolderCredential, sessionSetFolderTmux, sessionBulkUndo, type BulkResult, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
 	import { DEFAULT_SERIAL_OPTIONS } from '#lib/ipc/serial.js';
@@ -66,14 +66,13 @@
 	import type { SecretRef } from '#lib/ipc/pwmanager.js';
 	import { untrack } from 'svelte';
 	import { positionMenu } from '#lib/utils/positionMenu.js';
-	import { buildFolderTree, canMoveFolder, folderPath, type FolderTreeNode } from '#lib/sessions/folder-tree.js';
+	import { buildFolderTree, canMoveFolder, commonVault, folderPath, foldersInVault, vaultOf, type FolderTreeNode } from '#lib/sessions/folder-tree.js';
 	import { canScanLinkCode, scanLinkCode } from '#lib/state/link-scan.js';
 	import { vaultState, checkState, initIdentity, importIdentity, linkDevice, ALL_VAULTS, loadVaultFilter, type VaultFilter } from '#lib/state/vault.svelte.js';
 	import { tmuxFor } from '#lib/terminal/tmux.js';
 	import { openOtherWindows, tmuxView } from '#lib/terminal/tmux-tabs.js';
 
 	let showQuickConnect = $state(false);
-	let showRdpConnect = $state(false);
 	let showEditor = $state(false);
 	/** The import dialog open now, by source; null when none is. */
 	let importSource = $state<AnyImportSource | null>(null);
@@ -384,9 +383,24 @@
 	let moveTarget = $state<string | null | undefined>(undefined);
 	let moveNewName = $state('');
 	const NEW_FOLDER = '__new__';
-	let moveFolders = $derived(
-		moveFilter.trim() ? folders.filter(f => folderPath(f.id, folders).toLowerCase().includes(moveFilter.trim().toLowerCase())) : folders
-	);
+	/** The vault of the sessions with these ids, or undefined when they
+	 *  are in several: a session goes only into a folder of its own vault. */
+	function vaultOfIds(ids: string[]): string | null | undefined {
+		const set = new Set(ids);
+		return commonVault(sessions.filter(s => set.has(s.id)));
+	}
+	/** The folders these sessions can be moved into. */
+	function moveTargets(ids: string[]): Folder[] {
+		const vault = vaultOfIds(ids);
+		return vault === undefined ? [] : foldersInVault(folders, vault);
+	}
+	let moveFolders = $derived.by(() => {
+		const targets = moveIds_ ? moveTargets(moveIds_) : [];
+		const filter = moveFilter.trim().toLowerCase();
+		return filter ? targets.filter(f => folderPath(f.id, folders).toLowerCase().includes(filter)) : targets;
+	});
+	/** The sessions being moved are in several vaults: no folder takes them all. */
+	let moveMixed = $derived(moveIds_ !== null && vaultOfIds(moveIds_) === undefined);
 	/** Sessions to move into the folder being created. */
 	let pendingMove = $state<string[] | null>(null);
 
@@ -458,8 +472,13 @@
 		if (target === NEW_FOLDER) {
 			const name = moveNewName.trim();
 			if (!name) return;
+			const vault = vaultOfIds(ids);
+			if (vault === undefined) {
+				addToast(t('session.move_mixed_vaults'), 'error');
+				return;
+			}
 			try {
-				target = (await sessionCreateFolder(name, null, targetVaultId)).id;
+				target = (await sessionCreateFolder(name, null, vault)).id;
 				folders = await sessionListFolders();
 			} catch (err) {
 				addToast(String(err), 'error');
@@ -547,9 +566,8 @@
 		}
 	}
 
-	/** Add every session inside a folder, at any depth, to the selection. */
-	function selectFolderSessions(folder: Folder): void {
-		closeContextMenu();
+	/** A folder and every folder under it, at any depth. */
+	function foldersInside(folder: Folder): Set<string> {
 		const inside = new Set([folder.id]);
 		let grew = true;
 		while (grew) {
@@ -561,10 +579,106 @@
 				}
 			}
 		}
+		return inside;
+	}
+
+	/** The sessions on screen inside a folder, at any depth. */
+	function sessionsInside(folder: Folder): SessionConfig[] {
+		const inside = foldersInside(folder);
+		return filteredSessions.filter(s => s.folder_id && inside.has(s.folder_id));
+	}
+
+	/** Add every session inside a folder, at any depth, to the selection. */
+	function selectFolderSessions(folder: Folder): void {
+		closeContextMenu();
 		const next = new Set(selected);
-		for (const s of filteredSessions) if (s.folder_id && inside.has(s.folder_id)) next.add(s.id);
+		for (const s of sessionsInside(folder)) next.add(s.id);
 		selected = next;
 		selectMode = true;
+	}
+
+	/** Bulk edit (or the editor, for one) everything inside a folder. */
+	function editFolderSessions(folder: Folder): void {
+		const inside = sessionsInside(folder);
+		closeContextMenu();
+		if (inside.length === 0) return;
+		selected = new Set(inside.map(s => s.id));
+		selectMode = true;
+		openBulkEdit();
+	}
+
+	// ---- Folder menu: open all, new session here, rename, delete --------------
+	/** More than this many asks first: each one is a connection and a tab. */
+	const OPEN_ALL_ASK_ABOVE = 10;
+	let openAllConfirm = $state<{ folder: Folder; sessions: SessionConfig[] } | null>(null);
+
+	function openAllIn(folder: Folder): void {
+		const inside = sessionsInside(folder);
+		closeContextMenu();
+		if (inside.length > OPEN_ALL_ASK_ABOVE) openAllConfirm = { folder, sessions: inside };
+		else openSessions(inside);
+	}
+
+	function openSessions(list: SessionConfig[]): void {
+		openAllConfirm = null;
+		for (const session of list) void handleConnect(session);
+	}
+
+	/** The folder a session made with "New session here" starts in. */
+	let newSessionFolder = $state<Folder | null>(null);
+
+	function newSessionIn(folder: Folder): void {
+		closeContextMenu();
+		editingSession = undefined;
+		newSessionFolder = folder;
+		showEditor = true;
+	}
+
+	let renamingFolderId = $state<string | null>(null);
+	let renameValue = $state('');
+
+	function startRename(folder: Folder): void {
+		closeContextMenu();
+		renamingFolderId = folder.id;
+		renameValue = folder.name;
+	}
+
+	async function commitRename(): Promise<void> {
+		const id = renamingFolderId;
+		const name = renameValue.trim();
+		renamingFolderId = null;
+		const folder = folders.find(f => f.id === id);
+		if (!id || !folder || !name || name === folder.name) return;
+		try {
+			await sessionRenameFolder(id, name);
+			folders = await sessionListFolders();
+		} catch (err) {
+			addToast(String(err), 'error');
+		}
+	}
+
+	function focusSelect(el: HTMLInputElement): void {
+		el.focus();
+		el.select();
+	}
+
+	let folderDeleteConfirm = $state<Folder | null>(null);
+
+	function askDeleteFolder(folder: Folder): void {
+		closeContextMenu();
+		folderDeleteConfirm = folder;
+	}
+
+	/** Open or fold a folder together with every folder under it. */
+	function setFoldersInside(folder: Folder, collapsed: boolean): void {
+		closeContextMenu();
+		const next = new Set(collapsedFolders);
+		for (const id of foldersInside(folder)) {
+			if (collapsed) next.add(id);
+			else next.delete(id);
+		}
+		collapsedFolders = next;
+		localStorage.setItem('collapsedFolders', JSON.stringify([...next]));
 	}
 
 	async function deleteSelected(): Promise<void> {
@@ -603,12 +717,14 @@
 	}
 
 
-	// Build the hierarchy from Folder.parent_id. Search keeps ancestors of
-	// matching sessions visible; outside search, empty folders stay visible in
-	// the selected vault so they can receive sessions or subfolders.
-	let folderTree = $derived.by(() => buildFolderTree(folders, filteredSessions, (folder) =>
-		!searchQuery.trim() && selectedVaultId !== ALL_VAULTS &&
-		(folder.vault_id === undefined || folder.vault_id === null || folder.vault_id === selectedVaultId)
+	// Build the hierarchy from Folder.parent_id. Each vault shows only its
+	// own folders (Private ones only under Private); All vaults shows every
+	// folder that holds a session shown. Search keeps ancestors of matching
+	// sessions visible; outside search, empty folders stay visible in the
+	// selected vault so they can receive sessions or subfolders.
+	let shownFolders = $derived(selectedVaultId === ALL_VAULTS ? folders : foldersInVault(folders, selectedVaultId));
+	let folderTree = $derived.by(() => buildFolderTree(shownFolders, filteredSessions, () =>
+		!searchQuery.trim() && selectedVaultId !== ALL_VAULTS
 	));
 
 	function toggleFolder(folderId: string): void {
@@ -620,10 +736,10 @@
 	}
 
 	/** Some folder on screen is open: the toolbar button folds them all. */
-	let anyExpanded = $derived(folders.some(f => !collapsedFolders.has(f.id)));
+	let anyExpanded = $derived(shownFolders.some(f => !collapsedFolders.has(f.id)));
 
 	function setAllFolders(collapsed: boolean): void {
-		collapsedFolders = new Set(collapsed ? folders.map(f => f.id) : []);
+		collapsedFolders = new Set(collapsed ? shownFolders.map(f => f.id) : []);
 		localStorage.setItem('collapsedFolders', JSON.stringify([...collapsedFolders]));
 	}
 
@@ -656,7 +772,14 @@
 		if (!name) return;
 		try {
 			const parent = creatingFolderParentId ? folders.find(folder => folder.id === creatingFolderParentId) : undefined;
-			const folder = await sessionCreateFolder(name, creatingFolderParentId, parent ? parent.vault_id : targetVaultId);
+			const ids = pendingMove;
+			// A folder made to take sessions goes in their vault.
+			const vault = parent ? vaultOf(parent) : ids?.length ? vaultOfIds(ids) : targetVaultId;
+			if (vault === undefined) {
+				addToast(t('session.move_mixed_vaults'), 'error');
+				return;
+			}
+			const folder = await sessionCreateFolder(name, creatingFolderParentId, vault);
 			if (creatingFolderParentId) {
 				const next = new Set(collapsedFolders);
 				next.delete(creatingFolderParentId);
@@ -667,7 +790,6 @@
 			creatingFolder = false;
 			creatingFolderParentId = null;
 			folders = await sessionListFolders();
-			const ids = pendingMove;
 			pendingMove = null;
 			if (ids?.length) await moveIds(ids, folder.id);
 		} catch (err) {
@@ -709,6 +831,8 @@
 	function handleDragStart(e: PointerEvent, session: SessionConfig): void {
 		dragSession = session;
 		dragging = true;
+		// Only folders of the dragged sessions' vault take them.
+		const allowed = new Set(moveTargets(targetsOf(session)).map(f => f.id));
 		const onMove = (me: PointerEvent) => {
 			if (!dragSession) return;
 			// Find drop target by checking which folder header we're over
@@ -717,7 +841,8 @@
 			if (el) {
 				const folderEl = el.closest('[data-folder-id]') as HTMLElement | null;
 				if (folderEl) {
-					dropTarget = folderEl.dataset.folderId === '__ungrouped__' ? null : folderEl.dataset.folderId!;
+					const id = folderEl.dataset.folderId!;
+					dropTarget = id === '__ungrouped__' ? null : allowed.has(id) ? id : undefined;
 				} else {
 					dropTarget = undefined;
 				}
@@ -753,20 +878,26 @@
 		contextMenu = { x: e.clientX, y: e.clientY };
 	}
 
+	/** Which list a folder's menu shows: the main one, or one of its choices. */
+	let folderMenuPage = $state<'main' | 'move' | 'login' | 'tmux'>('main');
+
 	function openFolderContextMenu(e: MouseEvent, folder: Folder): void {
 		e.preventDefault();
 		e.stopPropagation();
+		folderMenuPage = 'main';
 		contextMenu = { x: e.clientX, y: e.clientY, folder };
 	}
 
 	function openFolderMenu(e: MouseEvent, folder: Folder): void {
 		e.stopPropagation();
 		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		folderMenuPage = 'main';
 		contextMenu = { x: rect.right, y: rect.bottom, folder };
 	}
 
 	function closeContextMenu(): void {
 		contextMenu = undefined;
+		folderMenuPage = 'main';
 	}
 
 	async function moveToFolder(session: SessionConfig, folderId: string | null): Promise<void> {
@@ -1404,6 +1535,7 @@
 
 	function handleNewSession(): void {
 		editingSession = undefined;
+		newSessionFolder = null;
 		showEditor = true;
 	}
 
@@ -1550,13 +1682,19 @@
 	<div class="folder-node" data-folder-id={node.folder.id}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="folder-header" class:drop-active={dropTarget === node.folder.id && dragging} data-folder-id={node.folder.id} style:padding-left={`${6 + Math.min(node.depth, 8) * 14}px`} oncontextmenu={(e) => openFolderContextMenu(e, node.folder)}>
-			<button class="folder-toggle" onclick={() => toggleFolder(node.folder.id)} aria-expanded={!collapsedFolders.has(node.folder.id)} title={folderPath(node.folder.id, folders)}>
+			{#if renamingFolderId === node.folder.id}
+			<form class="folder-rename" onsubmit={(e) => { e.preventDefault(); void commitRename(); }}>
+				<input class="new-folder-input" type="text" aria-label={t('folder.rename')} bind:value={renameValue} use:focusSelect onblur={() => void commitRename()} onkeydown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); renamingFolderId = null; } }} />
+			</form>
+			{:else}
+			<button class="folder-toggle" onclick={() => toggleFolder(node.folder.id)} onkeydown={(e) => { if (e.key === 'F2') { e.preventDefault(); startRename(node.folder); } }} aria-expanded={!collapsedFolders.has(node.folder.id)} title={folderPath(node.folder.id, folders)}>
 				<svg width="10" height="10" viewBox="0 0 10 10" fill="none" class="folder-chevron" class:collapsed={collapsedFolders.has(node.folder.id)}><path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
 				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" class="folder-icon"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
 				<span class="folder-name">{node.folder.name}</span><span class="folder-count">{node.totalSessions}</span>
 			</button>
-			<button class="folder-menu-btn" onclick={(e) => openFolderMenu(e, node.folder)} aria-label={t('session.move_to_folder')} title={t('session.move_to_folder')}><svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><circle cx="2" cy="6" r="1.2"/><circle cx="6" cy="6" r="1.2"/><circle cx="10" cy="6" r="1.2"/></svg></button>
-			<button class="folder-delete-btn" onclick={() => handleDeleteFolder(node.folder.id)} title={t('common.delete')}><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button>
+			{/if}
+			<button class="folder-menu-btn" onclick={(e) => openFolderMenu(e, node.folder)} aria-label={t('folder.menu')} title={t('folder.menu')}><svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><circle cx="2" cy="6" r="1.2"/><circle cx="6" cy="6" r="1.2"/><circle cx="10" cy="6" r="1.2"/></svg></button>
+			<button class="folder-delete-btn" onclick={() => askDeleteFolder(node.folder)} title={t('folder.delete')} aria-label={t('folder.delete')}><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button>
 		</div>
 		{#if searchQuery.trim() || !collapsedFolders.has(node.folder.id)}
 			{#each node.sessions as session (session.id)}{@render sessionRow(session, node.depth)}{/each}
@@ -1686,17 +1824,9 @@
 							<span>{t('session.quick_connect')}</span>
 							<kbd>{shortcutLabel('n', { ctrl: true, shift: true })}</kbd>
 						</button>
-						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => { showRdpConnect = true; })}>
-							<FaIcon icon={faDesktop} size={12} />
-							<span>{t('session.rdp_connect')}</span>
-						</button>
 						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => contextNewFolder())}>
 							<FaIcon icon={faFolderPlus} size={12} />
 							<span>{t('session.new_folder')}</span>
-						</button>
-						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => { selectMode = true; })}>
-							<FaIcon icon={faListCheck} size={12} />
-							<span>{t('session.select_sessions')}</span>
 						</button>
 						<div class="menu-sep"></div>
 						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => openImport(lastImportSource))}>
@@ -1717,7 +1847,7 @@
 					<FaIcon icon={faCheckDouble} size={13} />
 				</button>
 				<span class="tb-sep"></span>
-				<button class="tb-btn" type="button" onclick={() => setAllFolders(anyExpanded)} disabled={folders.length === 0} title={anyExpanded ? t('session.collapse_all') : t('session.expand_all')} aria-label={anyExpanded ? t('session.collapse_all') : t('session.expand_all')}>
+				<button class="tb-btn" type="button" onclick={() => setAllFolders(anyExpanded)} disabled={shownFolders.length === 0} title={anyExpanded ? t('session.collapse_all') : t('session.expand_all')} aria-label={anyExpanded ? t('session.collapse_all') : t('session.expand_all')}>
 					<FaIcon icon={anyExpanded ? faAnglesUp : faAnglesDown} size={13} />
 				</button>
 				<button class="tb-btn" class:on={sortKey !== 'default'} type="button" onclick={(e) => openViewMenu(e, 'sort')} title={t('session.sort_by')} aria-label={t('session.sort_by')} aria-haspopup="menu" aria-expanded={viewMenu?.kind === 'sort'}>
@@ -1885,7 +2015,7 @@
 				<!-- Scrollable so a large number of folders doesn't make the menu
 				     overflow the screen — caps at ~5 visible rows. -->
 				<div class="context-folders">
-					{#each folders as folder (folder.id)}
+					{#each moveTargets(targetsOf(contextMenu.session)) as folder (folder.id)}
 						<button class="context-item context-folder-item" onclick={() => { if (contextMenu?.session) moveToFolder(contextMenu.session, folder.id); }} type="button">
 							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" class="ctx-folder-icon">
 								<path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1916,33 +2046,64 @@
 					</button>
 				{/if}
 			{:else if contextMenu.folder}
-				<button class="context-item" onclick={() => contextNewFolder(contextMenu?.folder?.id ?? null)} type="button">{t('session.new_folder')}</button>
-				<button class="context-item" onclick={() => { if (contextMenu?.folder) selectFolderSessions(contextMenu.folder); }} type="button">{t('bulk.select_folder')}</button>
-				<div class="context-sep"></div>
-				<div class="context-label">{t('session.move_to_folder')}</div>
-				<div class="context-folders">
-					{#if contextMenu.folder.parent_id}<button class="context-item context-folder-item" onclick={() => { if (contextMenu?.folder) moveFolder(contextMenu.folder, null); }} type="button">{t('session.no_folder')}</button>{/if}
-					{#each folders.filter(folder => contextMenu?.folder && canMoveFolder(contextMenu.folder.id, folder.id, folders)) as folder (folder.id)}
-						<button class="context-item context-folder-item" onclick={() => { if (contextMenu?.folder) moveFolder(contextMenu.folder, folder.id); }} type="button">{folderPath(folder.id, folders)}</button>
-					{/each}
-				</div>
-				<div class="context-sep"></div>
-				<div class="context-label">{t('credential.folder_menu')}</div>
-				<div class="context-folders">
-					<button class="context-item context-folder-item" class:context-current={!contextMenu.folder.credential_id} onclick={() => { if (contextMenu?.folder) void setFolderCredential(contextMenu.folder, null); }} type="button">{t('credential.folder_none')}</button>
-					{#each credentialsFor(savedCredentials, contextMenu.folder.vault_id) as c (c.id)}
-						<button class="context-item context-folder-item" class:context-current={contextMenu.folder.credential_id === c.id} onclick={() => { if (contextMenu?.folder) void setFolderCredential(contextMenu.folder, c.id); }} type="button">{c.name} ({c.username})</button>
-					{/each}
-				</div>
-				<div class="context-sep"></div>
-				<div class="context-label">{t('tmux.folder_menu')}</div>
-				<div class="context-folders">
-					{#each [[null, 'tmux.folder_inherit'], [true, 'tmux.folder_on'], [false, 'tmux.folder_off']] as const as [value, label] (label)}
-						<button class="context-item context-folder-item" class:context-current={(contextMenu.folder.tmux ?? null) === value} onclick={() => { if (contextMenu?.folder) void setFolderTmux(contextMenu.folder, value); }} type="button">{t(label)}</button>
-					{/each}
-				</div>
-				<div class="context-sep"></div>
-				<button class="context-item context-danger" onclick={() => { if (contextMenu?.folder) handleDeleteFolder(contextMenu.folder.id); closeContextMenu(); }} type="button">{t('common.delete')}</button>
+				{@const folder = contextMenu.folder}
+				{#if folderMenuPage === 'main'}
+					{@const inside = sessionsInside(folder)}
+					{@const hasSubfolders = folders.some(f => f.parent_id === folder.id)}
+					{@const credential = folder.credential_id ? savedCredentials.find(c => c.id === folder.credential_id) : undefined}
+					<button class="context-item" disabled={inside.length === 0} onclick={() => openAllIn(folder)} type="button">{t('folder.open_all', { count: String(inside.length) })}</button>
+					<button class="context-item" onclick={() => newSessionIn(folder)} type="button">{t('folder.new_session')}</button>
+					<button class="context-item" onclick={() => contextNewFolder(folder.id)} type="button">{t('folder.new_subfolder')}</button>
+					<button class="context-item" onclick={() => startRename(folder)} type="button">{t('folder.rename')}<kbd class="context-kbd">F2</kbd></button>
+					<div class="context-sep"></div>
+					<button class="context-item" disabled={inside.length === 0} onclick={() => selectFolderSessions(folder)} type="button">{t('bulk.select_folder')}</button>
+					<button class="context-item" disabled={inside.length === 0} onclick={() => editFolderSessions(folder)} type="button">{t('folder.edit_inside')}</button>
+					{#if hasSubfolders}
+						<button class="context-item" onclick={() => setFoldersInside(folder, false)} type="button">{t('folder.expand_inside')}</button>
+						<button class="context-item" onclick={() => setFoldersInside(folder, true)} type="button">{t('folder.collapse_inside')}</button>
+					{/if}
+					<div class="context-sep"></div>
+					<button class="context-item context-sub" onclick={() => (folderMenuPage = 'move')} type="button">
+						<span class="context-sub-label">{t('folder.move')}</span>
+						<span class="context-sub-value">{folder.parent_id ? folderPath(folder.parent_id, folders) : t('folder.top_level')}</span>
+						<FaIcon icon={faChevronRight} size={9} />
+					</button>
+					<button class="context-item context-sub" onclick={() => (folderMenuPage = 'login')} type="button">
+						<span class="context-sub-label">{t('folder.login')}</span>
+						<span class="context-sub-value">{credential ? credential.name : t('credential.folder_none')}</span>
+						<FaIcon icon={faChevronRight} size={9} />
+					</button>
+					<button class="context-item context-sub" onclick={() => (folderMenuPage = 'tmux')} type="button">
+						<span class="context-sub-label">tmux</span>
+						<span class="context-sub-value">{t(folder.tmux === true ? 'tmux.folder_on' : folder.tmux === false ? 'tmux.folder_off' : 'tmux.folder_inherit')}</span>
+						<FaIcon icon={faChevronRight} size={9} />
+					</button>
+					<div class="context-sep"></div>
+					<button class="context-item context-danger" onclick={() => askDeleteFolder(folder)} type="button">{t('folder.delete')}</button>
+				{:else}
+					<button class="context-item context-back" onclick={() => (folderMenuPage = 'main')} type="button">
+						<FaIcon icon={faChevronLeft} size={9} />
+						<span>{folderMenuPage === 'move' ? t('session.move_to_folder') : folderMenuPage === 'login' ? t('credential.folder_menu') : t('tmux.folder_menu')}</span>
+					</button>
+					<div class="context-sep"></div>
+					<div class="context-folders context-folders-tall">
+						{#if folderMenuPage === 'move'}
+							<button class="context-item context-folder-item" class:context-current={!folder.parent_id} disabled={!folder.parent_id} onclick={() => moveFolder(folder, null)} type="button">{t('folder.top_level')}</button>
+							{#each folders.filter(f => f.id === folder.parent_id || canMoveFolder(folder.id, f.id, folders)) as f (f.id)}
+								<button class="context-item context-folder-item" class:context-current={folder.parent_id === f.id} disabled={folder.parent_id === f.id} onclick={() => moveFolder(folder, f.id)} type="button">{folderPath(f.id, folders)}</button>
+							{/each}
+						{:else if folderMenuPage === 'login'}
+							<button class="context-item context-folder-item" class:context-current={!folder.credential_id} onclick={() => void setFolderCredential(folder, null)} type="button">{t('credential.folder_none')}</button>
+							{#each credentialsFor(savedCredentials, folder.vault_id) as c (c.id)}
+								<button class="context-item context-folder-item" class:context-current={folder.credential_id === c.id} onclick={() => void setFolderCredential(folder, c.id)} type="button">{c.name} ({c.username})</button>
+							{/each}
+						{:else}
+							{#each [[null, 'tmux.folder_inherit'], [true, 'tmux.folder_on'], [false, 'tmux.folder_off']] as const as [value, label] (label)}
+								<button class="context-item context-folder-item" class:context-current={(folder.tmux ?? null) === value} onclick={() => void setFolderTmux(folder, value)} type="button">{t(label)}</button>
+							{/each}
+						{/if}
+					</div>
+				{/if}
 			{:else}
 				<button class="context-item" onclick={() => { closeContextMenu(); handleNewSession(); }} type="button">{t('session.new_session')}</button>
 				<button class="context-item" onclick={() => contextNewFolder()} type="button">{t('session.new_folder')}</button>
@@ -1950,7 +2111,7 @@
 				<div class="context-sep"></div>
 				<button class="context-item" onclick={() => { closeContextMenu(); selectMode = true; }} type="button">{t('session.select_sessions')}</button>
 				<button class="context-item" onclick={() => { closeContextMenu(); selectAllShown(); }} type="button">{t('session.select_all')}</button>
-				{#if folders.length}
+				{#if shownFolders.length}
 					<div class="context-sep"></div>
 					<button class="context-item" onclick={() => { closeContextMenu(); setAllFolders(true); }} type="button">{t('session.collapse_all')}</button>
 					<button class="context-item" onclick={() => { closeContextMenu(); setAllFolders(false); }} type="button">{t('session.expand_all')}</button>
@@ -1978,7 +2139,10 @@
 
 <Modal open={moveIds_ !== null} onclose={() => (moveIds_ = null)} title={t('session.move_n_title', { count: String(moveIds_?.length ?? 0) })} maxWidth="420px">
 	<div class="move-body">
-		{#if folders.length > 6}
+		{#if moveMixed}
+			<p class="move-empty">{t('session.move_mixed_vaults')}</p>
+		{/if}
+		{#if (moveIds_ ? moveTargets(moveIds_) : []).length > 6}
 			<input class="move-filter" type="search" placeholder={t('session.move_filter')} aria-label={t('session.move_filter')} bind:value={moveFilter} />
 		{/if}
 		<div class="move-list" role="radiogroup" aria-label={t('session.move_to')}>
@@ -2034,9 +2198,42 @@
 	/>
 {/if}
 
+{#if openAllConfirm}
+	<ConfirmAction
+		open={!!openAllConfirm}
+		title={t('folder.open_all_title', { count: String(openAllConfirm.sessions.length) })}
+		message={t('folder.open_all_message', { name: openAllConfirm.folder.name })}
+		items={openAllConfirm.sessions.map(s => s.name)}
+		where={folderPath(openAllConfirm.folder.id, folders)}
+		environment="none"
+		confirmLabel={t('folder.open_all_confirm', { count: String(openAllConfirm.sessions.length) })}
+		typeToConfirm=""
+		onconfirm={() => { if (openAllConfirm) openSessions(openAllConfirm.sessions); }}
+		onclose={() => (openAllConfirm = null)}
+	/>
+{/if}
+
+{#if folderDeleteConfirm}
+	{@const doomed = folderDeleteConfirm}
+	{@const ownSessions = sessions.filter(s => s.folder_id === doomed.id).length}
+	{@const ownFolders = folders.filter(f => f.parent_id === doomed.id).length}
+	<ConfirmAction
+		open={!!folderDeleteConfirm}
+		title={t('folder.delete_title', { name: doomed.name })}
+		message={t('folder.delete_message')}
+		items={[folderPath(doomed.id, folders)]}
+		where={doomed.parent_id ? folderPath(doomed.parent_id, folders) : t('folder.top_level')}
+		environment="none"
+		note={ownSessions || ownFolders ? t('folder.delete_note', { sessions: String(ownSessions), folders: String(ownFolders), parent: doomed.parent_id ? folderPath(doomed.parent_id, folders) : t('folder.top_level') }) : ''}
+		confirmLabel={t('common.delete')}
+		typeToConfirm=""
+		onconfirm={() => { folderDeleteConfirm = null; void handleDeleteFolder(doomed.id); }}
+		onclose={() => (folderDeleteConfirm = null)}
+	/>
+{/if}
+
 <QuickConnect bind:open={showQuickConnect} prefill={quickPrefill} />
-<RdpQuickConnect bind:open={showRdpConnect} />
-<SessionEditor bind:open={showEditor} editSession={editingSession} vaultId={targetVaultId} {folders} onsave={handleEditorSave} />
+<SessionEditor bind:open={showEditor} editSession={editingSession} vaultId={newSessionFolder ? (newSessionFolder.vault_id ?? null) : targetVaultId} folderId={newSessionFolder?.id ?? null} {folders} onsave={handleEditorSave} />
 <SshConfigImport bind:open={() => importOpen('ssh_config'), (v) => setImportOpen('ssh_config', v)} vaultId={targetVaultId} onsave={handleEditorSave} onsource={openImport} />
 <RdpImport bind:open={() => importOpen('rdp'), (v) => setImportOpen('rdp', v)} vaultId={targetVaultId} onsave={handleEditorSave} onsource={openImport} />
 <ManagerImport
@@ -2566,6 +2763,60 @@
 	.context-folders {
 		max-height: 150px;
 		overflow-y: auto;
+	}
+
+	/* A choice opened from the folder menu has the menu to itself. */
+	.context-folders-tall {
+		max-height: 320px;
+	}
+
+	.context-sub {
+		gap: 8px;
+	}
+
+	.context-sub-label {
+		flex-shrink: 0;
+	}
+
+	.context-sub-value {
+		flex: 1;
+		min-width: 0;
+		text-align: right;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--color-text-secondary);
+		font-size: 0.75rem;
+	}
+
+	.context-back {
+		font-weight: 600;
+	}
+
+	.context-kbd {
+		margin-left: auto;
+		font-family: var(--font-mono);
+		font-size: 0.6875rem;
+		color: var(--color-text-secondary);
+	}
+
+	.context-item:disabled,
+	.context-item:disabled:hover {
+		opacity: 0.45;
+		cursor: default;
+		background: transparent;
+	}
+
+	.folder-rename {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		padding: 2px 0;
+	}
+
+	.folder-rename .new-folder-input {
+		flex: 1;
+		min-width: 0;
 	}
 
 	.context-item {
