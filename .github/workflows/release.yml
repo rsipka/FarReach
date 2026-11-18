@@ -89,8 +89,8 @@ jobs:
 
     # "macos" is not a runner name: see MACOS_RUNNER_LABEL in .github/ci-runners.md.
     runs-on: ${{ matrix.platform == 'macos' && (github.event_name != 'pull_request' && vars.MACOS_RUNNER_LABEL || 'macos-15') || matrix.platform }}
-    # GitHub's runners set CI=true; the self-hosted Mac did not (its DMG
-    # build drove Finder and timed out). Tauri skips the Finder step on CI.
+    # GitHub's runners set CI=true; the self-hosted Mac may not. With it,
+    # and TAURI_BUNDLER_DMG_IGNORE_CI=false below, Tauri skips the Finder step.
     env:
       CI: 'true'
     steps:
@@ -117,7 +117,22 @@ jobs:
         if: runner.environment == 'self-hosted'
         run: echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
 
+      # On a self-hosted Mac the build stays on its own disk instead of going
+      # through GitHub's cache: saving and restoring that cache moved about
+      # 1.5 GB over the Mac's connection on every run. checkout wipes
+      # src-tauri/target, so it is a link to a folder kept between jobs.
+      - name: Keep Rust builds on the self-hosted Mac
+        if: runner.environment == 'self-hosted'
+        run: |
+          keep="$RUNNER_TOOL_CACHE/reachercm-target"
+          mkdir -p "$keep"
+          rm -rf src-tauri/target
+          ln -s "$keep" src-tauri/target
+          # Bundles of an earlier version must not end up in this release.
+          rm -rf "$keep"/release/bundle "$keep"/*/release/bundle
+
       - name: Rust cache
+        if: runner.environment != 'self-hosted'
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
@@ -219,6 +234,12 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The DMG window layout is set by driving Finder over AppleScript.
+          # tauri-action turns that on even on CI; on the self-hosted Mac,
+          # where the runner is a background service, Finder never answers
+          # and the build fails after two minutes (AppleEvent timed out).
+          # There the DMG gets Finder's default layout instead.
+          TAURI_BUNDLER_DMG_IGNORE_CI: ${{ runner.environment == 'self-hosted' && 'false' || 'true' }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           NO_STRIP: true
@@ -558,6 +579,15 @@ jobs:
       - name: Use rustup's Rust on a self-hosted Mac
         if: runner.environment == 'self-hosted'
         run: echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
+
+      # As in build-desktop: the Rust build stays on the self-hosted Mac.
+      - name: Keep Rust builds on the self-hosted Mac
+        if: runner.environment == 'self-hosted'
+        run: |
+          keep="$RUNNER_TOOL_CACHE/reachercm-target"
+          mkdir -p "$keep"
+          rm -rf src-tauri/target
+          ln -s "$keep" src-tauri/target
 
       - run: |
           npm ci

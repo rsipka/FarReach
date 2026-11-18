@@ -203,7 +203,22 @@ jobs:
         if: runner.environment == 'self-hosted'
         run: echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
 
+      # On a self-hosted Mac the build stays on its own disk instead of going
+      # through GitHub's cache: saving and restoring that cache moved about
+      # 1.5 GB over the Mac's connection on every run. checkout wipes
+      # src-tauri/target, so it is a link to a folder kept between jobs.
+      - name: Keep Rust builds on the self-hosted Mac
+        if: runner.environment == 'self-hosted'
+        run: |
+          keep="$RUNNER_TOOL_CACHE/reachercm-target"
+          mkdir -p "$keep"
+          rm -rf src-tauri/target
+          ln -s "$keep" src-tauri/target
+          # Bundles of an earlier version must not end up in this release.
+          rm -rf "$keep"/release/bundle "$keep"/*/release/bundle
+
       - name: Rust cache
+        if: runner.environment != 'self-hosted'
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target

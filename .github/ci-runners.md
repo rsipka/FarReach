@@ -58,6 +58,11 @@ power.
 9. Try it: **Actions > iOS build > Run workflow** on main. The job should
    show the runner name `my-mac`.
 
+On the Mac the Rust build is kept in `~/actions-runner/_work/_tool/reachercm-target`
+instead of GitHub's build cache, so nothing large goes over its connection.
+It grows over time; delete the folder whenever you like (the next build is
+then a full one, about 15 minutes on an Intel Mac).
+
 To stop using it, delete the variable (step 8). To remove the runner:
 `./svc.sh uninstall`, then `./config.sh remove --token <token>` with a token
 from the runner's page on GitHub.
