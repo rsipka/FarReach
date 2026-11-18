@@ -1,6 +1,6 @@
-Reacher CM Dev 0.9.2-dev.6, a pre-release built from the fork's main.
+Reacher CM Dev 0.9.2-dev.7, a pre-release built from the fork's main.
 
-New since v0.9.2-dev.5:
+New since v0.9.2-dev.6:
 
 - CI ready for Ubuntu 26 and busy macOS runners
 
