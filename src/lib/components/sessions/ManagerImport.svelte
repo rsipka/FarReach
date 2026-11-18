@@ -1,8 +1,8 @@
 <script lang="ts">
 	/**
 	 * Import hosts from another connection manager: Devolutions Remote
-	 * Desktop Manager, or (picked in the dialog) mRemoteNG, MobaXterm, PuTTY,
-	 * WinSCP or Tabby. A file is picked or pasted, or the app's own settings
+	 * Desktop Manager, mRemoteNG, MobaXterm, PuTTY, WinSCP or Tabby, as
+	 * picked in the "Import from" select that all import dialogs share. A file is picked or pasted, or the app's own settings
 	 * are read from this computer; each app's reader is in
 	 * #lib/sessions/import (RDM's in #lib/sessions/rdm-import).
 	 *
@@ -20,7 +20,8 @@
 	import { sessionCreate, sessionCreateFolder, sessionList, sessionListFolders, sessionSetFolderCredential, type AuthMethod, type Folder, type JumpHostConfig, type SessionConfig } from '#lib/ipc/sessions.js';
 	import { findChildFolder, findExisting } from '#lib/sessions/rdm-import.js';
 	import { decodeFile, type ImportCredential, type ImportHost, type ImportNotice, type ImportSkipped } from '#lib/sessions/import/common.js';
-	import { IMPORT_SOURCES, OTHER_SOURCES, readLocal, type ImportSourceId } from '#lib/sessions/import/sources.js';
+	import { IMPORT_SOURCES, readLocal, type ImportSourceId } from '#lib/sessions/import/sources.js';
+	import ImportSourcePicker, { type AnyImportSource } from './ImportSourcePicker.svelte';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
 	import { savedCredentialCreate, savedCredentialList, credentialsFor } from '#lib/ipc/savedCredentials.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
@@ -30,14 +31,15 @@
 		open: boolean;
 		vaultId?: string | null;
 		onsave?: () => void;
-		/** RDM; or, left out, the person picks among the other apps. */
-		source?: ImportSourceId;
+		/** The app to import from. */
+		source: ImportSourceId;
+		/** Another source picked in the "Import from" select. */
+		onsource?: (source: AnyImportSource) => void;
 	}
 
-	let { open = $bindable(), vaultId = null, onsave, source: fixedSource }: Props = $props();
+	let { open = $bindable(), vaultId = null, onsave, source, onsource }: Props = $props();
 
-	let pickedSource = $state<ImportSourceId>(OTHER_SOURCES[0]);
-	const sourceId = $derived(fixedSource ?? pickedSource);
+	const sourceId = $derived(source);
 	const src = $derived(IMPORT_SOURCES[sourceId]);
 	const isRdm = $derived(sourceId === 'rdm');
 
@@ -385,24 +387,17 @@
 	}
 </script>
 
-<Modal {open} onclose={close} title={isRdm ? t('session.import_rdm') : t('session.mgr_import_title')} maxWidth="600px">
+<Modal {open} onclose={close} title={t('session.import_sessions')} maxWidth="600px">
 	<div class="import-content">
-		{#if !fixedSource}
-			<label class="user-field">
-				<span>{t('session.mgr_import_source')}</span>
-				<select
-					class="tool-input"
-					bind:value={pickedSource}
-					onchange={() => {
-						askPassword = null;
-						masterPassword = '';
-						error = undefined;
-					}}
-					disabled={busy || parsed}
-				>
-					{#each OTHER_SOURCES as id (id)}<option value={id}>{IMPORT_SOURCES[id].app}</option>{/each}
-				</select>
-			</label>
+		{#if onsource}
+			<ImportSourcePicker
+				value={sourceId}
+				onchange={(id) => {
+					if (id !== sourceId) close();
+					onsource(id);
+				}}
+				disabled={importing}
+			/>
 		{/if}
 		<p class="import-desc">{descFor(sourceId)}</p>
 
@@ -444,7 +439,7 @@
 				class="tool-input json-input"
 				bind:value={raw}
 				oninput={() => (fileName = null)}
-				aria-label={isRdm ? t('session.import_rdm') : t('session.mgr_import_title')}
+				aria-label={t('session.import_sessions')}
 				placeholder={src.placeholder}
 				spellcheck="false"
 				disabled={busy}

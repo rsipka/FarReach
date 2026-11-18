@@ -1,5 +1,5 @@
 // Standalone smoke test: start the real server, speak real MCP to it over TCP.
-use reach_lib::mcp::{server, McpState};
+use reacher_cm_lib::mcp::{server, McpState};
 use std::sync::Arc;
 
 #[tokio::main]
@@ -7,7 +7,7 @@ async fn main() {
     let state = Arc::new(McpState::default());
     state.set_token(Some("test-token".into()));
     state.set_agent("linux-administrator").unwrap();
-    state.share("s1".into(), reach_lib::mcp::session::SessionKind::Ssh,
+    state.share("s1".into(), reacher_cm_lib::mcp::session::SessionKind::Ssh,
                 "db.internal".into(), "root".into()).await;
     state.push_output("s1", b"root@db:~# uptime\n 21:04:11 up 3 days\nroot@db:~# ").await;
 
