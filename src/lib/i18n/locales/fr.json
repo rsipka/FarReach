@@ -1288,6 +1288,7 @@
   "session.move_n": "Déplacer ({{count}})",
   "session.move_filter": "Trouver un dossier",
   "session.move_to_folder": "Déplacer vers le dossier",
+  "session.move_mixed_vaults": "Ces sessions sont dans des coffres différents, et un dossier ne contient que les sessions d'un seul coffre.",
   "session.remove_from_folder": "Retirer du dossier",
   "nav.terminal": "Terminal",
   "nav.ansible": "Ansible",

@@ -1288,6 +1288,7 @@
   "session.move_n": "Mover ({{count}})",
   "session.move_filter": "Buscar una carpeta",
   "session.move_to_folder": "Mover a carpeta",
+  "session.move_mixed_vaults": "Estas sesiones están en vaults distintos y una carpeta solo contiene sesiones de un vault.",
   "session.remove_from_folder": "Quitar de la carpeta",
   "nav.terminal": "Terminal",
   "nav.ansible": "Ansible",
