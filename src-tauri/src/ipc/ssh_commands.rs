@@ -626,6 +626,49 @@ pub async fn ssh_tmux_list(
     Ok(crate::ssh::tmux::parse_list(&out))
 }
 
+/// The windows of a tab's tmux session, as its view (`{name}-{view}`) sees them.
+#[tauri::command]
+pub async fn ssh_tmux_windows(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    name: String,
+    view: String,
+) -> Result<Vec<crate::ssh::tmux::Window>, String> {
+    let view = crate::ssh::tmux::view_name(&name, &view)?;
+    let handle = {
+        let manager = state.ssh_manager.lock().await;
+        manager.get_handle(&connection_id).map_err(|e| e.to_string())?
+    };
+    let out = crate::ssh::client::exec_on_connection(&handle, &crate::ssh::tmux::windows_command(&view)).await.map_err(|e| e.to_string())?;
+    Ok(crate::ssh::tmux::parse_windows(&out))
+}
+
+/// Switch, rename, close or open a window in a tab's tmux view.
+#[tauri::command]
+pub async fn ssh_tmux_window(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    name: String,
+    view: String,
+    op: crate::ssh::tmux::WindowOp,
+    shell: Option<String>,
+) -> Result<(), String> {
+    let view = crate::ssh::tmux::view_name(&name, &view)?;
+    let command = crate::ssh::tmux::window_command(&view, &op, shell.as_deref())?;
+    let handle = {
+        let manager = state.ssh_manager.lock().await;
+        manager.get_handle(&connection_id).map_err(|e| e.to_string())?
+    };
+    let (_, err, code) = crate::ssh::client::exec_on_connection_with_exit_code_timeout(&handle, &command, std::time::Duration::from_secs(15))
+        .await
+        .map_err(|e| e.to_string())?;
+    if code != 0 {
+        let err = err.trim();
+        return Err(if err.is_empty() { format!("tmux exited with {code}") } else { err.to_string() });
+    }
+    Ok(())
+}
+
 /// Ends a tab's tmux session for good (the tab's own connection runs it),
 /// with the sessions other tabs joined it as.
 #[tauri::command]

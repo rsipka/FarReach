@@ -64,6 +64,9 @@ export interface Tab {
 	/** Bumped to make an SSH tab connect again into the tmux session its
 	 *  connect settings now name (Switch tmux session). */
 	tmuxSwitch?: number;
+	/** The tmux window a tmux tab shows (its id and name), from the title
+	 *  its view sets (see #lib/terminal/tmux-tabs). */
+	tmuxWindow?: { id: string; name: string };
 	/** That session's history choice; unset: the default from Settings. */
 	historyMode?: HistoryMode | null;
 }

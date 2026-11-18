@@ -1,3 +1,4 @@
+import { newTab } from '#lib/terminal/tmux-tabs.js';
 import { createTab, closeTab, getActiveTab, getTabs, activateTab } from './tabs.svelte';
 import { toggleAIPanel } from './ai-chat.svelte';
 import { togglePalette, requestSessionAction } from './palette.svelte';
@@ -98,7 +99,7 @@ function normalizeKey(key: string): string {
 }
 
 const shortcuts: Shortcut[] = [
-	{ key: 't', ctrl: true, action: 'New tab', handler: () => createTab('local') },
+	{ key: 't', ctrl: true, action: 'New tab', handler: newTab },
 	{ key: 'n', ctrl: true, action: 'New session', handler: () => requestSessionAction({ kind: 'new-session' }) },
 	{ key: 'n', ctrl: true, shift: true, action: 'Quick connect', handler: () => requestSessionAction({ kind: 'quick-connect' }) },
 	{ key: 'w', ctrl: true, shift: true, action: 'Close tab', handler: closeActiveTab },

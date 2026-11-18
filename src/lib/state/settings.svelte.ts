@@ -124,6 +124,13 @@ export interface Settings {
 	/** A program on the server may put text on the clipboard (OSC 52:
 	 *  tmux copy mode, vim). Never read. See #lib/terminal/osc52. */
 	terminalOsc52: boolean;
+	/** On a tmux tab, Ctrl+T and + open a new tmux window in a new tab. */
+	tmuxNewTabWindow: boolean;
+	/** Connecting to a tmux session opens the last used window, or every
+	 *  window in a tab of its own. See #lib/terminal/tmux-tabs. */
+	tmuxConnectWindows: 'last' | 'all';
+	/** tmux's status line off in tmux tabs. */
+	tmuxHideStatus: boolean;
 	/** A middle click in the terminal pastes. */
 	terminalMiddleClickPaste: boolean;
 	/** The characters that end a word on a double click, besides the space. */
@@ -230,6 +237,9 @@ const defaults: Settings = {
 	terminalRightClick: DEFAULT_RIGHT_CLICK,
 	terminalCopyOnSelect: false,
 	terminalOsc52: false,
+	tmuxNewTabWindow: true,
+	tmuxConnectWindows: 'last',
+	tmuxHideStatus: false,
 	terminalMiddleClickPaste: true,
 	terminalWordSeparators: DEFAULT_WORD_SEPARATORS,
 	setupComplete: false,
@@ -350,6 +360,9 @@ export function loadSettings(): void {
 			settings.terminalRightClick = rightClickMode(parsed.terminalRightClick);
 			settings.terminalCopyOnSelect = parsed.terminalCopyOnSelect ?? defaults.terminalCopyOnSelect;
 			settings.terminalOsc52 = parsed.terminalOsc52 ?? defaults.terminalOsc52;
+			settings.tmuxNewTabWindow = parsed.tmuxNewTabWindow ?? defaults.tmuxNewTabWindow;
+			settings.tmuxConnectWindows = parsed.tmuxConnectWindows === 'all' ? 'all' : 'last';
+			settings.tmuxHideStatus = parsed.tmuxHideStatus ?? defaults.tmuxHideStatus;
 			settings.terminalMiddleClickPaste = parsed.terminalMiddleClickPaste ?? defaults.terminalMiddleClickPaste;
 			settings.terminalWordSeparators = parsed.terminalWordSeparators ?? defaults.terminalWordSeparators;
 			settings.pendingTursoOrg = parsed.pendingTursoOrg ?? defaults.pendingTursoOrg;
