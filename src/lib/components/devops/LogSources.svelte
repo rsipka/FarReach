@@ -417,7 +417,7 @@
 	.typed input {
 		min-height: 26px;
 		padding: 2px 6px;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		background: var(--color-bg-primary);
 		color: var(--color-text-primary);
@@ -456,7 +456,7 @@
 
 	button.primary {
 		border-color: var(--color-accent);
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		color: #fff;
 		font-weight: 600;
 	}

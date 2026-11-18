@@ -171,7 +171,7 @@
 	}
 
 	.toggle input:checked + .toggle-track {
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 	}
 
 	.toggle input:checked + .toggle-track::after {

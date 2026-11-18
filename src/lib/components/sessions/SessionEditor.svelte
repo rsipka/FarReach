@@ -1302,7 +1302,7 @@
 	.folder-select {
 		padding: 6px 10px;
 		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		color: var(--color-text-primary);
 		font-family: var(--font-sans);
@@ -1360,7 +1360,7 @@
 	.field-input {
 		padding: 6px 10px;
 		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		color: var(--color-text-primary);
 		font-family: var(--font-sans);
@@ -1564,7 +1564,7 @@
 	}
 
 	.proxy-type-btn.active {
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		color: #fff;
 	}
 
@@ -1594,7 +1594,7 @@
 		font-size: 0.875rem;
 		color: var(--color-text-primary);
 		background-color: var(--color-bg-elevated);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		outline: none;
 		box-sizing: border-box;

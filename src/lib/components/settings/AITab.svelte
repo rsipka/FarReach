@@ -228,7 +228,7 @@
 		font-size: 0.8125rem;
 		font-weight: 500;
 		color: #fff;
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		border: none;
 		border-radius: var(--radius-btn);
 		cursor: pointer;
@@ -281,7 +281,7 @@
 		font-size: 0.8125rem;
 		color: var(--color-text-primary);
 		background-color: var(--color-bg-elevated);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		outline: none;
 		box-sizing: border-box;

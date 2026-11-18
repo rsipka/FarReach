@@ -97,7 +97,7 @@
 		padding: 0 20px;
 		border-radius: var(--radius-btn);
 		border: 1px solid var(--color-accent);
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		color: #fff;
 		font: inherit;
 		font-size: var(--text-sm);

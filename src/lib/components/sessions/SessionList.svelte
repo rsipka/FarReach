@@ -15,12 +15,20 @@
 		faListCheck,
 		faFolder,
 		faFolderOpen,
-		faPen
+		faPen,
+		faCheckDouble,
+		faAnglesUp,
+		faAnglesDown,
+		faArrowDownWideShort,
+		faFilter,
+		faStar,
+		faTrashCan,
+		faCheck
 	} from '@fortawesome/free-solid-svg-icons';
 	import { registerSessionActions, shortcutLabel } from '#lib/state/shortcuts.svelte.js';
 	import { pendingSessionAction, takeSessionAction } from '#lib/state/palette.svelte.js';
 	import { parseAddress } from '#lib/utils/address.js';
-	import { noteSessionUsed, forgetSession } from '#lib/state/recents.svelte.js';
+	import { noteSessionUsed, forgetSession, recentSessionIds } from '#lib/state/recents.svelte.js';
 	import { onMount, tick } from 'svelte';
 	import { listen } from '@tauri-apps/api/event';
 	import SessionEditor from './SessionEditor.svelte';
@@ -39,6 +47,7 @@
 	import Button from '#lib/components/shared/Button.svelte';
 	import UntrustedRefsDialog from '#lib/components/pwmanager/UntrustedRefsDialog.svelte';
 	import { sessionUntrustedSecretRefs, sessionApproveSecretRefs, untrustedRefsFromError, type UntrustedRefs } from '#lib/ipc/sessions.js';
+	import type { SessionKind } from '#lib/ipc/sessions.js';
 	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetFolderCredential, sessionSetFolderTmux, sessionBulkUndo, type BulkResult, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
@@ -232,13 +241,93 @@
 		return s.notes ? [s.notes, ...fields] : fields;
 	}
 
-	// Filter sessions by selected vault, then by search query
+	// ---- How the list is sorted and filtered (the toolbar above it) ----------
+	// Kept on this device only: it is how this screen is looked at, not data.
+	type SortKey = 'default' | 'name' | 'host' | 'recent';
+	const VIEW_KEY = 'reach-session-list-view';
+	const KINDS: { id: SessionKind; label: string }[] = [
+		{ id: 'ssh', label: 'SSH' },
+		{ id: 'rdp', label: 'RDP' },
+		{ id: 'vnc', label: 'VNC' },
+		{ id: 'telnet', label: 'Telnet' },
+		{ id: 'wsl', label: 'WSL' }
+	];
+	function loadView(): { sort: SortKey; favorites: boolean; kinds: SessionKind[]; tags: string[] } {
+		const none = { sort: 'default' as SortKey, favorites: false, kinds: [], tags: [] };
+		try {
+			const v = JSON.parse(localStorage.getItem(VIEW_KEY) ?? 'null');
+			if (!v || typeof v !== 'object') return none;
+			return {
+				sort: ['default', 'name', 'host', 'recent'].includes(v.sort) ? v.sort : 'default',
+				favorites: v.favorites === true,
+				kinds: Array.isArray(v.kinds) ? v.kinds.filter((k: unknown) => KINDS.some(x => x.id === k)) : [],
+				tags: Array.isArray(v.tags) ? v.tags.filter((x: unknown) => typeof x === 'string') : []
+			};
+		} catch {
+			return none;
+		}
+	}
+	const initialView = loadView();
+	let sortKey = $state<SortKey>(initialView.sort);
+	let filterFavorites = $state(initialView.favorites);
+	let filterKinds = $state<SessionKind[]>(initialView.kinds);
+	let filterTags = $state<string[]>(initialView.tags);
+	let filtering = $derived(filterFavorites || filterKinds.length > 0 || filterTags.length > 0);
+	let allTags = $derived([...new Set(sessions.flatMap(s => s.tags))].sort((a, b) => a.localeCompare(b)));
+	/** The sort or filter menu under its toolbar button. */
+	let viewMenu = $state<{ kind: 'sort' | 'filter'; x: number; y: number } | null>(null);
+
+	$effect(() => {
+		const v = { sort: sortKey, favorites: filterFavorites, kinds: filterKinds, tags: filterTags };
+		try {
+			localStorage.setItem(VIEW_KEY, JSON.stringify(v));
+		} catch {
+			// Not remembered; the list still works.
+		}
+	});
+
+	function openViewMenu(e: MouseEvent, kind: 'sort' | 'filter'): void {
+		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		viewMenu = viewMenu?.kind === kind ? null : { kind, x: rect.left, y: rect.bottom + 4 };
+	}
+
+	function toggleIn<T>(list: T[], value: T): T[] {
+		return list.includes(value) ? list.filter(x => x !== value) : [...list, value];
+	}
+
+	function clearFilters(): void {
+		filterFavorites = false;
+		filterKinds = [];
+		filterTags = [];
+	}
+
+	function sortSessions(list: SessionConfig[]): SessionConfig[] {
+		if (sortKey === 'default') return list;
+		const out = [...list];
+		if (sortKey === 'name') out.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+		else if (sortKey === 'host') out.sort((a, b) => a.host.localeCompare(b.host, undefined, { numeric: true }) || a.port - b.port);
+		else {
+			// Used here lately first, the rest after in their usual order.
+			const recent = recentSessionIds();
+			const rank = (s: SessionConfig) => {
+				const i = recent.indexOf(s.id);
+				return i < 0 ? recent.length : i;
+			};
+			out.sort((a, b) => rank(a) - rank(b));
+		}
+		return out;
+	}
+
+	// Filter sessions by selected vault, the toolbar's filter, then by search query
 	let filteredSessions = $derived.by(() => {
 		let result = sessions.filter(s => {
 			if (selectedVaultId === ALL_VAULTS) return true;
 			if (selectedVaultId === null) return !s.vault_id;
 			return s.vault_id === selectedVaultId;
 		});
+		if (filterFavorites) result = result.filter(s => s.favorite);
+		if (filterKinds.length) result = result.filter(s => filterKinds.includes(sessionKind(s)));
+		if (filterTags.length) result = result.filter(s => s.tags.some(tag => filterTags.includes(tag)));
 		const raw = searchQuery.trim();
 		const re = searchRegex.re;
 		if (re) {
@@ -258,7 +347,7 @@
 				docsText(s).some(text => text.toLowerCase().includes(q))
 			);
 		}
-		return result;
+		return sortSessions(result);
 	});
 
 	/** "/pattern/flags" searches by regular expression (case-insensitive
@@ -525,6 +614,38 @@
 		else next.add(folderId);
 		collapsedFolders = next;
 		localStorage.setItem('collapsedFolders', JSON.stringify([...next]));
+	}
+
+	/** Some folder on screen is open: the toolbar button folds them all. */
+	let anyExpanded = $derived(folders.some(f => !collapsedFolders.has(f.id)));
+
+	function setAllFolders(collapsed: boolean): void {
+		collapsedFolders = new Set(collapsed ? folders.map(f => f.id) : []);
+		localStorage.setItem('collapsedFolders', JSON.stringify([...collapsedFolders]));
+	}
+
+	/** Star the selected sessions, or unstar them when all already are. */
+	async function favoriteSelected(): Promise<void> {
+		const ids = [...selected];
+		if (!ids.length) return;
+		const all = sessions.filter(s => selected.has(s.id)).every(s => s.favorite);
+		try {
+			await sessionSetFavorite(ids, !all);
+			window.dispatchEvent(new CustomEvent('reach:sessions-changed'));
+			await loadSessions();
+		} catch (err) {
+			addToast(String(err), 'error');
+		}
+	}
+
+	/** Ctrl+A (Cmd+A) while the list has focus selects what it shows; in the
+	 *  search field it keeps selecting the text. */
+	function onListKeydown(e: KeyboardEvent): void {
+		if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'a') return;
+		const el = e.target as HTMLElement | null;
+		if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+		e.preventDefault();
+		selectAllShown();
 	}
 
 	async function handleCreateFolder(): Promise<void> {
@@ -1559,6 +1680,78 @@
 			</div>
 		</div>
 
+		{#if !selecting}
+			<div class="list-toolbar" role="toolbar" aria-label={t('session.list_tools')}>
+				<button class="tb-btn" type="button" onclick={() => { selectMode = true; }} title={t('session.select_sessions')} aria-label={t('session.select_sessions')}>
+					<FaIcon icon={faListCheck} size={13} />
+				</button>
+				<button class="tb-btn" type="button" onclick={selectAllShown} disabled={filteredSessions.length === 0} title={`${t('session.select_all')} (${shortcutLabel('a', { ctrl: true })})`} aria-label={t('session.select_all')}>
+					<FaIcon icon={faCheckDouble} size={13} />
+				</button>
+				<span class="tb-sep"></span>
+				<button class="tb-btn" type="button" onclick={() => setAllFolders(anyExpanded)} disabled={folders.length === 0} title={anyExpanded ? t('session.collapse_all') : t('session.expand_all')} aria-label={anyExpanded ? t('session.collapse_all') : t('session.expand_all')}>
+					<FaIcon icon={anyExpanded ? faAnglesUp : faAnglesDown} size={13} />
+				</button>
+				<button class="tb-btn" class:on={sortKey !== 'default'} type="button" onclick={(e) => openViewMenu(e, 'sort')} title={t('session.sort_by')} aria-label={t('session.sort_by')} aria-haspopup="menu" aria-expanded={viewMenu?.kind === 'sort'}>
+					<FaIcon icon={faArrowDownWideShort} size={13} />
+				</button>
+				<button class="tb-btn" class:on={filtering} type="button" onclick={(e) => openViewMenu(e, 'filter')} title={t('session.filter')} aria-label={t('session.filter')} aria-haspopup="menu" aria-expanded={viewMenu?.kind === 'filter'}>
+					<FaIcon icon={faFilter} size={12} />
+				</button>
+				<span class="tb-grow"></span>
+				<button class="tb-btn" type="button" onclick={() => contextNewFolder()} title={t('session.new_folder')} aria-label={t('session.new_folder')}>
+					<FaIcon icon={faFolderPlus} size={13} />
+				</button>
+				<button class="tb-btn" type="button" onclick={() => openImport(lastImportSource)} title={t('session.import_sessions_menu')} aria-label={t('session.import_sessions_menu')}>
+					<FaIcon icon={faFileImport} size={13} />
+				</button>
+			</div>
+			{#if filtering}
+				<div class="filter-note">
+					<span>{t('session.filter_on', { count: String(filteredSessions.length) })}</span>
+					<button class="bulk-link" type="button" onclick={clearFilters}>{t('session.filter_clear')}</button>
+				</div>
+			{/if}
+		{/if}
+
+		{#if viewMenu}
+			<ContextMenuBackdrop onclose={() => (viewMenu = null)} />
+			<div class="context-menu pop-in" role="menu" use:positionMenu={{ x: viewMenu.x, y: viewMenu.y }}>
+				{#if viewMenu.kind === 'sort'}
+					<div class="context-label">{t('session.sort_by')}</div>
+					{#each [['default', 'session.sort_default'], ['name', 'session.sort_name'], ['host', 'session.sort_host'], ['recent', 'session.sort_recent']] as const as [key, label] (key)}
+						<button class="context-item" class:context-current={sortKey === key} role="menuitemradio" aria-checked={sortKey === key} type="button" onclick={() => { sortKey = key; viewMenu = null; }}>{t(label)}</button>
+					{/each}
+				{:else}
+					<button class="context-item check-item" role="menuitemcheckbox" aria-checked={filterFavorites} type="button" onclick={() => (filterFavorites = !filterFavorites)}>
+						<span class="check">{#if filterFavorites}<FaIcon icon={faCheck} size={10} />{/if}</span>{t('session.filter_favorites')}
+					</button>
+					<div class="context-sep"></div>
+					<div class="context-label">{t('session.filter_type')}</div>
+					{#each KINDS as kind (kind.id)}
+						<button class="context-item check-item" role="menuitemcheckbox" aria-checked={filterKinds.includes(kind.id)} type="button" onclick={() => (filterKinds = toggleIn(filterKinds, kind.id))}>
+							<span class="check">{#if filterKinds.includes(kind.id)}<FaIcon icon={faCheck} size={10} />{/if}</span>{kind.label}
+						</button>
+					{/each}
+					{#if allTags.length}
+						<div class="context-sep"></div>
+						<div class="context-label">{t('session.filter_tags')}</div>
+						<div class="context-folders">
+							{#each allTags as tag (tag)}
+								<button class="context-item check-item" role="menuitemcheckbox" aria-checked={filterTags.includes(tag)} type="button" onclick={() => (filterTags = toggleIn(filterTags, tag))}>
+									<span class="check">{#if filterTags.includes(tag)}<FaIcon icon={faCheck} size={10} />{/if}</span>{tag}
+								</button>
+							{/each}
+						</div>
+					{/if}
+					{#if filtering}
+						<div class="context-sep"></div>
+						<button class="context-item" type="button" onclick={() => { clearFilters(); viewMenu = null; }}>{t('session.filter_clear')}</button>
+					{/if}
+				{/if}
+			</div>
+		{/if}
+
 		{#if addressSuggestion}
 			<button class="connect-suggestion" onclick={connectToAddress}>
 				<FaIcon icon={faBolt} size={12} />
@@ -1577,26 +1770,28 @@
 
 		{#if selecting}
 			<div class="bulk-bar" role="toolbar" aria-label={t('session.selection')}>
-				<div class="bulk-head">
-					<span class="bulk-count">{t('session.selected_n', { count: String(selected.size) })}</span>
-					{#if selected.size < filteredSessions.length}
-						<button class="bulk-link" type="button" onclick={selectAllShown}>{t('session.select_all_n', { count: String(filteredSessions.length) })}</button>
-					{/if}
-					<button class="bulk-close" type="button" onclick={clearSelection} title={t('session.done_selecting')} aria-label={t('session.done_selecting')}>
-						<FaIcon icon={faXmark} size={11} />
+				<span class="bulk-count">{t('session.selected_n', { count: String(selected.size) })}</span>
+				{#if selected.size < filteredSessions.length}
+					<button class="bulk-link" type="button" onclick={selectAllShown}>{t('session.select_all_n', { count: String(filteredSessions.length) })}</button>
+				{/if}
+				<span class="bulk-actions">
+					<button class="tb-btn" type="button" disabled={selected.size === 0} onclick={openBulkEdit} title={t('bulk.edit_hint')} aria-label={t('bulk.edit')}>
+						<FaIcon icon={faPen} size={12} />
 					</button>
-				</div>
-				<div class="bulk-actions">
-					<button class="bulk-btn" type="button" disabled={selected.size === 0} onclick={openBulkEdit} title={t('bulk.edit_hint')}>
-						<FaIcon icon={faPen} size={11} />
-						<span>{t('bulk.edit')}</span>
+					<button class="tb-btn" type="button" disabled={selected.size === 0} onclick={() => openMove([...selected])} title={t('session.move_to')} aria-label={t('session.move_to')}>
+						<FaIcon icon={faFolderOpen} size={13} />
 					</button>
-					<button class="bulk-btn primary" type="button" disabled={selected.size === 0} onclick={() => openMove([...selected])}>
-						<FaIcon icon={faFolderOpen} size={11} />
-						<span>{t('session.move_to')}</span>
+					<button class="tb-btn" type="button" disabled={selected.size === 0} onclick={() => void favoriteSelected()} title={t('session.add_favorite')} aria-label={t('session.add_favorite')}>
+						<FaIcon icon={faStar} size={12} />
 					</button>
-					<button class="bulk-btn danger" type="button" disabled={selected.size === 0} onclick={() => (bulkDeleteConfirm = true)}>{t('common.delete')}</button>
-				</div>
+					<button class="tb-btn danger" type="button" disabled={selected.size === 0} onclick={() => (bulkDeleteConfirm = true)} title={t('common.delete')} aria-label={t('common.delete')}>
+						<FaIcon icon={faTrashCan} size={12} />
+					</button>
+					<span class="tb-sep"></span>
+					<button class="tb-btn" type="button" onclick={clearSelection} title={t('session.done_selecting')} aria-label={t('session.done_selecting')}>
+						<FaIcon icon={faXmark} size={13} />
+					</button>
+				</span>
 			</div>
 		{:else if filteredSessions.length > 1 && searchQuery.trim()}
 			<!-- Only for a search: at rest it repeated the + menu's Select sessions on
@@ -1621,7 +1816,7 @@
 			{#if creatingFolder}{@render newFolderRow()}{/if}
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
-			<div class="sessions-scroll" data-folder-id="__ungrouped__" class:drop-active={dropTarget === null && dragging} oncontextmenu={openBackgroundContextMenu} onclick={closeContextMenu}>
+			<div class="sessions-scroll" data-folder-id="__ungrouped__" class:drop-active={dropTarget === null && dragging} oncontextmenu={openBackgroundContextMenu} onclick={closeContextMenu} onkeydown={onListKeydown}>
 				{#if dragging}
 					<div class="no-folder-drop" data-folder-id="__ungrouped__" class:drop-active={dropTarget === null}><FaIcon icon={faFolder} size={12} /><span>{t('session.no_folder')}</span></div>
 				{/if}
@@ -1721,7 +1916,22 @@
 				<div class="context-sep"></div>
 				<button class="context-item context-danger" onclick={() => { if (contextMenu?.folder) handleDeleteFolder(contextMenu.folder.id); closeContextMenu(); }} type="button">{t('common.delete')}</button>
 			{:else}
+				<button class="context-item" onclick={() => { closeContextMenu(); handleNewSession(); }} type="button">{t('session.new_session')}</button>
 				<button class="context-item" onclick={() => contextNewFolder()} type="button">{t('session.new_folder')}</button>
+				<button class="context-item" onclick={() => { closeContextMenu(); openImport(lastImportSource); }} type="button">{t('session.import_sessions_menu')}</button>
+				<div class="context-sep"></div>
+				<button class="context-item" onclick={() => { closeContextMenu(); selectMode = true; }} type="button">{t('session.select_sessions')}</button>
+				<button class="context-item" onclick={() => { closeContextMenu(); selectAllShown(); }} type="button">{t('session.select_all')}</button>
+				{#if folders.length}
+					<div class="context-sep"></div>
+					<button class="context-item" onclick={() => { closeContextMenu(); setAllFolders(true); }} type="button">{t('session.collapse_all')}</button>
+					<button class="context-item" onclick={() => { closeContextMenu(); setAllFolders(false); }} type="button">{t('session.expand_all')}</button>
+				{/if}
+				<div class="context-sep"></div>
+				<div class="context-label">{t('session.sort_by')}</div>
+				{#each [['default', 'session.sort_default'], ['name', 'session.sort_name'], ['host', 'session.sort_host'], ['recent', 'session.sort_recent']] as const as [key, label] (key)}
+					<button class="context-item context-folder-item" class:context-current={sortKey === key} onclick={() => { sortKey = key; closeContextMenu(); }} type="button">{t(label)}</button>
+				{/each}
 				{#if lastBulkUndo}
 					<button class="context-item" onclick={() => void undoBulkEdit()} type="button">{t('bulk.undo_last')}</button>
 				{/if}
@@ -1890,10 +2100,13 @@
 
 
 <style>
+	/* A segmented switch: the chosen side is raised out of a sunken track,
+	   so which list is showing reads at a glance in both themes. */
 	.list-tabs {
 		display: flex;
 		gap: 2px;
 		padding: 2px;
+		background: var(--color-surface-active);
 		border: 1px solid var(--color-border);
 		border-radius: 6px;
 	}
@@ -1910,9 +2123,10 @@
 	}
 
 	.list-tab.active {
-		background-color: var(--color-surface-hover);
+		background-color: var(--color-bg-elevated);
 		color: var(--color-text-primary);
-		font-weight: 500;
+		font-weight: 600;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 0 0 1px var(--color-border);
 	}
 
 	.context-current {
@@ -2068,7 +2282,7 @@
 		gap: 6px;
 		padding: 4px 8px;
 		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 6px;
 	}
 
@@ -2159,7 +2373,7 @@
 		width: 0;
 		min-width: 0;
 		padding: 5px 10px;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 5px;
 		background: var(--color-bg-primary);
 		color: var(--color-text-primary);
@@ -2184,7 +2398,7 @@
 	}
 
 	.new-folder-save {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		color: #fff;
 	}
 
@@ -2588,7 +2802,7 @@
 		font-size: var(--text-md);
 		color: var(--color-text-primary);
 		background-color: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 6px;
 		outline: none;
 		box-sizing: border-box;
@@ -2673,12 +2887,12 @@
 	}
 
 	.prompt-connect {
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		color: #fff;
 	}
 
 	.prompt-connect:hover:not(:disabled) {
-		background-color: var(--color-accent-hover);
+		background-color: color-mix(in srgb, var(--color-accent-fill) 88%, black);
 	}
 
 	/* Init section (first run) */
@@ -2709,7 +2923,7 @@
 		font-size: var(--text-sm);
 		color: var(--color-text-primary);
 		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 6px;
 		outline: none;
 	}
@@ -2772,7 +2986,7 @@
 		font-size: var(--text-sm);
 		font-weight: 500;
 		color: #fff;
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		border: none;
 		border-radius: 6px;
 		cursor: pointer;
@@ -2780,7 +2994,7 @@
 	}
 
 	.init-btn:hover:not(:disabled) {
-		background-color: var(--color-accent-hover);
+		background-color: color-mix(in srgb, var(--color-accent-fill) 88%, black);
 	}
 
 	.init-btn:disabled {
@@ -2825,27 +3039,111 @@
 		color: var(--color-accent);
 	}
 
+	/* The selection's actions on one row, in place of the toolbar. */
 	.bulk-bar {
 		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		margin: 6px 0 4px;
-		padding: 6px 8px;
-		border-radius: 8px;
-		background: color-mix(in srgb, var(--color-accent) 12%, var(--color-bg-secondary));
-		border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
-	}
-
-	.bulk-head {
-		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 6px;
+		gap: 2px 6px;
+		margin: 2px 0 4px;
+		padding: 3px 4px 3px 8px;
+		border-radius: 8px;
+		background: var(--color-accent-subtle);
+		border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
 	}
 
 	.bulk-count {
 		font-size: 0.75rem;
 		font-weight: 600;
-		margin-right: auto;
+		white-space: nowrap;
+	}
+
+	.bulk-actions {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		margin-left: auto;
+	}
+
+	/* The toolbar above the list: small icon buttons, labelled by tooltip. */
+	.list-toolbar {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		margin: 2px 0 4px;
+		padding-bottom: 4px;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.tb-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 26px;
+		padding: 0;
+		border: 1px solid transparent;
+		border-radius: 6px;
+		background: none;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+	}
+
+	.tb-btn:hover:not(:disabled) {
+		background: var(--color-surface-hover);
+		border-color: var(--color-border);
+		color: var(--color-text-primary);
+	}
+
+	.tb-btn.on {
+		background: var(--color-accent-subtle);
+		color: var(--color-accent);
+	}
+
+	.tb-btn.danger {
+		color: var(--color-danger);
+	}
+
+	.tb-btn:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+
+	.tb-sep {
+		width: 1px;
+		height: 16px;
+		margin: 0 3px;
+		background: var(--color-border);
+	}
+
+	.tb-grow {
+		flex: 1;
+	}
+
+	.filter-note {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 6px;
+		margin: 0 0 4px;
+		padding: 0 4px;
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
+	}
+
+	.check-item {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.check {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 14px;
+		height: 14px;
+		color: var(--color-accent);
 	}
 
 	.bulk-link {
@@ -2858,71 +3156,11 @@
 		cursor: pointer;
 	}
 
-	.bulk-actions {
-		display: grid;
-		grid-template-columns: 1fr 1fr 1fr;
-		gap: 6px;
-	}
-
-	.bulk-actions .bulk-btn {
-		justify-content: center;
-	}
-
-	.bulk-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 5px;
-		min-height: 26px;
-		padding: 3px 9px;
-		border-radius: 6px;
-		border: 1px solid var(--color-border);
-		background: var(--color-bg-elevated);
-		color: var(--color-text-primary);
-		font-size: 0.75rem;
-		cursor: pointer;
-	}
-
-	.bulk-btn:disabled {
-		opacity: 0.45;
-		cursor: default;
-	}
-
-	.bulk-btn.primary {
-		background: var(--color-accent);
-		border-color: var(--color-accent);
-		color: #fff;
-	}
-
-	.bulk-btn.danger {
-		color: var(--color-danger, #ff453a);
-	}
-
-	.bulk-close {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 26px;
-		height: 26px;
-		border: none;
-		border-radius: 6px;
-		background: none;
-		color: var(--color-text-secondary);
-		cursor: pointer;
-	}
-
-	.bulk-close:hover {
-		background: var(--color-surface-hover);
-	}
-
-
+	/* Finger-sized where there is no mouse. */
 	@media (pointer: coarse) {
-		.bulk-btn,
-		.bulk-close {
-			min-height: 36px;
-		}
-
-		.bulk-close {
+		.tb-btn {
 			width: 36px;
+			height: 36px;
 		}
 	}
 

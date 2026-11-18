@@ -213,7 +213,7 @@
 		flex: 1;
 		padding: 6px 8px;
 		border-radius: var(--radius-sm);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		background: var(--color-bg-primary);
 		color: var(--color-text-primary);
 		font-family: var(--font-mono);
@@ -237,7 +237,7 @@
 
 	.bar div {
 		height: 100%;
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		transition: width 0.2s;
 	}
 

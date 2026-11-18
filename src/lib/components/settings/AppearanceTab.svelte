@@ -428,6 +428,20 @@
 		</div>
 	</div>
 
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('termbar.setting')}</span>
+			<span class="setting-description">{t('termbar.setting_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<select class="log-field" value={settings.terminalBar} aria-label={t('termbar.setting')} onchange={(e) => updateSetting('terminalBar', (e.currentTarget as HTMLSelectElement).value as 'always' | 'hover' | 'hidden')}>
+				<option value="always">{t('termbar.always')}</option>
+				<option value="hover">{t('termbar.hover')}</option>
+				<option value="hidden">{t('termbar.hidden')}</option>
+			</select>
+		</div>
+	</div>
+
 	<div class="setting-row font-row">
 		<div class="setting-info">
 			<span class="setting-label">{t('settings.terminal_font')}</span>
@@ -854,7 +868,7 @@
 		min-width: 0;
 		padding: 7px 10px;
 		border-radius: var(--radius-btn);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		background: var(--color-bg-primary);
 		color: var(--color-text-primary);
 		font-family: inherit;

@@ -350,7 +350,7 @@
 		padding: 6px 14px;
 		border: none;
 		border-radius: 999px;
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		color: #fff;
 		font: inherit;
 		font-size: var(--text-xs);

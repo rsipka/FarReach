@@ -39,6 +39,8 @@ export interface Settings {
 	uiZoom: number;
 	/** Tighter rows (a session on one line): space over air. Text stays its size. */
 	compactLayout: boolean;
+	/** The bar over each terminal: always, when the pointer is over it, or never. */
+	terminalBar: 'always' | 'hover' | 'hidden';
 	/** Sessions in the list open on a double click; a single click only
 	 *  focuses the row. Off: one click connects, as before. */
 	doubleClickToOpen: boolean;
@@ -192,6 +194,7 @@ const defaults: Settings = {
 	fontSize: 14,
 	uiZoom: 1,
 	compactLayout: false,
+	terminalBar: 'always',
 	doubleClickToOpen: false,
 	closeTabOnExit: false,
 	serverMonitoring: true,
@@ -306,6 +309,7 @@ export function loadSettings(): void {
 			settings.fontSize = parsed.fontSize ?? defaults.fontSize;
 			settings.uiZoom = parsed.uiZoom ?? defaults.uiZoom;
 			settings.compactLayout = parsed.compactLayout ?? defaults.compactLayout;
+			settings.terminalBar = parsed.terminalBar === 'hover' || parsed.terminalBar === 'hidden' ? parsed.terminalBar : defaults.terminalBar;
 			settings.doubleClickToOpen = parsed.doubleClickToOpen ?? defaults.doubleClickToOpen;
 			settings.closeTabOnExit = parsed.closeTabOnExit ?? defaults.closeTabOnExit;
 			settings.serverMonitoring = parsed.serverMonitoring ?? defaults.serverMonitoring;

@@ -289,7 +289,7 @@
 		font-size: 0.875rem;
 		background: var(--color-bg-primary);
 		color: var(--color-text-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 		outline: none;
 		transition: border-color var(--duration-default) var(--ease-default);
@@ -333,7 +333,7 @@
 	}
 
 	.pill.active {
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		border-color: var(--color-accent);
 		color: #fff;
 	}
@@ -408,7 +408,7 @@
 
 	.name-input {
 		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		color: var(--color-text-primary);
 		border-radius: var(--radius-btn);
 		padding: 8px 10px;

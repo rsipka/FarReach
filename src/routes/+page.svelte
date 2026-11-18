@@ -15,6 +15,8 @@
 	import BroadcastBar from '#lib/components/terminal/BroadcastBar.svelte';
 	import { getBroadcastTargets, toggleBroadcastTarget } from '#lib/state/broadcast.svelte.js';
 	import MonitoringBar from '#lib/components/terminal/MonitoringBar.svelte';
+	import TerminalBar from '#lib/components/terminal/TerminalBar.svelte';
+	import { getSettings } from '#lib/state/settings.svelte.js';
 	import RemoteTerminal from '#lib/components/share/RemoteTerminal.svelte';
 	import * as share from '#lib/state/share.svelte.js';
 	import { monitorBarShown, monitoringWanted } from '#lib/state/monitor-bar.svelte.js';
@@ -57,6 +59,9 @@
 	}
 
 	let tabs = $derived(getTabs());
+	const appSettings = getSettings();
+	/** The tab whose bar has its find field open: a hover-only bar stays. */
+	let findOpenIn = $state<string | null>(null);
 	let activeTab = $derived(getActiveTab());
 	let activePage = $derived(getActivePage());
 	let broadcastTargets = $derived(getBroadcastTargets());
@@ -364,6 +369,12 @@
 							{:else if tab.type === 'vnc' && tab.vncConnectParams}
 								<RdpPanel id={tab.id} params={tab.vncConnectParams} protocol="vnc" active={focused} />
 							{:else if tab.type !== 'rdp' && tab.type !== 'vnc'}
+								{#if appSettings.terminalBar !== 'hidden'}
+									<div class="bar-slot" class:hover-only={appSettings.terminalBar === 'hover' && findOpenIn !== tab.id}>
+										<TerminalBar {tab} onfindopen={(open) => (findOpenIn = open ? tab.id : findOpenIn === tab.id ? null : findOpenIn)} />
+									</div>
+								{/if}
+								<div class="pane-body">
 								<Terminal
 									ptyId={tab.id}
 									type={tab.type}
@@ -383,6 +394,7 @@
 									sessionName={tab.sessionName}
 									historyMode={tab.historyMode}
 									wslDistro={tab.wslDistro}/>
+								</div>
 							{/if}
 						</div>
 					{/each}
@@ -500,6 +512,42 @@
 		display: block;
 	}
 
+	/* The terminal bar on top, the terminal in what is left under it. */
+	.bar-slot {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		z-index: 5;
+	}
+
+	.pane-body {
+		position: absolute;
+		inset: 0;
+	}
+
+	.bar-slot:not(.hover-only) + .pane-body {
+		top: 34px;
+	}
+
+	@media (pointer: coarse) {
+		.bar-slot:not(.hover-only) + .pane-body {
+			top: 40px;
+		}
+	}
+
+	/* "On hover": the bar lies over the top of the terminal, shown while the
+	   pointer is near, so the terminal keeps its full height. */
+	.bar-slot.hover-only {
+		opacity: 0;
+		transition: opacity 120ms ease;
+	}
+
+	.terminal-wrapper:hover .bar-slot.hover-only,
+	.bar-slot.hover-only:focus-within {
+		opacity: 1;
+	}
+
 	/* Split (#106): which pane has the keyboard is drawn, faintly, so typing
 	   never goes to the wrong server. */
 	/* Drawn above the pane's content (a terminal paints its whole box), and
@@ -563,7 +611,7 @@
 
 	.split-divider:hover::after,
 	.split-divider:focus-visible::after {
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 	}
 
 	.split-divider:not(.down):hover::after,
@@ -607,7 +655,7 @@
 	.drop-zone span {
 		padding: 6px 12px;
 		border-radius: 999px;
-		background: var(--color-accent);
+		background: var(--color-accent-fill);
 		color: #fff;
 		font-size: var(--text-sm);
 		font-weight: 600;

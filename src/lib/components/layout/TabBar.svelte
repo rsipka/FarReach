@@ -393,6 +393,7 @@
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div
 					class="tab"
+					data-tab-id={tab.id}
 					class:grouped={!!tab.groupId}
 					style:--group={tab.groupId ? groupColor(groups.find((x) => x.id === tab.groupId)?.color ?? 'grey') : undefined}
 					class:active={tab.id === activeTab?.id}
@@ -696,7 +697,7 @@
 		font: inherit;
 		color: var(--color-text-primary);
 		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-strong);
 		border-radius: var(--radius-btn);
 	}
 
@@ -712,7 +713,9 @@
 		align-items: stretch;
 		height: var(--tabbar-h, 36px);
 		min-height: var(--tabbar-h, 36px);
-		background-color: var(--color-bg-primary);
+		/* The bar is the sidebar's shade and the active tab the content's, so
+		   the open tab reads as the front of the page below it. */
+		background-color: var(--color-bg-secondary);
 		border-bottom: 1px solid var(--color-border);
 		user-select: none;
 	}
@@ -785,11 +788,12 @@
 		max-width: 200px;
 		padding: 0 8px 0 12px;
 		border: none;
+		border-right: 1px solid var(--color-border);
 		border-bottom: 2px solid transparent;
 		background: transparent;
 		color: var(--color-text-secondary);
 		font-family: var(--font-sans);
-		font-size: 0.75rem;
+		font-size: 0.8125rem;
 		cursor: pointer;
 		white-space: nowrap;
 		flex-shrink: 0;
@@ -797,14 +801,19 @@
 	}
 
 	.tab:hover {
-		background-color: var(--color-bg-secondary);
+		background-color: var(--color-surface-hover);
 		color: var(--color-text-primary);
 	}
 
+	/* Content-coloured, with an accent line on top and none below, so it
+	   joins the terminal under it. The bottom edge stays free for the split
+	   and broadcast marks. */
 	.tab.active {
-		background-color: var(--color-bg-secondary);
+		background-color: var(--color-bg-primary);
 		color: var(--color-text-primary);
-		border-bottom-color: var(--color-accent);
+		font-weight: 500;
+		box-shadow: inset 0 2px 0 var(--color-accent);
+		margin-bottom: -1px;
 	}
 
 	/* The other tab on screen in a split: shown, without the keyboard. */

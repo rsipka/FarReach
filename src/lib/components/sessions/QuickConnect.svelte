@@ -527,7 +527,7 @@
 	}
 
 	.proxy-type-btn.active {
-		background-color: var(--color-accent);
+		background-color: var(--color-accent-fill);
 		color: #fff;
 	}
 

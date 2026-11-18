@@ -57,6 +57,15 @@ export interface ThemeColors {
 	'surface-active': string;
 	'surface-sunken': string;
 	'surface-strong': string;
+	/** Optional: added later, so older and marketplace themes may lack them.
+	 *  Missing ones are derived from the colours above (see derivedColors). */
+	'border-strong'?: string;
+	/** Filled buttons that carry white text; `accent` is for text and icons. */
+	'accent-fill'?: string;
+	/** Tint behind a selected row or the active item. */
+	'accent-subtle'?: string;
+	/** Keyboard focus ring. */
+	focus?: string;
 }
 
 export interface Theme {
@@ -90,6 +99,23 @@ export const COLOR_KEYS: (keyof ThemeColors)[] = [
 	'surface-strong'
 ];
 
+/** Tokens a theme may leave out; applyTheme fills them in. */
+export const OPTIONAL_COLOR_KEYS = ['border-strong', 'accent-fill', 'accent-subtle', 'focus'] as const;
+
+/**
+ * Values for the optional tokens a theme does not set, from the colours it
+ * does: a field edge halfway from the divider to the secondary text, the
+ * accent itself for fills and focus, and a light tint of it for selection.
+ */
+export function derivedColors(c: ThemeColors): Record<(typeof OPTIONAL_COLOR_KEYS)[number], string> {
+	return {
+		'border-strong': c['border-strong'] ?? `color-mix(in srgb, ${c['text-secondary']} 55%, ${c.border})`,
+		'accent-fill': c['accent-fill'] ?? c.accent,
+		'accent-subtle': c['accent-subtle'] ?? `color-mix(in srgb, ${c.accent} 14%, transparent)`,
+		focus: c.focus ?? c.accent
+	};
+}
+
 export const TERMINAL_KEYS: (keyof TerminalPalette)[] = [
 	'background',
 	'foreground',
@@ -120,28 +146,32 @@ export const DARK: Theme = {
 	name: 'Reach Dark',
 	appearance: 'dark',
 	colors: {
-		'bg-primary': '#0a0a0a',
-		'bg-secondary': '#141414',
-		'bg-elevated': '#1c1c1e',
-		border: 'rgba(255, 255, 255, 0.08)',
-		'text-primary': '#f5f5f7',
-		'text-secondary': '#86868b',
-		'text-tertiary': '#6e6e73',
-		accent: '#0a84ff',
-		'accent-hover': '#409cff',
-		success: '#30d158',
-		warning: '#ffd60a',
-		danger: '#ff453a',
-		'surface-hover': 'rgba(255, 255, 255, 0.06)',
-		'surface-active': 'rgba(255, 255, 255, 0.10)',
-		'surface-sunken': 'rgba(0, 0, 0, 0.20)',
-		'surface-strong': 'rgba(255, 255, 255, 0.18)'
+		'bg-primary': '#0e0f12',
+		'bg-secondary': '#1a1b20',
+		'bg-elevated': '#24252b',
+		border: '#2e3037',
+		'text-primary': '#ececef',
+		'text-secondary': '#a3a6ad',
+		'text-tertiary': '#868a93',
+		accent: '#4c9dff',
+		'accent-hover': '#74b3ff',
+		success: '#3fcf6a',
+		warning: '#e8b730',
+		danger: '#ff6b61',
+		'surface-hover': 'rgba(255, 255, 255, 0.07)',
+		'surface-active': 'rgba(255, 255, 255, 0.12)',
+		'surface-sunken': 'rgba(0, 0, 0, 0.25)',
+		'surface-strong': 'rgba(255, 255, 255, 0.22)',
+		'border-strong': '#555963',
+		'accent-fill': '#2563eb',
+		'accent-subtle': 'rgba(76, 157, 255, 0.16)',
+		focus: '#4c9dff'
 	},
 	terminal: {
-		background: '#0a0a0a',
-		foreground: '#f5f5f7',
+		background: '#0e0f12',
+		foreground: '#ececef',
 		cursor: '#0a84ff',
-		cursorAccent: '#0a0a0a',
+		cursorAccent: '#0e0f12',
 		selectionBackground: 'rgba(10, 132, 255, 0.3)',
 		selectionForeground: '#f5f5f7',
 		black: '#1d1f21',
@@ -169,21 +199,25 @@ export const LIGHT: Theme = {
 	appearance: 'light',
 	colors: {
 		'bg-primary': '#ffffff',
-		'bg-secondary': '#f5f5f7',
+		'bg-secondary': '#eff1f4',
 		'bg-elevated': '#ffffff',
-		border: 'rgba(0, 0, 0, 0.06)',
-		'text-primary': '#1d1d1f',
-		'text-secondary': '#86868b',
-		'text-tertiary': '#8e8e93',
-		accent: '#007aff',
-		'accent-hover': '#0071e3',
-		success: '#34c759',
-		warning: '#ff9f0a',
-		danger: '#ff3b30',
-		'surface-hover': 'rgba(0, 0, 0, 0.04)',
-		'surface-active': 'rgba(0, 0, 0, 0.08)',
+		border: '#d5d9df',
+		'text-primary': '#17191c',
+		'text-secondary': '#50565f',
+		'text-tertiary': '#656b75',
+		accent: '#0b63ce',
+		'accent-hover': '#0a56b3',
+		success: '#1a7f37',
+		warning: '#9a6700',
+		danger: '#cf222e',
+		'surface-hover': 'rgba(0, 0, 0, 0.05)',
+		'surface-active': 'rgba(0, 0, 0, 0.09)',
 		'surface-sunken': 'rgba(0, 0, 0, 0.03)',
-		'surface-strong': 'rgba(0, 0, 0, 0.16)'
+		'surface-strong': 'rgba(0, 0, 0, 0.22)',
+		'border-strong': '#8c929c',
+		'accent-fill': '#0b63ce',
+		'accent-subtle': 'rgba(11, 99, 206, 0.10)',
+		focus: '#0b63ce'
 	},
 	terminal: {
 		// The terminal stayed #0a0a0a in light mode before themes existed — a
@@ -263,6 +297,9 @@ export function applyTheme(theme: Theme): void {
 	for (const key of COLOR_KEYS) {
 		const value = theme.colors[key];
 		if (value) root.style.setProperty('--color-' + key, value);
+	}
+	for (const [key, value] of Object.entries(derivedColors(theme.colors))) {
+		root.style.setProperty('--color-' + key, value);
 	}
 	root.classList.remove('dark', 'light');
 	root.classList.add(theme.appearance);
