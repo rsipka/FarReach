@@ -82,7 +82,8 @@ jobs:
   ipa:
     needs: changes
     if: needs.changes.outputs.build == 'true'
-    runs-on: macos-latest
+    # See MACOS_RUNNER_LABEL in .github/ci-runners.md.
+    runs-on: ${{ github.event_name != 'pull_request' && vars.MACOS_RUNNER_LABEL || 'macos-15' }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
