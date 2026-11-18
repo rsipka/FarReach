@@ -89,8 +89,8 @@ jobs:
 
     # "macos" is not a runner name: see MACOS_RUNNER_LABEL in .github/ci-runners.md.
     runs-on: ${{ matrix.platform == 'macos' && (github.event_name != 'pull_request' && vars.MACOS_RUNNER_LABEL || 'macos-15') || matrix.platform }}
-    # GitHub's runners set CI=true; the self-hosted Mac did not (its DMG
-    # build drove Finder and timed out). Tauri skips the Finder step on CI.
+    # GitHub's runners set CI=true; the self-hosted Mac may not. With it,
+    # and TAURI_BUNDLER_DMG_IGNORE_CI=false below, Tauri skips the Finder step.
     env:
       CI: 'true'
     steps:
@@ -234,6 +234,12 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The DMG window layout is set by driving Finder over AppleScript.
+          # tauri-action turns that on even on CI; on the self-hosted Mac,
+          # where the runner is a background service, Finder never answers
+          # and the build fails after two minutes (AppleEvent timed out).
+          # There the DMG gets Finder's default layout instead.
+          TAURI_BUNDLER_DMG_IGNORE_CI: ${{ runner.environment == 'self-hosted' && 'false' || 'true' }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           NO_STRIP: true
