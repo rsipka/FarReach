@@ -1,6 +1,6 @@
 {
   "settings.compact_layout": "Kompaktní rozložení",
-  "settings.compact_layout_desc": "Užší řádky, s názvem a adresou relace na jednom řádku, takže se jich na obrazovku vejde víc. Text zůstává stejně velký.",
+  "settings.compact_layout_desc": "Užší řádky, které ukazují jen název relace, takže se jich na obrazovku vejde víc. Na počítači uvidíte adresu, typ, štítky a další údaje po najetí myší. Text zůstává stejně velký.",
   "sidebar.resize": "Změnit šířku postranního panelu",
   "security.locked_desc": "Přihlašovací údaje jsou uzamčené a šifrované.",
   "security.unlocked_desc": "Přihlašovací údaje jsou právě přístupné.",
@@ -3227,5 +3227,7 @@
   "settings.tmux_windows_last": "Naposledy použité",
   "settings.tmux_windows_all": "Všechna okna",
   "settings.tmux_hide_status": "Skrýt stavový řádek tmux",
-  "settings.tmux_hide_status_desc": "Jen v kartách s tmux, kde karta ukazuje název okna. Platí pro karty otevřené od teď."
+  "settings.tmux_hide_status_desc": "Jen v kartách s tmux, kde karta ukazuje název okna. Platí pro karty otevřené od teď.",
+  "session.tooltip_tags": "Štítky: {{tags}}",
+  "session.tooltip_vault": "Trezor: {{name}}"
 }

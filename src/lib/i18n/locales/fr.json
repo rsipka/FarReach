@@ -1,6 +1,6 @@
 {
   "settings.compact_layout": "Disposition compacte",
-  "settings.compact_layout_desc": "Des lignes plus serrées, avec le nom et l'adresse d'une session sur une seule ligne, pour en voir davantage à l'écran. Le texte garde sa taille.",
+  "settings.compact_layout_desc": "Lignes plus serrées qui n'affichent que le nom de chaque session, pour en voir davantage à l'écran. Sur ordinateur, survolez une session pour voir son adresse, son type, ses étiquettes et le reste. Le texte garde la même taille.",
   "sidebar.resize": "Redimensionner la barre latérale",
   "security.locked_desc": "Les identifiants sont verrouillés et chiffrés.",
   "security.unlocked_desc": "Les identifiants sont actuellement accessibles.",
@@ -3227,5 +3227,7 @@
   "settings.tmux_windows_last": "La dernière utilisée",
   "settings.tmux_windows_all": "Toutes les fenêtres",
   "settings.tmux_hide_status": "Masquer la barre d'état de tmux",
-  "settings.tmux_hide_status_desc": "Seulement dans les onglets tmux, où l'onglet affiche le nom de la fenêtre. S'applique aux onglets ouverts à partir de maintenant."
+  "settings.tmux_hide_status_desc": "Seulement dans les onglets tmux, où l'onglet affiche le nom de la fenêtre. S'applique aux onglets ouverts à partir de maintenant.",
+  "session.tooltip_tags": "Étiquettes : {{tags}}",
+  "session.tooltip_vault": "Coffre : {{name}}"
 }

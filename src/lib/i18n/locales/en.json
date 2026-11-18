@@ -1,6 +1,6 @@
 {
   "settings.compact_layout": "Compact layout",
-  "settings.compact_layout_desc": "Tighter rows, with a session's name and address on one line, so more fit on the screen. Text stays the same size.",
+  "settings.compact_layout_desc": "Denser rows that show only each session's name, so more fit on screen. On desktop, hover a session to see its address, type, tags and the rest. Text stays the same size.",
   "sidebar.resize": "Resize the sidebar",
   "security.locked_desc": "Credentials are locked and encrypted.",
   "security.unlocked_desc": "Credentials are currently accessible.",
@@ -3227,5 +3227,7 @@
   "settings.tmux_windows_last": "The last used",
   "settings.tmux_windows_all": "All windows",
   "settings.tmux_hide_status": "Hide tmux's status bar",
-  "settings.tmux_hide_status_desc": "In tmux tabs only, where the tab shows the window's name. Applies to tabs opened from now on."
+  "settings.tmux_hide_status_desc": "In tmux tabs only, where the tab shows the window's name. Applies to tabs opened from now on.",
+  "session.tooltip_tags": "Tags: {{tags}}",
+  "session.tooltip_vault": "Vault: {{name}}"
 }

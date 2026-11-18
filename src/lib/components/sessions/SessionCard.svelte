@@ -78,6 +78,28 @@
 		return text;
 	});
 
+	/** Compact layout shows the name alone; on desktop everything else the
+	 *  full row shows is in the row's tooltip instead. */
+	let compact = $derived(settings.compactLayout);
+	let detailsTooltip = $derived.by(() => {
+		const kind = session.kind ?? 'ssh';
+		const lines: string[] = [session.favorite ? `${session.name} ★` : session.name];
+		lines.push(kind === 'wsl'
+			? `${session.username ? `${session.username} · ` : ''}${session.wsl_distro || 'WSL'}`
+			: sessionAddress(session));
+		const type = t(`session.protocol_${kind}`);
+		lines.push(kind === 'wsl' || kind === 'serial' ? type : `${type} · ${t('session.auth_type', { type: session.auth_method.type })}`);
+		if (kind !== 'wsl' && session.tags.length > 0) lines.push(t('session.tooltip_tags', { tags: session.tags.join(', ') }));
+		if (vault) lines.push(t('session.tooltip_vault', { name: vault.name }));
+		if (session.credential) {
+			lines.push(session.credential.missing ? t('credential.missing') : t('credential.chip', { name: session.credential.name }));
+		}
+		const parts = [lines.join('\n')];
+		if (docsTooltip) parts.push(docsTooltip);
+		parts.push(mainTitle);
+		return parts.join('\n\n');
+	});
+
 	let authLabel = $derived(
 		session.kind === 'wsl' ? 'WSL' :
 		session.auth_method.type === 'Password' ? t('session.auth_pw_label') :
@@ -86,7 +108,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="session-card" class:selected class:unavailable class:dbl={needsDouble} oncontextmenu={oncontextmenu} role="group">
+<div class="session-card" class:selected class:unavailable class:dbl={needsDouble} class:names-only={compact} oncontextmenu={oncontextmenu} role="group">
 	{#if selecting}
 		<input
 			class="select-box"
@@ -108,7 +130,7 @@
 			<circle cx="2" cy="10" r="1.2"/><circle cx="6" cy="10" r="1.2"/>
 		</svg>
 	</span>
-	<button class="card-main" onclick={onMain} ondblclick={onMainDouble} disabled={unavailable && !selecting} aria-pressed={selecting ? selected : undefined} title={mainTitle} >
+	<button class="card-main" onclick={onMain} ondblclick={onMainDouble} disabled={unavailable && !selecting} aria-pressed={selecting ? selected : undefined} title={compact && !isMobile() ? detailsTooltip : mainTitle} >
 		<!-- Every row has the icon's place, so names line up whether or not the
 		     OS is known yet: its logo once detected, until then a quiet mark for
 		     the kind of session. -->
@@ -603,26 +625,25 @@
 		background-color: var(--color-surface-hover);
 	}
 
-	/* Compact layout: the name and the address on one line, as a list of
-	   many servers wants. Text and the row's hit area stay the size they were. */
+	/* Compact layout: the icon and the name only, as a list of many servers
+	   wants; the rest is in the row's tooltip. Text and the row's hit area
+	   stay the size they were. */
 	:global(html.compact) .session-card {
 		padding-top: 2px;
 		padding-bottom: 2px;
 	}
 
-	:global(html.compact) .session-info {
-		flex-direction: row;
-		align-items: baseline;
-		gap: 8px;
-	}
-
 	:global(html.compact) .session-name-row {
-		flex: 0 1 auto;
 		flex-wrap: nowrap;
 	}
 
-	:global(html.compact) .session-meta {
-		flex: 1 1 0;
+	.names-only .tags,
+	.names-only .vault-chip,
+	.names-only .session-detail,
+	.names-only .session-meta,
+	.names-only .auth-mark,
+	.names-only .auth-badge {
+		display: none;
 	}
 
 	.fav-mark {

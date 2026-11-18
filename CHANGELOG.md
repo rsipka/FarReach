@@ -3,6 +3,7 @@
 All notable changes to Reacher CM are documented here. Reacher CM is a personal fork of [Reach](https://github.com/alexandrosnt/Reach) with additional features, written with the help of AI coding tools; the entries from v0.9.1 down are Reach's own.
 
 ## Reacher CM (unreleased, based on Reach v0.9.2)
+- **Compact layout shows names only** — With Settings > Appearance > *Compact layout* on, the session list shows each session's icon and name only: no address, tags, vault or credential chips, notes mark or login mark. On desktop, hovering a session shows all of it in a tooltip (address, type and login, tags, vault, credential, notes and fields).
 - **tmux windows as tabs** — Each tmux tab now shows a tmux window of its own, so one tmux session can fill several tabs:
   - On a tmux tab, *Ctrl+T* and *+* open a new tmux window in a new tab. The tab's name shows the window's name.
   - *tmux windows…* in the tab's menu lists the session's windows: click one to show it in the tab, or open it in a new tab, rename it or close it. *New window* and *New tmux window in new tab* are there too.
