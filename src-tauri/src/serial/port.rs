@@ -284,7 +284,7 @@ pub fn list_ports() -> Result<Vec<SerialPortInfo>, String> {
             SerialPortInfo { name: p.port_name, description }
         })
         .collect();
-    infos.sort_by(|a, b| natural_key(&a.name).cmp(&natural_key(&b.name)));
+    infos.sort_by_key(|p| natural_key(&p.name));
     infos.dedup_by(|a, b| a.name == b.name);
     Ok(infos)
 }
