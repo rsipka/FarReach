@@ -2132,6 +2132,7 @@
 <BulkEditor
 	open={bulkEditOpen}
 	sessions={bulkEditSessions}
+	allSessions={sessions}
 	credentials={savedCredentials}
 	onclose={() => (bulkEditOpen = false)}
 	onapplied={(r) => void bulkEdited(r)}

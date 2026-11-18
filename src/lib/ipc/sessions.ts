@@ -439,6 +439,28 @@ export interface SessionPatch {
   history?: BulkChange<HistoryMode>;
   cursor_style?: BulkChange<CursorStyle>;
   cursor_blink?: BulkChange<boolean>;
+  /** SSH: log in with a key, the agent, or a password (set by `password`). */
+  auth?: AuthMethod;
+  /** SSH key sessions: also offer the agent's keys. */
+  try_agent_keys?: boolean;
+  /** SSH: the whole jump host chain, or none. */
+  jump_chain?: BulkChange<JumpHostConfig[]>;
+  /** SSH: the proxy, or none. */
+  proxy?: BulkChange<ProxySessionConfig>;
+  /** SSH: the login shell, or the server's default. */
+  shell?: BulkChange<string>;
+  /** Custom fields set by name (added or overwritten). */
+  fields_set?: CustomField[];
+  /** Custom fields removed by name. */
+  fields_remove?: string[];
+  /** Telnet: the parts of its options to change. */
+  telnet?: Partial<TelnetOptions>;
+  /** SSH and WSL: server monitoring on or off, or the default. */
+  monitoring?: BulkChange<boolean>;
+  /** SSH and WSL: tmux mode (`inherit`: as the folder says) and mouse. */
+  tmux?: { mode?: 'off' | 'attach' | 'ask' | 'inherit'; mouse?: boolean };
+  /** VNC: the saved SSH session it goes through, or directly. */
+  via_session?: BulkChange<string>;
 }
 
 export interface BulkOutcome {

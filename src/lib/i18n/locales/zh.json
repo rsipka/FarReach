@@ -3258,5 +3258,22 @@
   "settings.tmux_hide_status": "隐藏 tmux 状态栏",
   "settings.tmux_hide_status_desc": "仅在 tmux 标签页中，标签页会显示窗口名称。适用于今后打开的标签页。",
   "session.tooltip_tags": "标签：{{tags}}",
-  "session.tooltip_vault": "保管库：{{name}}"
+  "session.tooltip_vault": "保管库：{{name}}",
+  "bulk.section_connection": "连接",
+  "bulk.section_server": "服务器端",
+  "bulk.jump_hosts": "跳板机",
+  "bulk.jump_replace": "替换为这些跳板",
+  "bulk.jump_none": "不使用跳板机",
+  "bulk.hop_copy": "从已保存的会话复制…",
+  "bulk.proxy": "代理",
+  "bulk.proxy_set": "使用此代理",
+  "bulk.proxy_none": "不使用代理",
+  "bulk.shell": "登录 shell",
+  "bulk.shell_default": "服务器默认",
+  "bulk.fields_add": "设置字段",
+  "bulk.fields_remove": "移除字段（名称，逗号分隔）",
+  "bulk.tmux_folder": "按文件夹设置",
+  "bulk.key_needed": "请选择已导入的密钥或密钥文件。",
+  "bulk.auth_password_hint": "改为密码登录的会话使用上方的密码；留空则在连接时询问。",
+  "bulk.agent_keys": "同时使用代理中的密钥"
 }

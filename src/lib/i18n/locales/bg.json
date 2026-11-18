@@ -3258,5 +3258,22 @@
   "settings.tmux_hide_status": "Скриване на лентата на състоянието на tmux",
   "settings.tmux_hide_status_desc": "Само в раздели с tmux, където разделът показва името на прозореца. Важи за разделите, отворени отсега нататък.",
   "session.tooltip_tags": "Етикети: {{tags}}",
-  "session.tooltip_vault": "Трезор: {{name}}"
+  "session.tooltip_vault": "Трезор: {{name}}",
+  "bulk.section_connection": "Връзка",
+  "bulk.section_server": "На сървъра",
+  "bulk.jump_hosts": "Междинни хостове",
+  "bulk.jump_replace": "Замяна с тези преходи",
+  "bulk.jump_none": "Без междинен хост",
+  "bulk.hop_copy": "Копиране от запазена сесия…",
+  "bulk.proxy": "Прокси",
+  "bulk.proxy_set": "Използване на това прокси",
+  "bulk.proxy_none": "Без прокси",
+  "bulk.shell": "Обвивка за вход",
+  "bulk.shell_default": "По подразбиране на сървъра",
+  "bulk.fields_add": "Задаване на поле",
+  "bulk.fields_remove": "Премахване на полета (имена със запетая)",
+  "bulk.tmux_folder": "Както е в папката",
+  "bulk.key_needed": "Изберете импортиран ключ или файл с ключ.",
+  "bulk.auth_password_hint": "Сесиите, превключени на парола, получават паролата по-горе; ако е празна, се пита при свързване.",
+  "bulk.agent_keys": "Също ключовете на агента"
 }

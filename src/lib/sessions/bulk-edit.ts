@@ -5,7 +5,7 @@
  * there and reported back.
  */
 
-import type { SessionConfig, SessionKind, SessionPatch } from '#lib/ipc/sessions.js';
+import type { AuthMethod, SessionConfig, SessionKind, SessionPatch } from '#lib/ipc/sessions.js';
 
 export type BulkField =
 	| 'username'
@@ -18,7 +18,17 @@ export type BulkField =
 	| 'terminal_theme'
 	| 'history'
 	| 'cursor_style'
-	| 'cursor_blink';
+	| 'cursor_blink'
+	| 'auth'
+	| 'try_agent_keys'
+	| 'jump_chain'
+	| 'proxy'
+	| 'shell'
+	| 'custom_fields'
+	| 'telnet'
+	| 'monitoring'
+	| 'tmux'
+	| 'via_session';
 
 /** The value meaning "the session's own login" in `credential_id`. */
 export const OWN_LOGIN = 'own';
@@ -46,13 +56,20 @@ export function loginFromCredential(s: SessionConfig, credential?: SessionPatch[
 
 /** Whether `field` can change on `s`. `credential` is the patch's own
  *  credential choice, which decides whether the login is the session's. */
-export function appliesTo(field: BulkField, s: SessionConfig, credential?: SessionPatch['credential']): boolean {
+export function appliesTo(
+	field: BulkField,
+	s: SessionConfig,
+	credential?: SessionPatch['credential'],
+	auth?: AuthMethod['type']
+): boolean {
 	const k = kindOf(s);
+	// The login method the session has once the patch's own (if any) is made.
+	const method = k === 'ssh' && auth && !loginFromCredential(s, credential) ? auth : s.auth_method?.type;
 	switch (field) {
 		case 'username':
 			return k !== 'wsl' && k !== 'serial' && !loginFromCredential(s, credential);
 		case 'password':
-			return k !== 'wsl' && k !== 'serial' && s.auth_method?.type === 'Password' && !loginFromCredential(s, credential);
+			return k !== 'wsl' && k !== 'serial' && method === 'Password' && !loginFromCredential(s, credential);
 		case 'credential':
 			return takesCredential(s);
 		case 'port':
@@ -66,13 +83,34 @@ export function appliesTo(field: BulkField, s: SessionConfig, credential?: Sessi
 			return k === 'ssh' || k === 'telnet' || k === 'wsl' || k === 'serial';
 		case 'tags':
 		case 'notes':
+		case 'custom_fields':
 			return true;
+		case 'auth':
+			return k === 'ssh' && !loginFromCredential(s, credential);
+		case 'try_agent_keys':
+			return k === 'ssh' && method === 'Key' && !loginFromCredential(s, credential);
+		case 'jump_chain':
+		case 'proxy':
+		case 'shell':
+			return k === 'ssh';
+		case 'telnet':
+			return k === 'telnet';
+		case 'monitoring':
+		case 'tmux':
+			return k === 'ssh' || k === 'wsl';
+		case 'via_session':
+			return k === 'vnc';
 	}
 }
 
 /** How many of `sessions` take `field`. */
-export function countApplying(field: BulkField, sessions: SessionConfig[], credential?: SessionPatch['credential']): number {
-	return sessions.filter((s) => appliesTo(field, s, credential)).length;
+export function countApplying(
+	field: BulkField,
+	sessions: SessionConfig[],
+	credential?: SessionPatch['credential'],
+	auth?: AuthMethod['type']
+): number {
+	return sessions.filter((s) => appliesTo(field, s, credential, auth)).length;
 }
 
 export interface ValueSummary {
@@ -125,6 +163,16 @@ export function changedFields(p: SessionPatch): BulkField[] {
 	if (p.history !== undefined) out.push('history');
 	if (p.cursor_style !== undefined) out.push('cursor_style');
 	if (p.cursor_blink !== undefined) out.push('cursor_blink');
+	if (p.auth !== undefined) out.push('auth');
+	if (p.try_agent_keys !== undefined) out.push('try_agent_keys');
+	if (p.jump_chain !== undefined) out.push('jump_chain');
+	if (p.proxy !== undefined) out.push('proxy');
+	if (p.shell !== undefined) out.push('shell');
+	if ((p.fields_set?.length ?? 0) > 0 || (p.fields_remove?.length ?? 0) > 0) out.push('custom_fields');
+	if (p.telnet !== undefined && Object.keys(p.telnet).length > 0) out.push('telnet');
+	if (p.monitoring !== undefined) out.push('monitoring');
+	if (p.tmux !== undefined && Object.keys(p.tmux).length > 0) out.push('tmux');
+	if (p.via_session !== undefined) out.push('via_session');
 	return out;
 }
 
