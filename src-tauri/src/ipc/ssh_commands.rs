@@ -440,6 +440,24 @@ pub fn session_log_default_dir() -> String {
     crate::ssh::session_log::default_dir().display().to_string()
 }
 
+/// The file log of a terminal stream, if it is writing or paused.
+#[tauri::command]
+pub fn session_log_status(stream: String) -> Option<crate::ssh::session_log::LogStatus> {
+    crate::ssh::session_log::log_status(&stream)
+}
+
+/// Pauses or resumes a terminal's file log from the bottom bar.
+#[tauri::command]
+pub fn session_log_pause(stream: String, paused: bool) -> Option<crate::ssh::session_log::LogStatus> {
+    crate::ssh::session_log::set_log_paused(&stream, paused)
+}
+
+/// Stops a terminal's file log and closes the file.
+#[tauri::command]
+pub fn session_log_stop(stream: String) -> bool {
+    crate::ssh::session_log::stop_log(&stream)
+}
+
 /// The frontend's host-key verification dialog reports the user's decision,
 /// un-parking the SSH handshake that's waiting on `check_server_key`.
 #[tauri::command]
