@@ -2966,6 +2966,7 @@
   "termtheme.session_hint": "Crea o edita tus temas en Ajustes → Apariencia → Colores del terminal.",
   "termtheme.missing": "Tema no encontrado: se usa el predeterminado",
   "history.search_menu": "Buscar en el historial",
+  "history.button": "Historial",
   "history.session_menu": "Historial…",
   "history.session_label": "Historial de sesión",
   "history.session_default": "Como en Ajustes",

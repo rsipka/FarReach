@@ -2966,6 +2966,7 @@
   "termtheme.session_hint": "Свои темы создаются и изменяются в Настройки → Внешний вид → Цвета терминала.",
   "termtheme.missing": "Тема не найдена: используется по умолчанию",
   "history.search_menu": "Искать в истории",
+  "history.button": "История",
   "history.session_menu": "История…",
   "history.session_label": "История сессии",
   "history.session_default": "Как в настройках",

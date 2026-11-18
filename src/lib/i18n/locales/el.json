@@ -2966,6 +2966,7 @@
   "termtheme.session_hint": "Δημιουργήστε ή επεξεργαστείτε θέματα στις Ρυθμίσεις → Εμφάνιση → Χρώματα τερματικού.",
   "termtheme.missing": "Το θέμα δεν βρέθηκε: χρησιμοποιείται η προεπιλογή",
   "history.search_menu": "Αναζήτηση στο ιστορικό",
+  "history.button": "Ιστορικό",
   "history.session_menu": "Ιστορικό…",
   "history.session_label": "Ιστορικό συνεδρίας",
   "history.session_default": "Όπως στις Ρυθμίσεις",

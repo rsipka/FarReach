@@ -2966,6 +2966,7 @@
   "termtheme.session_hint": "Eigene Designs erstellen und bearbeiten Sie unter Einstellungen → Darstellung → Terminalfarben.",
   "termtheme.missing": "Design nicht gefunden: Standard verwendet",
   "history.search_menu": "Verlauf durchsuchen",
+  "history.button": "Verlauf",
   "history.session_menu": "Verlauf…",
   "history.session_label": "Sitzungsverlauf",
   "history.session_default": "Wie in den Einstellungen",

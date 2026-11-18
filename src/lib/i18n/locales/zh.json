@@ -2966,6 +2966,7 @@
   "termtheme.session_hint": "在 设置 → 外观 → 终端颜色 中创建或编辑自己的主题。",
   "termtheme.missing": "未找到主题：使用默认",
   "history.search_menu": "搜索历史",
+  "history.button": "历史",
   "history.session_menu": "历史…",
   "history.session_label": "会话历史",
   "history.session_default": "按设置",
