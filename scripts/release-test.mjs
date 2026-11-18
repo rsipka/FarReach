@@ -58,7 +58,11 @@ test('the repository is consistent now', () => {
 });
 
 test('a bump edits every file and passes the same checks', () => {
-	const v = '0.9.2-dev.5';
+	// Bump from whatever the repository has now, so this keeps passing on a
+	// release branch, where the next version is already in the metainfo.
+	const current = checkVersions(read).version;
+	const v = nextVersion(current, 'dev');
+	const stable = nextVersion(current, 'stable', 'minor');
 	const ctx = { date: '2026-11-18', repo: 'rsipka/ReacherCM' };
 	const out = new Map();
 	for (const key of ['packageJson', 'packageLock', 'cargoToml', 'cargoLock', 'tauriConf', 'metainfo']) {
@@ -74,10 +78,14 @@ test('a bump edits every file and passes the same checks', () => {
 		assert.equal(a.length, b.length);
 		assert.equal(a.filter((l, i) => l !== b[i]).length, f === FILES.packageLock ? 2 : 1, f);
 	}
-	assert.match(out.get(FILES.metainfo), /<releases>\n    <release version="0\.9\.2-dev\.5" date="2026-11-18" type="development">\n      <url type="details">https:\/\/github\.com\/rsipka\/ReacherCM\/releases\/tag\/v0\.9\.2-dev\.5<\/url>/);
+	const esc = (x) => x.replace(/\./g, '\\.');
+	assert.match(
+		out.get(FILES.metainfo),
+		new RegExp(`<releases>\n    <release version="${esc(v)}" date="2026-11-18" type="development">\n      <url type="details">https://github\\.com/rsipka/ReacherCM/releases/tag/v${esc(v)}</url>`),
+	);
 	// A stable release is not marked as development, and a listed one is refused.
-	assert.match(edit.metainfo(read(FILES.metainfo), '0.9.3', ctx), /<release version="0\.9\.3" date="2026-11-18">/);
-	assert.throws(() => edit.metainfo(read(FILES.metainfo), '0.9.2', ctx), /already lists/);
+	assert.match(edit.metainfo(read(FILES.metainfo), stable, ctx), new RegExp(`<release version="${esc(stable)}" date="2026-11-18">`));
+	assert.throws(() => edit.metainfo(read(FILES.metainfo), current, ctx), /already lists/);
 });
 
 test('a stable release dates the CHANGELOG section', () => {
@@ -86,7 +94,7 @@ test('a stable release dates the CHANGELOG section', () => {
 		edit.changelog(t, '0.9.3', { date: '2026-11-18' }),
 		'# Changelog\n\n## Reacher CM (unreleased)\n\n## Reacher CM v0.9.3 (2026-11-18, based on Reach v0.9.2)\n- **A** — a\n',
 	);
-	assert.match(edit.changelog(read(FILES.changelog), '0.9.3', { date: '2026-11-18' }), /^## Reacher CM v0\.9\.3 \(2026-11-18/m);
+	assert.match(edit.changelog(read(FILES.changelog), '9.9.9', { date: '2026-11-18' }), /^## Reacher CM v9\.9\.9 \(2026-11-18/m);
 });
 
 test('release notes draft', () => {
