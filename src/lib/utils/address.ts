@@ -41,8 +41,19 @@ export function defaultPort(kind: string | undefined): number {
 }
 
 /** `user@host`, with `:port` only when it is not the protocol's own, as the
- *  session list, the start screen and the palette all show a session. */
-export function sessionAddress(s: { username?: string | null; host: string; port?: number | null; kind?: string }): string {
+ *  session list, the start screen and the palette all show a session. A
+ *  serial session: its port and line settings, `COM3 · 9600 8N1`. */
+export function sessionAddress(s: {
+	username?: string | null;
+	host: string;
+	port?: number | null;
+	kind?: string;
+	serial?: { baud_rate?: number; data_bits?: number; parity?: string; stop_bits?: number } | null;
+}): string {
+	if (s.kind === 'serial') {
+		const o = s.serial ?? {};
+		return `${s.host} · ${o.baud_rate ?? 9600} ${o.data_bits ?? 8}${(o.parity ?? 'none')[0].toUpperCase()}${o.stop_bits ?? 1}`;
+	}
 	const user = s.username ? `${s.username}@` : '';
 	const port = s.port && s.port !== defaultPort(s.kind) ? `:${s.port}` : '';
 	return `${user}${s.host}${port}`;

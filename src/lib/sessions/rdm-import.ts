@@ -31,7 +31,8 @@ import { DEFAULT_PORT, parsePort, text, type ImportCredential, type ImportField,
 
 export { parsePort };
 
-export type RdmKind = ImportKind;
+/** RDM entries never become serial sessions: its serial entries are not read. */
+export type RdmKind = Exclude<ImportKind, 'serial'>;
 export type RdmImportHost = ImportHost;
 export type RdmField = ImportField;
 /** A login RDM keeps apart from the hosts: a credential entry (key: its ID), or a group's own (key: `group:` and the path). */

@@ -23,6 +23,8 @@
 	import { IMPORT_SOURCES, readLocal, type ImportSourceId } from '#lib/sessions/import/sources.js';
 	import ImportSourcePicker, { type AnyImportSource } from './ImportSourcePicker.svelte';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
+	import { DEFAULT_SERIAL_OPTIONS } from '#lib/ipc/serial.js';
+	import { sessionAddress } from '#lib/utils/address.js';
 	import { savedCredentialCreate, savedCredentialList, credentialsFor } from '#lib/ipc/savedCredentials.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -227,7 +229,7 @@
 	/** VNC has no user name; Telnet's is optional, typed at the device's
 	 *  prompt, so the one asked for here is not forced on it. */
 	function needsUser(h: ImportHost): boolean {
-		return h.kind !== 'vnc' && h.kind !== 'telnet';
+		return h.kind !== 'vnc' && h.kind !== 'telnet' && h.kind !== 'serial';
 	}
 
 	function userFor(h: ImportHost): string {
@@ -336,6 +338,7 @@
 					domain: h.kind === 'rdp' ? h.domain : null,
 					detectedOs: h.kind === 'rdp' ? 'windows' : null,
 					telnet: h.kind === 'telnet' ? { ...DEFAULT_TELNET_OPTIONS, mode: h.raw ? 'raw' : 'active' } : null,
+					serial: h.kind === 'serial' ? { ...DEFAULT_SERIAL_OPTIONS, ...(h.serial ?? {}) } : null,
 					notes: h.notes,
 					customFields: h.fields.map((f) => (f.hidden ? f : { name: f.name, value: f.value }))
 				});
@@ -516,7 +519,7 @@
 									<span class="host-name">{h.name}</span>
 									{#if saved}<span class="badge-imported">{t('session.import_already_exists')}</span>{/if}
 								</span>
-								<span class="host-detail">{h.username ? `${h.username}@` : ''}{h.host}:{h.port}{h.domain ? ` · ${h.domain}` : ''}{h.keyPath ? ` · ${h.keyPath}` : ''}{h.jump.length > 0 ? ` · ${t('session.rdm_import_via', { host: h.jump.map((g) => `${g.host}:${g.port}`).join(' → ') })}` : ''}{h.password ? ` · ${t('session.mgr_import_has_password')}` : ''}</span>
+								<span class="host-detail">{h.username ? `${h.username}@` : ''}{h.kind === 'serial' ? sessionAddress({ kind: 'serial', host: h.host, serial: h.serial }) : `${h.host}:${h.port}`}{h.domain ? ` · ${h.domain}` : ''}{h.keyPath ? ` · ${h.keyPath}` : ''}{h.jump.length > 0 ? ` · ${t('session.rdm_import_via', { host: h.jump.map((g) => `${g.host}:${g.port}`).join(' → ') })}` : ''}{h.password ? ` · ${t('session.mgr_import_has_password')}` : ''}</span>
 							</span>
 							{#if h.folder.length > 0}<span class="host-folder">{folderLabel(h)}</span>{/if}
 						</label>

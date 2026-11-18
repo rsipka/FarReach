@@ -7,8 +7,8 @@
  * Sessions sit in [Bookmarks], [Bookmarks_1] and so on, one section per
  * folder (SubRep, levels split by a backslash). Each line is
  * `name=#icon#type%host%port%user%...#font settings#...#comment#...`; the
- * fields after the type depend on it. SSH, Telnet, RDP and VNC become
- * sessions; an SSH session's gateway list (fields 8 to 10, hops split by
+ * fields after the type depend on it. SSH, Telnet, RDP, VNC and serial
+ * become sessions; an SSH session's gateway list (fields 8 to 10, hops split by
  * __PIPE__) becomes its jump hosts.
  *
  * Passwords are in [Passwords] (or the P registry key) by
@@ -26,12 +26,14 @@ import { splitAddress } from '../rdm-import.ts';
 import {
 	aesCfb8Decrypt,
 	aesEcbBlock,
+	baudOf,
 	blankHost,
 	Dedupe,
 	fromBase64,
 	iniGet,
 	portOr,
 	readIni,
+	serialHost,
 	sha512,
 	strictText,
 	type IniSection,
@@ -61,6 +63,7 @@ const TYPES: Record<string, string> = {
 	'14': 'WSL'
 };
 const KINDS: Record<string, ImportKind> = { '0': 'ssh', '1': 'telnet', '4': 'rdp', '5': 'vnc' };
+// Serial ('8') is read by mobaSerial: its fields are not a host and port.
 
 /** MobaXterm's escapes for characters its line format uses. */
 export function mobaUnescape(s: string): string {
@@ -215,6 +218,17 @@ export async function parseMobaXterm(raw: string, password?: string | null): Pro
 			}
 			const fields = parts[at + 1].split('%');
 			const type = fields[0];
+			if (type === '8') {
+				const serial = mobaSerial(String(index), name, fields);
+				if (!serial) skipped.push({ label: name, reason: 'no_host' });
+				else if (!dedupe.add(serial)) skipped.push({ label: name, reason: 'duplicate' });
+				else {
+					serial.folder = folder;
+					serial.notes = mobaUnescape(parts[at + 4] ?? '') || null;
+					hosts.push(serial);
+				}
+				continue;
+			}
 			const kind = KINDS[type];
 			if (!kind) {
 				skipped.push({ label: name, reason: 'unsupported', type: TYPES[type] ?? type });
@@ -257,6 +271,29 @@ export async function parseMobaXterm(raw: string, password?: string | null): Pro
 	}
 	if (hosts.length === 0 && skipped.length === 0) return { ok: false, error: 'no_hosts' };
 	return { ok: true, hosts, skipped, credentials: [...credentials.values()], notice: unreadable ? 'passwords_skipped' : undefined };
+}
+
+/** Speeds MobaXterm offers; a field holding one of them is the speed. */
+const MOBA_SPEEDS = new Set([110, 300, 600, 1200, 2400, 4800, 9600, 14400, 19200, 38400, 57600, 115200, 128000, 230400, 256000, 460800, 921600]);
+
+/**
+ * A serial session. Its fields are not documented and no sample file has
+ * been seen, so only what can be recognised is taken: the port (a field
+ * that starts with COMn or /dev/, as in `COM3  (USB Serial Port (COM3))`)
+ * and the speed (a field holding a usual speed). The framing stays 8N1.
+ */
+function mobaSerial(id: string, name: string, fields: string[]): ImportHost | null {
+	let port = '';
+	let speed: number | undefined;
+	for (let i = 1; i < fields.length; i++) {
+		const v = mobaUnescape(fields[i]);
+		const m = /^(COM\d+|\/dev\/\S+)/i.exec(v);
+		if (!port && m) port = m[1].toUpperCase().startsWith('COM') ? m[1].toUpperCase() : m[1];
+		const n = baudOf(v);
+		if (speed === undefined && n !== undefined && MOBA_SPEEDS.has(n)) speed = n;
+	}
+	if (!port) return null;
+	return serialHost(id, name, port, speed ? { baud_rate: speed } : {});
 }
 
 /** The SSH gateway hops, from three parallel __PIPE__ lists. */

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getTabs, getActiveTab, updateTabTitle, updateTabConnection, setTelnetConnection, createTab, activateTab, getSplit, setSplitRatio, getDraggedTab, setDraggedTab, splitWith, unsplit } from '#lib/state/tabs.svelte.js';
+	import { getTabs, getActiveTab, updateTabTitle, updateTabConnection, setTelnetConnection, setSerialConnection, createTab, activateTab, getSplit, setSplitRatio, getDraggedTab, setDraggedTab, splitWith, unsplit } from '#lib/state/tabs.svelte.js';
 	import { paneOf, paneStyle, dividerStyle, dropZone, neighbour, type Direction } from '#lib/terminal/split.js';
 	import { getActivePage } from '#lib/state/navigation.svelte.js';
 	import { isDevopsEnabled } from '#lib/state/devops.svelte.js';
@@ -8,6 +8,7 @@
 	import { ptySpawn, ptyClose } from '#lib/ipc/pty.js';
 	import { sshDisconnect } from '#lib/ipc/ssh.js';
 	import { telnetDisconnect } from '#lib/ipc/telnet.js';
+	import { serialDisconnect } from '#lib/ipc/serial.js';
 	import { monitoringStart, monitoringStop, monitoringGetStats, monitoringStartWsl } from '#lib/ipc/monitoring.js';
 	import { updateStats, removeStats } from '#lib/state/monitoring.svelte.js';
 	import Terminal from '#lib/components/terminal/Terminal.svelte';
@@ -186,6 +187,7 @@
 	let spawnedPtys = $state(new Set<string>());
 	let connectedSsh = $state(new Set<string>());
 	let connectedTelnet = $state(new Set<string>());
+	let connectedSerial = $state(new Set<string>());
 	let monitoredConnections = $state(new Set<string>());
 	let pollIntervals = $state(new Map<string, ReturnType<typeof setInterval>>());
 
@@ -208,6 +210,9 @@
 			}
 			if (tab.type === 'telnet' && tab.telnetConnectionId) {
 				connectedTelnet.add(tab.telnetConnectionId);
+			}
+			if (tab.type === 'serial' && tab.serialConnectionId) {
+				connectedSerial.add(tab.serialConnectionId);
 			}
 		}
 	});
@@ -328,6 +333,15 @@
 			}
 		}
 
+		// A serial tab closed (the port is let go), or opened again.
+		const openSerial = new Set(tabs.map((t) => t.serialConnectionId).filter(Boolean));
+		for (const connId of connectedSerial) {
+			if (!openSerial.has(connId)) {
+				connectedSerial.delete(connId);
+				serialDisconnect(connId).catch(() => {});
+			}
+		}
+
 		for (const connId of monitoredConnections) {
 			if (!activeConnectionIds.has(connId)) stopMonitoring(connId);
 		}
@@ -378,14 +392,15 @@
 								<Terminal
 									ptyId={tab.id}
 									type={tab.type}
-									connectionId={tab.type === 'telnet' ? tab.telnetConnectionId : tab.connectionId}
+									connectionId={tab.type === 'telnet' ? tab.telnetConnectionId : tab.type === 'serial' ? tab.serialConnectionId : tab.connectionId}
 									active={focused}
 									visible={focused || pane !== null}
 									onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
 									sshConnectParams={tab.sshConnectParams}
 									tmuxSwitch={tab.tmuxSwitch}
 									telnetConnectParams={tab.telnetConnectParams}
-									onReconnected={(newId) => (tab.type === 'telnet' ? setTelnetConnection(tab.id, newId) : updateTabConnection(tab.id, newId))}
+									serialConnectParams={tab.serialConnectParams}
+									onReconnected={(newId) => (tab.type === 'telnet' ? setTelnetConnection(tab.id, newId) : tab.type === 'serial' ? setSerialConnection(tab.id, newId) : updateTabConnection(tab.id, newId))}
 									onReady={() => handleTerminalReady(tab)}
 									terminalTheme={tab.terminalTheme}
 									cursorStyle={tab.cursorStyle}

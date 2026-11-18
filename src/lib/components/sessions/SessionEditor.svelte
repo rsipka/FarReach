@@ -8,7 +8,7 @@
 	import Input from '#lib/components/shared/Input.svelte';
 	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField, type TmuxSetting } from '#lib/ipc/sessions.js';
 	import { defaultTmuxName, folderTmux, validTmuxName } from '#lib/terminal/tmux.js';
-	import { isWindows } from '#lib/platform.js';
+	import { isMobile, isWindows } from '#lib/platform.js';
 	import SshOptionsSection from './SshOptionsSection.svelte';
 	import Disclosure from '#lib/components/shared/Disclosure.svelte';
 	import TerminalThemeList from '#lib/components/terminal/TerminalThemeList.svelte';
@@ -22,6 +22,7 @@
 	import { open as openDialog } from '@tauri-apps/plugin-dialog';
 	import { savedCredentialList, credentialsFor, type SavedCredential } from '#lib/ipc/savedCredentials.js';
 	import { DEFAULT_TELNET_OPTIONS, type TelnetOptions } from '#lib/ipc/telnet.js';
+	import { DEFAULT_SERIAL_OPTIONS, SERIAL_BAUD_RATES, serialListPorts, type SerialOptions, type SerialPortInfo } from '#lib/ipc/serial.js';
 	import type { HistoryMode } from '#lib/ipc/history.js';
 	import type { CursorStyle } from '#lib/terminal/cursor.js';
 
@@ -65,6 +66,16 @@
 	let wslDistro = $state('');
 	/** Telnet only: how it talks to the device. */
 	let telnetOptions = $state<TelnetOptions>({ ...DEFAULT_TELNET_OPTIONS });
+	/** Serial only: line settings. The port name is kept in `host`. */
+	let serialOptions = $state<SerialOptions>({ ...DEFAULT_SERIAL_OPTIONS });
+	let serialPorts = $state<SerialPortInfo[]>([]);
+	let serialPortsLoading = $state(false);
+	/** The port is typed rather than picked (one the system does not list). */
+	let serialPortTyped = $state(false);
+	/** The speeds offered, with the session's own if it is not a usual one. */
+	let baudRates = $derived(
+		SERIAL_BAUD_RATES.includes(serialOptions.baud_rate) ? SERIAL_BAUD_RATES : [...SERIAL_BAUD_RATES, serialOptions.baud_rate].sort((a, b) => a - b)
+	);
 	let availableDistros = $state<string[]>([]);
 	let sshSessions = $state<SessionConfig[]>([]);
 
@@ -159,6 +170,28 @@
 		}
 	});
 
+	async function loadSerialPorts(): Promise<void> {
+		serialPortsLoading = true;
+		try {
+			serialPorts = await serialListPorts();
+		} catch {
+			serialPorts = [];
+		} finally {
+			serialPortsLoading = false;
+		}
+		// A new session takes the first port found; a saved one keeps its own,
+		// typed in when it is not plugged in now.
+		untrack(() => {
+			if (!host.trim() && serialPorts.length > 0) host = serialPorts[0].name;
+			serialPortTyped = !!host.trim() && !serialPorts.some((p) => p.name === host);
+			if (!host.trim() && serialPorts.length === 0) serialPortTyped = true;
+		});
+	}
+
+	$effect(() => {
+		if (open && kind === 'serial') void loadSerialPorts();
+	});
+
 	$effect(() => {
 		if (open && kind === 'vnc') {
 			sessionList()
@@ -172,7 +205,7 @@
 	let portStr = $state('22');
 	let username = $state('root');
 
-	const DEFAULT_PORT: Record<SessionKind, string> = { ssh: '22', rdp: '3389', vnc: '5900', wsl: '0', telnet: '23' };
+	const DEFAULT_PORT: Record<SessionKind, string> = { ssh: '22', rdp: '3389', vnc: '5900', wsl: '0', telnet: '23', serial: '0' };
 
 	function setKind(next: SessionKind): void {
 		if (next === kind) return;
@@ -180,7 +213,9 @@
 		if (next !== 'ssh' && username === 'root') username = '';
 		if (next === 'ssh' && username === '') username = 'root';
 		// A VNC user name means a Mac's own login: not one carried over.
-		if (next === 'vnc') username = '';
+		if (next === 'vnc' || next === 'serial') username = '';
+		// A port name is not a host name, nor the other way round.
+		if (next === 'serial' || kind === 'serial') host = '';
 		kind = next;
 	}
 	/** 'Manager' is a password from a password manager: saved as a Password login with a reference. */
@@ -247,7 +282,7 @@
 	let canSave = $derived(
 		name.trim().length > 0 &&
 		(kind === 'wsl' ? wslDistro.trim().length > 0 : host.trim().length > 0) &&
-		(kind === 'vnc' || kind === 'wsl' || kind === 'telnet' || !!usedCredential || username.trim().length > 0) &&
+		(kind === 'vnc' || kind === 'wsl' || kind === 'telnet' || kind === 'serial' || !!usedCredential || username.trim().length > 0) &&
 		!saving
 	);
 
@@ -275,6 +310,7 @@
 			viaSessionId = editSession.via_session_id ?? '';
 			wslDistro = editSession.wsl_distro ?? '';
 			telnetOptions = { ...DEFAULT_TELNET_OPTIONS, ...(editSession.telnet ?? {}) };
+			serialOptions = { ...DEFAULT_SERIAL_OPTIONS, ...(editSession.serial ?? {}) };
 			credentialId = editSession.credential_id ?? '';
 			name = editSession.name;
 			host = editSession.host;
@@ -342,6 +378,7 @@
 			sharePath = '';
 			viaSessionId = '';
 			telnetOptions = { ...DEFAULT_TELNET_OPTIONS };
+			serialOptions = { ...DEFAULT_SERIAL_OPTIONS };
 			credentialId = '';
 			name = '';
 			host = '';
@@ -397,20 +434,21 @@
 		saving = true;
 		error = undefined;
 
-		const port = kind === 'wsl' ? 0 : (parseInt(portStr, 10) || parseInt(DEFAULT_PORT[kind], 10) || 22);
+		const port = kind === 'wsl' || kind === 'serial' ? 0 : (parseInt(portStr, 10) || parseInt(DEFAULT_PORT[kind], 10) || 22);
 		const rdp = kind === 'rdp';
 		const vnc = kind === 'vnc';
 		const wsl = kind === 'wsl';
 		const telnet = kind === 'telnet';
+		const serial = kind === 'serial';
 		/** Jump hosts, proxies, login shells and ssh_config are SSH's alone. */
-		const desktop = rdp || vnc || wsl || telnet;
+		const desktop = rdp || vnc || wsl || telnet || serial;
 		const via = vnc ? viaSessionId || null : null;
 		/** WSL and VNC have no username to share; their login stays their own. */
 		const credential = rdp || telnet || kind === 'ssh' ? credentialId || null : null;
 		// RDP and VNC are password logons; the toggle below is SSH-only and
 		// its value is ignored here rather than trusted. WSL signs in by
 		// itself: nothing to keep, so a password left in the form is not saved.
-		const authMethod: AuthMethod = wsl
+		const authMethod: AuthMethod = wsl || serial
 			? { type: 'Password' }
 			: desktop
 			? passwordAuth(password, passwordRef)
@@ -534,6 +572,7 @@
 					try_agent_keys: !desktop && authType === 'Key' && tryAgentKeys ? true : null,
 					wsl_distro: kind === 'wsl' ? wslDistro.trim() : null,
 					telnet: telnet ? { ...telnetOptions } : null,
+					serial: serial ? { ...serialOptions } : null,
 					ssh_options: sshOptionsToSave,
 					credential_id: credential,
 					credential: null,
@@ -573,6 +612,7 @@
 					sshOptions: sshOptionsToSave,
 					wslDistro: kind === 'wsl' ? wslDistro.trim() : null,
 					telnet: telnet ? { ...telnetOptions } : null,
+					serial: serial ? { ...serialOptions } : null,
 					credentialId: credential,
 					notes: notesToSave,
 					customFields: fieldsToSave,
@@ -677,6 +717,12 @@
 				<button type="button" class="auth-btn" class:active={kind === 'telnet'} disabled={saving} onclick={() => setKind('telnet')}>
 					{t('session.protocol_telnet')}
 				</button>
+				<!-- A serial port is on this computer: none on a phone. -->
+				{#if !isMobile() || kind === 'serial'}
+					<button type="button" class="auth-btn" class:active={kind === 'serial'} disabled={saving} onclick={() => setKind('serial')}>
+						{t('session.protocol_serial')}
+					</button>
+				{/if}
 				<!-- Only show WSL option on Windows -->
 				{#if isWindows()}
 					<button type="button" class="auth-btn" class:active={kind === 'wsl'} disabled={saving} onclick={() => setKind('wsl')}>
@@ -686,7 +732,7 @@
 			</div>
 		</div>
 
-		<Input label={t('session.name')} bind:value={name} placeholder={kind === 'rdp' ? 'Office PC' : kind === 'telnet' ? 'Core switch' : 'My Server'} disabled={saving} />
+		<Input label={t('session.name')} bind:value={name} placeholder={kind === 'rdp' ? 'Office PC' : kind === 'telnet' ? 'Core switch' : kind === 'serial' ? 'Switch console' : 'My Server'} disabled={saving} />
 
 		{#if kind === 'wsl'}
 			<div class="shell-field">
@@ -705,6 +751,36 @@
 						disabled={saving}
 					/>
 				{/if}
+			</div>
+		{:else if kind === 'serial'}
+			<div class="shell-field">
+				<label class="via-label" for="serial-port">{t('serial.port')}</label>
+				<div class="key-path-row">
+					<div class="key-path-input">
+						{#if serialPortTyped}
+							<Input bind:value={host} placeholder={isWindows() ? 'COM3' : '/dev/ttyUSB0'} disabled={saving} />
+						{:else}
+							<select id="serial-port" class="via-select" bind:value={host} disabled={saving}>
+								{#each serialPorts as p (p.name)}
+									<option value={p.name}>{p.description ? `${p.name} · ${p.description}` : p.name}</option>
+								{/each}
+							</select>
+						{/if}
+					</div>
+					<Button variant="secondary" size="sm" onclick={loadSerialPorts} disabled={saving || serialPortsLoading}>
+						{t('serial.refresh')}
+					</Button>
+				</div>
+				<p class="shell-hint">
+					{#if serialPorts.length === 0 && !serialPortsLoading}
+						{t('serial.no_ports')}
+					{/if}
+					{#if serialPorts.length > 0}
+						<button type="button" class="link-btn" onclick={() => (serialPortTyped = !serialPortTyped)} disabled={saving}>
+							{serialPortTyped ? t('serial.pick_port') : t('serial.type_port')}
+						</button>
+					{/if}
+				</p>
 			</div>
 		{:else}
 			<div class="row">
@@ -742,7 +818,7 @@
 			</div>
 		{/if}
 
-		{#if kind !== 'vnc' && kind !== 'wsl' && !usedCredential}
+		{#if kind !== 'vnc' && kind !== 'wsl' && kind !== 'serial' && !usedCredential}
 			<Input label={kind === 'telnet' ? t('session.telnet_username') : t('session.username')} bind:value={username} placeholder={kind === 'rdp' ? 'Administrator' : kind === 'telnet' ? 'admin' : 'root'} disabled={saving} />
 		{/if}
 
@@ -827,6 +903,76 @@
 				</div>
 			</div>
 			<p class="shell-hint">{t('session.telnet_keys_hint')}</p>
+		{:else if kind === 'serial'}
+			<!-- A serial line has no login of its own; the device's console may
+			     ask for one, typed in the terminal. -->
+			<div class="row">
+				<div class="shell-field telnet-half">
+					<label class="via-label" for="serial-baud">{t('serial.speed')}</label>
+					<select id="serial-baud" class="via-select" bind:value={serialOptions.baud_rate} disabled={saving}>
+						{#each baudRates as b (b)}
+							<option value={b}>{b}</option>
+						{/each}
+					</select>
+				</div>
+				<div class="shell-field telnet-half">
+					<label class="via-label" for="serial-data-bits">{t('serial.data_bits')}</label>
+					<select id="serial-data-bits" class="via-select" bind:value={serialOptions.data_bits} disabled={saving}>
+						{#each [8, 7, 6, 5] as b (b)}
+							<option value={b}>{b}</option>
+						{/each}
+					</select>
+				</div>
+			</div>
+			<div class="row">
+				<div class="shell-field telnet-half">
+					<label class="via-label" for="serial-parity">{t('serial.parity')}</label>
+					<select id="serial-parity" class="via-select" bind:value={serialOptions.parity} disabled={saving}>
+						<option value="none">{t('serial.parity_none')}</option>
+						<option value="odd">{t('serial.parity_odd')}</option>
+						<option value="even">{t('serial.parity_even')}</option>
+					</select>
+				</div>
+				<div class="shell-field telnet-half">
+					<label class="via-label" for="serial-stop-bits">{t('serial.stop_bits')}</label>
+					<select id="serial-stop-bits" class="via-select" bind:value={serialOptions.stop_bits} disabled={saving}>
+						<option value={1}>1</option>
+						<option value={2}>2</option>
+					</select>
+				</div>
+			</div>
+			<div class="shell-field">
+				<label class="via-label" for="serial-flow">{t('serial.flow_control')}</label>
+				<select id="serial-flow" class="via-select" bind:value={serialOptions.flow_control} disabled={saving}>
+					<option value="none">{t('serial.flow_none')}</option>
+					<option value="software">{t('serial.flow_software')}</option>
+					<option value="hardware">{t('serial.flow_hardware')}</option>
+				</select>
+			</div>
+			<div class="row">
+				<div class="shell-field telnet-half">
+					<label class="via-label" for="serial-newline">{t('session.telnet_enter')}</label>
+					<select id="serial-newline" class="via-select" bind:value={serialOptions.newline} disabled={saving}>
+						<option value="cr">CR</option>
+						<option value="crlf">CR LF</option>
+						<option value="lf">LF</option>
+					</select>
+				</div>
+				<div class="shell-field telnet-half">
+					<label class="via-label" for="serial-backspace">{t('session.telnet_backspace')}</label>
+					<select id="serial-backspace" class="via-select" bind:value={serialOptions.backspace} disabled={saving}>
+						<option value="del">DEL (^?)</option>
+						<option value="ctrlh">Ctrl+H (^H)</option>
+					</select>
+				</div>
+			</div>
+			<div class="shell-field">
+				<label class="jump-toggle">
+					<input type="checkbox" bind:checked={serialOptions.local_echo} disabled={saving} />
+					<span class="jump-toggle-text">{t('serial.local_echo')}</span>
+				</label>
+				<p class="shell-hint">{t('serial.hint')}</p>
+			</div>
 		{:else if kind === 'wsl'}
 			<!-- wsl.exe signs in by itself: no password, key, jump host, proxy or
 			     ssh_config here. Only which Linux user, if not the distro's default. -->
@@ -1239,6 +1385,19 @@
 	.telnet-half {
 		flex: 1;
 		min-width: 0;
+	}
+
+	.link-btn {
+		background: none;
+		border: none;
+		padding: 0;
+		color: var(--color-accent);
+		font: inherit;
+		cursor: pointer;
+	}
+
+	.link-btn:hover {
+		text-decoration: underline;
 	}
 
 	.field-host {

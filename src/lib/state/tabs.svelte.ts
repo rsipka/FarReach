@@ -2,11 +2,12 @@ import type { SshConnectParams } from '#lib/ipc/ssh.js';
 import { rdpDisconnect, type RdpConnectParams } from '#lib/ipc/rdp.js';
 import { vncDisconnect, type VncConnectParams } from '#lib/ipc/vnc.js';
 import type { TelnetConnectParams } from '#lib/ipc/telnet.js';
+import type { SerialConnectParams } from '#lib/ipc/serial.js';
 import type { HistoryMode } from '#lib/ipc/history.js';
 import * as splits from '#lib/terminal/split.js';
 import type { Direction, Split } from '#lib/terminal/split.js';
 
-export type TabType = 'local' | 'ssh' | 'rdp' | 'vnc' | 'telnet';
+export type TabType = 'local' | 'ssh' | 'rdp' | 'vnc' | 'telnet' | 'serial';
 
 /** A tab that shows a remote desktop rather than a terminal. */
 export function isDesktopTab(tab: Pick<Tab, 'type'> | undefined): boolean {
@@ -34,6 +35,10 @@ export interface Tab {
 	/** A Telnet tab's open connection. Kept apart from `connectionId`, which
 	 *  the file explorer, recipes and the rest read as an SSH connection. */
 	telnetConnectionId?: string;
+	/** What a serial tab opens; its terminal opens the port once it listens. */
+	serialConnectParams?: SerialConnectParams;
+	/** A serial tab's open connection, kept apart like `telnetConnectionId`. */
+	serialConnectionId?: string;
 	/** A local tab that runs this program instead of the default shell
 	 *  (a shell inside a container on this computer, say). */
 	localCommand?: { program: string; args: string[] };
@@ -142,7 +147,7 @@ export function createTab(type: TabType, title?: string, connectionId?: string, 
 
 	const tab: Tab = {
 		id,
-		title: title ?? numbered(type === 'local' ? 'Local' : type === 'rdp' ? 'RDP' : type === 'vnc' ? 'VNC' : type === 'telnet' ? 'Telnet' : 'SSH'),
+		title: title ?? numbered(type === 'local' ? 'Local' : type === 'rdp' ? 'RDP' : type === 'vnc' ? 'VNC' : type === 'telnet' ? 'Telnet' : type === 'serial' ? 'Serial' : 'SSH'),
 		type,
 		connectionId,
 		active: true,
@@ -219,6 +224,11 @@ export function updateTabOs(connectionId: string, os: string): void {
 export function setTelnetConnection(tabId: string, connectionId: string): void {
 	const tab = tabs.find((t) => t.id === tabId);
 	if (tab) tab.telnetConnectionId = connectionId;
+}
+
+export function setSerialConnection(tabId: string, connectionId: string): void {
+	const tab = tabs.find((t) => t.id === tabId);
+	if (tab) tab.serialConnectionId = connectionId;
 }
 
 export function updateTabConnection(tabId: string, newConnectionId: string): void {

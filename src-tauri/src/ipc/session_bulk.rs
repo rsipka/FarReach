@@ -89,7 +89,7 @@ impl SessionPatch {
 /// Fields a kind of session has. The window offers the same rules, as
 /// "applies to 8 of 24".
 fn has_login(kind: SessionKind) -> bool {
-    kind != SessionKind::Wsl
+    !matches!(kind, SessionKind::Wsl | SessionKind::Serial)
 }
 
 /// The kinds the session editor offers a saved credential for.
@@ -98,7 +98,7 @@ fn takes_credential(kind: SessionKind) -> bool {
 }
 
 fn has_terminal(kind: SessionKind) -> bool {
-    matches!(kind, SessionKind::Ssh | SessionKind::Telnet | SessionKind::Wsl)
+    matches!(kind, SessionKind::Ssh | SessionKind::Telnet | SessionKind::Wsl | SessionKind::Serial)
 }
 
 /// Apply `patch` to `s`, a session as the editor reads it. `uses_credential`

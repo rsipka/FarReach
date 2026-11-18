@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { sessionAddress } from '#lib/utils/address.js';
 	/**
 	 * The bar over a terminal pane: what it is connected to, and the actions
 	 * people reach for while working in it, one click away instead of in the
@@ -34,13 +35,13 @@
 		close: 'M6 6l12 12M18 6L6 18'
 	};
 
-	let remote = $derived(tab.type === 'ssh' || tab.type === 'telnet');
+	let remote = $derived(tab.type === 'ssh' || tab.type === 'telnet' || tab.type === 'serial');
 	let params = $derived(tab.sshConnectParams ?? tab.telnetConnectParams);
 	let address = $derived(
-		params ? `${'username' in params && params.username ? params.username + '@' : ''}${params.host}:${params.port}` : ''
+		tab.serialConnectParams ? sessionAddress({ kind: 'serial', host: tab.serialConnectParams.port, serial: tab.serialConnectParams.options }) : params ? `${'username' in params && params.username ? params.username + '@' : ''}${params.host}:${params.port}` : ''
 	);
 	let protocol = $derived(
-		tab.type === 'ssh' ? 'SSH' : tab.type === 'telnet' ? 'Telnet' : tab.wslDistro ? 'WSL' : t('termbar.local')
+		tab.type === 'ssh' ? 'SSH' : tab.type === 'telnet' ? 'Telnet' : tab.type === 'serial' ? t('session.protocol_serial') : tab.wslDistro ? 'WSL' : t('termbar.local')
 	);
 	let tmuxName = $derived(tab.type === 'ssh' ? (tab.sshConnectParams?.tmux?.name ?? null) : null);
 	let tap = $derived(tabHistory(tab.id));
