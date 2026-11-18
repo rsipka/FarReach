@@ -3,7 +3,7 @@
 	import Dropdown from '#lib/components/shared/Dropdown.svelte';
 	import { CURSOR_STYLES, CURSOR_WIDTHS, INACTIVE_CURSOR_STYLES, cursorStyle, cursorWidth, inactiveCursorStyle } from '#lib/terminal/cursor.js';
 	import TerminalThemeSettings from './TerminalThemeSettings.svelte';
-	import { themeState, applyTheme, loadInstalledThemes, DARK, LIGHT } from '#lib/state/theme.svelte.js';
+	import { themeState, applyTheme, loadInstalledThemes, DARK, LIGHT, BUILT_IN_IDS } from '#lib/state/theme.svelte.js';
 	import { onMount } from 'svelte';
 	import { themeFetchRegistry, themeInstall, themeUninstall, type ThemeEntry } from '#lib/ipc/theme.js';
 	import { validateTheme } from '#lib/state/theme.svelte.js';
@@ -80,7 +80,8 @@
 		loadingRegistry = true;
 		registryError = null;
 		try {
-			registry = await themeFetchRegistry();
+			// A theme the app already ships is not offered again.
+			registry = (await themeFetchRegistry()).filter((e) => !BUILT_IN_IDS.has(e.id));
 		} catch (err) {
 			registryError = String(err);
 		} finally {
@@ -1102,7 +1103,9 @@
 
 	.theme-cards {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		/* 20-odd themes ship now: as many across as fit, rather than a tall
+		   column of threes. */
+		grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
 		gap: 10px;
 	}
 

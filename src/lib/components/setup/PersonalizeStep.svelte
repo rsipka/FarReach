@@ -160,7 +160,9 @@
 
 		<div class="field">
 			<span class="field-label">{t('settings.theme')}</span>
-			<div class="theme-grid">
+			<!-- With the bundled themes there are 20-odd of these: one row that
+			     scrolls sideways, like the marketplace below, keeps Next on screen. -->
+			<div class={ready.length > 6 ? 'theme-strip' : 'theme-grid'}>
 				{#each ready as choice (choice.id)}
 					<button
 						type="button"
