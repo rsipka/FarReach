@@ -1277,6 +1277,7 @@
   "session.move_n": "Přesunout ({{count}})",
   "session.move_filter": "Najít složku",
   "session.move_to_folder": "Přesunout do složky",
+  "session.move_mixed_vaults": "Tyto relace jsou v různých trezorech a složka může obsahovat jen relace jednoho trezoru.",
   "session.remove_from_folder": "Vyjmout ze složky",
   "nav.terminal": "Terminál",
   "nav.ansible": "Ansible",

@@ -66,7 +66,7 @@
 	import type { SecretRef } from '#lib/ipc/pwmanager.js';
 	import { untrack } from 'svelte';
 	import { positionMenu } from '#lib/utils/positionMenu.js';
-	import { buildFolderTree, canMoveFolder, folderPath, type FolderTreeNode } from '#lib/sessions/folder-tree.js';
+	import { buildFolderTree, canMoveFolder, commonVault, folderPath, foldersInVault, vaultOf, type FolderTreeNode } from '#lib/sessions/folder-tree.js';
 	import { canScanLinkCode, scanLinkCode } from '#lib/state/link-scan.js';
 	import { vaultState, checkState, initIdentity, importIdentity, linkDevice, ALL_VAULTS, loadVaultFilter, type VaultFilter } from '#lib/state/vault.svelte.js';
 	import { tmuxFor } from '#lib/terminal/tmux.js';
@@ -384,9 +384,24 @@
 	let moveTarget = $state<string | null | undefined>(undefined);
 	let moveNewName = $state('');
 	const NEW_FOLDER = '__new__';
-	let moveFolders = $derived(
-		moveFilter.trim() ? folders.filter(f => folderPath(f.id, folders).toLowerCase().includes(moveFilter.trim().toLowerCase())) : folders
-	);
+	/** The vault of the sessions with these ids, or undefined when they
+	 *  are in several: a session goes only into a folder of its own vault. */
+	function vaultOfIds(ids: string[]): string | null | undefined {
+		const set = new Set(ids);
+		return commonVault(sessions.filter(s => set.has(s.id)));
+	}
+	/** The folders these sessions can be moved into. */
+	function moveTargets(ids: string[]): Folder[] {
+		const vault = vaultOfIds(ids);
+		return vault === undefined ? [] : foldersInVault(folders, vault);
+	}
+	let moveFolders = $derived.by(() => {
+		const targets = moveIds_ ? moveTargets(moveIds_) : [];
+		const filter = moveFilter.trim().toLowerCase();
+		return filter ? targets.filter(f => folderPath(f.id, folders).toLowerCase().includes(filter)) : targets;
+	});
+	/** The sessions being moved are in several vaults: no folder takes them all. */
+	let moveMixed = $derived(moveIds_ !== null && vaultOfIds(moveIds_) === undefined);
 	/** Sessions to move into the folder being created. */
 	let pendingMove = $state<string[] | null>(null);
 
@@ -458,8 +473,13 @@
 		if (target === NEW_FOLDER) {
 			const name = moveNewName.trim();
 			if (!name) return;
+			const vault = vaultOfIds(ids);
+			if (vault === undefined) {
+				addToast(t('session.move_mixed_vaults'), 'error');
+				return;
+			}
 			try {
-				target = (await sessionCreateFolder(name, null, targetVaultId)).id;
+				target = (await sessionCreateFolder(name, null, vault)).id;
 				folders = await sessionListFolders();
 			} catch (err) {
 				addToast(String(err), 'error');
@@ -603,12 +623,14 @@
 	}
 
 
-	// Build the hierarchy from Folder.parent_id. Search keeps ancestors of
-	// matching sessions visible; outside search, empty folders stay visible in
-	// the selected vault so they can receive sessions or subfolders.
-	let folderTree = $derived.by(() => buildFolderTree(folders, filteredSessions, (folder) =>
-		!searchQuery.trim() && selectedVaultId !== ALL_VAULTS &&
-		(folder.vault_id === undefined || folder.vault_id === null || folder.vault_id === selectedVaultId)
+	// Build the hierarchy from Folder.parent_id. Each vault shows only its
+	// own folders (Private ones only under Private); All vaults shows every
+	// folder that holds a session shown. Search keeps ancestors of matching
+	// sessions visible; outside search, empty folders stay visible in the
+	// selected vault so they can receive sessions or subfolders.
+	let shownFolders = $derived(selectedVaultId === ALL_VAULTS ? folders : foldersInVault(folders, selectedVaultId));
+	let folderTree = $derived.by(() => buildFolderTree(shownFolders, filteredSessions, () =>
+		!searchQuery.trim() && selectedVaultId !== ALL_VAULTS
 	));
 
 	function toggleFolder(folderId: string): void {
@@ -620,10 +642,10 @@
 	}
 
 	/** Some folder on screen is open: the toolbar button folds them all. */
-	let anyExpanded = $derived(folders.some(f => !collapsedFolders.has(f.id)));
+	let anyExpanded = $derived(shownFolders.some(f => !collapsedFolders.has(f.id)));
 
 	function setAllFolders(collapsed: boolean): void {
-		collapsedFolders = new Set(collapsed ? folders.map(f => f.id) : []);
+		collapsedFolders = new Set(collapsed ? shownFolders.map(f => f.id) : []);
 		localStorage.setItem('collapsedFolders', JSON.stringify([...collapsedFolders]));
 	}
 
@@ -656,7 +678,14 @@
 		if (!name) return;
 		try {
 			const parent = creatingFolderParentId ? folders.find(folder => folder.id === creatingFolderParentId) : undefined;
-			const folder = await sessionCreateFolder(name, creatingFolderParentId, parent ? parent.vault_id : targetVaultId);
+			const ids = pendingMove;
+			// A folder made to take sessions goes in their vault.
+			const vault = parent ? vaultOf(parent) : ids?.length ? vaultOfIds(ids) : targetVaultId;
+			if (vault === undefined) {
+				addToast(t('session.move_mixed_vaults'), 'error');
+				return;
+			}
+			const folder = await sessionCreateFolder(name, creatingFolderParentId, vault);
 			if (creatingFolderParentId) {
 				const next = new Set(collapsedFolders);
 				next.delete(creatingFolderParentId);
@@ -667,7 +696,6 @@
 			creatingFolder = false;
 			creatingFolderParentId = null;
 			folders = await sessionListFolders();
-			const ids = pendingMove;
 			pendingMove = null;
 			if (ids?.length) await moveIds(ids, folder.id);
 		} catch (err) {
@@ -709,6 +737,8 @@
 	function handleDragStart(e: PointerEvent, session: SessionConfig): void {
 		dragSession = session;
 		dragging = true;
+		// Only folders of the dragged sessions' vault take them.
+		const allowed = new Set(moveTargets(targetsOf(session)).map(f => f.id));
 		const onMove = (me: PointerEvent) => {
 			if (!dragSession) return;
 			// Find drop target by checking which folder header we're over
@@ -717,7 +747,8 @@
 			if (el) {
 				const folderEl = el.closest('[data-folder-id]') as HTMLElement | null;
 				if (folderEl) {
-					dropTarget = folderEl.dataset.folderId === '__ungrouped__' ? null : folderEl.dataset.folderId!;
+					const id = folderEl.dataset.folderId!;
+					dropTarget = id === '__ungrouped__' ? null : allowed.has(id) ? id : undefined;
 				} else {
 					dropTarget = undefined;
 				}
@@ -1717,7 +1748,7 @@
 					<FaIcon icon={faCheckDouble} size={13} />
 				</button>
 				<span class="tb-sep"></span>
-				<button class="tb-btn" type="button" onclick={() => setAllFolders(anyExpanded)} disabled={folders.length === 0} title={anyExpanded ? t('session.collapse_all') : t('session.expand_all')} aria-label={anyExpanded ? t('session.collapse_all') : t('session.expand_all')}>
+				<button class="tb-btn" type="button" onclick={() => setAllFolders(anyExpanded)} disabled={shownFolders.length === 0} title={anyExpanded ? t('session.collapse_all') : t('session.expand_all')} aria-label={anyExpanded ? t('session.collapse_all') : t('session.expand_all')}>
 					<FaIcon icon={anyExpanded ? faAnglesUp : faAnglesDown} size={13} />
 				</button>
 				<button class="tb-btn" class:on={sortKey !== 'default'} type="button" onclick={(e) => openViewMenu(e, 'sort')} title={t('session.sort_by')} aria-label={t('session.sort_by')} aria-haspopup="menu" aria-expanded={viewMenu?.kind === 'sort'}>
@@ -1885,7 +1916,7 @@
 				<!-- Scrollable so a large number of folders doesn't make the menu
 				     overflow the screen — caps at ~5 visible rows. -->
 				<div class="context-folders">
-					{#each folders as folder (folder.id)}
+					{#each moveTargets(targetsOf(contextMenu.session)) as folder (folder.id)}
 						<button class="context-item context-folder-item" onclick={() => { if (contextMenu?.session) moveToFolder(contextMenu.session, folder.id); }} type="button">
 							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" class="ctx-folder-icon">
 								<path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1950,7 +1981,7 @@
 				<div class="context-sep"></div>
 				<button class="context-item" onclick={() => { closeContextMenu(); selectMode = true; }} type="button">{t('session.select_sessions')}</button>
 				<button class="context-item" onclick={() => { closeContextMenu(); selectAllShown(); }} type="button">{t('session.select_all')}</button>
-				{#if folders.length}
+				{#if shownFolders.length}
 					<div class="context-sep"></div>
 					<button class="context-item" onclick={() => { closeContextMenu(); setAllFolders(true); }} type="button">{t('session.collapse_all')}</button>
 					<button class="context-item" onclick={() => { closeContextMenu(); setAllFolders(false); }} type="button">{t('session.expand_all')}</button>
@@ -1978,7 +2009,10 @@
 
 <Modal open={moveIds_ !== null} onclose={() => (moveIds_ = null)} title={t('session.move_n_title', { count: String(moveIds_?.length ?? 0) })} maxWidth="420px">
 	<div class="move-body">
-		{#if folders.length > 6}
+		{#if moveMixed}
+			<p class="move-empty">{t('session.move_mixed_vaults')}</p>
+		{/if}
+		{#if (moveIds_ ? moveTargets(moveIds_) : []).length > 6}
 			<input class="move-filter" type="search" placeholder={t('session.move_filter')} aria-label={t('session.move_filter')} bind:value={moveFilter} />
 		{/if}
 		<div class="move-list" role="radiogroup" aria-label={t('session.move_to')}>

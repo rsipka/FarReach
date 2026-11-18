@@ -1290,6 +1290,7 @@
   "session.move_n": "Переместить ({{count}})",
   "session.move_filter": "Найти папку",
   "session.move_to_folder": "Переместить в папку",
+  "session.move_mixed_vaults": "Эти сеансы находятся в разных хранилищах, а папка содержит сеансы только одного хранилища.",
   "session.remove_from_folder": "Remove from Folder",
   "nav.terminal": "Terminal",
   "nav.ansible": "Ansible",

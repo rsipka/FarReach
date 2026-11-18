@@ -1290,6 +1290,7 @@
   "session.move_n": "Μετακίνηση ({{count}})",
   "session.move_filter": "Εύρεση φακέλου",
   "session.move_to_folder": "Μετακίνηση σε φάκελο",
+  "session.move_mixed_vaults": "Αυτές οι συνεδρίες βρίσκονται σε διαφορετικά θησαυροφυλάκια και ένας φάκελος περιέχει συνεδρίες μόνο ενός θησαυροφυλακίου.",
   "session.remove_from_folder": "Αφαίρεση από φάκελο",
   "nav.terminal": "Τερματικό",
   "nav.ansible": "Ansible",
