@@ -385,6 +385,11 @@ export async function sessionSetFolderCredential(folderId: string, credentialId:
   return invoke<Folder>('session_set_folder_credential', { folderId, credentialId });
 }
 
+/** Rename a folder; what is inside stays put. */
+export async function sessionRenameFolder(folderId: string, name: string): Promise<Folder> {
+  return invoke<Folder>('session_rename_folder', { folderId, name });
+}
+
 export async function sessionDeleteFolder(folderId: string): Promise<void> {
   return invoke('session_delete_folder', { folderId });
 }

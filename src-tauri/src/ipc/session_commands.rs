@@ -1569,6 +1569,40 @@ pub async fn session_set_folder_tmux(
     Ok(folder)
 }
 
+/// Rename a folder. Its sessions and subfolders stay where they are.
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn session_rename_folder(
+    state: State<'_, AppState>,
+    folder_id: String,
+    name: String,
+) -> Result<Folder, String> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err("Folder name cannot be empty".to_string());
+    }
+    let manager = state.vault_manager.lock().await;
+    if manager.is_locked() {
+        return Err("Vault is locked".to_string());
+    }
+    let mut folder = read_folders(&manager)
+        .await?
+        .into_iter()
+        .find(|f| f.id == folder_id)
+        .ok_or_else(|| format!("Folder not found: {folder_id}"))?;
+    folder.name = name;
+    let vault_id = find_folder_vault(&manager, &folder.id)
+        .await
+        .ok_or_else(|| format!("Folder not found: {}", folder.id))?;
+    let json = serde_json::to_vec(&folder).map_err(|e| e.to_string())?;
+    manager
+        .update_secret(&vault_id, &folder.id, SecretBox::new(Box::new(json)))
+        .await
+        .map_err(|e| e.to_string())?;
+    tracing::info!("Folder {} renamed", folder.id);
+    Ok(folder)
+}
+
 // --- For saved_credential_commands ---
 
 pub(crate) fn sessions_vault_id(manager: &crate::vault::VaultManager) -> Option<String> {

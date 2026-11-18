@@ -31,10 +31,12 @@
 		editSession?: SessionConfig;
 		vaultId?: string | null; // Which vault to save to (null = private)
 		folders?: Folder[];
+		/** The folder a new session starts in (a folder's "New session here"). */
+		folderId?: string | null;
 		onsave?: () => void;
 	}
 
-	let { open = $bindable(), editSession, vaultId = null, folders = [], onsave }: Props = $props();
+	let { open = $bindable(), editSession, vaultId = null, folders = [], folderId = null, onsave }: Props = $props();
 
 	/**
 	 * SSH or RDP. The two share a name, a host, a port and a username; RDP has
@@ -401,7 +403,7 @@
 			shell = '';
 			sshOptions = {};
 			tagsStr = '';
-			folderIdStr = '';
+			folderIdStr = folderId ?? '';
 			notes = '';
 			customFields = [];
 			docsOpen = false;
