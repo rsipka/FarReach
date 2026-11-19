@@ -238,10 +238,17 @@
 	 *  On a phone, the default `monospace` becomes the JetBrains Mono Reach
 	 *  ships: phones that let the user change the system font (ColorOS, MIUI,
 	 *  One UI) can hand `monospace` a proportional font, whose narrow letters
-	 *  then sit spread out in cells sized for its widest one (#127). */
+	 *  then sit spread out in cells sized for its widest one (#127).
+	 *  On a Mac (and an iPad), `monospace` alone is resolved differently by
+	 *  WebKit's DOM and its canvas, so the WebGL renderer drew some glyphs in
+	 *  one font and the ones it drew later (a selection, a new colour) in
+	 *  another: selected text grew. It is named as the system monospace
+	 *  font (SF Mono, then Menlo) instead. */
 	function terminalFont(family: string | undefined): string {
 		const f = family || 'monospace';
-		return onPhone && f === 'monospace' ? '"JetBrains Mono", monospace' : cssFontFamily(f);
+		if (f !== 'monospace') return cssFontFamily(f);
+		if (onPhone) return '"JetBrains Mono", monospace';
+		return isMac() ? 'ui-monospace, Menlo, monospace' : f;
 	}
 
 	/** Make the terminal's text a size larger or smaller, from 8 to 32 px,
