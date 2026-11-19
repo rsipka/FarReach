@@ -836,7 +836,7 @@
 				// asks for its own size once connected, which some servers allow.
 				await vncConnect(params as VncConnectParams, paint);
 			} else {
-				graphicsPipeline = getSettings().rdpGraphicsPipeline;
+				graphicsPipeline = (params as RdpConnectParams).graphicsPipeline || getSettings().rdpGraphicsPipeline;
 				connectSize = size;
 				await rdpConnect({ ...(params as RdpConnectParams), ...size, graphicsPipeline }, paint);
 			}

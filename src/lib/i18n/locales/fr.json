@@ -341,7 +341,7 @@
   "session.rdp_password_hint": "Stored encrypted in vault. Leave empty to be asked on connect.",
   "session.os": "Système d'exploitation",
   "session.os_windows": "Windows",
-  "session.os_linux": "Linux (xrdp)",
+  "session.os_linux": "Linux (xrdp, GNOME)",
   "session.rdp_share_folder": "Share a folder (optional)",
   "session.rdp_share_hint": "Apparaît dans le bureau distant comme un lecteur. Non disponible sur Android.",
   "session.rdp_share_browse": "Parcourir",
