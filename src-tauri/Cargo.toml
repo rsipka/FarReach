@@ -187,6 +187,10 @@ subtle = "2"
 # agree. Move back to versions when the next release carries this.
 ironrdp-client = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59", default-features = false, features = ["rustls", "clipboard", "rdpdr"] }
 ironrdp-cliprdr = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
+# Pictures on the RDP clipboard: DIB to and from PNG (IronRDP's converters),
+# and PNG to and from the RGBA the local clipboard speaks.
+ironrdp-cliprdr-format = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
+image = { version = "0.25", default-features = false, features = ["png"] }
 ironrdp-rdpdr = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
 ironrdp-svc = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
 ironrdp-tls = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59", default-features = false, features = ["rustls"] }
@@ -222,8 +226,9 @@ serde-saphyr = { version = "0.0.29", features = ["serialize"] }
 # Session history: its file is encrypted page by page (SQLite3 Multiple
 # Ciphers), built with CMake; desktop only until the mobile builds are tried.
 libsql = { version = "0.9", default-features = false, features = ["core", "encryption"] }
-# The local clipboard for RDP: text and file lists. Android has no file clipboard and uses the plugin.
-arboard = { version = "3.6", default-features = false }
+# The local clipboard for RDP: text, pictures and file lists. The phones have
+# no file clipboard and use the plugin.
+arboard = { version = "3.6", default-features = false, features = ["image-data"] }
 # Sound for RDP. The same crate again with one more feature: Cargo unions the
 # features, so playback (cpal + a bundled Opus) is built for the desktops only.
 # Android would need the NDK C++ toolchain for cpal and has no listener yet.

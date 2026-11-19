@@ -56,6 +56,8 @@ export interface SessionConfig {
   domain?: string | null;
   /** A local folder shown inside the remote desktop as a drive, RDP only. */
   share_path?: string | null;
+  /** RDP only: what the clipboard carries; absent for text, pictures and files. */
+  rdp_clipboard?: 'text' | 'off' | null;
   /** VNC only: a saved SSH session to reach the server through. */
   via_session_id?: string | null;
   /** Key sessions: also offer the SSH agent's keys if this key is refused. Off by default. */
@@ -210,6 +212,7 @@ export async function sessionCreate(params: {
   detectedOs?: string | null;
   osManual?: boolean;
   sharePath?: string | null;
+  rdpClipboard?: 'text' | 'off' | null;
   viaSessionId?: string | null;
   tryAgentKeys?: boolean | null;
   sshOptions?: SshOptions | null;
@@ -243,6 +246,7 @@ export async function sessionCreate(params: {
     detectedOs: params.detectedOs ?? null,
     osManual: params.osManual || null,
     sharePath: params.sharePath?.trim() ? params.sharePath.trim() : null,
+    rdpClipboard: params.kind === 'rdp' ? (params.rdpClipboard ?? null) : null,
     viaSessionId: params.viaSessionId || null,
     tryAgentKeys: params.tryAgentKeys || null,
     sshOptions: params.sshOptions ?? null,

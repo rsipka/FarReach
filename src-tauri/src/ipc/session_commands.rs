@@ -718,6 +718,12 @@ pub async fn session_get(
     Ok(session)
 }
 
+/// The RDP clipboard choice as stored: only the two that differ from the
+/// default, and only on an RDP session.
+pub(crate) fn rdp_clipboard_setting(value: Option<String>, kind: crate::state::SessionKind) -> Option<String> {
+    value.filter(|v| kind == crate::state::SessionKind::Rdp && (v == "text" || v == "off"))
+}
+
 /// Create a new session configuration. O(1) insert.
 /// If vault_id is provided and is a user vault, stores in that vault (for sharing).
 /// Otherwise stores in __sessions__ (private).
@@ -745,6 +751,7 @@ pub async fn session_create(
     detected_os: Option<String>,
     os_manual: Option<bool>,
     share_path: Option<String>,
+    rdp_clipboard: Option<String>,
     via_session_id: Option<String>,
     try_agent_keys: Option<bool>,
     ssh_options: Option<crate::ssh::sshconf::session::SshOptions>,
@@ -796,6 +803,7 @@ pub async fn session_create(
         serial: serial.filter(|_| kind == crate::state::SessionKind::Serial),
         domain: domain.filter(|d| !d.trim().is_empty()),
         share_path: share_path.filter(|d| !d.trim().is_empty()),
+        rdp_clipboard: rdp_clipboard_setting(rdp_clipboard, kind),
         via_session_id: via_session_id.filter(|s| !s.is_empty()),
         try_agent_keys: try_agent_keys.filter(|t| *t),
         folder_id,
@@ -910,6 +918,7 @@ async fn prepare_update(
     mut session: SessionConfig,
 ) -> Result<(SessionLoc, Prepared), String> {
     session.tidy_documentation();
+    session.rdp_clipboard = rdp_clipboard_setting(session.rdp_clipboard.take(), session.kind);
 
     // Find which vault contains this session
     let loc = locate_session(manager, &session.id).await

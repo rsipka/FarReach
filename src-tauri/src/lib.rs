@@ -422,6 +422,9 @@ pub fn run() {
             rdp_ack,
             rdp_disconnect_all,
             rdp_clipboard_sync,
+            rdp_clipboard_send_files,
+            rdp_clipboard_fetch,
+            rdp_clipboard_cancel,
             rdp_window_fullscreen,
             vnc_connect,
             vnc_disconnect,
@@ -885,6 +888,9 @@ pub fn run() {
             rdp_ack,
             rdp_disconnect_all,
             rdp_clipboard_sync,
+            rdp_clipboard_send_files,
+            rdp_clipboard_fetch,
+            rdp_clipboard_cancel,
             rdp_window_fullscreen,
             vnc_connect,
             vnc_disconnect,
@@ -1694,6 +1700,11 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            // What was dropped on the window, as the OS gave it: the RDP
+            // clipboard sends only files that really were dropped.
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                rdp::note_drop(paths);
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 // Editor windows: ALWAYS hide instead of close (prevents WebView2 crash on Windows)
                 if window.label().starts_with("editor") {

@@ -24,10 +24,24 @@ export interface RdpConnectParams {
 	sharePath?: string;
 	/** Advertise the graphics pipeline; see the setting. */
 	graphicsPipeline?: boolean;
+	/** What the clipboard carries: unset for everything, `text` for no files, `off` for nothing. */
+	clipboard?: RdpClipboardMode | null;
 	/** The size the panel can show. The server renders at this size. */
 	width: number;
 	height: number;
 }
+
+/** A session's clipboard choice, as saved with it; absent means everything. */
+export type RdpClipboardMode = 'text' | 'off';
+
+/** What the clipboard reports, on `rdp-clipboard-{id}`. `incoming` is from the desktop to here. */
+export type RdpClipEvent =
+	| { kind: 'progress'; incoming: boolean; done: number; total: number; files: number }
+	| { kind: 'finished'; incoming: boolean; files: number }
+	| { kind: 'cancelled'; incoming: boolean }
+	| { kind: 'failed'; incoming: boolean; reason: string }
+	| { kind: 'held'; files: number; total: number }
+	| { kind: 'heldGone' };
 
 export type RdpStatus =
 	| { state: 'connected' }
@@ -95,6 +109,21 @@ export async function rdpDisconnect(id: string): Promise<void> {
  */
 export async function rdpClipboardSync(id: string): Promise<void> {
 	await invoke('rdp_clipboard_sync', { id });
+}
+
+/** Files dropped on the desktop: put them on its clipboard. Only files that were really dropped are taken. */
+export async function rdpClipboardSendFiles(id: string, paths: string[]): Promise<void> {
+	await invoke('rdp_clipboard_send_files', { id, paths });
+}
+
+/** Download what the desktop copied that was too large to take unasked. */
+export async function rdpClipboardFetch(id: string): Promise<void> {
+	await invoke('rdp_clipboard_fetch', { id });
+}
+
+/** Stop the clipboard transfer in progress, either way. */
+export async function rdpClipboardCancel(id: string): Promise<void> {
+	await invoke('rdp_clipboard_cancel', { id });
 }
 
 /** The app window goes full screen, or comes back, for a desktop. */

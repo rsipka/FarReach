@@ -121,6 +121,30 @@ pub async fn rdp_clipboard_sync(state: tauri::State<'_, AppState>, id: String) -
     state.rdp_manager.lock().await.clipboard_sync(&id)
 }
 
+/// Files dropped on a desktop: offer them on its clipboard, for a paste
+/// there. Only paths the user dropped reach this; each must exist.
+#[tauri::command]
+pub async fn rdp_clipboard_send_files(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    paths: Vec<String>,
+) -> Result<(), String> {
+    let paths = paths.into_iter().map(std::path::PathBuf::from).collect();
+    state.rdp_manager.lock().await.clipboard_send_files(&id, paths)
+}
+
+/// Download the files the remote copied that were too large to take unasked.
+#[tauri::command]
+pub async fn rdp_clipboard_fetch(state: tauri::State<'_, AppState>, id: String) -> Result<(), String> {
+    state.rdp_manager.lock().await.clipboard_fetch(&id)
+}
+
+/// Stop the clipboard transfer in progress, either way.
+#[tauri::command]
+pub async fn rdp_clipboard_cancel(state: tauri::State<'_, AppState>, id: String) -> Result<(), String> {
+    state.rdp_manager.lock().await.clipboard_cancel(&id)
+}
+
 /// The window itself goes full screen (or comes back) for a desktop. Done
 /// here rather than through the web-side window API so it needs no
 /// capability grant and cannot be refused quietly.

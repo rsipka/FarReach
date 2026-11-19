@@ -4019,6 +4019,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ironrdp-cliprdr-format"
+version = "0.2.0"
+source = "git+https://github.com/Devolutions/IronRDP?rev=bfd16a2e5573d4cd6617dd71b2802b4e7b944a59#bfd16a2e5573d4cd6617dd71b2802b4e7b944a59"
+dependencies = [
+ "ironrdp-core",
+ "png",
+]
+
+[[package]]
 name = "ironrdp-cliprdr-native"
 version = "0.7.0"
 source = "git+https://github.com/Devolutions/IronRDP?rev=bfd16a2e5573d4cd6617dd71b2802b4e7b944a59#bfd16a2e5573d4cd6617dd71b2802b4e7b944a59"
@@ -7303,8 +7312,10 @@ dependencies = [
  "hyper 1.12.0",
  "hyper-util",
  "if-addrs",
+ "image",
  "ironrdp-client",
  "ironrdp-cliprdr",
+ "ironrdp-cliprdr-format",
  "ironrdp-egfx",
  "ironrdp-graphics",
  "ironrdp-pdu",

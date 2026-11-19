@@ -20,6 +20,8 @@
 	 */
 	import { onDestroy, onMount } from 'svelte';
 	import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+	import { getCurrentWebview } from '@tauri-apps/api/webview';
+	import { addToast } from '#lib/state/toasts.svelte.js';
 	import {
 		FRAME_FULL,
 		FRAME_HEADER,
@@ -31,6 +33,9 @@
 		FRAME_POINTER_SHAPE_HEADER,
 		FRAME_REGION,
 		rdpAck,
+		rdpClipboardCancel,
+		rdpClipboardFetch,
+		rdpClipboardSendFiles,
 		rdpClipboardSync,
 		rdpConnect,
 		rdpDisconnect,
@@ -40,6 +45,7 @@
 		rdpWindowFullscreen,
 		rdpUnicode,
 		type MouseAction,
+		type RdpClipEvent,
 		type RdpConnectParams,
 		type RdpStatus,
 	} from '#lib/ipc/rdp.js';
@@ -132,6 +138,110 @@
 	let ended = $state(false);
 
 	let unlisten: UnlistenFn | null = null;
+	let unlistenClip: UnlistenFn | null = null;
+	let unlistenDrop: UnlistenFn | null = null;
+
+	/* --- clipboard transfers (RDP) ----------------------------------------- */
+
+	/** What the session's clipboard carries; see the session editor. */
+	const clipMode = $derived(isVnc() ? 'off' : ((params as RdpConnectParams).clipboard ?? 'all'));
+	/** A file transfer in progress, for the bar at the bottom of the desktop. */
+	let transfer = $state<{ incoming: boolean; done: number; total: number; files: number } | null>(null);
+	/** Files the desktop copied that wait for a yes before coming down. */
+	let heldCopy = $state<{ files: number; total: number } | null>(null);
+	/** Files are being dragged over the desktop. */
+	let dropping = $state(false);
+
+	function formatBytes(n: number): string {
+		if (n < 1024) return `${n} B`;
+		const units = ['KB', 'MB', 'GB', 'TB'];
+		let v = n / 1024;
+		let i = 0;
+		while (v >= 1024 && i < units.length - 1) {
+			v /= 1024;
+			i++;
+		}
+		return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
+	}
+
+	function onClipEvent(e: RdpClipEvent): void {
+		switch (e.kind) {
+			case 'progress':
+				transfer = { incoming: e.incoming, done: e.done, total: e.total, files: e.files };
+				break;
+			case 'finished':
+				// Only a transfer that was shown gets a word that it ended.
+				if (transfer) {
+					addToast(e.incoming ? t('rdp.clip_received', { count: e.files }) : t('rdp.clip_sent', { count: e.files }), 'success');
+				}
+				transfer = null;
+				break;
+			case 'cancelled':
+				if (transfer) addToast(t('rdp.clip_cancelled'), 'info');
+				transfer = null;
+				break;
+			case 'failed':
+				addToast(t('rdp.clip_failed', { reason: e.reason }), 'error', 6000);
+				transfer = null;
+				break;
+			case 'held':
+				heldCopy = { files: e.files, total: e.total };
+				break;
+			case 'heldGone':
+				heldCopy = null;
+				break;
+		}
+	}
+
+	function downloadHeld(): void {
+		if (!heldCopy) return;
+		transfer = { incoming: true, done: 0, total: heldCopy.total, files: heldCopy.files };
+		heldCopy = null;
+		void rdpClipboardFetch(id).catch(() => {});
+	}
+
+	function cancelTransfer(): void {
+		void rdpClipboardCancel(id).catch(() => {});
+	}
+
+	/** Is a drop at this window position (physical pixels) on this desktop? */
+	function overDesktop(position: { x: number; y: number }): boolean {
+		if (!active || phase !== 'connected' || !screen) return false;
+		const scale = window.devicePixelRatio || 1;
+		const x = position.x / scale;
+		const y = position.y / scale;
+		const r = screen.getBoundingClientRect();
+		return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+	}
+
+	async function listenForDrops(): Promise<void> {
+		unlistenDrop = await getCurrentWebview().onDragDropEvent((event) => {
+			const p = event.payload;
+			if (p.type === 'leave') {
+				dropping = false;
+				return;
+			}
+			if (p.type === 'enter' || p.type === 'over') {
+				dropping = overDesktop(p.position);
+				return;
+			}
+			if (p.type !== 'drop') return;
+			const here = overDesktop(p.position);
+			dropping = false;
+			if (!here || p.paths.length === 0) return;
+			if (clipMode !== 'all') {
+				addToast(t('rdp.drop_files_off'), 'info');
+				return;
+			}
+			rdpClipboardSendFiles(id, p.paths)
+				.then(() => {
+					addToast(t('rdp.drop_ready', { count: p.paths.length }), 'success', 5000);
+					canvas?.focus();
+				})
+				.catch((err) => addToast(String(err), 'error'));
+		});
+	}
+
 	let sizeObserver: ResizeObserver | null = null;
 	let resizeTimer: ReturnType<typeof setTimeout> | null = null;
 	/**
@@ -839,6 +949,11 @@
 			}
 		});
 
+		if (!isVnc() && clipMode !== 'off') {
+			unlistenClip = await listen<RdpClipEvent>(`rdp-clipboard-${id}`, (event) => onClipEvent(event.payload));
+			if (!onPhone) await listenForDrops().catch(() => {});
+		}
+
 		try {
 			initGl();
 			if (isVnc()) {
@@ -893,6 +1008,8 @@
 
 	onDestroy(() => {
 		unlisten?.();
+		unlistenClip?.();
+		unlistenDrop?.();
 		sizeObserver?.disconnect();
 		if (resizeTimer) clearTimeout(resizeTimer);
 		releaseAll();
@@ -980,6 +1097,29 @@
 		<div class="fs-bar" class:shown={barShown}>
 			<span class="fs-host">{label}</span>
 			<button type="button" class="fs-exit" onclick={() => setFullscreen(false)}>{t('rdp.exit_fullscreen')}</button>
+		</div>
+	{/if}
+
+	{#if dropping}
+		<div class="drop-zone" aria-hidden="true">
+			<span>{clipMode === 'all' ? t('rdp.drop_hint') : t('rdp.drop_files_off')}</span>
+		</div>
+	{/if}
+
+	{#if phase === 'connected' && (transfer || heldCopy)}
+		<div class="clip-bar" role="status">
+			{#if transfer}
+				<span class="clip-text">
+					{transfer.incoming ? t('rdp.clip_receiving') : t('rdp.clip_sending')}
+					{formatBytes(transfer.done)} / {formatBytes(transfer.total)}
+				</span>
+				<progress max={Math.max(1, transfer.total)} value={transfer.done}></progress>
+				<button type="button" class="clip-btn" onclick={cancelTransfer}>{t('rdp.clip_cancel')}</button>
+			{:else if heldCopy}
+				<span class="clip-text">{t('rdp.clip_held', { count: heldCopy.files, size: formatBytes(heldCopy.total) })}</span>
+				<button type="button" class="clip-btn primary" onclick={downloadHeld}>{t('rdp.clip_download')}</button>
+				<button type="button" class="clip-btn" onclick={() => (heldCopy = null)}>{t('rdp.clip_ignore')}</button>
+			{/if}
 		</div>
 	{/if}
 
@@ -1206,5 +1346,70 @@
 		border: none;
 		border-radius: var(--radius-btn);
 		cursor: pointer;
+	}
+
+	/* Files dragged over the desktop. */
+	.drop-zone {
+		position: absolute;
+		inset: 8px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: 2px dashed var(--color-accent);
+		border-radius: var(--radius-btn);
+		background: color-mix(in srgb, var(--color-bg-primary) 55%, transparent);
+		color: var(--color-text-primary);
+		font-size: 0.875rem;
+		pointer-events: none;
+		z-index: 4;
+	}
+
+	/* A clipboard transfer, or a large remote copy waiting for a yes. */
+	.clip-bar {
+		position: absolute;
+		left: 50%;
+		bottom: 12px;
+		transform: translateX(-50%);
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		max-width: calc(100% - 24px);
+		padding: 6px 10px;
+		font-size: 0.75rem;
+		color: var(--color-text-primary);
+		background: var(--color-bg-elevated, var(--color-bg-secondary));
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-btn);
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+		z-index: 5;
+	}
+
+	.clip-text {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.clip-bar progress {
+		width: 120px;
+		flex: none;
+		accent-color: var(--color-accent);
+	}
+
+	.clip-btn {
+		flex: none;
+		padding: 3px 10px;
+		font: inherit;
+		color: var(--color-text-primary);
+		background: transparent;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-btn);
+		cursor: pointer;
+	}
+
+	.clip-btn.primary {
+		color: #fff;
+		background: var(--color-accent-fill);
+		border-color: transparent;
 	}
 </style>

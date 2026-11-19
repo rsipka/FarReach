@@ -35,7 +35,7 @@
 //! many messages as it can paint — under load the picture updates less often
 //! but never late, which is how the reference clients behave. See [`Flow`].
 //!
-//! The clipboard is in — text and files, both ways — with a backend of our
+//! The clipboard is in — text, pictures and files, both ways — with a backend of our
 //! own in [`clipboard`]. Not in this version, on purpose: sound and drive
 //! redirection. Each pulls a native backend into the build, and neither is
 //! needed to see a desktop and drive it. The server's certificate goes
@@ -91,6 +91,10 @@ pub struct RdpConnectParams {
     /// Advertise the graphics pipeline. Off unless the user turned it on.
     #[serde(default)]
     pub graphics_pipeline: bool,
+    /// What the clipboard lets through, as saved with the session: unset
+    /// for everything, `text` for no files, `off` for no clipboard at all.
+    #[serde(default)]
+    pub clipboard: Option<String>,
     /// The size the panel can show, so the server renders at the size it is
     /// seen at rather than being scaled after the fact.
     pub width: u16,
@@ -274,7 +278,8 @@ struct Open {
     /// a page navigation does that — so the session survives it.
     frames: Arc<std::sync::Mutex<Channel<InvokeResponseBody>>>,
     /// Dropped with the entry, which is what ends the clipboard thread.
-    clipboard: clipboard::ClipboardHandle,
+    /// None when the session turned the clipboard off.
+    clipboard: Option<clipboard::ClipboardHandle>,
 }
 
 #[derive(Default)]
@@ -345,9 +350,19 @@ impl RdpManager {
         let input = client.input_sender();
 
         // The clipboard has a thread of its own; see the clipboard module.
-        let (clipboard, clip_factory) = clipboard::spawn(&id, input.clone(), app.clone())
-            .map_err(|e| format!("could not start the RDP clipboard thread: {e}"))?;
-        let mut client = client.with_cliprdr_backend_factory(Box::new(clip_factory));
+        let mut client = client;
+        let clipboard = match clipboard_mode(&params) {
+            Some(mode) => {
+                let (handle, clip_factory) = clipboard::spawn(&id, input.clone(), app.clone(), mode)
+                    .map_err(|e| format!("could not start the RDP clipboard thread: {e}"))?;
+                client = client.with_cliprdr_backend_factory(Box::new(clip_factory));
+                Some(handle)
+            }
+            None => {
+                tracing::info!("RDP {id}: clipboard off for this session");
+                None
+            }
+        };
 
         // A shared folder rides the device channel as one drive. The native
         // backends serve it: IronRDP's own on Windows, its Unix one on the
@@ -395,10 +410,36 @@ impl RdpManager {
 
     /// The local clipboard may have changed: offer it to this desktop.
     pub fn clipboard_sync(&self, id: &str) -> Result<(), String> {
-        self.open
-            .get(id)
-            .map(|open| open.clipboard.sync())
-            .ok_or_else(|| format!("no RDP session {id}"))
+        self.with_clipboard(id, |c| c.sync())
+    }
+
+    /// Files dropped on the desktop: put them on its clipboard.
+    pub fn clipboard_send_files(&self, id: &str, paths: Vec<std::path::PathBuf>) -> Result<(), String> {
+        let paths = take_dropped(paths);
+        if paths.is_empty() {
+            return Err("nothing was dropped".to_string());
+        }
+        self.with_clipboard(id, |c| c.send_files(paths))
+    }
+
+    /// Download the remote copy that waited for a yes.
+    pub fn clipboard_fetch(&self, id: &str) -> Result<(), String> {
+        self.with_clipboard(id, |c| c.fetch_held())
+    }
+
+    /// Stop the clipboard transfer in progress.
+    pub fn clipboard_cancel(&self, id: &str) -> Result<(), String> {
+        self.with_clipboard(id, |c| c.cancel())
+    }
+
+    /// A session with its clipboard off answers every clipboard call with
+    /// nothing done; that is not an error.
+    fn with_clipboard(&self, id: &str, f: impl FnOnce(&clipboard::ClipboardHandle)) -> Result<(), String> {
+        let open = self.open.get(id).ok_or_else(|| format!("no RDP session {id}"))?;
+        if let Some(c) = open.clipboard.as_ref() {
+            f(c);
+        }
+        Ok(())
     }
 
     /// Ask every open desktop to end. Used on the way out of the app, so the
@@ -596,7 +637,7 @@ fn build_config(p: &RdpConnectParams, app: AppHandle) -> Result<ironrdp_client::
         .with_server_pointer(true)
         .with_pointer_software_rendering(false)
         // Our own backend, handed to the client in `connect`.
-        .with_clipboard(ClipboardType::Enable)
+        .with_clipboard(if clipboard_mode(p).is_some() { ClipboardType::Enable } else { ClipboardType::Disable })
         // Always, folder or no folder. Windows starts audio redirection only
         // when the device channel is present: without it the "Remote Audio"
         // device never appears and the sound channel stays silent (IronRDP
@@ -637,6 +678,34 @@ fn build_config(p: &RdpConnectParams, app: AppHandle) -> Result<ironrdp_client::
     }
 
     builder.build().map_err(|e| e.to_string())
+}
+
+/// The files last dropped on a window, as the OS reported them. A drop on a
+/// desktop sends these and only these: the webview names which, but cannot
+/// name a file nobody dropped.
+static DROPPED: std::sync::Mutex<Vec<std::path::PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Called from the window's drop event.
+pub fn note_drop(paths: &[std::path::PathBuf]) {
+    if let Ok(mut dropped) = DROPPED.lock() {
+        *dropped = paths.to_vec();
+    }
+}
+
+/// The requested paths that were in the last drop. The drop is used up.
+fn take_dropped(requested: Vec<std::path::PathBuf>) -> Vec<std::path::PathBuf> {
+    let Ok(mut dropped) = DROPPED.lock() else { return Vec::new() };
+    let last = std::mem::take(&mut *dropped);
+    requested.into_iter().filter(|p| last.contains(p)).collect()
+}
+
+/// What the session lets through its clipboard; None: no clipboard at all.
+fn clipboard_mode(p: &RdpConnectParams) -> Option<clipboard::ClipboardMode> {
+    match p.clipboard.as_deref() {
+        Some("off") => None,
+        Some("text") => Some(clipboard::ClipboardMode::NoFiles),
+        _ => Some(clipboard::ClipboardMode::All),
+    }
 }
 
 /// The drive backend for one shared folder, named after the folder: Reach's
@@ -1102,6 +1171,30 @@ fn merge_damage(rects: &[InclusiveRectangle]) -> Vec<InclusiveRectangle> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_dropped_files_are_sent_and_a_drop_is_used_once() {
+        use std::path::PathBuf;
+        note_drop(&[PathBuf::from("/a/one.txt"), PathBuf::from("/a/two.txt")]);
+        let sent = take_dropped(vec![PathBuf::from("/a/one.txt"), PathBuf::from("/etc/shadow")]);
+        assert_eq!(sent, vec![PathBuf::from("/a/one.txt")]);
+        assert!(take_dropped(vec![PathBuf::from("/a/two.txt")]).is_empty(), "the drop was used up");
+    }
+
+    #[test]
+    fn the_clipboard_choice_reads_as_saved() {
+        let mode = |v: Option<&str>| {
+            let p: RdpConnectParams = serde_json::from_value(serde_json::json!({
+                "id": "x", "host": "h", "port": 3389, "username": "u", "width": 800, "height": 600,
+                "clipboard": v,
+            }))
+            .unwrap();
+            clipboard_mode(&p)
+        };
+        assert_eq!(mode(None), Some(clipboard::ClipboardMode::All));
+        assert_eq!(mode(Some("text")), Some(clipboard::ClipboardMode::NoFiles));
+        assert_eq!(mode(Some("off")), None);
+    }
+
     use super::*;
 
     fn nz(v: u16) -> NonZeroU16 {
