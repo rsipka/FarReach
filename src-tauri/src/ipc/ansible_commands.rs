@@ -1,6 +1,5 @@
 use tauri::State;
 
-use crate::ansible::project::AnsibleProjectManager;
 use crate::ansible::{engine, runner};
 use tauri::Emitter;
 use crate::ansible::types::{
@@ -10,15 +9,17 @@ use crate::ansible::types::{
 use crate::devops::{self, Tool};
 use crate::state::AppState;
 
+async fn projects(state: &AppState) -> Result<crate::devops_projects::ProjectStore<'_>, String> {
+    crate::devops_projects::ProjectStore::open(&state.vault_manager, crate::vault::manager::ANSIBLE_PROJECTS_VAULT, "ansible_project").await
+}
+
 #[tauri::command]
 pub async fn ansible_list_projects(
     state: State<'_, AppState>,
-) -> Result<Vec<AnsibleProject>, String> {
+) -> Result<Vec<crate::devops_projects::ProjectSummary>, String> {
     devops::require(Tool::Ansible)?;
-    let mut mgr = state.ansible_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    mgr.ensure_loaded(&mut vault_mgr).await?;
-    Ok(mgr.list_projects())
+    let store = projects(&state).await?;
+    store.list().await
 }
 
 #[tauri::command]
@@ -29,6 +30,7 @@ pub async fn ansible_create_project(
     description: String,
 ) -> Result<AnsibleProject, String> {
     devops::require(Tool::Ansible)?;
+    let store = projects(&state).await?;
     let id = uuid::Uuid::new_v4().to_string();
     let now = {
         let dur = std::time::SystemTime::now()
@@ -59,7 +61,7 @@ pub async fn ansible_create_project(
         format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, m + 1, remaining + 1, hours, minutes, seconds)
     };
 
-    AnsibleProjectManager::scaffold_project(&path, &name)?;
+    crate::ansible::project::scaffold_project(&path, &name)?;
 
     let project = AnsibleProject {
         id,
@@ -73,10 +75,7 @@ pub async fn ansible_create_project(
         vault_password: None,
     };
 
-    let mut mgr = state.ansible_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    mgr.ensure_loaded(&mut vault_mgr).await?;
-    mgr.add_project(project.clone(), &mut vault_mgr).await?;
+    store.add(&project.id, &project.name, &project).await?;
     Ok(project)
 }
 
@@ -86,10 +85,8 @@ pub async fn ansible_delete_project(
     project_id: String,
 ) -> Result<(), String> {
     devops::require(Tool::Ansible)?;
-    let mut mgr = state.ansible_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    mgr.ensure_loaded(&mut vault_mgr).await?;
-    mgr.remove_project(&project_id, &mut vault_mgr).await
+    let store = projects(&state).await?;
+    store.remove(&project_id).await
 }
 
 #[tauri::command]
@@ -98,13 +95,11 @@ pub async fn ansible_open_project(
     project_id: String,
 ) -> Result<AnsibleProject, String> {
     devops::require(Tool::Ansible)?;
-    let mut mgr = state.ansible_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    mgr.ensure_loaded(&mut vault_mgr).await?;
-    mgr.touch_project(&project_id, &mut vault_mgr).await?;
-    mgr.get_project(&project_id)
-        .cloned()
-        .ok_or_else(|| "Project not found".to_string())
+    let store = projects(&state).await?;
+    let mut project = store.get::<AnsibleProject>(&project_id).await?;
+    project.last_opened_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    store.update(&project_id, &project).await?;
+    Ok(project)
 }
 
 #[tauri::command]
@@ -115,16 +110,11 @@ pub async fn ansible_update_inventory(
     groups: Vec<AnsibleInventoryGroup>,
 ) -> Result<AnsibleProject, String> {
     devops::require(Tool::Ansible)?;
-    let mut mgr = state.ansible_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    mgr.ensure_loaded(&mut vault_mgr).await?;
-    let mut project = mgr
-        .get_project(&project_id)
-        .cloned()
-        .ok_or_else(|| "Project not found".to_string())?;
+    let store = projects(&state).await?;
+    let mut project = store.get::<AnsibleProject>(&project_id).await?;
     project.inventory_hosts = hosts;
     project.inventory_groups = groups;
-    mgr.update_project(project.clone(), &mut vault_mgr).await?;
+    store.update(&project_id, &project).await?;
     Ok(project)
 }
 
@@ -134,10 +124,7 @@ pub async fn ansible_list_files(
     project_id: String,
 ) -> Result<Vec<String>, String> {
     devops::require(Tool::Ansible)?;
-    let mgr = state.ansible_project_manager.lock().await;
-    let project = mgr
-        .get_project(&project_id)
-        .ok_or_else(|| "Project not found".to_string())?;
+    let project = projects(&state).await?.get::<AnsibleProject>(&project_id).await?;
 
     let dir = std::path::Path::new(&project.path);
     if !dir.exists() {
@@ -177,10 +164,7 @@ pub async fn ansible_read_file(
     filename: String,
 ) -> Result<String, String> {
     devops::require(Tool::Ansible)?;
-    let mgr = state.ansible_project_manager.lock().await;
-    let project = mgr
-        .get_project(&project_id)
-        .ok_or_else(|| "Project not found".to_string())?;
+    let project = projects(&state).await?.get::<AnsibleProject>(&project_id).await?;
 
     let file_path = std::path::Path::new(&project.path).join(&filename);
     std::fs::read_to_string(&file_path)
@@ -195,10 +179,7 @@ pub async fn ansible_write_file(
     content: String,
 ) -> Result<(), String> {
     devops::require(Tool::Ansible)?;
-    let mgr = state.ansible_project_manager.lock().await;
-    let project = mgr
-        .get_project(&project_id)
-        .ok_or_else(|| "Project not found".to_string())?;
+    let project = projects(&state).await?.get::<AnsibleProject>(&project_id).await?;
 
     let file_path = std::path::Path::new(&project.path).join(&filename);
     std::fs::write(&file_path, content)
@@ -214,16 +195,11 @@ pub async fn ansible_run_command(
     devops::require(Tool::Ansible)?;
     let run_id = uuid::Uuid::new_v4().to_string();
 
-    let mgr = state.ansible_project_manager.lock().await;
-    let project = mgr
-        .get_project(&request.project_id)
-        .ok_or_else(|| "Project not found".to_string())?
-        .clone();
-    drop(mgr);
+    let project = projects(&state).await?.get::<AnsibleProject>(&request.project_id).await?;
 
-    let working_dir = project.path.clone();
-    let vault_password = project.vault_password.clone();
-    let project_id = project.id.clone();
+    let working_dir = project.path;
+    let vault_password = project.vault_password;
+    let project_id = project.id;
     let target = request.target.clone();
     let rid = run_id.clone();
     let ssh_mgr = state.ssh_manager.clone();
@@ -372,10 +348,7 @@ pub async fn ansible_generate_inventory(
     project_id: String,
 ) -> Result<String, String> {
     devops::require(Tool::Ansible)?;
-    let mgr = state.ansible_project_manager.lock().await;
-    let project = mgr
-        .get_project(&project_id)
-        .ok_or_else(|| "Project not found".to_string())?;
+    let project = projects(&state).await?.get::<AnsibleProject>(&project_id).await?;
 
     let mut ini = String::new();
 
@@ -476,10 +449,7 @@ pub async fn ansible_write_inventory(
     filename: Option<String>,
 ) -> Result<(), String> {
     devops::require(Tool::Ansible)?;
-    let mgr = state.ansible_project_manager.lock().await;
-    let project = mgr
-        .get_project(&project_id)
-        .ok_or_else(|| "Project not found".to_string())?;
+    let project = projects(&state).await?.get::<AnsibleProject>(&project_id).await?;
 
     let fname = filename.unwrap_or_else(|| "inventory.ini".to_string());
     let file_path = std::path::Path::new(&project.path).join(&fname);
@@ -493,10 +463,7 @@ pub async fn ansible_list_roles(
     project_id: String,
 ) -> Result<Vec<AnsibleRole>, String> {
     devops::require(Tool::Ansible)?;
-    let mgr = state.ansible_project_manager.lock().await;
-    let project = mgr
-        .get_project(&project_id)
-        .ok_or_else(|| "Project not found".to_string())?;
+    let project = projects(&state).await?.get::<AnsibleProject>(&project_id).await?;
 
     // Try to list roles from the project's roles directory
     let roles_dir = std::path::Path::new(&project.path).join("roles");
@@ -527,10 +494,7 @@ pub async fn ansible_list_collections(
     project_id: String,
 ) -> Result<Vec<AnsibleCollection>, String> {
     devops::require(Tool::Ansible)?;
-    let mgr = state.ansible_project_manager.lock().await;
-    let project = mgr
-        .get_project(&project_id)
-        .ok_or_else(|| "Project not found".to_string())?;
+    let project = projects(&state).await?.get::<AnsibleProject>(&project_id).await?;
 
     // Try to list collections from the project's collections directory
     let collections_dir = std::path::Path::new(&project.path).join("collections");
@@ -576,10 +540,7 @@ pub async fn ansible_vault_view(
     vault_file: String,
 ) -> Result<String, String> {
     devops::require(Tool::Ansible)?;
-    let mgr = state.ansible_project_manager.lock().await;
-    let project = mgr
-        .get_project(&project_id)
-        .ok_or_else(|| "Project not found".to_string())?;
+    let project = projects(&state).await?.get::<AnsibleProject>(&project_id).await?;
 
     let file_path = std::path::Path::new(&project.path).join(&vault_file);
     if !file_path.exists() {

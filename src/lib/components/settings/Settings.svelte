@@ -20,7 +20,6 @@
 	import { settingsTabHasNew, markSettingsTabSeen, newSince } from '#lib/state/whats-new.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { isMobile } from '#lib/platform.js';
-	import { __APP_VERSION__ } from '#lib/version.js';
 	import { GROUPS, PAGES, isPageId, type PageId, type SettingsPage } from './settings-pages.js';
 	import { SETTINGS_INDEX, searchSettings, type IndexedRow } from './settings-index.js';
 
@@ -264,16 +263,7 @@
 	{:else if id === 'sharing'}
 		<SettingsCard><SharingTab /></SettingsCard>
 	{:else if id === 'about'}
-		<SettingsCard>
-			<div class="tab-content">
-				<div class="setting-row">
-					<div class="setting-info">
-						<span class="setting-label">{t('settings.version')}</span>
-					</div>
-					<div class="setting-control"><span class="version">v{__APP_VERSION__}</span></div>
-				</div>
-			</div>
-		</SettingsCard>
+		<SettingsCard><GeneralTab part="updates" /></SettingsCard>
 		<SettingsCard><GeneralTab part="about" /></SettingsCard>
 	{/if}
 {/snippet}
@@ -474,12 +464,6 @@
 		font-size: 1.125rem;
 		font-weight: 600;
 		color: var(--color-text-primary);
-	}
-
-	.version {
-		font-family: var(--font-mono, monospace);
-		font-size: 0.8125rem;
-		color: var(--color-text-secondary);
 	}
 
 	.results {

@@ -2502,6 +2502,15 @@ impl VaultManager {
         vault_id: &str,
         secret_id: &str,
     ) -> Result<SecretBox<Vec<u8>>, VaultError> {
+        self.read_secret_in_category(vault_id, secret_id, None).await
+    }
+
+    pub(crate) async fn read_secret_in_category(
+        &self,
+        vault_id: &str,
+        secret_id: &str,
+        category: Option<&str>,
+    ) -> Result<SecretBox<Vec<u8>>, VaultError> {
         let vault = self
             .vaults
             .get(vault_id)
@@ -2514,8 +2523,8 @@ impl VaultManager {
         let mut rows = vault
             
             .query(
-                "SELECT nonce, ciphertext, wrapped_dek FROM secrets WHERE id = ?",
-                [secret_id],
+                "SELECT nonce, ciphertext, wrapped_dek FROM secrets WHERE id = ?1 AND (?2 IS NULL OR category = ?2)",
+                (secret_id, category),
             )
             .await?;
 

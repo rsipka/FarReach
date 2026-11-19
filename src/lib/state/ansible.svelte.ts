@@ -1,3 +1,4 @@
+import { projectGeneration, projectSummary, type ProjectSummary } from '#lib/ipc/devops-projects.js';
 import type {
 	AnsibleProject,
 	AnsibleRole,
@@ -28,8 +29,9 @@ import { toolchainCheck, type ToolStatus } from '#lib/ipc/toolchain.js';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 // --- State ---
-let projects = $state<AnsibleProject[]>([]);
-let activeProjectId = $state<string | null>(null);
+let activeProject = $state<AnsibleProject | undefined>();
+let projects = $state<ProjectSummary[]>([]);
+let activeProjectId = $derived(activeProject?.id ?? null);
 let toolStatus = $state<ToolStatus | null>(null);
 let toolChecking = $state(false);
 let commandRunning = $state(false);
@@ -48,7 +50,7 @@ export type AnsibleTab = 'playbooks' | 'inventory' | 'dependencies' | 'vault';
 let workspaceTab = $state<AnsibleTab>('playbooks');
 
 // --- Getters ---
-export function getProjects(): AnsibleProject[] {
+export function getProjects(): ProjectSummary[] {
 	return projects;
 }
 
@@ -57,7 +59,7 @@ export function getActiveProjectId(): string | null {
 }
 
 export function getActiveProject(): AnsibleProject | undefined {
-	return projects.find((p) => p.id === activeProjectId);
+	return activeProject;
 }
 
 export function getToolStatus(): ToolStatus | null {
@@ -156,7 +158,7 @@ export async function createProject(
 	description: string
 ): Promise<AnsibleProject> {
 	const project = await ansibleCreateProject(name, path, description);
-	projects = [...projects, project];
+	projects = [...projects, projectSummary(project)];
 	return project;
 }
 
@@ -164,20 +166,28 @@ export async function deleteProject(projectId: string): Promise<void> {
 	await ansibleDeleteProject(projectId);
 	projects = projects.filter((p) => p.id !== projectId);
 	if (activeProjectId === projectId) {
-		activeProjectId = null;
+		activeProject = undefined;
+
 		projectFiles = [];
 	}
 }
 
 export async function openProject(projectId: string): Promise<void> {
 	const project = await ansibleOpenProject(projectId);
-	activeProjectId = project.id;
-	projects = projects.map((p) => (p.id === project.id ? project : p));
+	activeProject = project;
+
+	projects = projects.map((p) => (p.id === project.id ? projectSummary(project) : p));
 	await refreshFiles();
 }
 
+export function forgetProjects(): void {
+	projects = [];
+	closeProject();
+}
+
 export function closeProject(): void {
-	activeProjectId = null;
+	activeProject = undefined;
+
 	projectFiles = [];
 	commandOutput = [];
 	runView = emptyAnsibleRun();
@@ -201,7 +211,8 @@ export async function refreshFiles(): Promise<void> {
 }
 
 function updateLocalProject(updated: AnsibleProject): void {
-	projects = projects.map((p) => (p.id === updated.id ? updated : p));
+	if (activeProjectId === updated.id) activeProject = updated;
+	projects = projects.map((p) => (p.id === updated.id ? projectSummary(updated) : p));
 }
 
 export async function saveInventory(
@@ -233,6 +244,7 @@ export async function runCommand(request: AnsibleCommandRequest): Promise<string
 	runView = emptyAnsibleRun();
 	runExitCode = null;
 
+	const generation = projectGeneration();
 	const runId = await ansibleRunCommand(request);
 	currentRunId = runId;
 
@@ -243,6 +255,10 @@ export async function runCommand(request: AnsibleCommandRequest): Promise<string
 	// SSH channel had, which can end mid-line. One splitter serves both.
 	let carry = '';
 	unlisten = await listen<AnsibleCommandEvent & { data?: string }>(eventName, (event) => {
+		if (generation !== projectGeneration()) {
+			unlisten?.();
+			return;
+		}
 		const data = event.payload;
 		const take = (stream: string, line: string) => {
 			commandOutput = [...commandOutput, { stream, line }];

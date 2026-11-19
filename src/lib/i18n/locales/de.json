@@ -168,6 +168,7 @@
   "terminal.connection_lost": "Verbindung verloren",
   "terminal.connection_closed": "Verbindung geschlossen",
   "terminal.session_ended": "Sitzung beendet",
+  "terminal.always_close_tab": "Tab immer schließen, wenn eine Sitzung endet",
   "telnet.connecting": "Verbinde mit {{host}}…",
   "telnet.connect_failed": "Verbindung fehlgeschlagen",
   "telnet.closed": "Verbindung geschlossen",

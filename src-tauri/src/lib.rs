@@ -11,6 +11,7 @@ pub mod vnc;
 pub mod container;
 pub mod db;
 pub mod devops;
+mod devops_projects;
 pub mod devops_store;
 pub mod k8s;
 pub mod logfiles;
