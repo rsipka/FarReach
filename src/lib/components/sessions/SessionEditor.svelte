@@ -1088,11 +1088,6 @@
 		{/if}
 		{/if}
 
-		<div class="shell-field">
-			<Input label={t('session.login_shell_optional')} bind:value={shell} placeholder="fish -l" disabled={saving} />
-			<p class="shell-hint">{t('session.login_shell_hint')}</p>
-		</div>
-
 		<div class="jump-section">
 			<label class="jump-toggle">
 				<input type="checkbox" bind:checked={jumpEnabled} disabled={saving} />
@@ -1328,6 +1323,13 @@
 					<option value="on">{t('session.monitoring_on')}</option>
 					<option value="off">{t('session.monitoring_off')}</option>
 				</select>
+			</div>
+		{/if}
+
+		{#if kind === 'ssh'}
+			<div class="shell-field">
+				<Input label={t('session.login_shell_optional')} bind:value={shell} placeholder="fish -l" disabled={saving} />
+				<p class="shell-hint">{t('session.login_shell_hint')}</p>
 			</div>
 		{/if}
 

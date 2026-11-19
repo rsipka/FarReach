@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { SshOptions } from './sessions';
+import type { CatalogGroup } from '../utils/sshAlgorithms';
 
 /** What became of a line (src-tauri/src/ssh/sshconf/resolve.rs `Status`). */
 export type LineStatus =
@@ -88,4 +89,9 @@ export async function sshOptionsReport(host: string, port: number, username: str
 /** How an approved weakening is stored (apply.rs `weakening_key`). */
 export function weakeningKey(w: Pick<Weakening, 'keyword' | 'value'>): string {
   return `${w.keyword} ${w.value}`;
+}
+
+/** Key exchange, host key, cipher and MAC algorithms, against Reach's defaults. */
+export async function sshAlgorithmCatalog(): Promise<CatalogGroup[]> {
+  return invoke<CatalogGroup[]>('ssh_algorithm_catalog');
 }

@@ -44,6 +44,7 @@
     "archive:test": "node --import ./scripts/resolve-lib.mjs scripts/archive-progress-test.mjs",
     "drag:test": "node --import ./scripts/resolve-lib.mjs scripts/drag-out-test.mjs",
     "tofu:test": "node scripts/tofu-json-test.mjs",
+    "sshalg:test": "node scripts/ssh-algorithms-test.mjs",
     "bulk-edit:test": "node --import ./scripts/resolve-lib.mjs scripts/bulk-edit-test.mjs",
     "folder-tree:test": "node --import ./scripts/resolve-lib.mjs scripts/folder-tree-test.mjs",
     "color-schemes:test": "node scripts/color-schemes-test.mjs",
