@@ -20,6 +20,9 @@ export interface Split {
 }
 
 /** The divider stays where both panes are still usable. */
+/** Below this window width only the focused pane is shown; the split comes back with the room. */
+export const SPLIT_MIN_WIDTH = 900;
+
 export const MIN_RATIO = 0.2;
 export const MAX_RATIO = 0.8;
 
