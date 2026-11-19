@@ -7,6 +7,7 @@
 
 import {
 	findHighlights,
+	parseCustomRules,
 	isIpv6,
 	highlightKinds,
 	highlightColors,
@@ -87,6 +88,29 @@ expect('in order of the line', 'failed to reach 10.0.0.1 (00:1a:2b:3c:4d:5e): ti
 ]);
 expect('nothing to find in an empty line', '   ', []);
 expect('nothing with no kinds', 'error 10.0.0.1', [], []);
+
+section('custom patterns');
+{
+	const { rules, errors } = parseCustomRules('vlan \\d+\n\n// a comment\n/crc errors?/i\n#ff8800 \\bGi\\d+/\\d+\\b\n#abc LINK DOWN\n(unclosed\n/x/q\n.*\n');
+	check('valid lines are rules', same(rules.map((r) => r.source), ['vlan \\d+', '/crc errors?/i', '#ff8800 \\bGi\\d+/\\d+\\b', '#abc LINK DOWN']));
+	check('a colour in front is the rule colour', rules[2].color === '#ff8800' && rules[3].color === '#aabbcc' && rules[0].color === null);
+	check('bad lines are reported by line number', same(errors.map((e) => e.line), [7, 8, 9]), JSON.stringify(errors));
+	check('an empty field has nothing', parseCustomRules('').rules.length === 0 && parseCustomRules(undefined).errors.length === 0);
+	const hlc = (line, kinds = ALL) =>
+		findHighlights(line, kinds, rules).map((h) => `${h.kind}${h.color ? '(' + h.color + ')' : ''}:${line.slice(h.start, h.end)}`);
+	const want = (name, line, w, kinds) => {
+		const got = hlc(line, kinds);
+		check(name, same(got, w), `got ${JSON.stringify(got)}`);
+	};
+	want('plain pattern is case-sensitive', 'vlan 10 VLAN 20', ['custom:vlan 10']);
+	want('/i ignores case', 'CRC Errors on port', ['custom:CRC Errors']);
+	want('its own colour', 'Gi0/1 is up', ['custom(#ff8800):Gi0/1']);
+	want('custom wins over a built-in overlap', '10.0.0.1 LINK DOWN error', ['ipv4:10.0.0.1', 'custom(#aabbcc):LINK DOWN', 'error:error']);
+	want('custom alone works with no kinds', 'vlan 5 error', ['custom:vlan 5'], []);
+	const over = parseCustomRules('error at').rules;
+	const got = findHighlights('fatal error at 10.0.0.1', ALL, over).map((h) => h.kind);
+	check('a built-in inside a custom match is dropped', same(got, ['error', 'custom', 'ipv4']), JSON.stringify(got));
+}
 
 section('stored settings');
 check('the default when nothing is stored', same(highlightKinds(undefined), [...DEFAULT_HIGHLIGHT_KINDS]));

@@ -72,6 +72,7 @@ const CHANGED = {
 	terminalWordSeparators: '()',
 	terminalHighlight: true,
 	terminalHighlightKinds: ['success', 'mac'],
+	terminalHighlightCustom: '/vlan \\d+/i',
 	setupComplete: true,
 	pendingTursoOrg: 'my-org',
 	pendingTursoApiToken: 'token',

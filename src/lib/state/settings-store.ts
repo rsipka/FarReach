@@ -144,6 +144,8 @@ export interface Settings {
 	terminalHighlight: boolean;
 	/** Which of them. See #lib/terminal/highlight. */
 	terminalHighlightKinds: HighlightKind[];
+	/** The user's own patterns, one regular expression per line. */
+	terminalHighlightCustom: string;
 
 	setupComplete: boolean;
 	pendingTursoOrg: string;
@@ -247,6 +249,7 @@ export const defaults: Settings = {
 	terminalWordSeparators: DEFAULT_WORD_SEPARATORS,
 	terminalHighlight: DEFAULT_HIGHLIGHT,
 	terminalHighlightKinds: [...DEFAULT_HIGHLIGHT_KINDS],
+	terminalHighlightCustom: '',
 	setupComplete: false,
 	pendingTursoOrg: '',
 	pendingTursoApiToken: '',
@@ -333,6 +336,7 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.terminalWordSeparators = parsed.terminalWordSeparators ?? defaults.terminalWordSeparators;
 	settings.terminalHighlight = parsed.terminalHighlight ?? defaults.terminalHighlight;
 	settings.terminalHighlightKinds = highlightKinds(parsed.terminalHighlightKinds);
+	settings.terminalHighlightCustom = typeof parsed.terminalHighlightCustom === 'string' ? parsed.terminalHighlightCustom : defaults.terminalHighlightCustom;
 	settings.pendingTursoOrg = parsed.pendingTursoOrg ?? defaults.pendingTursoOrg;
 	settings.launches = parsed.launches ?? defaults.launches;
 	settings.communityPromptDismissed =

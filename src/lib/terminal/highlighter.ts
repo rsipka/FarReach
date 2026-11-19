@@ -13,12 +13,14 @@
  */
 
 import type { IBufferCell, IDecoration, IDisposable, IMarker, Terminal } from '@xterm/xterm';
-import { findHighlights, type HighlightKind } from './highlight.js';
+import { findHighlights, type CustomRule, type HighlightKind } from './highlight.js';
 
 export interface HighlighterOptions {
 	enabled: boolean;
 	kinds: readonly HighlightKind[];
-	colors: Record<HighlightKind, string>;
+	/** The user's own patterns (Settings), shown before the built-in kinds. */
+	custom: readonly CustomRule[];
+	colors: Record<HighlightKind | 'custom', string>;
 }
 
 interface Shown {
@@ -35,7 +37,7 @@ interface Logical {
 }
 
 export class Highlighter {
-	private options: HighlighterOptions = { enabled: false, kinds: [], colors: {} as Record<HighlightKind, string> };
+	private options: HighlighterOptions = { enabled: false, kinds: [], custom: [], colors: {} as Record<HighlightKind | 'custom', string> };
 	private shown = new Map<string, Shown>();
 	private listeners: IDisposable[] = [];
 	private frame = 0;
@@ -95,9 +97,9 @@ export class Highlighter {
 	}
 
 	private scan(): void {
-		const { enabled, kinds, colors } = this.options;
+		const { enabled, kinds, custom, colors } = this.options;
 		const buffer = this.term.buffer.active;
-		if (!enabled || kinds.length === 0 || buffer.type !== 'normal') {
+		if (!enabled || (kinds.length === 0 && custom.length === 0) || buffer.type !== 'normal') {
 			if (this.shown.size) this.clear();
 			return;
 		}
@@ -119,7 +121,7 @@ export class Highlighter {
 		while (y < bottom) {
 			const line = this.readLogical(y, cell);
 			y = line.rows.length ? line.rows[line.rows.length - 1] + 1 : y + 1;
-			for (const h of findHighlights(line.text, kinds)) {
+			for (const h of findHighlights(line.text, kinds, custom)) {
 				// One decoration per row the match covers.
 				let i = h.start;
 				while (i < h.end) {
@@ -132,7 +134,7 @@ export class Highlighter {
 						j++;
 					}
 					if (row >= top && row < bottom && width > 0) {
-						const color = colors[h.kind];
+						const color = h.color ?? colors[h.kind];
 						wanted.set(`${row}:${col}:${width}:${color}`, { row, col, width, color });
 					}
 					i = j;

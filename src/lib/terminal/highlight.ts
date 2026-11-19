@@ -28,7 +28,9 @@ export function highlightKinds(value: unknown): HighlightKind[] {
 }
 
 export interface Highlight {
-	kind: HighlightKind;
+	kind: HighlightKind | 'custom';
+	/** A custom pattern's own colour, when it gives one. */
+	color?: string;
 	/** Index in the line's text, as a JS string index. */
 	start: number;
 	/** One past the last character. */
@@ -126,13 +128,105 @@ export function isIpv6(text: string): boolean {
 	return halves.length === 2 ? count <= 7 : count === 8;
 }
 
+// ---- Custom patterns --------------------------------------------------------
+
+/** One of the user's own patterns, ready to match. */
+export interface CustomRule {
+	re: RegExp;
+	/** `#rrggbb`, or null for the default custom colour. */
+	color: string | null;
+	/** The line it came from, as typed. */
+	source: string;
+}
+
+export interface CustomRuleError {
+	/** 1-based line number in the field. */
+	line: number;
+	message: string;
+}
+
+/** Longest pattern taken; anything longer is almost surely a paste gone wrong. */
+const MAX_PATTERN = 500;
+
+/**
+ * The Settings field read as patterns: one regular expression per line.
+ *
+ *  - `pattern` matches as written (case-sensitive);
+ *  - `/pattern/flags` takes JavaScript flags, such as `i` to ignore case;
+ *  - `#rrggbb ` in front gives that pattern its own colour.
+ *
+ * Empty lines and lines starting with `//` are skipped. A line that is not a
+ * valid expression, or one that can match nothing (an empty match), is left
+ * out and reported, so Settings can show what is wrong while the rest work.
+ */
+export function parseCustomRules(text: string | undefined | null): { rules: CustomRule[]; errors: CustomRuleError[] } {
+	const rules: CustomRule[] = [];
+	const errors: CustomRuleError[] = [];
+	(text ?? '').split(/\r?\n/).forEach((raw, i) => {
+		let line = raw.trim();
+		if (!line || line.startsWith('//')) return;
+		let color: string | null = null;
+		const c = /^(#[0-9a-f]{6}|#[0-9a-f]{3})\s+(.+)$/i.exec(line);
+		if (c) {
+			color = hexColor(c[1]);
+			line = c[2].trim();
+		}
+		if (line.length > MAX_PATTERN) {
+			errors.push({ line: i + 1, message: 'too long' });
+			return;
+		}
+		let body = line;
+		let flags = '';
+		const slashed = /^\/(.+)\/([a-z]*)$/i.exec(line);
+		if (slashed) {
+			body = slashed[1];
+			flags = slashed[2].toLowerCase();
+			if (/[^imsu]/.test(flags) || new Set(flags).size !== flags.length) {
+				errors.push({ line: i + 1, message: `unknown flags "${slashed[2]}" (use i, m, s, u)` });
+				return;
+			}
+		}
+		let re: RegExp;
+		try {
+			re = new RegExp(body, flags + 'g');
+		} catch (e) {
+			errors.push({ line: i + 1, message: e instanceof Error ? e.message.replace(/^Invalid regular expression: (?:\/.*\/[a-z]*: )?/, '') : String(e) });
+			return;
+		}
+		if (re.test('')) {
+			errors.push({ line: i + 1, message: 'matches empty text' });
+			return;
+		}
+		rules.push({ re, color, source: raw.trim() });
+	});
+	return { rules, errors };
+}
+
 /**
  * What to highlight in one line of terminal text, in order and never
- * overlapping. Where two matches overlap, the one that starts first wins,
- * then the longer one: an IPv4 address inside an IPv6 one is part of it.
+ * overlapping. Custom patterns go first: where one overlaps a built-in
+ * match, the custom one is shown. Among the rest, the one that starts first
+ * wins, then the longer one: an IPv4 address inside an IPv6 one is part of it.
  */
-export function findHighlights(line: string, kinds: readonly HighlightKind[]): Highlight[] {
-	if (!line.trim() || kinds.length === 0) return [];
+export function findHighlights(line: string, kinds: readonly HighlightKind[], custom: readonly CustomRule[] = []): Highlight[] {
+	if (!line.trim() || (kinds.length === 0 && custom.length === 0)) return [];
+	const placed: Highlight[] = [];
+	const free = (start: number, end: number) => placed.every((h) => end <= h.start || start >= h.end);
+	const place = (found: Highlight[]) => {
+		found.sort((a, b) => a.start - b.start || b.end - b.start - (a.end - a.start));
+		for (const h of found) if (free(h.start, h.end)) placed.push(h);
+	};
+
+	const mine: Highlight[] = [];
+	for (const rule of custom) {
+		rule.re.lastIndex = 0;
+		for (const m of line.matchAll(rule.re)) {
+			if (!m[0]) continue;
+			mine.push({ kind: 'custom', start: m.index!, end: m.index! + m[0].length, ...(rule.color ? { color: rule.color } : {}) });
+		}
+	}
+	place(mine);
+
 	const found: Highlight[] = [];
 	const add = (kind: HighlightKind, re: RegExp, test?: (s: string) => boolean) => {
 		if (!kinds.includes(kind)) return;
@@ -148,16 +242,9 @@ export function findHighlights(line: string, kinds: readonly HighlightKind[]): H
 	add('error', ERROR_WORDS);
 	add('warning', WARNING_WORDS);
 	add('success', SUCCESS_WORDS);
-	if (found.length < 2) return found;
-	found.sort((a, b) => a.start - b.start || b.end - b.start - (a.end - a.start));
-	const out: Highlight[] = [];
-	let reached = 0;
-	for (const h of found) {
-		if (h.start < reached) continue;
-		out.push(h);
-		reached = h.end;
-	}
-	return out;
+	place(found);
+
+	return placed.sort((a, b) => a.start - b.start);
 }
 
 // ---- Colours ----------------------------------------------------------------
@@ -200,8 +287,12 @@ export function hexColor(value: string | undefined): string | null {
 	return null;
 }
 
-export function highlightColors(palette: HighlightPalette): Record<HighlightKind, string> {
-	const out = {} as Record<HighlightKind, string>;
+/** What a custom pattern without its own colour is drawn in. */
+const CUSTOM_FROM_THEME: [keyof HighlightPalette, string] = ['yellow', '#ffaf00'];
+
+export function highlightColors(palette: HighlightPalette): Record<HighlightKind | 'custom', string> {
+	const out = {} as Record<HighlightKind | 'custom', string>;
+	out.custom = hexColor(palette[CUSTOM_FROM_THEME[0]]) ?? CUSTOM_FROM_THEME[1];
 	for (const kind of HIGHLIGHT_KINDS) {
 		const [key, fallback] = FROM_THEME[kind];
 		out[kind] = hexColor(palette[key]) ?? fallback;

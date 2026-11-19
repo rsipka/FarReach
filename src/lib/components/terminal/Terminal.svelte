@@ -47,7 +47,7 @@
 	import { cssFontFamily } from '#lib/utils/font.js';
 	import { cursorOptions } from '#lib/terminal/cursor.js';
 	import { Highlighter } from '#lib/terminal/highlighter.js';
-	import { highlightColors, highlightKinds } from '#lib/terminal/highlight.js';
+	import { highlightColors, highlightKinds, parseCustomRules } from '#lib/terminal/highlight.js';
 
 	interface Props {
 		ptyId: string;
@@ -641,6 +641,7 @@
 		const options = {
 			enabled: s.terminalHighlight,
 			kinds: highlightKinds(s.terminalHighlightKinds),
+			custom: parseCustomRules(s.terminalHighlightCustom).rules,
 			colors: highlightColors(palette)
 		};
 		const term = terminal;
