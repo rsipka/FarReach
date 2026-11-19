@@ -539,20 +539,63 @@ pub async fn ssh_detect_os(
 
     // Exit codes matter: cmd.exe on Windows answers `cat` with an error on
     // stderr, and a shell that prints a banner must not pass for an answer.
-    if let Ok((out, _, 0)) = exec_on_connection_with_exit_code_timeout(&handle, "cat /etc/os-release", OS_PROBE_TIMEOUT).await {
-        return Ok(os_from_os_release(&out));
-    }
-    if let Ok((out, _, 0)) = exec_on_connection_with_exit_code_timeout(&handle, "uname -s", OS_PROBE_TIMEOUT).await {
-        if let Some(os) = os_from_uname(&out) {
-            return Ok(os);
+    // MikroTik RouterOS runs exec commands in its own CLI, which answers
+    // `cat` with "bad command name", so look at the text before the code.
+    let release = exec_on_connection_with_exit_code_timeout(&handle, "cat /etc/os-release", OS_PROBE_TIMEOUT).await;
+    if let Ok((out, err, _)) = &release {
+        if is_routeros_reply(out) || is_routeros_reply(err) {
+            return Ok("mikrotik".to_string());
         }
+    }
+    let unix = match release {
+        Ok((out, _, 0)) => Some(os_from_os_release(&out)),
+        _ => match exec_on_connection_with_exit_code_timeout(&handle, "uname -s", OS_PROBE_TIMEOUT).await {
+            Ok((out, _, 0)) => os_from_uname(&out),
+            _ => None,
+        },
+    };
+    if let Some(os) = unix {
+        // UniFi consoles run Debian and UniFi access points and switches a
+        // BusyBox Linux; both carry Ubiquiti's board files.
+        if os != "windows" && os != "darwin" {
+            if let Ok((_, _, 0)) = exec_on_connection_with_exit_code_timeout(&handle, UNIFI_PROBE, OS_PROBE_TIMEOUT).await {
+                return Ok("unifi".to_string());
+            }
+        }
+        return Ok(os);
     }
     if let Ok((out, _, 0)) = exec_on_connection_with_exit_code_timeout(&handle, "cmd /c ver", OS_PROBE_TIMEOUT).await {
         if out.to_lowercase().contains("windows") {
             return Ok("windows".to_string());
         }
     }
+    // A RouterOS that answered `cat` with nothing at all still knows this.
+    if let Ok((out, _, _)) = exec_on_connection_with_exit_code_timeout(&handle, "/system resource print", OS_PROBE_TIMEOUT).await {
+        if is_routeros_resource(&out) {
+            return Ok("mikrotik".to_string());
+        }
+    }
     Ok("unknown".to_string())
+}
+
+/// Succeeds only on a Ubiquiti device: UniFi OS consoles ship
+/// `ubnt-device-info`, access points and switches `/etc/board.info` and
+/// `mca-cli-op`.
+const UNIFI_PROBE: &str = "test -e /etc/board.info || test -e /usr/bin/ubnt-device-info || test -e /sbin/ubnt-device-info || command -v mca-cli-op >/dev/null 2>&1";
+
+/// The RouterOS CLI's answer to a command it does not have, such as
+/// `bad command name cat (line 1 column 1)`.
+fn is_routeros_reply(text: &str) -> bool {
+    let text = text.to_lowercase();
+    text.contains("bad command name") || text.contains("expected end of command")
+}
+
+/// `/system resource print` on RouterOS lists `platform: MikroTik`.
+fn is_routeros_resource(text: &str) -> bool {
+    text.lines().any(|line| {
+        let line = line.trim().to_lowercase();
+        line.starts_with("platform:") && line.contains("mikrotik")
+    })
 }
 
 /// The `ID=` of an os-release file (not `ID_LIKE=`). MSYS2, MinGW and Cygwin
@@ -612,6 +655,16 @@ mod detect_os_tests {
         assert_eq!(os_from_uname("Darwin\n").as_deref(), Some("darwin"));
         assert_eq!(os_from_uname("FreeBSD\n").as_deref(), Some("freebsd"));
         assert_eq!(os_from_uname("  \n"), None);
+    }
+
+    #[test]
+    fn routeros_answers_are_mikrotik() {
+        assert!(is_routeros_reply("bad command name cat (line 1 column 1)\n"));
+        assert!(is_routeros_reply("expected end of command (line 1 column 5)"));
+        assert!(!is_routeros_reply("cat: /etc/os-release: No such file or directory"));
+        let resource = "                   uptime: 3d2h\n                  version: 7.16 (stable)\n              board-name: hAP ax2\n                 platform: MikroTik\n";
+        assert!(is_routeros_resource(resource));
+        assert!(!is_routeros_resource("sh: /system: not found\n"));
     }
 }
 

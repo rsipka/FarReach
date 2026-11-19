@@ -4,7 +4,15 @@
 	let { osId, size = 16 }: { osId: string | undefined | null; size?: number } = $props();
 
 	let icon = $derived(getDistroIcon(osId));
-	let fill = $derived(icon && icon.hex.toLowerCase() === '000000' ? '#f5f5f7' : icon ? `#${icon.hex}` : '');
+	// A near-black logo (Apple, MikroTik) takes the text colour, so it shows
+	// on a dark theme and a light one alike.
+	let fill = $derived(icon ? (isDark(icon.hex) ? 'var(--color-text-primary)' : `#${icon.hex}`) : '');
+
+	function isDark(hex: string): boolean {
+		const n = parseInt(hex, 16);
+		const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+		return 0.2126 * r + 0.7152 * g + 0.0722 * b < 64;
+	}
 </script>
 
 {#if icon}
