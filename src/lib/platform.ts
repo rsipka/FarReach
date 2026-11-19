@@ -50,3 +50,9 @@ export function isMobile(): boolean {
 	if (/Android|iPhone|iPad|iPod/i.test(ua)) return true;
 	return /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
 }
+
+/** True on an iPhone or iPad: a phone or tablet that is not Android. */
+export function isIos(): boolean {
+	if (typeof navigator === 'undefined') return false;
+	return isMobile() && !/Android/i.test(navigator.userAgent);
+}

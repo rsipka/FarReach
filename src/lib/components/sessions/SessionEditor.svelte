@@ -8,7 +8,8 @@
 	import Input from '#lib/components/shared/Input.svelte';
 	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField, type TmuxSetting } from '#lib/ipc/sessions.js';
 	import { defaultTmuxName, folderTmux, validTmuxName } from '#lib/terminal/tmux.js';
-	import { isMobile, isWindows } from '#lib/platform.js';
+	import { isIos, isMobile, isWindows } from '#lib/platform.js';
+	import { APP_FILES_SHARE } from '#lib/ipc/rdp.js';
 	import SshOptionsSection from './SshOptionsSection.svelte';
 	import Disclosure from '#lib/components/shared/Disclosure.svelte';
 	import TerminalThemeList from '#lib/components/terminal/TerminalThemeList.svelte';
@@ -67,6 +68,8 @@
 	let autoOs = $derived(source && !source.os_manual && kind === sessionKind(source) && !osCleared ? (source.detected_os ?? '') : '');
 	let osTitle = (id: string) => (id === 'unknown' ? t('session.os_none') : (osOptions.find((o) => o.id === id)?.title ?? id));
 	let sharePath = $state('');
+	/** iPhone and iPad: no folder can be named, the app's own folder in Files can be shared. */
+	const onIos = isIos();
 	/** What the RDP clipboard carries: '' for everything, 'text' for no files, 'off'. */
 	let rdpClipboard = $state<'' | 'text' | 'off'>('');
 	/** VNC only: the saved SSH session to go through, or '' for direct. */
@@ -889,6 +892,15 @@
 					<button type="button" class="auth-btn" class:active={os === 'gnome'} disabled={saving} onclick={() => (os = 'gnome')}>{t('session.os_gnome')}</button>
 				</div>
 			</div>
+			{#if onIos}
+			<div class="shell-field">
+				<label class="jump-toggle">
+					<input type="checkbox" checked={sharePath === APP_FILES_SHARE} disabled={saving} onchange={(e) => (sharePath = e.currentTarget.checked ? APP_FILES_SHARE : '')} />
+					<span class="jump-toggle-text">{t('session.rdp_share_app_files')}</span>
+				</label>
+				<p class="shell-hint">{t('session.rdp_share_app_files_hint')}</p>
+			</div>
+			{:else}
 			<div class="shell-field">
 				<div class="key-path-row">
 					<div class="key-path-input">
@@ -900,6 +912,7 @@
 				</div>
 				<p class="shell-hint">{t('session.rdp_share_hint')}</p>
 			</div>
+			{/if}
 			<div class="shell-field">
 				<label class="via-label" for="rdp-clipboard">{t('session.rdp_clipboard')}</label>
 				<select id="rdp-clipboard" class="via-select" bind:value={rdpClipboard} disabled={saving}>

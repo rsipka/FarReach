@@ -121,6 +121,19 @@ export async function rdpClipboardFetch(id: string): Promise<void> {
 	await invoke('rdp_clipboard_fetch', { id });
 }
 
+/** The share path that means the app's own folder in Files (iPhone and iPad). */
+export const APP_FILES_SHARE = '@app-files';
+
+/** Pick files with the system's picker and put them on the desktop's clipboard. Resolves to how many (0: none picked). */
+export async function rdpClipboardPickFiles(id: string): Promise<number> {
+	return invoke<number>('rdp_clipboard_pick_files', { id });
+}
+
+/** Save what the last download from the desktop brought, one Save dialog per file; folders are skipped. */
+export async function rdpClipboardSaveReceived(id: string): Promise<{ saved: number; skipped: number }> {
+	return invoke<{ saved: number; skipped: number }>('rdp_clipboard_save_received', { id });
+}
+
 /** Stop the clipboard transfer in progress, either way. */
 export async function rdpClipboardCancel(id: string): Promise<void> {
 	await invoke('rdp_clipboard_cancel', { id });
