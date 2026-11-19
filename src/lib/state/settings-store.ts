@@ -17,6 +17,7 @@ import {
 	type CursorStyle,
 	type InactiveCursorStyle
 } from '#lib/terminal/cursor.js';
+import { DEFAULT_HIGHLIGHT, DEFAULT_HIGHLIGHT_KINDS, highlightKinds, type HighlightKind } from '#lib/terminal/highlight.js';
 
 /** The localStorage key. Kept from Reach, so an update finds what was saved. */
 export const STORAGE_KEY = 'reach-settings';
@@ -139,6 +140,10 @@ export interface Settings {
 	terminalMiddleClickPaste: boolean;
 	/** The characters that end a word on a double click, besides the space. */
 	terminalWordSeparators: string;
+	/** Errors, warnings and addresses in the terminal shown in colour. */
+	terminalHighlight: boolean;
+	/** Which of them. See #lib/terminal/highlight. */
+	terminalHighlightKinds: HighlightKind[];
 
 	setupComplete: boolean;
 	pendingTursoOrg: string;
@@ -240,6 +245,8 @@ export const defaults: Settings = {
 	tmuxHideStatus: false,
 	terminalMiddleClickPaste: true,
 	terminalWordSeparators: DEFAULT_WORD_SEPARATORS,
+	terminalHighlight: DEFAULT_HIGHLIGHT,
+	terminalHighlightKinds: [...DEFAULT_HIGHLIGHT_KINDS],
 	setupComplete: false,
 	pendingTursoOrg: '',
 	pendingTursoApiToken: '',
@@ -324,6 +331,8 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.tmuxHideStatus = parsed.tmuxHideStatus ?? defaults.tmuxHideStatus;
 	settings.terminalMiddleClickPaste = parsed.terminalMiddleClickPaste ?? defaults.terminalMiddleClickPaste;
 	settings.terminalWordSeparators = parsed.terminalWordSeparators ?? defaults.terminalWordSeparators;
+	settings.terminalHighlight = parsed.terminalHighlight ?? defaults.terminalHighlight;
+	settings.terminalHighlightKinds = highlightKinds(parsed.terminalHighlightKinds);
 	settings.pendingTursoOrg = parsed.pendingTursoOrg ?? defaults.pendingTursoOrg;
 	settings.launches = parsed.launches ?? defaults.launches;
 	settings.communityPromptDismissed =

@@ -3,6 +3,7 @@
 	import Dropdown from '#lib/components/shared/Dropdown.svelte';
 	import { CURSOR_STYLES, CURSOR_WIDTHS, INACTIVE_CURSOR_STYLES, cursorStyle, cursorWidth, inactiveCursorStyle } from '#lib/terminal/cursor.js';
 	import TerminalThemeSettings from './TerminalThemeSettings.svelte';
+	import { HIGHLIGHT_KINDS, highlightKinds, type HighlightKind } from '#lib/terminal/highlight.js';
 	import { themeState, applyTheme, loadInstalledThemes, DARK, LIGHT, BUILT_IN_IDS, BUNDLED_IDS } from '#lib/state/theme.svelte.js';
 	import { onMount } from 'svelte';
 	import { themeFetchRegistry, themeInstall, themeUninstall, type ThemeEntry } from '#lib/ipc/theme.js';
@@ -35,6 +36,14 @@
 		}))
 	);
 	let cursorWidthOptions = $derived(CURSOR_WIDTHS.map((w) => ({ label: t('cursor.width_px', { count: w }), value: String(w) })));
+	let shownKinds = $derived(highlightKinds(settings.terminalHighlightKinds));
+
+	function toggleKind(kind: HighlightKind, on: boolean): void {
+		const next = new Set(shownKinds);
+		if (on) next.add(kind);
+		else next.delete(kind);
+		updateSetting('terminalHighlightKinds', HIGHLIGHT_KINDS.filter((k) => next.has(k)));
+	}
 	let currentFont = $derived(settings.fontFamily || 'monospace');
 	let currentSize = $derived(settings.fontSize || 14);
 	let uiZoom = $derived(settings.uiZoom || 1);
@@ -627,6 +636,38 @@
 			/>
 		</div>
 	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('highlight.setting')}</span>
+			<span class="setting-description">{t('highlight.setting_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.terminalHighlight}
+				label={t('highlight.setting')}
+				onchange={(v) => updateSetting('terminalHighlight', v)}
+			/>
+		</div>
+	</div>
+
+	{#if settings.terminalHighlight}
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('highlight.kinds')}</span>
+				<span class="setting-description">{t('highlight.kinds_desc')}</span>
+			</div>
+			<div class="highlight-kinds" role="group" aria-label={t('highlight.kinds')}>
+				{#each HIGHLIGHT_KINDS as kind (kind)}
+					<label class="highlight-kind {kind}">
+						<input type="checkbox" checked={shownKinds.includes(kind)} onchange={(e) => toggleKind(kind, e.currentTarget.checked)} />
+						{t(`highlight.kind_${kind}`)}
+					</label>
+				{/each}
+			</div>
+		</div>
+	{/if}
 	{/if}
 
 	{#if part === 'term-adv'}
@@ -1309,4 +1350,25 @@
 		font-family: var(--font-sans);
 	}
 
+
+	/* The kinds take the row's full width under its label, not the narrow
+	   control column. */
+	.highlight-kinds {
+		grid-column: 1 / -1;
+		/* Over the settings rows' own end alignment for a bare control. */
+		justify-self: stretch !important;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+		gap: 8px 16px;
+		margin-top: 10px;
+	}
+
+	.highlight-kind {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: var(--text-sm, 0.8125rem);
+		color: var(--color-text-primary);
+		cursor: pointer;
+	}
 </style>

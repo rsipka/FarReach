@@ -46,6 +46,8 @@
 	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
 	import { cssFontFamily } from '#lib/utils/font.js';
 	import { cursorOptions } from '#lib/terminal/cursor.js';
+	import { Highlighter } from '#lib/terminal/highlighter.js';
+	import { highlightColors, highlightKinds } from '#lib/terminal/highlight.js';
 
 	interface Props {
 		ptyId: string;
@@ -628,6 +630,24 @@
 		if (term.options.cursorBlink !== c.cursorBlink) term.options.cursorBlink = c.cursorBlink;
 		if (term.options.cursorInactiveStyle !== c.cursorInactiveStyle) term.options.cursorInactiveStyle = c.cursorInactiveStyle;
 		if (term.options.cursorWidth !== c.cursorWidth) term.options.cursorWidth = c.cursorWidth;
+	});
+
+	// Errors, warnings and addresses in colour, when Settings or the
+	// terminal bar turn it on (#lib/terminal/highlight). Colours come from
+	// the terminal theme, so they follow a theme change.
+	let highlighter: Highlighter | undefined;
+	$effect(() => {
+		const s = getSettings();
+		const options = {
+			enabled: s.terminalHighlight,
+			kinds: highlightKinds(s.terminalHighlightKinds),
+			colors: highlightColors(palette)
+		};
+		const term = terminal;
+		if (!term) return;
+		if (!highlighter && !options.enabled) return;
+		highlighter ??= new Highlighter(term);
+		highlighter.setOptions(options);
 	});
 
 	/** A server tried OSC 52 while it is off: said once per tab. */
@@ -1415,6 +1435,8 @@
 			resizeObserver?.disconnect();
 			unregisterFinder?.();
 			unregisterFinder = undefined;
+			highlighter?.dispose();
+			highlighter = undefined;
 			term.dispose();
 			terminal = undefined;
 			fitAddon = undefined;

@@ -70,6 +70,8 @@ const CHANGED = {
 	tmuxHideStatus: true,
 	terminalMiddleClickPaste: false,
 	terminalWordSeparators: '()',
+	terminalHighlight: true,
+	terminalHighlightKinds: ['success', 'mac'],
 	setupComplete: true,
 	pendingTursoOrg: 'my-org',
 	pendingTursoApiToken: 'token',
