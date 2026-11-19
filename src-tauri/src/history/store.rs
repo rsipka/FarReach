@@ -102,6 +102,8 @@ pub struct Hit {
     pub name: String,
     pub host: String,
     pub protocol: String,
+    /// The computer the run was recorded on.
+    pub device: String,
 }
 
 /// What to forget.
@@ -235,6 +237,12 @@ impl Store {
             .await
             .map_err(err)?;
         conn.execute_batch(SCHEMA).await.map_err(err)?;
+        // Local shells used to be saved under "localhost"; they belong
+        // under the computer they ran on, which history from several
+        // devices needs to tell apart.
+        conn.execute("UPDATE runs SET host = device WHERE protocol = 'local' AND host IN ('', 'localhost') AND device <> ''", ())
+            .await
+            .map_err(err)?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -244,10 +252,15 @@ impl Store {
     }
 
     pub async fn new_run(&self, meta: &RunMeta, device: &str, started: i64) -> Result<i64, String> {
+        let host = if meta.protocol == "local" && (meta.host.is_empty() || meta.host == "localhost") && !device.is_empty() {
+            device.to_string()
+        } else {
+            meta.host.clone()
+        };
         self.conn
             .execute(
                 "INSERT INTO runs (session_id, name, protocol, host, user, device, started) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-                libsql::params![meta.session_id.clone(), meta.name.clone(), meta.protocol.clone(), meta.host.clone(), meta.user.clone(), device, started],
+                libsql::params![meta.session_id.clone(), meta.name.clone(), meta.protocol.clone(), host, meta.user.clone(), device, started],
             )
             .await
             .map_err(err)?;
@@ -314,7 +327,7 @@ impl Store {
                 ("c.id IN (SELECT rowid FROM commands_fts WHERE commands_fts MATCH ?1)", phrase(text))
             };
             let sql = format!(
-                "SELECT c.id, c.run, c.at, c.text, c.cwd, c.exit, c.redacted, r.session_id, r.name, r.host, r.protocol
+                "SELECT c.id, c.run, c.at, c.text, c.cwd, c.exit, c.redacted, r.session_id, r.name, r.host, r.protocol, r.device
                  FROM commands c JOIN runs r ON r.id = c.run
                  WHERE {filter} AND (?2 IS NULL OR r.session_id = ?2) AND (?3 IS NULL OR r.host = ?3)
                    AND (?4 IS NULL OR c.at >= ?4) AND (?5 IS NULL OR c.at <= ?5)
@@ -339,6 +352,7 @@ impl Store {
                     name: row.get(8).map_err(err)?,
                     host: row.get(9).map_err(err)?,
                     protocol: row.get(10).map_err(err)?,
+                    device: row.get(11).map_err(err)?,
                 });
             }
         }
@@ -354,7 +368,7 @@ impl Store {
                 ("o.id IN (SELECT rowid FROM output_fts WHERE output_fts MATCH ?1)", phrase(text), limit)
             };
             let sql = format!(
-                "SELECT o.id, o.run, o.first, o.body, o.redacted, r.session_id, r.name, r.host, r.protocol
+                "SELECT o.id, o.run, o.first, o.body, o.redacted, r.session_id, r.name, r.host, r.protocol, r.device
                  FROM output o JOIN runs r ON r.id = o.run
                  WHERE {filter} AND (?2 IS NULL OR r.session_id = ?2) AND (?3 IS NULL OR r.host = ?3)
                    AND (?4 IS NULL OR o.last >= ?4) AND (?5 IS NULL OR o.first <= ?5)
@@ -389,6 +403,7 @@ impl Store {
                     name: row.get(6).map_err(err)?,
                     host: row.get(7).map_err(err)?,
                     protocol: row.get(8).map_err(err)?,
+                    device: row.get(9).map_err(err)?,
                 });
             }
         }
@@ -402,12 +417,12 @@ impl Store {
         let mut items = Vec::new();
         let mut meta = self
             .conn
-            .query("SELECT session_id, name, host, protocol FROM runs WHERE id = ?1", [run])
+            .query("SELECT session_id, name, host, protocol, device FROM runs WHERE id = ?1", [run])
             .await
             .map_err(err)?;
         let Some(m) = meta.next().await.map_err(err)? else { return Ok(items) };
-        let (session_id, name, host, protocol): (Option<String>, String, String, String) =
-            (m.get(0).map_err(err)?, m.get(1).map_err(err)?, m.get(2).map_err(err)?, m.get(3).map_err(err)?);
+        let (session_id, name, host, protocol, device): (Option<String>, String, String, String, String) =
+            (m.get(0).map_err(err)?, m.get(1).map_err(err)?, m.get(2).map_err(err)?, m.get(3).map_err(err)?, m.get(4).map_err(err)?);
         let base = |kind: &str, id: i64, at: i64, text: String, cwd: Option<String>, exit: Option<i64>, redacted: bool| Hit {
             kind: kind.into(),
             id,
@@ -421,6 +436,7 @@ impl Store {
             name: name.clone(),
             host: host.clone(),
             protocol: protocol.clone(),
+            device: device.clone(),
         };
         let mut rows = self
             .conn
