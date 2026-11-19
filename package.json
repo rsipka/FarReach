@@ -52,7 +52,8 @@
     "devops-vault:test": "node scripts/devops-vault-test.mjs",
     "ansible:test": "node scripts/ansible-recap-test.mjs && node scripts/ansible-sessions-test.mjs",
     "session-folders:test": "node --import ./scripts/resolve-lib.mjs scripts/session-folders-test.mjs",
-    "settings-persist:test": "node --import ./scripts/resolve-lib.mjs scripts/settings-persist-test.mjs"
+    "settings-persist:test": "node --import ./scripts/resolve-lib.mjs scripts/settings-persist-test.mjs",
+    "setup-wizard:test": "node --import ./scripts/resolve-lib.mjs scripts/setup-wizard-test.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.4",

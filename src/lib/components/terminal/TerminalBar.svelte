@@ -16,6 +16,7 @@
 	import { finderFor, pendingFind } from '#lib/state/terminal-find.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { tick } from 'svelte';
+	import { formatHops, formatProxyAddress, ROUTE_ICON } from '#lib/utils/route.js';
 
 	interface Props {
 		tab: Tab;
@@ -45,6 +46,16 @@
 	);
 	let protocol = $derived(
 		tab.type === 'ssh' ? 'SSH' : tab.type === 'telnet' ? 'Telnet' : tab.type === 'serial' ? t('session.protocol_serial') : tab.wslDistro ? 'WSL' : t('termbar.local')
+	);
+	/** Not a direct connection: the same marks as the session list, with the
+	 *  hops or the proxy in their tooltip. */
+	let jumpTip = $derived(
+		tab.type === 'ssh' && tab.sshConnectParams?.jumpChain?.length ? t('session.via_jump', { hops: formatHops(tab.sshConnectParams.jumpChain) }) : ''
+	);
+	let proxyTip = $derived(
+		tab.type === 'ssh' && tab.sshConnectParams?.proxy?.host
+			? t('session.via_proxy', { type: tab.sshConnectParams.proxy.proxy_type.toUpperCase(), address: formatProxyAddress(tab.sshConnectParams.proxy) })
+			: ''
 	);
 	let tmuxName = $derived(tab.type === 'ssh' ? (tab.sshConnectParams?.tmux?.name ?? null) : null);
 	let tap = $derived(tabHistory(tab.id));
@@ -147,6 +158,8 @@
 	<span class="name">{tab.sessionName || tab.title}</span>
 	{#if address}<span class="address">{address}</span>{/if}
 	{#if remote || tab.wslDistro}<span class="badge">{protocol}</span>{/if}
+	{#if jumpTip}<span class="route" role="img" aria-label={jumpTip} title={jumpTip}>{@render icon(ROUTE_ICON.jump, 13)}</span>{/if}
+	{#if proxyTip}<span class="route" role="img" aria-label={proxyTip} title={proxyTip}>{@render icon(ROUTE_ICON.proxy, 13)}</span>{/if}
 	{#if tmuxName}<span class="badge" title={tmuxName}>tmux</span>{/if}
 	{#if log}<span class="rec" class:paused={log.paused} title={log.paused ? t('history.log_paused_hint') : t('termbar.logging')}>{t('termbar.log')}</span>{/if}
 
@@ -252,6 +265,12 @@
 		font-size: var(--text-2xs);
 		font-weight: 600;
 		line-height: 16px;
+	}
+
+	.route {
+		flex-shrink: 0;
+		display: inline-flex;
+		color: var(--color-text-secondary);
 	}
 
 	/* Writing to a log file is never silent. */

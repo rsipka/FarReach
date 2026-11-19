@@ -209,24 +209,27 @@ pub enum HelmAction {
     Uninstall,
 }
 
-pub fn command(action: HelmAction, ns: &str, name: &str, revision: Option<i32>, kube_context: Option<&str>) -> Result<String, String> {
-    use crate::container::sh_quote;
-    let mut cmd = match action {
+pub fn arguments(action: HelmAction, ns: &str, name: &str, revision: Option<i32>, context: &str) -> Result<Vec<String>, String> {
+    if name.is_empty() || name.starts_with('-') {
+        return Err("Invalid Helm release name".into());
+    }
+    let mut args = match action {
         HelmAction::Rollback => {
             let r = revision.ok_or("A rollback needs the revision to go back to")?;
             if r < 1 {
                 return Err("Revisions start at 1".into());
             }
-            // --wait: done means the rolled-back pods are ready, not just sent.
-            format!("helm rollback {} {r} --wait", sh_quote(name))
+            vec!["rollback".into(), name.into(), r.to_string()]
         }
-        HelmAction::Uninstall => format!("helm uninstall {} --wait", sh_quote(name)),
+        HelmAction::Uninstall => vec!["uninstall".into(), name.into()],
     };
-    cmd.push_str(&format!(" --namespace {}", sh_quote(ns)));
-    if let Some(c) = kube_context {
-        cmd.push_str(&format!(" --kube-context {}", sh_quote(c)));
-    }
-    Ok(cmd)
+    args.extend(["--wait", "--namespace", ns, "--kube-context", context].map(str::to_owned));
+    Ok(args)
+}
+
+pub fn remote_command(args: &[String]) -> String {
+    let words: Vec<_> = args.iter().map(|s| crate::container::sh_quote(s)).collect();
+    format!("helm {}", words.join(" "))
 }
 
 /// `helm_cmd` run on a POSIX host with the kubeconfig Reach is using, which

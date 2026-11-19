@@ -1,16 +1,26 @@
 <script lang="ts">
 	import PersonalizeStep from './PersonalizeStep.svelte';
+	import SessionsStep from './SessionsStep.svelte';
+	import LoggingStep from './LoggingStep.svelte';
+	import SecurityStep from './SecurityStep.svelte';
 	import PluginsStep from './PluginsStep.svelte';
 	import TursoStep from './TursoStep.svelte';
 	import CompleteStep from './CompleteStep.svelte';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { updateSetting } from '#lib/state/settings.svelte.js';
+	import { setupWizard, closeSetupWizard } from '#lib/state/setup-wizard.svelte.js';
+	import { wizardSteps, skipTarget } from '#lib/setup/wizard-steps.js';
+
+	/** Fixed when the wizard opens: a first run, or again from Settings. */
+	const rerun = setupWizard.rerun;
+	const steps = wizardSteps({ rerun });
 
 	let currentStep = $state(0);
-	const totalSteps = 4;
+	let step = $derived(steps[currentStep]);
+	let last = $derived(currentStep === steps.length - 1);
 
 	function next() {
-		if (currentStep < totalSteps - 1) {
+		if (currentStep < steps.length - 1) {
 			currentStep++;
 		}
 	}
@@ -21,38 +31,56 @@
 		}
 	}
 
+	/** Everything not yet seen keeps its default; the summary still shows,
+	 *  so it is clear what was chosen and how to finish. */
+	function skipRest() {
+		currentStep = skipTarget(steps);
+	}
+
 	function complete() {
 		updateSetting('setupComplete', true);
+		closeSetupWizard();
 	}
 </script>
 
 <div class="welcome-overlay">
 	<div class="welcome-container">
-		<!-- Step indicator dots -->
-		<div class="step-dots">
-			{#each Array(totalSteps) as _, i (i)}
-				<div class="dot" class:active={i === currentStep} class:completed={i < currentStep}></div>
-			{/each}
+		<div class="top-row">
+			<!-- Step indicator dots -->
+			<div class="step-dots">
+				{#each steps as id, i (id)}
+					<div class="dot" class:active={i === currentStep} class:completed={i < currentStep}></div>
+				{/each}
+			</div>
+			{#if !last}
+				<button type="button" class="skip-rest" onclick={skipRest}>{t('setup.skip_rest')}</button>
+			{/if}
 		</div>
 
 		<!-- Welcome header (only on first step) -->
 		{#if currentStep === 0}
 			<div class="welcome-header">
-				<h1 class="welcome-title">{t('setup.welcome_title')}</h1>
-				<p class="welcome-subtitle">{t('setup.welcome_subtitle')}</p>
+				<h1 class="welcome-title">{rerun ? t('setup.rerun_title') : t('setup.welcome_title')}</h1>
+				<p class="welcome-subtitle">{rerun ? t('setup.rerun_subtitle') : t('setup.welcome_subtitle')}</p>
 			</div>
 		{/if}
 
 		<!-- Step content -->
 		<div class="step-content">
-			{#if currentStep === 0}
+			{#if step === 'personalize'}
 				<PersonalizeStep onNext={next} />
-			{:else if currentStep === 1}
+			{:else if step === 'sessions'}
+				<SessionsStep onNext={next} onBack={back} />
+			{:else if step === 'logging'}
+				<LoggingStep onNext={next} onBack={back} />
+			{:else if step === 'security'}
+				<SecurityStep onNext={next} onBack={back} />
+			{:else if step === 'plugins'}
 				<PluginsStep onNext={next} onBack={back} />
-			{:else if currentStep === 2}
+			{:else if step === 'storage'}
 				<TursoStep onNext={next} onBack={back} />
-			{:else if currentStep === 3}
-				<CompleteStep onComplete={complete} onBack={back} />
+			{:else if step === 'complete'}
+				<CompleteStep onComplete={complete} onBack={back} {rerun} />
 			{/if}
 		</div>
 	</div>
@@ -101,9 +129,36 @@
 		box-shadow: var(--shadow-elevated);
 	}
 
+	/* The dots stay centred; Skip sits at the right edge without pushing them. */
+	.top-row {
+		position: relative;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		width: 100%;
+		min-height: 20px;
+	}
+
 	.step-dots {
 		display: flex;
 		gap: 8px;
+	}
+
+	.skip-rest {
+		position: absolute;
+		right: 0;
+		padding: 0;
+		font-family: inherit;
+		font-size: var(--text-xs);
+		color: var(--color-text-secondary);
+		background: none;
+		border: none;
+		cursor: pointer;
+	}
+
+	.skip-rest:hover {
+		color: var(--color-accent);
+		text-decoration: underline;
 	}
 
 	.dot {
