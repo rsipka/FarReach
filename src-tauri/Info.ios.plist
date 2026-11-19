@@ -14,5 +14,15 @@
 	<!-- The camera reads another device's link QR code (Settings > Sync). -->
 	<key>NSCameraUsageDescription</key>
 	<string>The camera reads the QR code that links this device to your other one.</string>
+	<!--
+		The app's Documents folder shows in the Files app under the app's
+		name: an RDP session can share its "Shared with desktops" folder
+		into the remote desktop as a drive, and files put there in Files
+		appear on the remote.
+	-->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 </dict>
 </plist>

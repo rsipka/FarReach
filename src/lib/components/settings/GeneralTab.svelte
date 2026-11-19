@@ -16,13 +16,15 @@
 	import ReportProblem from './ReportProblem.svelte';
 	import { getSettings, updateSetting, syncTraySettings } from '#lib/state/settings.svelte.js';
 	import { manualUpdateCheck } from '#lib/state/updater.svelte.js';
+	import { openSetupWizard } from '#lib/state/setup-wizard.svelte.js';
 	import { effectiveThreshold, MIN_PASTE_THRESHOLD } from '#lib/terminal/paste.js';
 	import { DEFAULT_WORD_SEPARATORS, rightClickMode } from '#lib/terminal/mouse.js';
 	import { t, changeLocale } from '#lib/state/i18n.svelte.js';
+	import { __APP_VERSION__ } from '#lib/version.js';
 
 	/** Which slice of these rows to show: Settings arranges them by topic,
 	 *  so one tab file feeds several pages (see settings-pages.ts). */
-	type Part = 'general' | 'shell' | 'paste' | 'paste-adv' | 'sessions' | 'tmux' | 'about';
+	type Part = 'general' | 'shell' | 'paste' | 'paste-adv' | 'sessions' | 'tmux' | 'updates' | 'about';
 	let { part }: { part: Part } = $props();
 
 	const settings = getSettings();
@@ -172,21 +174,16 @@
 		</div>
 	{/if}
 
+	<!-- The first-run questions again, over whatever is open. -->
 	<div class="setting-row">
 		<div class="setting-info">
-			<span class="setting-label">{t('settings.check_updates')}</span>
-			<span class="setting-description">{t('settings.check_updates_desc')}</span>
+			<span class="setting-label">{t('settings.rerun_setup')}</span>
+			<span class="setting-description">{t('settings.rerun_setup_desc')}</span>
 		</div>
-		<div class="setting-control update-controls">
-			<button class="discord-link" onclick={onCheckNow} disabled={checkingUpdates}>
-				<span>{checkingUpdates ? t('settings.check_updates_checking') : t('settings.check_updates_now')}</span>
+		<div class="setting-control">
+			<button class="discord-link" onclick={openSetupWizard}>
+				<span>{t('settings.rerun_setup_button')}</span>
 			</button>
-			<Toggle
-				hideLabel
-				checked={settings.checkForUpdates}
-				label={t('settings.check_updates')}
-				onchange={onCheckForUpdatesChange}
-			/>
 		</div>
 	</div>
 
@@ -445,6 +442,35 @@
 
 	{/if}
 
+	{#if part === 'updates'}
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.version')}</span>
+		</div>
+		<div class="setting-control"><span class="version">v{__APP_VERSION__}</span></div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.check_updates')}</span>
+			<span class="setting-description">{t('settings.check_updates_desc')}</span>
+		</div>
+		<div class="setting-control update-controls">
+			<button class="discord-link" onclick={onCheckNow} disabled={checkingUpdates}>
+				<span>{checkingUpdates ? t('settings.check_updates_checking') : t('settings.check_updates_now')}</span>
+			</button>
+			<Toggle
+				hideLabel
+				checked={settings.checkForUpdates}
+				label={t('settings.check_updates')}
+				onchange={onCheckForUpdatesChange}
+			/>
+		</div>
+	</div>
+
+	{/if}
+
 	{#if part === 'about'}
 
 	{#if SHOW_COMMUNITY}
@@ -545,6 +571,12 @@
 <style>
 	/* The dropdowns' box: it was the page's black, the one dark well in a
 	   column of grey controls. */
+	.version {
+		font-family: var(--font-mono, monospace);
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
+	}
+
 	.update-controls {
 		display: flex;
 		align-items: center;
