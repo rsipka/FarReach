@@ -26,6 +26,7 @@
     "ios-source:test": "node scripts/ios-source-test.mjs",
     "paste:test": "node scripts/paste-test.mjs",
     "mouse:test": "node scripts/mouse-test.mjs",
+    "selection-sync:test": "node scripts/selection-sync-test.mjs",
     "cursor:test": "node scripts/cursor-test.mjs",
     "tmux:test": "node scripts/tmux-test.mjs",
     "snippet:test": "node scripts/snippet-test.mjs",

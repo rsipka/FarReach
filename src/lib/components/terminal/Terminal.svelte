@@ -26,6 +26,7 @@
 	import { rightClickAction, wordSeparator, MIDDLE_CLICK_PASTE_MS } from '#lib/terminal/mouse.js';
 	import { shouldRearmIme, nudgeCaret, REARM_SETTLE_MS } from '#lib/terminal/ime.js';
 	import { installWebkitInputFix } from '#lib/terminal/webkit-input-fix.js';
+	import { deferLinuxSelectionSync } from '#lib/terminal/selection-sync.js';
 	import { isMac, isMobile, isWebKit } from '#lib/platform.js';
 	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import { invoke } from '@tauri-apps/api/core';
@@ -1241,7 +1242,13 @@
 				window.addEventListener('mouseup', onSelectEnd, true);
 			}
 			termEl.addEventListener('mousedown', onSelectStart, true);
-			unlistenSelectEnd = () => window.removeEventListener('mouseup', onSelectEnd, true);
+			// Linux: the primary selection gets the text once the button is
+			// up, not on every move of the drag (#lib/terminal/selection-sync).
+			const undoSelectionSync = deferLinuxSelectionSync(term, { host: termEl, win: window });
+			unlistenSelectEnd = () => {
+				window.removeEventListener('mouseup', onSelectEnd, true);
+				undoSelectionSync();
+			};
 
 			// A middle click pastes. On Linux the webview does it itself, with
 			// the selection (X11's primary), as a paste event on xterm's
