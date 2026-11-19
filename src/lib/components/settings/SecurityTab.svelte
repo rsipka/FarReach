@@ -7,6 +7,7 @@
 		isLocked as checkIsLocked
 	} from '#lib/ipc/credentials.js';
 	import { t } from '#lib/state/i18n.svelte.js';
+	import { hostKeysRemoveAll } from '#lib/ipc/sessions.js';
 	import Dropdown from '#lib/components/shared/Dropdown.svelte';
 	import Toggle from '#lib/components/shared/Toggle.svelte';
 	import { getSettings, updateSetting } from '#lib/state/settings.svelte.js';
@@ -64,6 +65,28 @@
 		if (!hasPassword) return t('security.biometric_needs_password', { method });
 		return t('security.biometric_desc', { method });
 	});
+
+	// Remove all saved host keys: asked once more in place, then done.
+	let hostKeysAsk = $state(false);
+	let hostKeysBusy = $state(false);
+	let hostKeysDone = $state('');
+	let hostKeysError = $state('');
+
+	async function removeAllHostKeys() {
+		hostKeysBusy = true;
+		hostKeysError = '';
+		try {
+			const r = await hostKeysRemoveAll();
+			hostKeysDone = t('security.host_keys_removed', { sessions: r.sessions, device: r.device });
+			if (r.failed > 0) hostKeysError = t('security.host_keys_remove_failed', { count: r.failed });
+			window.dispatchEvent(new CustomEvent('reach:sessions-changed'));
+		} catch (e) {
+			hostKeysError = String(e);
+		} finally {
+			hostKeysBusy = false;
+			hostKeysAsk = false;
+		}
+	}
 
 	async function changeMethods(change: () => Promise<void>) {
 		methodBusy = true;
@@ -295,6 +318,38 @@
 			</div>
 		</div>
 	{/if}
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('security.host_keys_remove_all')}</span>
+			<span class="setting-description">
+				{#if hostKeysAsk}
+					{t('security.host_keys_remove_all_confirm')}
+				{:else if hostKeysDone}
+					{hostKeysDone}
+				{:else}
+					{t('security.host_keys_remove_all_desc')}
+				{/if}
+			</span>
+			{#if hostKeysError}
+				<span class="form-error">{hostKeysError}</span>
+			{/if}
+		</div>
+		<div class="setting-control" style="gap: 8px">
+			{#if hostKeysAsk}
+				<Button variant="ghost" size="sm" disabled={hostKeysBusy} onclick={() => (hostKeysAsk = false)}>
+					{t('common.cancel')}
+				</Button>
+				<Button variant="danger" size="sm" disabled={hostKeysBusy} onclick={removeAllHostKeys}>
+					{t('security.host_keys_remove_all_yes')}
+				</Button>
+			{:else}
+				<Button variant="secondary" size="sm" disabled={locked} onclick={() => { hostKeysAsk = true; hostKeysDone = ''; hostKeysError = ''; }}>
+					{t('security.host_keys_remove_all_button')}
+				</Button>
+			{/if}
+		</div>
+	</div>
 
 	{#if methods?.platform}
 		<div class="setting-row">

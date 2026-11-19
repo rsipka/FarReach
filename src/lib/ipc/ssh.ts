@@ -241,11 +241,15 @@ export interface HostKeyPrompt {
   randomart?: string | null;
   /** VerifyHostKeyDNS: whether a matching SSHFP record was found. */
   dnsMatch?: boolean | null;
+  /** Where Accept and save keeps the key: with the saved session (synced)
+   *  or in this device's own list. */
+  saveTo?: 'session' | 'device';
 }
 
-/** Report the user's accept/reject decision for a host-key prompt. */
-export async function sshHostkeyResponse(promptId: string, accept: boolean): Promise<void> {
-  return invoke('ssh_hostkey_response', { promptId, accept });
+/** Report the user's answer to a host-key prompt: Don't connect
+ *  (`accept` false), Accept once (`save` false) or Accept and save. */
+export async function sshHostkeyResponse(promptId: string, accept: boolean, save = true): Promise<void> {
+  return invoke('ssh_hostkey_response', { promptId, accept, save });
 }
 
 export async function sshResize(connectionId: string, cols: number, rows: number): Promise<void> {

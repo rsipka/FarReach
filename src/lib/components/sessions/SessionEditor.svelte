@@ -11,6 +11,7 @@
 	import { isIos, isMobile, isWindows } from '#lib/platform.js';
 	import { APP_FILES_SHARE } from '#lib/ipc/rdp.js';
 	import SshOptionsSection from './SshOptionsSection.svelte';
+	import SessionHostKeys from './SessionHostKeys.svelte';
 	import Disclosure from '#lib/components/shared/Disclosure.svelte';
 	import TerminalThemeList from '#lib/components/terminal/TerminalThemeList.svelte';
 	import { findTerminalTheme, terminalPalette } from '#lib/state/terminal-themes.svelte.js';
@@ -1259,6 +1260,11 @@
 				disabled={saving}
 			/>
 		{/key}
+		{#if kind === 'ssh' && editSession}
+			{#key editSession.id}
+				<SessionHostKeys sessionId={editSession.id} initial={editSession.host_keys} disabled={saving} />
+			{/key}
+		{/if}
 		{/if}
 
 		<Input label={t('session.tags')} bind:value={tagsStr} placeholder={kind === 'rdp' ? 'office, windows' : 'production, web, linux'} disabled={saving} />

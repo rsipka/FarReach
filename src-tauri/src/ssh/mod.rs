@@ -19,6 +19,7 @@ pub mod prompt;
 #[cfg(test)]
 mod proto_live_tests;
 pub mod proxycmd;
+pub mod session_hostkeys;
 pub mod session_log;
 pub mod session_opts;
 pub mod tun;

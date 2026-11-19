@@ -11,12 +11,12 @@ import { getSettings } from '#lib/state/settings.svelte.js';
 import type { Tab } from '#lib/state/tabs.svelte.js';
 
 /** Whether a tab's server is monitored: its session's own choice, or the
- *  default from Settings. A Windows host is off unless its session turns it
- *  on: the stats come from /proc, which Windows has not got. */
+ *  default from Settings. A Windows or MikroTik RouterOS host is off unless
+ *  its session turns it on: the stats come from /proc, which neither has. */
 export function monitoringWanted(tab: Tab | undefined): boolean {
 	if (!tab) return false;
 	if (tab.monitoring != null) return tab.monitoring;
-	if (tab.type === 'ssh' && tab.detectedOs === 'windows') return false;
+	if (tab.type === 'ssh' && (tab.detectedOs === 'windows' || tab.detectedOs === 'mikrotik')) return false;
 	return getSettings().serverMonitoring;
 }
 
