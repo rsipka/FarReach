@@ -5,6 +5,7 @@ import type { TelnetConnectParams } from '#lib/ipc/telnet.js';
 import type { SerialConnectParams } from '#lib/ipc/serial.js';
 import type { HistoryMode } from '#lib/ipc/history.js';
 import * as splits from '#lib/terminal/split.js';
+import { isMobile } from '#lib/platform.js';
 import type { Direction, Split } from '#lib/terminal/split.js';
 
 export type TabType = 'local' | 'ssh' | 'rdp' | 'vnc' | 'telnet' | 'serial';
@@ -87,12 +88,14 @@ export function getSplit(): Split | null {
 /**
  * Show `tabId` beside the focused tab, which keeps its place. The focused
  * tab itself (dragged out, say) goes beside its neighbour in the bar; with no
- * tab to pair it with, a new local terminal opens beside it.
+ * tab to pair it with, a new local terminal opens beside it; not on a phone
+ * or tablet, which has no local shell, so there nothing happens.
  */
 export function splitWith(tabId: string, direction: Direction): void {
 	let first = activeTab?.id;
 	if (first === tabId) first = splits.neighbour(tabs.map((t) => t.id), tabId) ?? undefined;
 	if (!first) {
+		if (isMobile()) return;
 		const fresh = createTab('local');
 		split = splits.open(tabId, fresh.id, direction, split?.ratio ?? 0.5);
 		return;
