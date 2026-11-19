@@ -46,7 +46,7 @@ fn label_sessions() -> windows::core::Result<bool> {
         let manager: IAudioSessionManager2 = device.Activate(CLSCTX_ALL, None)?;
         let sessions = manager.GetSessionEnumerator()?;
 
-        let name = HSTRING::from("Reach");
+        let name = HSTRING::from("Reacher CM");
         let icon = HSTRING::from(format!(
             "{},0",
             std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default()

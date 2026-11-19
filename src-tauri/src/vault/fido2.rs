@@ -141,7 +141,7 @@ mod platform {
         match hr.0 as u32 {
             0x80090036 | 0x800704C7 => "The security key request was cancelled".into(),
             0x8009000F => "This security key is already added".into(),
-            0x80090011 => "This key is not one added to Reach".into(),
+            0x80090011 => "This key is not one added to Reacher CM".into(),
             0x80090029 => "This security key does not support what unlocking needs (hmac-secret)".into(),
             _ => format!("The security key request failed: {}", windows::core::Error::from(hr).message()),
         }
@@ -352,7 +352,7 @@ mod platform {
         } else if text.contains("0x32") || text.contains("PIN_BLOCKED") || text.contains("0x34") {
             "This security key's PIN is blocked; reset it with the key maker's tool".into()
         } else if text.contains("0x2E") || text.contains("NO_CREDENTIALS") {
-            "This key is not one added to Reach".into()
+            "This key is not one added to Reacher CM".into()
         } else if text.contains("0x2F") || text.contains("ACTION_TIMEOUT") {
             "The key was not touched in time".into()
         } else {
@@ -399,7 +399,7 @@ mod platform {
             return Err("Plug in your security key".into());
         }
         let challenge: [u8; 32] = rand::random();
-        let mut last = "This key is not one added to Reach".to_string();
+        let mut last = "This key is not one added to Reacher CM".to_string();
         for key in keys {
             let mut args = GetAssertionArgsBuilder::new(RP_ID, &challenge)
                 .pin(pin)

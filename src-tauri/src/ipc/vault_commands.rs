@@ -32,7 +32,7 @@ fn is_internal_vault_id(vault_id: &str, id_of: impl Fn(&str) -> Option<String>) 
 
 fn refuse_internal_vault(manager: &crate::vault::VaultManager, vault_id: &str) -> Result<(), String> {
     if is_internal_vault_id(vault_id, |name| manager.get_vault_id_by_name(name)) {
-        Err("This vault is kept by Reach for its own data and cannot be opened here".into())
+        Err("This vault is kept by Reacher CM for its own data and cannot be opened here".into())
     } else {
         Ok(())
     }

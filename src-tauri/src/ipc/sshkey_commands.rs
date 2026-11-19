@@ -130,7 +130,7 @@ pub async fn ssh_key_import(
     let public_key = match (public_key, facts.public_key.as_deref()) {
         (Some(given), Some(derived)) if !keystore::same_public_key(&given, derived) => {
             if pasted_public {
-                return Err("That public key does not belong to this private key. Leave it empty: Reach works out the right one from the private key.".into());
+                return Err("That public key does not belong to this private key. Leave it empty: Reacher CM works out the right one from the private key.".into());
             }
             tracing::warn!("Ignoring the .pub file beside the key: it belongs to a different key");
             None

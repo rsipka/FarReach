@@ -548,7 +548,7 @@ async fn type_into_session(app: tauri::AppHandle, req: SendRequest) -> Result<()
 
     let state = app
         .try_state::<AppState>()
-        .ok_or_else(|| "Reach is still starting up".to_string())?;
+        .ok_or_else(|| "Reacher CM is still starting up".to_string())?;
 
     // The newline is added here rather than asked of the caller: the tool
     // contract says "do not include one", and a model that forgets would leave

@@ -216,7 +216,7 @@ Specific to this role:\n\
 Specific to this role:\n\
 - State the rollback before the change. If you cannot describe how to undo it,\n\
   you are not ready to do it.\n\
-- Reach has Ansible and OpenTofu workspaces. A repeatable change belongs there,\n\
+- Reacher CM has Ansible and OpenTofu workspaces. A repeatable change belongs there,\n\
   not typed into a shell where it will be forgotten.\n\
 - `terraform apply` and `tofu apply` follow a reviewed plan. Never skip the\n\
   plan because the change looks small.\n\

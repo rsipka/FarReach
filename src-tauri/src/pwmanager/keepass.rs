@@ -73,14 +73,14 @@ fn read_capped(path: &Path, max: u64, what: &str) -> Result<Zeroizing<Vec<u8>>, 
         return Err(format!("{NAME}: {what} at {} is not a file", path.display()));
     }
     if meta.len() > max {
-        return Err(format!("{NAME}: {what} at {} is larger than Reach reads", path.display()));
+        return Err(format!("{NAME}: {what} at {} is larger than Reacher CM reads", path.display()));
     }
     // Sized up front, so the buffer is never reallocated (which would leave
     // an unwiped copy behind); one byte more, to notice a file that grew.
     let mut bytes = Zeroizing::new(Vec::with_capacity(usize::try_from(meta.len()).unwrap_or(0) + 1));
     file.take(max + 1).read_to_end(&mut bytes).map_err(failed)?;
     if bytes.len() as u64 > max {
-        return Err(format!("{NAME}: {what} at {} is larger than Reach reads", path.display()));
+        return Err(format!("{NAME}: {what} at {} is larger than Reacher CM reads", path.display()));
     }
     Ok(bytes)
 }
@@ -102,7 +102,7 @@ pub fn open(database: &Path, key_file: Option<&Path>, password: &str) -> Result<
             if key_file.is_some() { " or key file" } else { "" }
         )),
         DatabaseOpenError::UnsupportedVersion | DatabaseOpenError::VersionParse(_) => {
-            Failure::Other(format!("{NAME}: {} is not a KeePass database Reach can read.", database.display()))
+            Failure::Other(format!("{NAME}: {} is not a KeePass database Reacher CM can read.", database.display()))
         }
         other => Failure::Other(format!(
             "{NAME}: the database could not be opened: {}",

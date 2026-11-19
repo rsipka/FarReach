@@ -641,7 +641,7 @@ fn build_config(p: &RdpConnectParams, app: AppHandle) -> Result<ironrdp_client::
         .with_destination(destination)
         .with_username(&p.username)
         .with_password(&p.password)
-        .with_client_name("Reach")
+        .with_client_name("Reacher CM")
         .with_client_build(client_build())
         .with_client_dir("C:\\Windows\\System32\\mstscax.dll")
         .with_platform(platform)

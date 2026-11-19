@@ -288,7 +288,7 @@ fn login_error(e: vnc::VncError) -> String {
         // A Mac without a user name in the session, RealVNC's encryption,
         // VeNCrypt.
         vnc::VncError::General(m) if m.contains("not been implemented") => {
-            "This server only offers a login Reach does not support yet. For a Mac, enter its macOS user name in the session.".to_string()
+            "This server only offers a login Reacher CM does not support yet. For a Mac, enter its macOS user name in the session.".to_string()
         }
         other => other.to_string(),
     }

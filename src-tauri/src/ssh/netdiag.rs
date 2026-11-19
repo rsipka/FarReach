@@ -62,7 +62,7 @@ pub fn describe_connect_error(host: &str, err: &russh::Error) -> String {
                         "No route to host — but {} is on your local network, and macOS only \
                          lets an app reach the local network once you have allowed it. Open \
                          System Settings → Privacy & Security → Local Network and turn on \
-                         Reach. If Reach is not in that list, macOS never offered the prompt: \
+                         Reacher CM. If Reacher CM is not in that list, macOS never offered the prompt: \
                          it only does so for apps signed with an Apple Developer certificate, \
                          and this build is not. The installation guide has the current \
                          workaround.",
@@ -71,7 +71,7 @@ pub fn describe_connect_error(host: &str, err: &russh::Error) -> String {
                 } else {
                     format!(
                         "No route to host ({}). If this host is on your local network, macOS \
-                         needs Local Network permission for Reach: System Settings → Privacy & \
+                         needs Local Network permission for Reacher CM: System Settings → Privacy & \
                          Security → Local Network.",
                         host
                     )

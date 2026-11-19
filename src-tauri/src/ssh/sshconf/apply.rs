@@ -433,7 +433,7 @@ impl Plan {
             let mut limits = self.config.limits.clone();
             if let Some(b) = bytes.filter(|b| *b > 0) {
                 if b > MAX {
-                    note = Some(format!("{} is held to 1G, the most Reach's engine allows", s.args[0]));
+                    note = Some(format!("{} is held to 1G, the most Reacher CM's engine allows", s.args[0]));
                 }
                 let b = b.min(MAX) as usize;
                 limits.rekey_write_limit = b;

@@ -168,7 +168,7 @@ export const MCP_CLIENTS: McpClient[] = [
 		kind: 'yaml',
 		path: '~/.continue/config.yaml  (or .continue/mcpServers/reach.yaml)',
 		snippet: `mcpServers:
-  - name: Reach
+  - name: Reacher CM
     type: streamable-http
     url: {{url}}
     requestOptions:
@@ -224,7 +224,7 @@ bearer_token_env_var = "REACH_MCP_TOKEN"`,
     }
   }
 }`,
-		note: 'JetBrains documents no way to send an Authorization header, so this will be refused with 401 by Reach. Listed for completeness — it needs header support before it can work.',
+		note: 'JetBrains documents no way to send an Authorization header, so this will be refused with 401 by Reacher CM. Listed for completeness — it needs header support before it can work.',
 		verified: false,
 		docs: 'https://www.jetbrains.com/help/ai-assistant/mcp.html'
 	}

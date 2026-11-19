@@ -66,7 +66,7 @@ impl Refusal {
         match self {
             Refusal::ToolNotGranted { tool, agent } => format!(
                 "The active agent ({agent}) does not have the `{tool}` tool. This is not a \
-                 permission you can request — ask the user to switch agents in Reach if a \
+                 permission you can request — ask the user to switch agents in Reacher CM if a \
                  different capability is genuinely needed."
             ),
             Refusal::SessionNotDescribed =>
@@ -92,7 +92,7 @@ impl Refusal {
             Refusal::Denied { reason } => format!("Refused: {reason}"),
             Refusal::SecretInCommand =>
                 "This command contains what looks like a credential in the clear. It would be \
-                 written to shell history and to Reach's log. Use a file, an environment \
+                 written to shell history and to Reacher CM's log. Use a file, an environment \
                  variable, or ask the user to enter it.".into(),
             Refusal::RateLimited { retry_after_secs } => format!(
                 "Too many commands too quickly. Wait {retry_after_secs}s. If you are looping, \
@@ -179,7 +179,7 @@ fn sensitive_patterns() -> &'static Vec<(Regex, &'static str)> {
             // Reach's own configuration. Cannot escalate — the baseline is
             // compiled in and agents are user-selected — but the user should
             // still see that the AI is writing to Reach's directory.
-            (r"(?i)\.reach/(profiles|agents|skills|plugins|themes)/", "modifies Reach's own configuration"),
+            (r"(?i)\.reach/(profiles|agents|skills|plugins|themes)/", "modifies Reacher CM's own configuration"),
         ];
         specs
             .iter()
@@ -554,7 +554,7 @@ mod tests {
     fn writes_to_reach_config_are_surfaced() {
         let c = classify("echo '{}' > ~/.reach/agents/fast.json", DangerThreshold::Strict);
         assert_eq!(c.danger, Danger::Sensitive);
-        assert!(c.reason.unwrap().contains("Reach's own configuration"));
+        assert!(c.reason.unwrap().contains("Reacher CM's own configuration"));
     }
 
     /// Every refusal has to tell the model what to do next, or it retries.

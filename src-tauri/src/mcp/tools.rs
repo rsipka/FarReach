@@ -37,7 +37,7 @@ pub fn definitions(agent: &Agent) -> Vec<Value> {
             "description":
                 "List the terminal sessions the user has explicitly shared with you. \
                  Returns an empty list when nothing is shared — that is normal and not an \
-                 error; ask the user to share a session in Reach. Start here.",
+                 error; ask the user to share a session in Reacher CM. Start here.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         }));
     }
@@ -164,7 +164,7 @@ pub fn list_sessions(sessions: &HashMap<String, SharedSession>) -> Value {
         return json!({
             "sessions": [],
             "note": "The user has not shared any session. This is not an error. Ask them to \
-                     enable sharing on a terminal tab in Reach."
+                     enable sharing on a terminal tab in Reacher CM."
         });
     }
     json!({ "sessions": items })
@@ -231,7 +231,7 @@ pub fn read_output(
         "awaitingSecretPrompt": s.awaiting_secret(),
         "note": if masked > 0 {
             Some(format!(
-                "{masked} value(s) were masked by Reach before you saw this. The text is \
+                "{masked} value(s) were masked by Reacher CM before you saw this. The text is \
                  incomplete — do not infer their contents."
             ))
         } else {

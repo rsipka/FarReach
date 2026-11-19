@@ -301,7 +301,7 @@ impl Unlockers {
             .seals
             .iter()
             .find(|s| s.kind == FIDO2 && s.credential_id == credential)
-            .ok_or("This key is not one added to Reach")?;
+            .ok_or("This key is not one added to Reacher CM")?;
         self.open_with(&fido_key(output), seal)
     }
 
@@ -413,7 +413,7 @@ mod hello {
         match status {
             KeyCredentialStatus::UserCanceled => "Windows Hello was cancelled".into(),
             KeyCredentialStatus::UserPrefersPassword => "Windows Hello was declined".into(),
-            KeyCredentialStatus::NotFound => "Windows Hello has no key for Reach".into(),
+            KeyCredentialStatus::NotFound => "Windows Hello has no key for Reacher CM".into(),
             KeyCredentialStatus::SecurityDeviceLocked => "Windows Hello is locked after too many attempts".into(),
             other => format!("Windows Hello failed (status {})", other.0),
         }
