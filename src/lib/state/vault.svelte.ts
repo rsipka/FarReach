@@ -2,7 +2,7 @@ import { APP_NAME } from '#lib/brand.js';
 import { SvelteMap } from 'svelte/reactivity';
 import * as vaultIpc from '#lib/ipc/vault.js';
 import { t } from '#lib/state/i18n.svelte.js';
-import { restoreLocalSettingsFromVault } from '#lib/state/settings.svelte.js';
+import { markSettingsRestorePending, restoreLocalSettingsFromVault } from '#lib/state/settings.svelte.js';
 import type {
 	VaultInfo,
 	SecretMetadata,
@@ -514,6 +514,8 @@ export async function previewBackup(filePath: string, exportPassword: string): P
 /** Import a full encrypted backup. Resets local state and restores. */
 export async function importBackup(filePath: string, exportPassword: string, masterPassword: string): Promise<string> {
 	const uuid = await vaultIpc.importBackup(filePath, exportPassword, masterPassword);
+	// The backup's font, language, shell and tray choices, at the next unlock.
+	markSettingsRestorePending();
 	// Re-check state after import
 	await checkState();
 	return uuid;
