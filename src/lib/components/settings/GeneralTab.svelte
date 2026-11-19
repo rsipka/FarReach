@@ -174,6 +174,21 @@
 		</div>
 	{/if}
 
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.play_sounds')}</span>
+			<span class="setting-description">{t('settings.play_sounds_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.playSounds}
+				label={t('settings.play_sounds')}
+				onchange={(v) => updateSetting('playSounds', v)}
+			/>
+		</div>
+	</div>
+
 	<!-- The first-run questions again, over whatever is open. -->
 	<div class="setting-row">
 		<div class="setting-info">

@@ -817,6 +817,8 @@
   "community.not_now": "Όχι τώρα",
   "community.join": "Συμμετοχή",
   "settings.system_startup_desc": "Αυτόματη εκκίνηση του Reach κατά τη σύνδεση.",
+  "settings.play_sounds": "Αναπαραγωγή ήχων",
+  "settings.play_sounds_desc": "Ένας σύντομος ήχος όταν εμφανίζεται μια ειδοποίηση. Απενεργοποιημένο από προεπιλογή σε τηλέφωνα και tablet.",
   "settings.font_size_desc": "Μέγεθος κειμένου τερματικού ({{size}}px)",
   "settings.font_desc": "Γραμματοσειρά που χρησιμοποιείται στον εξομοιωτή τερματικού.",
   "security.master_password_status": "Κατάσταση Κύριου Κωδικού",

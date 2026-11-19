@@ -817,6 +817,8 @@
   "community.not_now": "Plus tard",
   "community.join": "Rejoindre",
   "settings.system_startup_desc": "Lancer Reach automatiquement a la connexion.",
+  "settings.play_sounds": "Jouer des sons",
+  "settings.play_sounds_desc": "Un bref carillon quand une notification apparaît. Désactivé par défaut sur téléphones et tablettes.",
   "settings.font_size_desc": "Taille du texte du terminal ({{size}}px)",
   "settings.font_desc": "Police utilisee dans l'emulateur de terminal.",
   "security.master_password_status": "Etat du mot de passe principal",

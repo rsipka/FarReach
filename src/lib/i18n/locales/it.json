@@ -817,6 +817,8 @@
   "community.not_now": "Non ora",
   "community.join": "Entra",
   "settings.system_startup_desc": "Avvia Reach automaticamente all'accesso.",
+  "settings.play_sounds": "Riproduci suoni",
+  "settings.play_sounds_desc": "Un breve suono quando appare una notifica. Disattivato per impostazione predefinita su telefoni e tablet.",
   "settings.font_size_desc": "Dimensione del testo nel terminale ({{size}}px)",
   "settings.font_desc": "Font utilizzato nell'emulatore di terminale.",
   "security.master_password_status": "Stato Password Principale",

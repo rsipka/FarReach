@@ -4,6 +4,7 @@
  * setting survives a save and a restart (scripts/settings-persist-test.mjs).
  */
 
+import { isMobile } from '#lib/platform.js';
 import { DEFAULT_PASTE_THRESHOLD } from '#lib/terminal/paste.js';
 import { DEFAULT_RIGHT_CLICK, DEFAULT_WORD_SEPARATORS, rightClickMode, type RightClickMode } from '#lib/terminal/mouse.js';
 import {
@@ -60,6 +61,9 @@ export interface Settings {
 	/** Look for a new release at launch and every 45 minutes. Off: only
 	 *  Settings > General > Check now asks, so nothing goes out on its own. */
 	checkForUpdates: boolean;
+	/** The chime when a notification (toast) appears. Off by default on phones
+	 *  and tablets, where the system's own sounds already say enough. */
+	playSounds: boolean;
 	fontFamily: string;
 	defaultShell: string;
 	openLastSession: boolean;
@@ -208,6 +212,7 @@ export const defaults: Settings = {
 	closeTabOnExit: false,
 	serverMonitoring: true,
 	checkForUpdates: true,
+	playSounds: !isMobile(),
 	fontFamily: 'monospace',
 	defaultShell: '/bin/bash',
 	openLastSession: false,
@@ -290,6 +295,7 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.closeTabOnExit = parsed.closeTabOnExit ?? defaults.closeTabOnExit;
 	settings.serverMonitoring = parsed.serverMonitoring ?? defaults.serverMonitoring;
 	settings.checkForUpdates = parsed.checkForUpdates ?? defaults.checkForUpdates;
+	settings.playSounds = parsed.playSounds ?? defaults.playSounds;
 	settings.fontFamily = parsed.fontFamily ?? defaults.fontFamily;
 	settings.defaultShell = parsed.defaultShell ?? defaults.defaultShell;
 	settings.openLastSession = parsed.openLastSession ?? defaults.openLastSession;

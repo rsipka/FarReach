@@ -801,6 +801,8 @@
   "community.not_now": "Teď ne",
   "community.join": "Připojit se",
   "settings.system_startup_desc": "Automaticky spustit Reach po přihlášení.",
+  "settings.play_sounds": "Přehrávat zvuky",
+  "settings.play_sounds_desc": "Krátké zazvonění, když se objeví oznámení. Na telefonech a tabletech je ve výchozím stavu vypnuté.",
   "settings.font_size_desc": "Velikost textu v terminálu ({{size}} px)",
   "settings.font_desc": "Písmo použité v emulátoru terminálu.",
   "security.master_password_status": "Stav hlavního hesla",

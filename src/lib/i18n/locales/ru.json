@@ -817,6 +817,8 @@
   "community.not_now": "Не сейчас",
   "community.join": "Присоединиться",
   "settings.system_startup_desc": "Запускать Reach автоматически при входе в систему.",
+  "settings.play_sounds": "Воспроизводить звуки",
+  "settings.play_sounds_desc": "Короткий сигнал при появлении уведомления. На телефонах и планшетах по умолчанию выключено.",
   "settings.font_size_desc": "Размер текста в терминале ({{size}} px)",
   "settings.font_desc": "Шрифт эмулятора терминала.",
   "security.master_password_status": "Master Password Status",

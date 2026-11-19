@@ -817,6 +817,8 @@
   "community.not_now": "Jetzt nicht",
   "community.join": "Beitreten",
   "settings.system_startup_desc": "Reach automatisch beim Anmelden starten.",
+  "settings.play_sounds": "Töne abspielen",
+  "settings.play_sounds_desc": "Ein kurzer Ton, wenn eine Benachrichtigung erscheint. Auf Smartphones und Tablets standardmäßig aus.",
   "settings.font_size_desc": "Terminal-Textgröße ({{size}}px)",
   "settings.font_desc": "Schriftart, die im Terminal-Emulator verwendet wird.",
   "security.master_password_status": "Master-Passwort-Status",

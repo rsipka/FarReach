@@ -817,6 +817,8 @@
   "community.not_now": "Ahora no",
   "community.join": "Unirme",
   "settings.system_startup_desc": "Iniciar Reach automáticamente cuando inicies sesión.",
+  "settings.play_sounds": "Reproducir sonidos",
+  "settings.play_sounds_desc": "Un breve sonido cuando aparece una notificación. Desactivado de forma predeterminada en teléfonos y tabletas.",
   "settings.font_size_desc": "Tamaño del texto de la terminal ({{size}}px)",
   "settings.font_desc": "Fuente utilizada en el emulador de terminal.",
   "security.master_password_status": "Estado de la contraseña maestra",

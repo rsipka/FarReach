@@ -38,6 +38,7 @@ const CHANGED = {
 	closeTabOnExit: true,
 	serverMonitoring: false,
 	checkForUpdates: false,
+	playSounds: false,
 	fontFamily: 'JetBrains Mono',
 	defaultShell: '/bin/zsh',
 	openLastSession: true,
