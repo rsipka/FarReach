@@ -150,7 +150,7 @@ pub const FIELD_PASSWORD: &str = "password";
 
 /// The fields a manager does not read are refused with this.
 pub(crate) fn unsupported_field(id: ProviderId, field: &str) -> String {
-    format!("{}: Reach cannot read the field '{}' of an entry", id.display_name(), sanitize_display(field, 40))
+    format!("{}: Reacher CM cannot read the field '{}' of an entry", id.display_name(), sanitize_display(field, 40))
 }
 
 /// One entry as the picker lists it: metadata only, never a secret.

@@ -65,7 +65,7 @@ impl Cluster {
     pub async fn find_log_files(&self, ns: &str, pod: &str, container: Option<String>) -> Result<Vec<FoundFile>, String> {
         let ran = self.exec_collect(ns, pod, container, vec!["sh".into(), "-c".into(), logfiles::DISCOVER_SCRIPT.into()], 30).await?;
         if ran.refusal() == Some(Refusal::NoTool) {
-            return Err("This image has no shell, so Reach cannot list its files. Type the file's path instead.".into());
+            return Err("This image has no shell, so Reacher CM cannot list its files. Type the file's path instead.".into());
         }
         Ok(logfiles::parse_discovery(&ran.stdout))
     }

@@ -9,7 +9,7 @@
 	import Dropdown from '#lib/components/shared/Dropdown.svelte';
 	import DiscordIcon from '#lib/components/shared/DiscordIcon.svelte';
 	import { COMMUNITY } from '#lib/data/community.js';
-	import { SHOW_COMMUNITY, SHOW_SPONSOR } from '#lib/brand.js';
+	import { SHOW_COMMUNITY, SHOW_SPONSOR, WEBSITE_URL, CHANGELOG_URL, LICENSE_URL } from '#lib/brand.js';
 	import LanguageSelect from '#lib/components/shared/LanguageSelect.svelte';
 	import Toggle from '#lib/components/shared/Toggle.svelte';
 	import X11ServerSetting from './X11ServerSetting.svelte';
@@ -472,6 +472,27 @@
 	{/if}
 
 	{#if part === 'about'}
+
+	<!-- Website, changelog and license, opened in the system browser
+	     (on phones too, through the opener plugin). -->
+	{#each [
+		{ label: 'settings.website', desc: 'settings.website_desc', url: WEBSITE_URL },
+		{ label: 'settings.changelog', desc: 'settings.changelog_desc', url: CHANGELOG_URL },
+		{ label: 'settings.license', desc: 'settings.license_desc', url: LICENSE_URL }
+	] as link (link.label)}
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t(link.label)}</span>
+				<span class="setting-description">{t(link.desc)}</span>
+			</div>
+			<div class="setting-control">
+				<button class="discord-link" title={link.url} onclick={() => void openUrl(link.url)}>
+					<span>{t('settings.open_link')}</span>
+					<span class="ext"><FaIcon icon={faUpRightFromSquare} size={10} /></span>
+				</button>
+			</div>
+		</div>
+	{/each}
 
 	{#if SHOW_COMMUNITY}
 		<!-- The permanent route to the community. The launch prompt can be

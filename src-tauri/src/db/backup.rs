@@ -100,7 +100,7 @@ pub async fn dump<W: Write>(
     let wanted = |name: &str| opts.tables.as_ref().is_none_or(|t| t.iter().any(|x| x == name));
     let tables: Vec<String> = objects.iter().filter(|o| o.kind == ObjectKind::Table && wanted(&o.name)).map(|o| o.name.clone()).collect();
 
-    writeln!(out, "-- Reach backup of {} {}", engine_name(e), if scope.is_empty() { database } else { scope }).map_err(io)?;
+    writeln!(out, "-- Reacher CM backup of {} {}", engine_name(e), if scope.is_empty() { database } else { scope }).map_err(io)?;
     writeln!(out, "-- Tables, rows, indexes, keys, triggers, views and routines. Not included:").map_err(io)?;
     writeln!(out, "-- extensions, custom types, grants, and server settings.").map_err(io)?;
     writeln!(out).map_err(io)?;

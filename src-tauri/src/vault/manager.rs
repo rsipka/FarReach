@@ -3766,7 +3766,7 @@ mod android_keychain {
     }
 
     fn call<T: serde::de::DeserializeOwned>(method: &str, payload: serde_json::Value) -> Result<T, VaultError> {
-        let app = crate::android_app().ok_or_else(|| VaultError::KeychainUnavailable("Reach is still starting".into()))?;
+        let app = crate::android_app().ok_or_else(|| VaultError::KeychainUnavailable("Reacher CM is still starting".into()))?;
         app.state::<Unlock<tauri::Wry>>()
             .call_blocking(method, payload)
             .map_err(VaultError::KeychainUnavailable)

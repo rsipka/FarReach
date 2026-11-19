@@ -313,7 +313,7 @@ impl Escapes {
                     // suspend or fork.
                     0x1a | b'&' | b'V' | b'v' => {
                         let shown = if c == 0x1a { "^Z".to_string() } else { (c as char).to_string() };
-                        actions.push(EscapeAction::Show(format!("{e}{shown} is not available in Reach\r\n")));
+                        actions.push(EscapeAction::Show(format!("{e}{shown} is not available in Reacher CM\r\n")));
                         continue;
                     }
                     _ => {

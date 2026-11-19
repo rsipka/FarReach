@@ -144,7 +144,7 @@ export const TERMINAL_KEYS: (keyof TerminalPalette)[] = [
 
 export const DARK: Theme = {
 	id: 'reach-dark',
-	name: 'Reach Dark',
+	name: 'Reacher CM Dark',
 	appearance: 'dark',
 	colors: {
 		'bg-primary': '#0e0f12',
@@ -196,7 +196,7 @@ export const DARK: Theme = {
 
 export const LIGHT: Theme = {
 	id: 'reach-light',
-	name: 'Reach Light',
+	name: 'Reacher CM Light',
 	appearance: 'light',
 	colors: {
 		'bg-primary': '#ffffff',

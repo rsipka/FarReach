@@ -193,7 +193,7 @@
 
 	async function handleSelectBackupFile(): Promise<void> {
 		const path = await open({
-			filters: [{ name: 'Reach Backup', extensions: ['reachbackup'] }],
+			filters: [{ name: 'Reacher CM Backup', extensions: ['reachbackup'] }],
 			multiple: false
 		});
 		if (path) {

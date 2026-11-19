@@ -29,7 +29,7 @@ use std::sync::OnceLock;
 
 /// What replaces a matched secret. Deliberately visible: a silent deletion
 /// makes an AI think it read the whole file, and it will act on that belief.
-const MASK: &str = "«redacted by Reach»";
+const MASK: &str = "«redacted by Reacher CM»";
 
 struct Rule {
     re: Regex,

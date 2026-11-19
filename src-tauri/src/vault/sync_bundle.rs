@@ -112,10 +112,10 @@ fn aad(vault_id: &str, header: &[serde_json::Value], members: &[Vec<serde_json::
 
 fn parse(data: &[u8]) -> Result<File, VaultError> {
     let file: File = serde_json::from_slice(data)
-        .map_err(|_| VaultError::SerializationError("the sync location holds a file Reach cannot read".into()))?;
+        .map_err(|_| VaultError::SerializationError("the sync location holds a file Reacher CM cannot read".into()))?;
     if file.format != FORMAT {
         return Err(VaultError::SyncError(
-            "The vault file was written by a newer Reach. Update Reach on this device.".into(),
+            "The vault file was written by a newer Reacher CM. Update Reacher CM on this device.".into(),
         ));
     }
     Ok(file)

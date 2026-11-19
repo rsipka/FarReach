@@ -300,7 +300,7 @@ fn describe_key_load_error(
         return if had_passphrase {
             format!("Could not open {} — wrong passphrase? ({})", label, err)
         } else if encrypted == Some(false) || encrypted.is_none() {
-            format!("Could not read {}: it is damaged or not a private key Reach understands. Import it again from the original key file. ({})", label, err)
+            format!("Could not read {}: it is damaged or not a private key Reacher CM understands. Import it again from the original key file. ({})", label, err)
         } else {
             format!("{} {} ({})", NEEDS_PASSPHRASE, label, err)
         };

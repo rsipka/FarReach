@@ -1021,7 +1021,7 @@ pub fn write_device_settings(path: &Path, settings: &DeviceSettings) -> Result<(
 pub async fn load(state: &AppState) -> Result<Loaded, String> {
     let manager = state.vault_manager.lock().await;
     if manager.is_locked() {
-        return Err("The vault is locked. Unlock Reach first.".into());
+        return Err("The vault is locked. Unlock Reacher CM first.".into());
     }
     let mut config = read_setting_by_key(&manager, CONFIG_KEY)
         .await
@@ -1097,7 +1097,7 @@ pub async fn save(state: &AppState, save: &ValidatedSave) -> Result<(), String> 
     let json = serde_json::to_string(&save.config).map_err(|e| e.to_string())?;
     let mut manager = state.vault_manager.lock().await;
     if manager.is_locked() {
-        return Err("The vault is locked. Unlock Reach first.".into());
+        return Err("The vault is locked. Unlock Reacher CM first.".into());
     }
     // Before the new configuration replaces it.
     let stored_mode = stored_passphrase_mode(&manager).await;

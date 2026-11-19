@@ -116,7 +116,7 @@ impl Host {
     }
 }
 
-const NO_SHELL: &str = "This image has no shell, so Reach cannot list its files. Type the file's path instead.";
+const NO_SHELL: &str = "This image has no shell, so Reacher CM cannot list its files. Type the file's path instead.";
 const NOT_RUNNING_LIST: &str = "The container is not running, so its files cannot be listed. Type a file's path to read it as it was left.";
 
 /// The files' last lines as they are now, one after another, then why they

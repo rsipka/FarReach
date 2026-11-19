@@ -141,7 +141,7 @@ fn choose(offered: &[u8], private_path: bool) -> Result<u8, String> {
              Connect through an SSH session to use it."
             .to_string())
     } else {
-        Err(format!("The server offers no login Reach supports (security types {offered:?})"))
+        Err(format!("The server offers no login Reacher CM supports (security types {offered:?})"))
     }
 }
 
@@ -172,7 +172,7 @@ fn io(e: std::io::Error) -> String {
 }
 
 fn unexpected(what: &str) -> String {
-    format!("This Mac answered the login in a way Reach does not know ({what})")
+    format!("This Mac answered the login in a way Reacher CM does not know ({what})")
 }
 
 // ---------------------------------------------------------------------------
@@ -306,7 +306,7 @@ where
     let mut last = vec![0u8; len as usize];
     stream.read_exact(&mut last).await.map_err(io)?;
     if !server_proof_ok(&last, &proof.m2) {
-        return Err("This Mac could not prove it knows the account. Reach did not finish the login.".to_string());
+        return Err("This Mac could not prove it knows the account. Reacher CM did not finish the login.".to_string());
     }
     security_result(stream).await
 }

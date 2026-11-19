@@ -451,7 +451,7 @@ impl Bitwarden {
                 }
                 RunError::Spawn(e) => format!("{NAME}: could not start the CLI: {}", e.kind()),
                 RunError::Timeout => format!("{NAME}: no answer within {} seconds.", timeout.as_secs()),
-                RunError::TooLarge => format!("{NAME}: the CLI printed more than Reach accepts."),
+                RunError::TooLarge => format!("{NAME}: the CLI printed more than Reacher CM accepts."),
                 RunError::Io(e) => format!("{NAME}: reading the CLI's output failed: {}", e.kind()),
             })
         })?;
