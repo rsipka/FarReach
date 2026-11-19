@@ -104,6 +104,8 @@
 
 html {
   font-family: var(--font-sans);
+  /* No double-tap zoom on a touch screen (pinch is off in app.html). */
+  touch-action: manipulation;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
