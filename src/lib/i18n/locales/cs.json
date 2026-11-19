@@ -2473,7 +2473,7 @@
   "k8s.kc_usual": "Obvykle",
   "k8s.kind": "Druh",
   "k8s.kubeconfig": "Kubeconfig",
-  "k8s.kubeconfig_hint": "Vložte obsah souboru, nebo soubor vyberte. Uloží se šifrovaně ve vašem trezoru a použije se jen pro přístup k tomuto clusteru.",
+  "k8s.kubeconfig_hint": "Vložte obsah kubeconfigu nebo vyberte soubor. Uloží se šifrovaně v trezoru. Reach si vyžádá souhlas před spuštěním programu pro ověření identity nebo předáním přihlašovacích údajů vybraného kontextu vzdálenému Helmu.",
   "k8s.kubeconfig_keep": "Nechte prázdné pro zachování uloženého kubeconfigu",
   "k8s.kubeconfig_keep_hint": "Uložený kubeconfig zůstane, pokud nevložíte nebo nevyberete nový.",
   "k8s.kubeconfig_no_contexts": "Tento kubeconfig nemá žádné kontexty.",

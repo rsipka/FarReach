@@ -2486,7 +2486,7 @@
   "k8s.kc_usual": "通常",
   "k8s.kind": "类型",
   "k8s.kubeconfig": "Kubeconfig",
-  "k8s.kubeconfig_hint": "粘贴文件内容或选择文件。它会加密保存在你的保险库中，仅用于访问此集群。",
+  "k8s.kubeconfig_hint": "粘贴或选择 kubeconfig 文件。该文件会加密保存在保险库中。Reach 会在运行凭据辅助程序或将所选上下文的凭据发送给远程主机上的 Helm 前征求你的同意。",
   "k8s.kubeconfig_keep": "留空以保留已保存的 kubeconfig",
   "k8s.kubeconfig_keep_hint": "除非粘贴或选择新的 kubeconfig，否则保留已保存的。",
   "k8s.kubeconfig_no_contexts": "此 kubeconfig 中没有上下文。",

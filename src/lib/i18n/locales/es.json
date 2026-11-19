@@ -2486,7 +2486,7 @@
   "k8s.kc_usual": "Normalmente",
   "k8s.kind": "Tipo",
   "k8s.kubeconfig": "Kubeconfig",
-  "k8s.kubeconfig_hint": "Pega el contenido del archivo o elige el archivo. Se guarda cifrado en tu bóveda y solo se usa para llegar a este clúster.",
+  "k8s.kubeconfig_hint": "Pega o elige un kubeconfig. Se guarda cifrado en tu bóveda. Reach pide permiso antes de ejecutar un programa de autenticación o compartir las credenciales del contexto seleccionado con Helm en un servidor remoto.",
   "k8s.kubeconfig_keep": "Déjalo vacío para conservar el kubeconfig guardado",
   "k8s.kubeconfig_keep_hint": "Se conserva el kubeconfig guardado salvo que pegues o elijas uno nuevo.",
   "k8s.kubeconfig_no_contexts": "Este kubeconfig no tiene contextos.",

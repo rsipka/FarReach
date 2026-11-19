@@ -2486,7 +2486,7 @@
   "k8s.kc_usual": "Üblicherweise",
   "k8s.kind": "Art",
   "k8s.kubeconfig": "Kubeconfig",
-  "k8s.kubeconfig_hint": "Fügen Sie den Dateiinhalt ein oder wählen Sie die Datei. Sie wird verschlüsselt in Ihrem Tresor gespeichert und nur für diesen Cluster verwendet.",
+  "k8s.kubeconfig_hint": "Kubeconfig einfügen oder auswählen. Sie wird verschlüsselt im Tresor gespeichert. Reach fragt nach, bevor ein Anmeldeprogramm ausgeführt wird oder Helm auf einem entfernten Host die Anmeldedaten des ausgewählten Kontexts erhält.",
   "k8s.kubeconfig_keep": "Leer lassen, um die gespeicherte Kubeconfig zu behalten",
   "k8s.kubeconfig_keep_hint": "Die gespeicherte Kubeconfig bleibt erhalten, sofern Sie keine neue einfügen oder wählen.",
   "k8s.kubeconfig_no_contexts": "Diese Kubeconfig enthält keine Kontexte.",

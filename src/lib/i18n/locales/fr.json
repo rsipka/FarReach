@@ -2486,7 +2486,7 @@
   "k8s.kc_usual": "En général",
   "k8s.kind": "Type",
   "k8s.kubeconfig": "Kubeconfig",
-  "k8s.kubeconfig_hint": "Collez le contenu du fichier ou choisissez le fichier. Il est stocké chiffré dans votre coffre et sert uniquement à joindre ce cluster.",
+  "k8s.kubeconfig_hint": "Collez ou choisissez un kubeconfig. Il est conservé chiffré dans votre coffre. Reach demande votre accord avant de lancer un programme d’authentification ou de transmettre les identifiants du contexte sélectionné à Helm sur un hôte distant.",
   "k8s.kubeconfig_keep": "Laisser vide pour conserver le kubeconfig enregistré",
   "k8s.kubeconfig_keep_hint": "Le kubeconfig enregistré est conservé, sauf si vous en collez ou choisissez un nouveau.",
   "k8s.kubeconfig_no_contexts": "Ce kubeconfig ne contient aucun contexte.",
