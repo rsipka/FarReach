@@ -16,6 +16,7 @@
 	import ReportProblem from './ReportProblem.svelte';
 	import { getSettings, updateSetting, syncTraySettings } from '#lib/state/settings.svelte.js';
 	import { manualUpdateCheck } from '#lib/state/updater.svelte.js';
+	import { openSetupWizard } from '#lib/state/setup-wizard.svelte.js';
 	import { effectiveThreshold, MIN_PASTE_THRESHOLD } from '#lib/terminal/paste.js';
 	import { DEFAULT_WORD_SEPARATORS, rightClickMode } from '#lib/terminal/mouse.js';
 	import { t, changeLocale } from '#lib/state/i18n.svelte.js';
@@ -172,6 +173,19 @@
 			</div>
 		</div>
 	{/if}
+
+	<!-- The first-run questions again, over whatever is open. -->
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.rerun_setup')}</span>
+			<span class="setting-description">{t('settings.rerun_setup_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<button class="discord-link" onclick={openSetupWizard}>
+				<span>{t('settings.rerun_setup_button')}</span>
+			</button>
+		</div>
+	</div>
 
 	{/if}
 

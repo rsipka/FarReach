@@ -2,17 +2,47 @@
 	import Button from '#lib/components/shared/Button.svelte';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { getSettings } from '#lib/state/settings.svelte.js';
+	import { isMobile } from '#lib/platform.js';
 
 	interface Props {
 		onComplete: () => void;
 		onBack: () => void;
+		/** Opened again from Settings: no storage step was shown. */
+		rerun?: boolean;
 	}
 
-	let { onComplete, onBack }: Props = $props();
+	let { onComplete, onBack, rerun = false }: Props = $props();
 
 	const settings = getSettings();
+	const mobile = isMobile();
 	let hasTurso = $derived(!!settings.pendingTursoOrg);
 	let storageLabel = $derived(hasTurso ? t('setup.cloud_sync') : t('setup.local_only'));
+
+	const LOG_LABEL = { off: 'settings.log_off', printable: 'settings.log_printable', all: 'settings.log_all' } as const;
+	const HISTORY_LABEL = { off: 'history.mode_off', commands: 'history.mode_commands', output: 'history.mode_output' } as const;
+
+	/** What the new steps chose, beside language and storage. */
+	let rows = $derived(
+		[
+			{ label: t('settings.language'), value: settings.locale === 'en' ? 'English' : settings.locale, show: true },
+			{
+				label: t('setup.open_with'),
+				value: t(settings.doubleClickToOpen ? 'setup.open_double' : 'setup.open_single'),
+				show: !mobile
+			},
+			{ label: t('settings.log_section'), value: t(LOG_LABEL[settings.sessionLogMode] ?? 'settings.log_off'), show: true },
+			{
+				label: t('history.settings_section'),
+				value: t(HISTORY_LABEL[settings.historyMode] ?? 'history.mode_off'),
+				show: !mobile
+			},
+			{
+				label: t('setup.storage_title'),
+				value: storageLabel + (hasTurso ? ` (${settings.pendingTursoOrg})` : ''),
+				show: !rerun
+			}
+		].filter((r) => r.show)
+	);
 </script>
 
 <div class="step">
@@ -26,23 +56,19 @@
 		</div>
 		<h2 class="step-title">{t('setup.complete_title')}</h2>
 		<p class="step-subtitle">{t('setup.complete_subtitle')}</p>
+		<p class="step-hint">{t('setup.complete_rerun_hint')}</p>
 	</div>
 
 	<div class="summary">
-		<div class="summary-item">
-			<span class="summary-icon">
-				<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13.3 4.7L6.5 11.5L2.7 7.7" stroke="var(--color-success)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-			</span>
-			<span class="summary-label">{t('settings.language')}</span>
-			<span class="summary-value">{settings.locale === 'en' ? 'English' : settings.locale}</span>
-		</div>
-		<div class="summary-item">
-			<span class="summary-icon">
-				<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13.3 4.7L6.5 11.5L2.7 7.7" stroke="var(--color-success)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-			</span>
-			<span class="summary-label">{t('setup.storage_title')}</span>
-			<span class="summary-value">{storageLabel}{hasTurso ? ` (${settings.pendingTursoOrg})` : ''}</span>
-		</div>
+		{#each rows as row (row.label)}
+			<div class="summary-item">
+				<span class="summary-icon">
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13.3 4.7L6.5 11.5L2.7 7.7" stroke="var(--color-success)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+				</span>
+				<span class="summary-label">{row.label}</span>
+				<span class="summary-value">{row.value}</span>
+			</div>
+		{/each}
 	</div>
 
 	<div class="step-actions">
@@ -50,7 +76,7 @@
 			{t('setup.back')}
 		</Button>
 		<Button variant="primary" size="md" onclick={onComplete}>
-			{t('setup.get_started')}
+			{rerun ? t('setup.done') : t('setup.get_started')}
 		</Button>
 	</div>
 </div>
@@ -87,6 +113,12 @@
 		margin: 0;
 		font-size: 0.8125rem;
 		color: var(--color-text-secondary);
+	}
+
+	.step-hint {
+		margin: 0;
+		font-size: var(--text-xs);
+		color: var(--color-text-tertiary);
 	}
 
 	.summary {
