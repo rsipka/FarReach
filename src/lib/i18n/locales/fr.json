@@ -2085,7 +2085,7 @@
   "settings.log_folder_desc": "Où les journaux sont enregistrés. Laissez vide pour le dossier par défaut.",
   "settings.log_browse": "Parcourir",
   "settings.log_name": "Nom du fichier",
-  "settings.log_name_desc": "&H hôte, &P port, &Y année, &M mois, &D jour, &T heure (HHMMSS).",
+  "settings.log_name_desc": "&S nom de la session, &H hôte, &P port, &Y année, &M mois, &D jour, &T heure (HHMMSS).",
   "settings.log_append": "Ajouter à un fichier existant",
   "settings.log_append_desc": "Désactivé, un fichier du même nom est remplacé.",
   "settings.log_header": "Commencer par une ligne de date",

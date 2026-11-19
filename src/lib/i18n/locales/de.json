@@ -2085,7 +2085,7 @@
   "settings.log_folder_desc": "Wo Protokolldateien gespeichert werden. Leer lassen für den Standardordner.",
   "settings.log_browse": "Durchsuchen",
   "settings.log_name": "Dateiname",
-  "settings.log_name_desc": "&H Host, &P Port, &Y Jahr, &M Monat, &D Tag, &T Uhrzeit (HHMMSS).",
+  "settings.log_name_desc": "&S Sitzungsname, &H Host, &P Port, &Y Jahr, &M Monat, &D Tag, &T Uhrzeit (HHMMSS).",
   "settings.log_append": "An bestehende Datei anhängen",
   "settings.log_append_desc": "Wenn aus, wird eine Datei mit gleichem Namen ersetzt.",
   "settings.log_header": "Mit einer Datumszeile beginnen",

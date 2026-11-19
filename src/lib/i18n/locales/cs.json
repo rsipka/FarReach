@@ -2072,7 +2072,7 @@
   "settings.log_folder_desc": "Kam se ukládají soubory logů. Pro výchozí umístění nechte prázdné.",
   "settings.log_browse": "Procházet",
   "settings.log_name": "Název souboru",
-  "settings.log_name_desc": "&H hostitel, &P port, &Y rok, &M měsíc, &D den, &T čas (HHMMSS).",
+  "settings.log_name_desc": "&S název relace, &H hostitel, &P port, &Y rok, &M měsíc, &D den, &T čas (HHMMSS).",
   "settings.log_append": "Přidávat do existujícího souboru",
   "settings.log_append_desc": "Když je vypnuto, soubor se stejným názvem bude nahrazen.",
   "settings.log_header": "Začínat řádkem s datem",

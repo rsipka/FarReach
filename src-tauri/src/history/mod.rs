@@ -146,7 +146,12 @@ pub fn start(stream: &str, cfg: TapConfig) -> Result<TapStatus, String> {
     let log = match &cfg.log {
         Some(l) => {
             let host = if cfg.meta.host.is_empty() { cfg.meta.protocol.as_str() } else { cfg.meta.host.as_str() };
-            Some(crate::ssh::session_log::SessionLog::open(l, host, 0).map_err(|e| format!("Session log: {e}"))?)
+            // `&S` in the name: the tab's session, unless the caller named one.
+            let mut l = l.clone();
+            if l.session.trim().is_empty() {
+                l.session = cfg.meta.name.clone();
+            }
+            Some(crate::ssh::session_log::SessionLog::open(&l, host, 0).map_err(|e| format!("Session log: {e}"))?)
         }
         None => None,
     };

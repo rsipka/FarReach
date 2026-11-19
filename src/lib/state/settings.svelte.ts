@@ -183,6 +183,11 @@ export interface SecureSettings {
 
 const STORAGE_KEY = 'reach-settings';
 
+/** The file name a log gets unless Settings say otherwise: session name, host, date, time. */
+export const DEFAULT_LOG_NAME = '&S-&H-&Y&M&D-&T.log';
+/** The default before `&S` existed; a setting still holding it moves to the new one. */
+const OLD_DEFAULT_LOG_NAME = '&H-&Y&M&D-&T.log';
+
 const defaults: Settings = {
 	theme: 'dark',
 	themeId: undefined,
@@ -209,7 +214,7 @@ const defaults: Settings = {
 	showLoginMessage: true,
 	sessionLogMode: 'off',
 	sessionLogFolder: '',
-	sessionLogName: '&H-&Y&M&D-&T.log',
+	sessionLogName: DEFAULT_LOG_NAME,
 	sessionLogAppend: true,
 	sessionLogHeader: true,
 	historyMode: 'off',
@@ -257,13 +262,17 @@ export function getSettings(): Settings {
 	return settings;
 }
 
-/** The session log to ask `ssh_connect` for, or null when logging is off. */
-export function sessionLogConfig(): SessionLogConfig | null {
+/**
+ * The session log to ask `ssh_connect` for, or null when logging is off.
+ * `session` is the saved session's name, for `&S` in the file name.
+ */
+export function sessionLogConfig(session = ''): SessionLogConfig | null {
 	if (settings.sessionLogMode === 'off') return null;
 	return {
 		mode: settings.sessionLogMode,
 		folder: settings.sessionLogFolder.trim(),
 		name: settings.sessionLogName.trim(),
+		session: session.trim(),
 		append: settings.sessionLogAppend,
 		header: settings.sessionLogHeader
 	};
@@ -324,7 +333,10 @@ export function loadSettings(): void {
 			settings.showLoginMessage = parsed.showLoginMessage ?? defaults.showLoginMessage;
 			settings.sessionLogMode = parsed.sessionLogMode ?? defaults.sessionLogMode;
 			settings.sessionLogFolder = parsed.sessionLogFolder ?? defaults.sessionLogFolder;
-			settings.sessionLogName = parsed.sessionLogName ?? defaults.sessionLogName;
+			settings.sessionLogName =
+				!parsed.sessionLogName || parsed.sessionLogName === OLD_DEFAULT_LOG_NAME
+					? defaults.sessionLogName
+					: parsed.sessionLogName;
 			settings.sessionLogAppend = parsed.sessionLogAppend ?? defaults.sessionLogAppend;
 			settings.sessionLogHeader = parsed.sessionLogHeader ?? defaults.sessionLogHeader;
 			settings.historyMode = parsed.historyMode ?? defaults.historyMode;

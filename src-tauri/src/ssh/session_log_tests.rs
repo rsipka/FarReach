@@ -6,7 +6,7 @@ fn at(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32) -> chrono::DateTime<chro
 }
 
 fn cfg(folder: &Path, mode: LogMode, name: &str, append: bool, header: bool) -> SessionLogConfig {
-    SessionLogConfig { mode, folder: folder.display().to_string(), name: name.into(), append, header }
+    SessionLogConfig { mode, folder: folder.display().to_string(), name: name.into(), session: String::new(), append, header }
 }
 
 /// Waits for the writer thread, which owns the file, to have written `want`.
@@ -51,7 +51,7 @@ fn temp() -> Temp {
 fn putty_manual_example() {
     let now = at(2001, 5, 28, 11, 8, 59);
     assert_eq!(
-        expand_name("log-&h-&y&m&d-&t.dat", "server1.example.com", 22, &now),
+        expand_name("log-&h-&y&m&d-&t.dat", "", "server1.example.com", 22, &now),
         "log-server1.example.com-20010528-110859.dat"
     );
 }
@@ -59,7 +59,7 @@ fn putty_manual_example() {
 #[test]
 fn placeholders_are_case_insensitive_and_port_works() {
     let now = at(2026, 10, 2, 7, 5, 3);
-    assert_eq!(expand_name("&H_&P_&Y-&M-&D_&T", "box", 2222, &now), "box_2222_2026-10-02_070503");
+    assert_eq!(expand_name("&H_&P_&Y-&M-&D_&T", "", "box", 2222, &now), "box_2222_2026-10-02_070503");
 }
 
 /// PuTTY: `&&` is a literal `&`, an unknown `&x` stays as typed, and a
@@ -67,9 +67,9 @@ fn placeholders_are_case_insensitive_and_port_works() {
 #[test]
 fn ampersand_rules_match_putty() {
     let now = at(2026, 1, 1, 0, 0, 0);
-    assert_eq!(expand_name("a&&b", "h", 1, &now), "a&b");
-    assert_eq!(expand_name("a&xb", "h", 1, &now), "a&xb");
-    assert_eq!(expand_name("ab&", "h", 1, &now), "ab");
+    assert_eq!(expand_name("a&&b", "", "h", 1, &now), "a&b");
+    assert_eq!(expand_name("a&xb", "", "h", 1, &now), "a&xb");
+    assert_eq!(expand_name("ab&", "", "h", 1, &now), "ab");
 }
 
 /// What a host inserts can never be a separator or a drive colon: an IPv6
@@ -77,10 +77,10 @@ fn ampersand_rules_match_putty() {
 #[test]
 fn inserted_text_cannot_make_a_path() {
     let now = at(2026, 1, 1, 0, 0, 0);
-    assert_eq!(expand_name("&h.log", "fe80::1", 22, &now), "fe80..1.log");
-    let evil = expand_name("&h.log", "../../etc/passwd", 22, &now);
+    assert_eq!(expand_name("&h.log", "", "fe80::1", 22, &now), "fe80..1.log");
+    let evil = expand_name("&h.log", "", "../../etc/passwd", 22, &now);
     assert!(!evil.contains('/') && !evil.contains('\\'), "{evil}");
-    assert_eq!(expand_name("&h", "C:\\x|y?*<>\"\n", 22, &now), "C..x.y......");
+    assert_eq!(expand_name("&h", "", "C:\\x|y?*<>\"\n", 22, &now), "C..x.y......");
 
     let dir = temp();
     let c = cfg(dir.path(), LogMode::Printable, "&h", true, false);
@@ -110,10 +110,10 @@ fn literal_name_may_have_subfolders_but_not_escape() {
 #[test]
 fn relative_folder_is_refused_and_empty_values_use_defaults() {
     let now = at(2026, 1, 1, 0, 0, 0);
-    let rel = SessionLogConfig { mode: LogMode::All, folder: "logs".into(), name: "x".into(), append: true, header: true };
+    let rel = SessionLogConfig { mode: LogMode::All, folder: "logs".into(), name: "x".into(), session: String::new(), append: true, header: true };
     assert!(resolve_path(&rel, "h", 22, &now).is_err());
 
-    let empty = SessionLogConfig { mode: LogMode::All, folder: String::new(), name: "  ".into(), append: true, header: true };
+    let empty = SessionLogConfig { mode: LogMode::All, folder: String::new(), name: "  ".into(), session: String::new(), append: true, header: true };
     let p = resolve_path(&empty, "h", 22, &now).unwrap();
     assert!(p.starts_with(default_dir()));
     assert_eq!(p.file_name().unwrap(), "h-20260101-000000.log");
@@ -209,10 +209,29 @@ fn new_logs_and_folders_are_private() {
 fn config_from_frontend() {
     let c: SessionLogConfig = serde_json::from_str(r#"{"mode":"printable","name":"&H.log"}"#).unwrap();
     assert_eq!(c.mode, LogMode::Printable);
-    assert!(c.append && c.header && c.folder.is_empty());
+    assert!(c.append && c.header && c.folder.is_empty() && c.session.is_empty());
     let c: SessionLogConfig =
         serde_json::from_str(r#"{"mode":"all","folder":"/x","name":"n","append":false,"header":false}"#).unwrap();
     assert_eq!(c.mode, LogMode::All);
     assert!(!c.append && !c.header);
     assert!(serde_json::from_str::<SessionLogConfig>(r#"{"mode":"packets","name":"n"}"#).is_err());
+}
+
+#[test]
+fn session_name_placeholder() {
+    let now = at(2026, 3, 4, 5, 6, 7);
+    let n = DEFAULT_NAME;
+    assert_eq!(expand_name(n, "web-01", "10.0.0.5", 22, &now), "web-01-10.0.0.5-20260304-050607.log");
+    // No session name (quick connect), or one that is only the host again.
+    assert_eq!(expand_name(n, "", "10.0.0.5", 22, &now), "10.0.0.5-20260304-050607.log");
+    assert_eq!(expand_name(n, "  ", "10.0.0.5", 22, &now), "10.0.0.5-20260304-050607.log");
+    assert_eq!(expand_name(n, "Example.com", "example.com", 22, &now), "example.com-20260304-050607.log");
+    assert_eq!(expand_name("&s_&h", "", "h", 22, &now), "h");
+    assert_eq!(expand_name("&s.log", "", "h", 22, &now), ".log");
+    // A name cannot reach outside the folder or add a drive colon.
+    assert_eq!(expand_name("&S.log", "a/../b: c?", "h", 22, &now), "a....b. c..log");
+    let dir = temp();
+    let mut c = cfg(dir.path(), LogMode::Printable, "&S/&H.log", true, false);
+    c.session = "../../etc".into();
+    assert_eq!(resolve_path(&c, "h", 22, &now).unwrap(), dir.path().join("......etc").join("h.log"));
 }
