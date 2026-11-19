@@ -83,7 +83,7 @@ export async function checkForUpdate(): Promise<boolean> {
 	}
 }
 
-/** Settings > General > Check for updates. Off: nothing is fetched unless
+/** Settings > About > Check for updates. Off: nothing is fetched unless
  *  the user presses Check now. */
 function automaticChecksOn(): boolean {
 	return getSettings().checkForUpdates;
