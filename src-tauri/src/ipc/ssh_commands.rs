@@ -310,6 +310,9 @@ pub async fn ssh_connect(
             crate::ssh::sshconf::session::plan_for(ssh_options.as_ref(), &host, port, &username, false).into();
         // LogLevel/LogVerbose: everything logged while connecting is collected
         // for the terminal, and shown with the error if the connection fails.
+        // A saved session keeps the host keys it trusts, for every hop.
+        let trust = crate::ipc::session_commands::session_trust(&state, session_id.as_deref()).await;
+        target_opts.trust = trust.clone();
         let connlog = target_opts.log.as_ref().map(|(level, verbose)| crate::ssh::connlog::ConnLog::new(level.as_deref(), verbose));
         target_opts.connlog = connlog.clone();
         let span = connlog.as_ref().map_or_else(tracing::Span::none, |l| l.span());
@@ -345,7 +348,8 @@ pub async fn ssh_connect(
                             j.key_passphrase.filter(|p| !p.is_empty()).or(jstored),
                             false,
                         )?;
-                        let opts = crate::ssh::sshconf::session::plan_for(ssh_options.as_ref(), &j.host, j.port, &j.username, true).into();
+                        let mut opts: crate::ssh::client::HopOptions = crate::ssh::sshconf::session::plan_for(ssh_options.as_ref(), &j.host, j.port, &j.username, true).into();
+                        opts.trust = trust.clone();
                         Ok(JumpHostParams {
                             host: j.host,
                             port: j.port,
@@ -460,9 +464,10 @@ pub fn session_log_stop(stream: String) -> bool {
 
 /// The frontend's host-key verification dialog reports the user's decision,
 /// un-parking the SSH handshake that's waiting on `check_server_key`.
+/// `save`: false for Accept once; absent means save, as Accept always did.
 #[tauri::command]
-pub fn ssh_hostkey_response(prompt_id: String, accept: bool) {
-    crate::ssh::client::resolve_hostkey_prompt(&prompt_id, accept);
+pub fn ssh_hostkey_response(prompt_id: String, accept: bool, save: Option<bool>) {
+    crate::ssh::client::resolve_hostkey_prompt(&prompt_id, crate::ssh::session_hostkeys::Answer::from_reply(accept, save));
 }
 
 /// The answer to a login question (password, passphrase, keyboard-interactive,
