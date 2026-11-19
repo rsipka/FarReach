@@ -74,8 +74,9 @@ export async function resume(): Promise<boolean> {
 	return invoke<boolean>('vault_resume');
 }
 
-/** The platform biometric: Windows Hello, Touch ID, or Android's fingerprint. */
-export type PlatformBiometric = 'windows_hello' | 'touch_id' | 'android_biometric';
+/** The platform biometric: Windows Hello, Touch ID, Android's fingerprint,
+ *  or Face ID / Touch ID on iOS. */
+export type PlatformBiometric = 'windows_hello' | 'touch_id' | 'android_biometric' | 'ios_biometric';
 
 /** A device unlock method that is on: the platform biometric, or one security key. */
 export interface UnlockMethod {
@@ -89,6 +90,10 @@ export interface UnlockMethod {
 export interface UnlockMethods {
 	/** The platform biometric this build offers, if any. */
 	platform: PlatformBiometric | null;
+	/** What this device calls it, where that varies (iOS: Face ID, Touch ID). */
+	platform_label?: string | null;
+	/** Key passphrases can be remembered behind the biometric (Android, iOS). */
+	keys_biometric?: boolean;
 	platform_available: boolean;
 	keys_supported: boolean;
 	/** Reach asks for the key's PIN itself (macOS, Linux); Windows asks. */

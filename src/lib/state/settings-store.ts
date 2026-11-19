@@ -186,6 +186,9 @@ export interface Settings {
 	/** Ask for the passphrases of the saved credentials' keys once the vault
 	 *  opens, and keep them in memory until it locks or the app quits. */
 	unlockKeysAtStart: boolean;
+	/** Phones: remember the passphrases typed at start behind Face ID or the
+	 *  fingerprint, so the next start asks for the biometric once. */
+	unlockKeysWithBiometrics: boolean;
 }
 
 export const defaults: Settings = {
@@ -247,7 +250,8 @@ export const defaults: Settings = {
 	devopsTools: [],
 	autoLockMinutes: 0,
 	lockOnSystemLock: false,
-	unlockKeysAtStart: false
+	unlockKeysAtStart: false,
+	unlockKeysWithBiometrics: false
 };
 
 /** Settings held in memory only: never written, so never read back. */
@@ -337,6 +341,7 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.autoLockMinutes = parsed.autoLockMinutes ?? defaults.autoLockMinutes;
 	settings.lockOnSystemLock = parsed.lockOnSystemLock ?? defaults.lockOnSystemLock;
 	settings.unlockKeysAtStart = parsed.unlockKeysAtStart ?? defaults.unlockKeysAtStart;
+	settings.unlockKeysWithBiometrics = parsed.unlockKeysWithBiometrics ?? defaults.unlockKeysWithBiometrics;
 	// Migration: existing users who already have localStorage data get setupComplete: true
 	settings.setupComplete = parsed.setupComplete ?? true;
 	return settings;

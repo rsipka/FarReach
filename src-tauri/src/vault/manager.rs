@@ -878,6 +878,11 @@ impl VaultManager {
         self.held || (self.is_locked() && self.unlockers().is_some())
     }
 
+    /// The app's data folder, where the identity and its files live.
+    pub fn app_dir(&self) -> &std::path::Path {
+        &self.app_dir
+    }
+
     /// This identity's device unlock methods (Windows Hello, security keys),
     /// if any are on. A file left from another identity (after an import)
     /// does not count.

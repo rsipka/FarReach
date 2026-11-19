@@ -403,6 +403,11 @@ kube = { version = "5.1", default-features = false, features = ["webpki-roots"] 
 # finds them.
 [target.'cfg(target_os = "ios")'.dependencies]
 apple-native-keyring-store = { version = "1", features = ["protected"] }
+# Face ID / Touch ID: keychain items readable only after the biometric check
+# (vault/apple_biometric.rs). Both are already in the tree through the
+# keyring store and the macOS build.
+security-framework = "3"
+objc2-local-authentication = { version = "0.3", features = ["LAContext", "LABiometryType"] }
 webpki-root-certs = "1"
 # zlib compiled in. Rust builds a static library on iOS that Xcode links, and
 # the system libz the crate otherwise asks for is not passed on to Xcode, so

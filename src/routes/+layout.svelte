@@ -24,7 +24,8 @@
 	import { startupUpdateCheck, startPeriodicChecks, stopPeriodicChecks } from '#lib/state/updater.svelte.js';
 	import { changeLocale, t } from '#lib/state/i18n.svelte.js';
 	import { loadSnippets } from '#lib/state/snippets.svelte.js';
-	import { vaultState } from '#lib/state/vault.svelte.js';
+	import { biometricName, biometricPrompt, vaultState } from '#lib/state/vault.svelte.js';
+	import { unlockMethods } from '#lib/ipc/vault.js';
 	import * as mcp from '#lib/state/mcp.svelte.js';
 	import * as share from '#lib/state/share.svelte.js';
 	import { unlockCredentialKeys, setKeysUnlockEnabled } from '#lib/ipc/savedCredentials.js';
@@ -143,9 +144,20 @@
 		}
 		if (keysAsked) return;
 		keysAsked = true;
-		unlockCredentialKeys()
-			.then((r) => {
+		const biometric = settings.unlockKeysWithBiometrics
+			? {
+					open: biometricPrompt(t('security.keys_biometric_open')),
+					save: biometricPrompt(t('security.keys_biometric_save'))
+				}
+			: undefined;
+		unlockCredentialKeys(biometric)
+			.then(async (r) => {
 				if (r.unlocked > 0) addToast(t('security.keys_unlocked', { count: r.unlocked }), 'success', 3000);
+				if (r.remembered > 0) {
+					const m = await unlockMethods().catch(() => null);
+					const method = biometricName(m?.platform, m?.platform_label);
+					addToast(t('security.keys_biometric_remembered', { method, count: r.remembered }), 'success', 4000);
+				}
 			})
 			.catch((err) => console.error('Unlocking credential keys failed:', err));
 	});

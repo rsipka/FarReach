@@ -95,6 +95,27 @@ pub(crate) fn remember(material: &str, passphrase: &str) {
     }
 }
 
+/// Every name this key is kept under, as text, for the passphrases kept
+/// behind the device biometric ([`super::biometric_keys`]).
+pub(crate) fn key_ids(material: &str) -> Vec<String> {
+    ids(material).iter().map(|id| base64::Engine::encode(&base64::engine::general_purpose::STANDARD, id)).collect()
+}
+
+/// Keep a passphrase under names from [`key_ids`]: one the device biometric
+/// gave back. Does nothing while the setting is off.
+pub(crate) fn remember_ids(names: &[String], passphrase: &str) {
+    if !enabled() || passphrase.is_empty() {
+        return;
+    }
+    let mut kept = kept().lock().unwrap();
+    for name in names {
+        let id = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, name).ok();
+        if let Some(id) = id.and_then(|b| KeyHash::try_from(b.as_slice()).ok()) {
+            kept.insert(id, Zeroizing::new(passphrase.to_string()));
+        }
+    }
+}
+
 /// The vault locked, the setting went off, or the app is quitting.
 pub fn forget() {
     kept().lock().unwrap().clear();

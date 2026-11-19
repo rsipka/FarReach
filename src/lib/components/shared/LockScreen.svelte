@@ -27,7 +27,7 @@
 
 	const platform = $derived(methods?.methods.find((m) => m.kind !== 'fido2'));
 	const hasBiometric = $derived(!!platform);
-	const method = $derived(biometricName(platform?.kind as UnlockMethods['platform']));
+	const method = $derived(biometricName(platform?.kind as UnlockMethods['platform'], platform?.label));
 	const hasKey = $derived(!!methods?.methods.some((m) => m.kind === 'fido2'));
 	const hasDeviceMethod = $derived(hasBiometric || hasKey);
 	const passwordHint = $derived(
