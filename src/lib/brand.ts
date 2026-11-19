@@ -10,6 +10,11 @@ export const APP_NAME = 'Reacher CM';
 export const REPO_URL = 'https://github.com/rsipka/ReacherCM';
 export const UPSTREAM_URL = 'https://github.com/alexandrosnt/Reach';
 
+/** Linked from Settings > About. */
+export const WEBSITE_URL = 'https://rsipka.github.io/ReacherCM/';
+export const CHANGELOG_URL = `${REPO_URL}/blob/main/CHANGELOG.md`;
+export const LICENSE_URL = `${REPO_URL}/blob/main/LICENSE`;
+
 /**
  * Whether to show the "Join the community" parts: the launch prompt and the
  * Discord row in Settings > General. The Discord is upstream's, and Reacher CM
