@@ -168,6 +168,7 @@
   "terminal.connection_lost": "Connexion perdue",
   "terminal.connection_closed": "Connexion fermée",
   "terminal.session_ended": "Session terminée",
+  "terminal.always_close_tab": "Toujours fermer l’onglet à la fin d’une session",
   "telnet.connecting": "Connexion à {{host}}…",
   "telnet.connect_failed": "Connexion impossible",
   "telnet.closed": "Connexion fermée",

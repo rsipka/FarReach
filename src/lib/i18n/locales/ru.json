@@ -168,6 +168,7 @@
   "terminal.connection_lost": "Соединение потеряно",
   "terminal.connection_closed": "Соединение закрыто",
   "terminal.session_ended": "Сеанс завершён",
+  "terminal.always_close_tab": "Всегда закрывать вкладку по завершении сеанса",
   "telnet.connecting": "Подключение к {{host}}…",
   "telnet.connect_failed": "Не удалось подключиться",
   "telnet.closed": "Соединение закрыто",

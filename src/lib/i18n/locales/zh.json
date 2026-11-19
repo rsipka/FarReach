@@ -168,6 +168,7 @@
   "terminal.connection_lost": "连接已断开",
   "terminal.connection_closed": "连接已关闭",
   "terminal.session_ended": "会话已结束",
+  "terminal.always_close_tab": "会话结束时始终关闭标签页",
   "telnet.connecting": "正在连接 {{host}}…",
   "telnet.connect_failed": "无法连接",
   "telnet.closed": "连接已关闭",
