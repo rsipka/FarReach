@@ -783,6 +783,30 @@
 		return { width: even(r.width || 1024), height: even(r.height || 768) };
 	}
 
+	/** Whether the current RDP attempt asked for the graphics pipeline, and at what size. */
+	let graphicsPipeline = false;
+	let connectSize = { width: 0, height: 0 };
+
+	/**
+	 * GNOME Remote Desktop serves only clients that offer the graphics
+	 * pipeline. Without it the server hangs up during the capabilities
+	 * exchange with a bare Disconnect Provider Ultimatum, which reaches us as
+	 * a decode error before the session ever connected. When that happens on
+	 * an attempt made without the pipeline, try once more with it; Windows
+	 * and xrdp never get here, so the setting keeps its meaning for them.
+	 * Returns true when a retry was started.
+	 */
+	function retryWithGraphicsPipeline(error: string): boolean {
+		if (isVnc() || graphicsPipeline || phase !== 'connecting') return false;
+		if (!/disconnect provider ultimatum/i.test(error)) return false;
+		graphicsPipeline = true;
+		rdpConnect({ ...(params as RdpConnectParams), ...connectSize, graphicsPipeline: true }, paint).catch((err) => {
+			phase = 'error';
+			message = String(err);
+		});
+		return true;
+	}
+
 	onMount(async () => {
 		const size = fitSize();
 
@@ -799,6 +823,7 @@
 				held.clear();
 				heldKeysyms.clear();
 			} else if (s.state === 'error') {
+				if (retryWithGraphicsPipeline(s.message)) return;
 				phase = 'error';
 				message = s.message;
 			}
@@ -811,7 +836,9 @@
 				// asks for its own size once connected, which some servers allow.
 				await vncConnect(params as VncConnectParams, paint);
 			} else {
-				await rdpConnect({ ...(params as RdpConnectParams), ...size, graphicsPipeline: getSettings().rdpGraphicsPipeline }, paint);
+				graphicsPipeline = getSettings().rdpGraphicsPipeline;
+				connectSize = size;
+				await rdpConnect({ ...(params as RdpConnectParams), ...size, graphicsPipeline }, paint);
 			}
 		} catch (err) {
 			phase = 'error';

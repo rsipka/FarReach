@@ -186,6 +186,11 @@ pub struct Flow {
     pub(crate) notify: Notify,
     /// A new canvas is listening: send it the whole picture next.
     refresh: std::sync::atomic::AtomicBool,
+    /// The session has reported its end (failed or closed). Set before the
+    /// webview hears of it, so a connect that answers the news — a retry —
+    /// starts a new session instead of re-attaching to the one that is
+    /// still winding down its thread.
+    ended: std::sync::atomic::AtomicBool,
 }
 
 impl Flow {
@@ -194,6 +199,7 @@ impl Flow {
             in_flight: AtomicU32::new(0),
             notify: Notify::new(),
             refresh: std::sync::atomic::AtomicBool::new(false),
+            ended: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -203,6 +209,10 @@ impl Flow {
         self.in_flight.store(0, Ordering::Release);
         self.refresh.store(true, Ordering::Release);
         self.notify.notify_one();
+    }
+
+    pub(crate) fn has_ended(&self) -> bool {
+        self.ended.load(Ordering::Acquire)
     }
 
     pub(crate) fn take_refresh(&self) -> bool {
@@ -263,7 +273,7 @@ impl RdpManager {
     /// Whether a desktop is open under `id` and still running: a connect for
     /// it only re-attaches the panel.
     pub fn running(&self, id: &str) -> bool {
-        self.open.get(id).is_some_and(|o| !o.session.is_finished())
+        self.open.get(id).is_some_and(|o| !o.session.is_finished() && !o.flow.has_ended())
     }
 
     /// Open a desktop and start streaming it to `frames`.
@@ -283,7 +293,7 @@ impl RdpManager {
         // was left and returned to. The session is still running; give it the
         // new channel and the whole picture, and say it is connected.
         if let Some(open) = self.open.get(&id) {
-            if !open.session.is_finished() {
+            if !open.session.is_finished() && !open.flow.has_ended() {
                 tracing::info!("RDP {id}: panel re-attached to the running session");
                 *open.frames.lock().unwrap_or_else(|e| e.into_inner()) = frames;
                 open.flow.reattached();
@@ -667,6 +677,9 @@ async fn pump_output(
     flow: Arc<Flow>,
 ) {
     let status = |s: RdpStatus| {
+        if matches!(s, RdpStatus::Error { .. } | RdpStatus::Closed { .. }) {
+            flow.ended.store(true, Ordering::Release);
+        }
         let _ = app.emit(&format!("rdp-status-{id}"), s);
     };
 
