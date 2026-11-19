@@ -1359,21 +1359,25 @@ pub async fn db_redis_command(
         (None, Some(l)) => rds::split_args(&l)?,
         (None, None) => return Err("Type a command".into()),
     };
-    let risk = rds::classify(&args);
-    if r.config.read_only && !matches!(risk, Risk::Read) {
-        return Err("This connection is read-only".into());
+    if args.is_empty() {
+        return Err("Type a command".into());
     }
-    if !confirmed {
-        let hold = match &risk {
-            Risk::Danger(reason) => Some(reason.clone()),
-            Risk::Write if r.config.production => Some("This is a production connection".into()),
-            _ => None,
-        };
-        if let Some(reason) = hold {
-            return Ok(RedisOutcome::Confirm { reason });
-        }
+    if let Some(reason) = redis_gate(&r.config, &args, confirmed)? {
+        return Ok(RedisOutcome::Confirm { reason });
     }
     Ok(RedisOutcome::Done { reply: r.command(db, &args).await? })
+}
+
+fn redis_gate(config: &DbConnection, args: &[String], confirmed: bool) -> Result<Option<String>, String> {
+    let risk = rds::classify(args);
+    if config.read_only && !matches!(risk, Risk::Read) {
+        return Err("This connection is read-only".into());
+    }
+    Ok(match risk {
+        Risk::Danger(reason) if !confirmed => Some(reason),
+        Risk::Write if config.production && !confirmed => Some("This is a production connection".into()),
+        _ => None,
+    })
 }
 
 /// Redis INFO: each section's name with its key/value pairs.
@@ -1399,6 +1403,22 @@ mod tests {
             id: "c".into(), name: "c".into(), engine: Engine::Postgres, host: String::new(), port: 0,
             username: String::new(), password: None, password_ref: None, route_approval: None, route_context: None, database: None, file_path: None, route: Route::Direct,
             tls: TlsMode::Prefer, color: None, read_only, production, last_used_at: 0,
+        }
+    }
+
+    #[test]
+    fn redis_policy_checks_read_only_and_confirmation_before_dispatch() {
+        for (line, read, dangerous) in [
+            ("CLIENT LIST", true, false), ("SLOWLOG GET", true, false), ("COMMAND", true, false),
+            ("sLoWlOg ReSeT", false, true), ("CLIENT PAUSE 100", false, true), ("MEMORY PURGE", false, true),
+            ("CLIENT SETNAME editor", false, false), ("OBJECT future-option", false, false), ("SET key value", false, false),
+        ] {
+            let args = rds::split_args(line).unwrap();
+            for confirmed in [false, true] {
+                assert_eq!(redis_gate(&conn(true, false), &args, confirmed).is_ok(), read, "{line}");
+                assert_eq!(redis_gate(&conn(false, true), &args, confirmed).unwrap().is_some(), !read && !confirmed, "{line}");
+                assert_eq!(redis_gate(&conn(false, false), &args, confirmed).unwrap().is_some(), dangerous && !confirmed, "{line}");
+            }
         }
     }
 
