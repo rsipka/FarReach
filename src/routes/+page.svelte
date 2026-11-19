@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { takeTmuxTitle } from '#lib/terminal/tmux-tabs.js';
 	import { getTabs, getActiveTab, updateTabTitle, updateTabConnection, setTelnetConnection, setSerialConnection, createTab, activateTab, getSplit, setSplitRatio, getDraggedTab, setDraggedTab, splitWith, unsplit } from '#lib/state/tabs.svelte.js';
-	import { paneOf, paneStyle, dividerStyle, dropZone, neighbour, type Direction } from '#lib/terminal/split.js';
+	import { paneOf, paneStyle, dividerStyle, dropZone, neighbour, SPLIT_MIN_WIDTH, type Direction } from '#lib/terminal/split.js';
 	import { getActivePage } from '#lib/state/navigation.svelte.js';
 	import { isDevopsEnabled } from '#lib/state/devops.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -72,8 +72,6 @@
 	// Two tabs side by side (#106); the rules are in #lib/terminal/split.
 	let areaEl = $state<HTMLDivElement>();
 	let innerWidth = $state(1200);
-	/** Below this width only the focused pane is shown; the split comes back with the room. */
-	const SPLIT_MIN_WIDTH = 900;
 	let split = $derived(getSplit());
 	let shownSplit = $derived(
 		split && innerWidth >= SPLIT_MIN_WIDTH && tabs.some((x) => x.id === split.first) && tabs.some((x) => x.id === split.second) ? split : null

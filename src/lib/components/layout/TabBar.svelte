@@ -9,6 +9,10 @@
 	import { sshTmuxKill, sshTmuxList, sshTmuxWindows, sshTmuxWindow, type TmuxListed, type TmuxWindow, type TmuxWindowOp } from '#lib/ipc/ssh.js';
 	import { validTmuxName, newViewTag } from '#lib/terminal/tmux.js';
 	import { newTab, isTmuxViewTab, openTmuxWindowTab } from '#lib/terminal/tmux-tabs.js';
+	import { SPLIT_MIN_WIDTH } from '#lib/terminal/split.js';
+	import { isMobile } from '#lib/platform.js';
+	import { getSettings } from '#lib/state/settings.svelte.js';
+	import { shortcutLabel } from '#lib/state/shortcuts.svelte.js';
 	import {
 		getBroadcastTargets, isTerminalTab, toggleBroadcastTarget, broadcastToAll, stopBroadcast
 	} from '#lib/state/broadcast.svelte.js';
@@ -81,6 +85,13 @@
 		return items;
 	}
 
+	// A phone or tablet has no local shell: no + (it opened one), and a split
+	// needs a second open tab instead of a new local terminal.
+	const mobile = isMobile();
+	let newTabTip = $derived(
+		`${getSettings().tmuxNewTabWindow && isTmuxViewTab(activeTab) ? t('tmux.window_new_tab') : t('tabs.new_local')} (${shortcutLabel('T', { ctrl: true })})`
+	);
+
 	function handleNewTab(): void {
 		newTab();
 	}
@@ -134,15 +145,18 @@
 	}
 
 	function menuItems(id: string): MenuItem[] {
-		const items: MenuItem[] = [
-			{ label: t('split.right'), hint: `${mod}E`, disabled: tabs.length < 2 && id !== activeTab?.id, action: () => splitWith(id, 'right') },
-			{ label: t('split.down'), hint: `${mod}O`, disabled: tabs.length < 2 && id !== activeTab?.id, action: () => splitWith(id, 'down') }
+		// On a phone or tablet: nothing to split on a phone's narrow screen, and
+		// no local terminal to pair a lone tab with.
+		const noSplit = tabs.length < 2 && (mobile || id !== activeTab?.id);
+		const items: MenuItem[] = mobile && window.innerWidth < SPLIT_MIN_WIDTH ? [] : [
+			{ label: t('split.right'), hint: `${mod}E`, disabled: noSplit, action: () => splitWith(id, 'right') },
+			{ label: t('split.down'), hint: `${mod}O`, disabled: noSplit, action: () => splitWith(id, 'down') }
 		];
 		if (split) items.push({ label: t('split.unsplit'), hint: `${mod}U`, action: unsplit });
 
 		// Groups: a new one, any other there is, or out of the one it is in.
 		const tab = tabs.find((x) => x.id === id);
-		items.push({ label: '', separator: true }, { label: t('tabs.group_new'), icon: GROUP_ICON, action: () => startGroupFrom(id) });
+		items.push(...(items.length ? [{ label: '', separator: true }] : []), { label: t('tabs.group_new'), icon: GROUP_ICON, action: () => startGroupFrom(id) });
 		for (const g of groups) {
 			if (g.id === tab?.groupId) continue;
 			items.push({ label: t('tabs.group_add', { name: g.name }), icon: DOT_ICON, iconColor: groupColor(g.color), action: () => addToGroup(id, g.id) });
@@ -534,11 +548,13 @@
 			{/each}
 		</div>
 
-		<button class="new-tab-btn" onclick={handleNewTab} aria-label={t('common.new_tab')}>
-			<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-				<path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-			</svg>
-		</button>
+		{#if !mobile}
+			<button class="new-tab-btn" onclick={handleNewTab} title={newTabTip} aria-label={newTabTip}>
+				<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+					<path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+				</svg>
+			</button>
+		{/if}
 	{/if}
 </nav>
 
