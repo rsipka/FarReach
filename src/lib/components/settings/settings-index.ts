@@ -100,6 +100,7 @@ export const SETTINGS_INDEX: IndexedRow[] = [
 	{ page: 'security', label: 'security.auto_lock', desc: 'security.auto_lock_desc', words: 'timeout lock' },
 	{ page: 'security', label: 'security.lock_on_system_lock', desc: 'security.lock_on_system_lock_desc' },
 	{ page: 'security', label: 'security.unlock_keys_at_start', desc: 'security.unlock_keys_at_start_desc' },
+	{ page: 'security', label: 'security.host_keys_remove_all', desc: 'security.host_keys_remove_all_desc', words: 'known hosts fingerprint server key' },
 	{ page: 'security', label: 'security.biometric', words: 'face id touch id fingerprint windows hello' },
 	{ page: 'security', label: 'security.keys', words: 'yubikey fido security key' },
 	{ page: 'sharing', label: 'sharing.enable', desc: 'sharing.enable_desc', words: 'share session collaborate' },

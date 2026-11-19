@@ -356,13 +356,15 @@ async fn ssh_for_route_pinned(
             // operation: a password manager passphrase that must be asked
             // for is asked once (or not at all, inside a connect that already
             // has it).
+            let trust = Some(crate::ssh::session_hostkeys::SessionTrust::new(s.id.clone(), s.host_keys.clone().unwrap_or_default()));
             let reason = crate::pwmanager::Reason::Connect(s.name.clone());
             let (auth, jumps, proxy) = crate::pwmanager::with_prompt(app, reason, async {
                 let who = LoginFor { app, host: &s.host, port: s.port, username: &s.username };
                 let auth = auth_for(state, &s.auth_method, s.try_agent_keys.unwrap_or(false), who).await?;
                 let mut jumps = Vec::new();
                 for j in s.jump_chain.clone().unwrap_or_default() {
-                    let opts = crate::ssh::sshconf::session::plan_for(s.ssh_options.as_ref(), &j.host, j.port, &j.username, true).into();
+                    let mut opts: crate::ssh::client::HopOptions = crate::ssh::sshconf::session::plan_for(s.ssh_options.as_ref(), &j.host, j.port, &j.username, true).into();
+                    opts.trust = trust.clone();
                     let who = LoginFor { app, host: &j.host, port: j.port, username: &j.username };
                     let auth = auth_for(state, &j.auth_method, false, who).await?;
                     jumps.push(JumpHostParams { auth, host: j.host, port: j.port, username: j.username, opts });
@@ -375,7 +377,8 @@ async fn ssh_for_route_pinned(
                 Ok::<_, String>((auth, jumps, proxy))
             })
             .await?;
-            let opts = crate::ssh::sshconf::session::plan_for(s.ssh_options.as_ref(), &s.host, s.port, &s.username, false).into();
+            let mut opts: crate::ssh::client::HopOptions = crate::ssh::sshconf::session::plan_for(s.ssh_options.as_ref(), &s.host, s.port, &s.username, false).into();
+            opts.trust = trust;
             let ssh = SshManager::open_headless(&s.host, s.port, &s.username, auth, jumps, proxy, app.clone(), opts)
                 .await
                 .map_err(|e| format!("SSH to {}: {e}", s.name))?;

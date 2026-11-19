@@ -13,6 +13,7 @@
 
 	let unlisten: UnlistenFn | undefined;
 	let unlistenClosed: UnlistenFn | undefined;
+	let unlistenSaved: UnlistenFn | undefined;
 	onMount(async () => {
 		unlisten = await listen<HostKeyPrompt>('ssh-hostkey-prompt', (e) => {
 			queue = [...queue, e.payload];
@@ -22,18 +23,26 @@
 		unlistenClosed = await listen<string>('ssh-hostkey-prompt-closed', (e) => {
 			queue = queue.filter((p) => p.promptId !== e.payload);
 		});
+		// Accept and save wrote the key onto its session: the lists and an
+		// open editor show it.
+		unlistenSaved = await listen<string>('session-host-keys-changed', (e) => {
+			window.dispatchEvent(new CustomEvent('reach:sessions-changed', { detail: { hostKeys: e.payload } }));
+		});
 	});
 	onDestroy(() => {
 		unlisten?.();
 		unlistenClosed?.();
+		unlistenSaved?.();
 	});
 
-	async function respond(accept: boolean): Promise<void> {
+	/** Don't connect (`accept` false), Accept once (`save` false) or
+	 *  Accept and save. */
+	async function respond(accept: boolean, save = false): Promise<void> {
 		const p = current;
 		if (!p) return;
 		queue = queue.slice(1);
 		try {
-			await sshHostkeyResponse(p.promptId, accept);
+			await sshHostkeyResponse(p.promptId, accept, save);
 		} catch (err) {
 			console.error('Host-key response failed:', err);
 		}
@@ -73,11 +82,13 @@
 		{#if current.dnsMatch != null}
 			<p class="msg dns">{t(current.dnsMatch ? 'hostkey.dns_match' : 'hostkey.dns_nomatch')}</p>
 		{/if}
+		<p class="msg where">{t(current.saveTo === 'session' ? 'hostkey.save_to_session' : 'hostkey.save_to_device')}</p>
 
 		{#snippet actions()}
 			<Button variant="secondary" onclick={() => respond(false)}>{t('hostkey.reject')}</Button>
-			<Button variant={current.changed ? 'danger' : 'primary'} onclick={() => respond(true)}>
-				{t('hostkey.accept')}
+			<Button variant="secondary" onclick={() => respond(true, false)}>{t('hostkey.accept_once')}</Button>
+			<Button variant={current.changed ? 'danger' : 'primary'} onclick={() => respond(true, true)}>
+				{t('hostkey.accept_save')}
 			</Button>
 		{/snippet}
 	</Modal>
@@ -86,6 +97,12 @@
 <style>
 	.dns {
 		margin-top: var(--space-3, 12px);
+	}
+
+	.where {
+		margin: var(--space-3, 12px) 0 0;
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
 	}
 
 	.randomart {

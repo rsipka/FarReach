@@ -102,6 +102,22 @@ export interface SessionConfig {
   /** Start its terminals in tmux on the server; unset: as its folder says
    *  (see #lib/terminal/tmux). */
   tmux?: TmuxSetting | null;
+  /** The server keys it trusts, one per server it goes through. Read
+   *  only: saved by connecting (Accept and save) and changed with
+   *  sessionHostKeyRemove / sessionHostKeyReplace; a save keeps them. */
+  host_keys?: SavedHostKey[] | null;
+}
+
+/** A server key a session trusts. */
+export interface SavedHostKey {
+  /** The server as reached, `host:port` (a jump host's own). */
+  host: string;
+  /** Empty or absent when typed in by hand. */
+  key_type?: string;
+  /** `SHA256:` and base64. */
+  fingerprint: string;
+  /** Seconds since 1970. */
+  saved_at?: number | null;
 }
 
 /** A session's own tmux choice. */
@@ -363,6 +379,31 @@ export async function sessionDelete(sessionId: string): Promise<void> {
  *  Only the folder changes; returns how many moved. */
 export async function sessionMoveToFolder(sessionIds: string[], folderId: string | null): Promise<number> {
   return invoke<number>('session_move_to_folder', { sessionIds, folderId });
+}
+
+/** Remove a session's key for one server (`host:port`), or all of them
+ *  when `host` is null; the next connect asks again. Returns the keys left. */
+export async function sessionHostKeyRemove(sessionId: string, host: string | null): Promise<SavedHostKey[]> {
+  return invoke<SavedHostKey[]>('session_host_key_remove', { sessionId, host });
+}
+
+/** Trust this fingerprint (as `ssh-keygen -lf` prints it) for one server
+ *  of a session instead of the one saved. Returns the keys now kept. */
+export async function sessionHostKeyReplace(sessionId: string, host: string, fingerprint: string): Promise<SavedHostKey[]> {
+  return invoke<SavedHostKey[]>('session_host_key_replace', { sessionId, host, fingerprint });
+}
+
+/** What hostKeysRemoveAll did. */
+export interface HostKeysCleared {
+  sessions: number;
+  failed: number;
+  device: number;
+}
+
+/** Remove every saved host key: from all sessions (shared vaults too) and
+ *  from this device's own list. */
+export async function hostKeysRemoveAll(): Promise<HostKeysCleared> {
+  return invoke<HostKeysCleared>('host_keys_remove_all');
 }
 
 /** Mark sessions as favorites (or not) in one call. Only that flag

@@ -186,6 +186,12 @@ pub struct SessionConfig {
     /// see `ipc::saved_credential_commands`.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub credential_ref_approvals: std::collections::BTreeMap<String, Vec<String>>,
+    /// The server keys this session trusts, one per server it goes through
+    /// (see `ssh::session_hostkeys`). Kept on the session so it syncs and is
+    /// shared with it. Changed only by connecting (Accept and save) and the
+    /// `session_host_key_*` commands; an editor's save keeps the stored ones.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_keys: Option<Vec<crate::ssh::session_hostkeys::SavedHostKey>>,
 }
 
 /// One named value of a session's documentation.
