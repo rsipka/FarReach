@@ -1,3 +1,7 @@
+import { invalidateProjectRequests } from '#lib/ipc/devops-projects.js';
+import { forgetProjects as forgetAnsibleProjects } from './ansible.svelte';
+import { forgetProjects as forgetTofuProjects } from './tofu.svelte';
+
 import { APP_NAME } from '#lib/brand.js';
 import { SvelteMap } from 'svelte/reactivity';
 import * as vaultIpc from '#lib/ipc/vault.js';
@@ -14,6 +18,12 @@ import type {
 	AppSettings,
 	BackupPreview
 } from '#lib/ipc/vault.js';
+
+function forgetDevOpsProjects(): void {
+	invalidateProjectRequests();
+	forgetAnsibleProjects();
+	forgetTofuProjects();
+}
 
 // Re-export types
 export type {
@@ -139,6 +149,7 @@ export function getPublicKey(): string | null {
 
 export async function initIdentity(password: string): Promise<string> {
 	const uuid = await vaultIpc.initIdentity(password);
+	forgetDevOpsProjects();
 	vaultState.userUuid = uuid;
 	vaultState.locked = false;
 	vaultState.hasIdentity = true;
@@ -181,6 +192,7 @@ export async function exportIdentity(): Promise<string> {
 /** Import identity from backup (new device). */
 export async function importIdentity(secretKey: string): Promise<string> {
 	const uuid = await vaultIpc.importIdentity(secretKey);
+	forgetDevOpsProjects();
 	vaultState.locked = false;
 	vaultState.hasIdentity = true;
 	vaultState.userUuid = uuid;
@@ -192,6 +204,7 @@ export async function importIdentity(secretKey: string): Promise<string> {
 /** Make this device another device of the identity in a link code. */
 export async function linkDevice(code: string): Promise<string> {
 	const uuid = await vaultIpc.linkDevice(code);
+	forgetDevOpsProjects();
 	vaultState.locked = false;
 	vaultState.hasIdentity = true;
 	vaultState.userUuid = uuid;
@@ -203,6 +216,7 @@ export async function linkDevice(code: string): Promise<string> {
 
 export async function lock(): Promise<void> {
 	await vaultIpc.lock();
+	forgetDevOpsProjects();
 	vaultState.locked = true;
 	vaultState.held = true;
 	vaultState.secrets.clear();
@@ -253,6 +267,7 @@ export async function checkState(): Promise<void> {
 	vaultState.hasIdentity = await vaultIpc.hasIdentity();
 	vaultState.locked = await vaultIpc.isLocked();
 	vaultState.held = await vaultIpc.isHeld();
+	if (vaultState.locked || vaultState.held) forgetDevOpsProjects();
 	vaultState.keychainError = false;
 
 	// TLS-style: auto-unlock using OS keychain if identity exists, unless the
@@ -514,6 +529,7 @@ export async function previewBackup(filePath: string, exportPassword: string): P
 /** Import a full encrypted backup. Resets local state and restores. */
 export async function importBackup(filePath: string, exportPassword: string, masterPassword: string): Promise<string> {
 	const uuid = await vaultIpc.importBackup(filePath, exportPassword, masterPassword);
+	forgetDevOpsProjects();
 	// The backup's font, language, shell and tray choices, at the next unlock.
 	markSettingsRestorePending();
 	// Re-check state after import

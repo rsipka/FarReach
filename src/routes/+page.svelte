@@ -22,6 +22,7 @@
 	import RemoteTerminal from '#lib/components/share/RemoteTerminal.svelte';
 	import * as share from '#lib/state/share.svelte.js';
 	import { monitorBarShown, monitoringWanted } from '#lib/state/monitor-bar.svelte.js';
+	import { vaultState } from '#lib/state/vault.svelte.js';
 	import AnsiblePage from '#lib/components/ansible/AnsiblePage.svelte';
 	import TofuPage from '#lib/components/tofu/TofuPage.svelte';
 	import DbPage from '#lib/components/db/DbPage.svelte';
@@ -478,10 +479,10 @@
 			</div>
 		{/if}
 
-		{#if activePage === 'ansible' && isDevopsEnabled('ansible')}
-			<AnsiblePage />
-		{:else if activePage === 'tofu' && isDevopsEnabled('tofu')}
-			<TofuPage />
+		{#if activePage === 'ansible' && isDevopsEnabled('ansible') && !vaultState.locked}
+			{#key vaultState.userUuid}<AnsiblePage />{/key}
+		{:else if activePage === 'tofu' && isDevopsEnabled('tofu') && !vaultState.locked}
+			{#key vaultState.userUuid}<TofuPage />{/key}
 		{/if}
 	</div>
 {/if}
