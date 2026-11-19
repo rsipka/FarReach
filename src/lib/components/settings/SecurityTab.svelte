@@ -19,6 +19,7 @@
 		unlockMethods,
 		type UnlockMethods
 	} from '#lib/ipc/vault.js';
+	import { forgetBiometricKeys } from '#lib/ipc/savedCredentials.js';
 
 	const settings = getSettings();
 	const autoLockOptions = $derived([
@@ -45,7 +46,19 @@
 	let keyLabel = $state('');
 	let keyPin = $state('');
 	const biometric = $derived(methods?.methods.find((m) => m.kind !== 'fido2'));
-	const method = $derived(biometricName(methods?.platform));
+	const method = $derived(biometricName(methods?.platform, methods?.platform_label));
+
+	// Off forgets the passphrases remembered behind the biometric; so does
+	// turning off unlocking at start, which is what fills them.
+	function setKeysBiometric(on: boolean) {
+		updateSetting('unlockKeysWithBiometrics', on);
+		if (!on) void forgetBiometricKeys().catch(() => {});
+	}
+
+	function setUnlockKeysAtStart(on: boolean) {
+		updateSetting('unlockKeysAtStart', on);
+		if (!on && settings.unlockKeysWithBiometrics) setKeysBiometric(false);
+	}
 	const keys = $derived(methods?.methods.filter((m) => m.kind === 'fido2') ?? []);
 	const biometricNote = $derived.by(() => {
 		if (!methods?.platform_available) return t('security.biometric_unavailable', { method });
@@ -279,10 +292,32 @@
 				hideLabel
 				checked={settings.unlockKeysAtStart}
 				label={t('security.unlock_keys_at_start')}
-				onchange={(checked) => updateSetting('unlockKeysAtStart', checked)}
+				onchange={setUnlockKeysAtStart}
 			/>
 		</div>
 	</div>
+
+	{#if methods?.keys_biometric}
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('security.keys_biometric', { method })}</span>
+				<span class="setting-description">
+					{settings.unlockKeysAtStart
+						? t('security.keys_biometric_desc', { method })
+						: t('security.keys_biometric_needs_start')}
+				</span>
+			</div>
+			<div class="setting-control">
+				<Toggle
+					hideLabel
+					checked={settings.unlockKeysAtStart && settings.unlockKeysWithBiometrics}
+					label={t('security.keys_biometric', { method })}
+					disabled={!settings.unlockKeysAtStart}
+					onchange={setKeysBiometric}
+				/>
+			</div>
+		</div>
+	{/if}
 
 	<div class="setting-row">
 		<div class="setting-info">

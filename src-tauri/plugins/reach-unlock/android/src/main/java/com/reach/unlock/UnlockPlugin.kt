@@ -167,6 +167,18 @@ class UnlockPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
+    /** Whether the fingerprint key under this alias is still there. */
+    @Command
+    fun biometricHasKey(invoke: Invoke) {
+        val args = invoke.parseArgs(AliasArgs::class.java)
+        val present = try {
+            keyStore().containsAlias(args.alias)
+        } catch (_: Exception) {
+            false
+        }
+        invoke.resolve(JSObject().apply { put("present", present) })
+    }
+
     @Command
     fun biometricForget(invoke: Invoke) {
         val args = invoke.parseArgs(AliasArgs::class.java)

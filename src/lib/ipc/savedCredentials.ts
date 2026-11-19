@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { AuthMethod } from './sessions';
+import type { PromptText } from './vault';
 
 /** A login kept once and used by many sessions in the same vault. */
 export interface SavedCredential {
@@ -53,13 +54,29 @@ export function credentialsFor(all: SavedCredential[], vaultId: string | null | 
 export interface KeysUnlocked {
   unlocked: number;
   skipped: number;
+  /** Of `unlocked`, opened by passphrases remembered behind the biometric. */
+  by_biometric: number;
+  /** Passphrases newly remembered behind the biometric. */
+  remembered: number;
+}
+
+/** Remember key passphrases behind the phone's biometric: Android's prompt
+ *  texts for opening and for remembering (iOS words its own). */
+export interface KeysBiometric {
+  open: PromptText;
+  save: PromptText;
 }
 
 /** Ask for the passphrase of every passphrase-protected key the saved
  *  credentials use (Settings → Security). The questions arrive through the
  *  login prompt dialog; the passphrases stay in the backend's memory. */
-export async function unlockCredentialKeys(): Promise<KeysUnlocked> {
-  return invoke<KeysUnlocked>('credential_keys_unlock');
+export async function unlockCredentialKeys(biometric?: KeysBiometric): Promise<KeysUnlocked> {
+  return invoke<KeysUnlocked>('credential_keys_unlock', { biometric: biometric ?? null });
+}
+
+/** Forget the key passphrases remembered behind the biometric. */
+export async function forgetBiometricKeys(): Promise<void> {
+  return invoke('credential_keys_biometric_forget');
 }
 
 /** Tell the backend the setting: off forgets every passphrase kept. */

@@ -80,7 +80,8 @@ const CHANGED = {
 	devopsTools: ['ansible'],
 	autoLockMinutes: 15,
 	lockOnSystemLock: true,
-	unlockKeysAtStart: true
+	unlockKeysAtStart: true,
+	unlockKeysWithBiometrics: true
 };
 
 const restart = (s) => readStoredSettings(JSON.parse(storeSettings(s)));

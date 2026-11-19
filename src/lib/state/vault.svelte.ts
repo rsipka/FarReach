@@ -234,8 +234,10 @@ export function biometricPrompt(title: string): vaultIpc.PromptText {
 }
 
 /** What people call a platform biometric. */
-export function biometricName(kind: vaultIpc.PlatformBiometric | null | undefined): string {
+export function biometricName(kind: vaultIpc.PlatformBiometric | null | undefined, label?: string | null): string {
 	switch (kind) {
+		case 'ios_biometric':
+			return label || 'Face ID';
 		case 'windows_hello':
 			return 'Windows Hello';
 		case 'touch_id':

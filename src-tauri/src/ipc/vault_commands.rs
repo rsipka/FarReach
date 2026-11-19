@@ -99,6 +99,11 @@ pub async fn vault_resume(state: State<'_, AppState>) -> Result<bool, String> {
 pub struct UnlockMethods {
     /// The platform biometric this build offers, if any.
     platform: Option<&'static str>,
+    /// What this device calls it, where that varies (iOS: Face ID, Touch ID).
+    platform_label: Option<&'static str>,
+    /// Key passphrases can be kept behind the platform biometric (Android,
+    /// iOS; `ssh::biometric_keys`).
+    keys_biometric: bool,
     platform_available: bool,
     keys_supported: bool,
     /// Reach asks for the key's PIN itself (macOS, Linux, Android); Windows asks.
@@ -110,10 +115,10 @@ pub struct UnlockMethods {
 /// desktop prompts are the system's own and ignore it.
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct PromptText {
-    title: String,
+    pub(crate) title: String,
     #[serde(default)]
-    subtitle: Option<String>,
-    cancel: String,
+    pub(crate) subtitle: Option<String>,
+    pub(crate) cancel: String,
 }
 
 impl Default for PromptText {
@@ -358,6 +363,8 @@ pub async fn vault_unlock_methods(app: tauri::AppHandle, state: State<'_, AppSta
     let platform_available = platform.is_some() && device::platform_available(&app).await;
     Ok(UnlockMethods {
         platform,
+        platform_label: (platform == Some(biometric::IOS_BIOMETRIC)).then(crate::vault::apple_biometric::name),
+        keys_biometric: crate::ssh::biometric_keys::supported() && platform_available,
         platform_available,
         keys_supported: fido2::supported(),
         keys_ask_pin: fido2::asks_pin_itself(),
