@@ -168,6 +168,7 @@
   "terminal.connection_lost": "Spojení bylo ztraceno",
   "terminal.connection_closed": "Spojení bylo ukončeno",
   "terminal.session_ended": "Relace skončila",
+  "terminal.always_close_tab": "Vždy zavřít kartu po skončení relace",
   "telnet.connecting": "Připojování k {{host}}…",
   "telnet.connect_failed": "Nelze se připojit",
   "telnet.closed": "Spojení ukončeno",

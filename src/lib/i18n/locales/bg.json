@@ -168,6 +168,7 @@
   "terminal.connection_lost": "Връзката е прекъсната",
   "terminal.connection_closed": "Връзката е затворена",
   "terminal.session_ended": "Сесията приключи",
+  "terminal.always_close_tab": "Винаги затваряй раздела при край на сесия",
   "telnet.connecting": "Свързване с {{host}}…",
   "telnet.connect_failed": "Неуспешно свързване",
   "telnet.closed": "Връзката е затворена",

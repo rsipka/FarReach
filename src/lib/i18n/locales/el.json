@@ -168,6 +168,7 @@
   "terminal.connection_lost": "Η σύνδεση χάθηκε",
   "terminal.connection_closed": "Η σύνδεση έκλεισε",
   "terminal.session_ended": "Η συνεδρία τερματίστηκε",
+  "terminal.always_close_tab": "Πάντα κλείσιμο καρτέλας όταν τελειώνει μια συνεδρία",
   "telnet.connecting": "Σύνδεση με {{host}}…",
   "telnet.connect_failed": "Αδυναμία σύνδεσης",
   "telnet.closed": "Η σύνδεση έκλεισε",
