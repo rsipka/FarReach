@@ -235,7 +235,8 @@ async fn session(
     let reason = Pump { app: &app, id: &id, client: &client, flow: &flow, frames: &frames }.run(input).await;
     let _ = client.close().await;
     tracing::info!("VNC {id}: closed ({reason})");
-    status(RdpStatus::Closed { reason });
+    // VNC servers do not say why they closed: never taken as a clean end.
+    status(RdpStatus::Closed { reason, clean: false });
     // The SSH leg goes last, once nothing is using it.
     drop(forward);
 }

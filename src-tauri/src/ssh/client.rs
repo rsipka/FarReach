@@ -523,22 +523,84 @@ pub(crate) async fn cascade_authenticate<H: russh::client::Handler>(
             username,
             password.len()
         );
-        let accepted = handle
+        let result = handle
             .authenticate_password(username, password)
             .await
             .map_err(|e| {
                 tracing::error!("SSH password auth error: {}", e);
                 SshError::ConnectionFailed(format!("Auth error: {}", e))
-            })?
-            .success();
+            })?;
+        let accepted = result.success();
         tracing::info!("SSH password auth result: {}", accepted);
         if accepted {
+            outcome.by = Some(AuthBy::Password);
+            return Ok(outcome);
+        }
+        // 4. The same password through keyboard-interactive. Many servers
+        //    (PAM with PasswordAuthentication off, FreeBSD's default, most
+        //    appliances) take a password only this way; ssh, PuTTY and
+        //    uniTerm all try it. Only when the server offers it.
+        let offers_kbd = matches!(
+            &result,
+            russh::client::AuthResult::Failure { remaining_methods, .. }
+                if remaining_methods.contains(&russh::MethodKind::KeyboardInteractive)
+        );
+        if offers_kbd && kbd_interactive_with_password(handle, username, password).await? {
             outcome.by = Some(AuthBy::Password);
             return Ok(outcome);
         }
     }
 
     Ok(outcome)
+}
+
+/// Answers to one keyboard-interactive question round from the session's
+/// password: none needed (an empty round), or the password for a lone
+/// hidden question, given once. `None` for anything else (a one-time code,
+/// a second password question): there is no one to ask here.
+fn kbd_answers(prompts: &[russh::client::Prompt], password: &mut Option<&str>) -> Option<Vec<String>> {
+    match prompts {
+        [] => Some(Vec::new()),
+        [p] if !p.echo => password.take().map(|pw| vec![pw.to_string()]),
+        _ => None,
+    }
+}
+
+/// Log in with keyboard-interactive, answering the server's password
+/// question with the session's password. True when the server let us in.
+async fn kbd_interactive_with_password<H: russh::client::Handler>(
+    handle: &mut russh::client::Handle<H>,
+    username: &str,
+    password: &str,
+) -> Result<bool, SshError> {
+    use russh::client::KeyboardInteractiveAuthResponse as K;
+    let err = |e: russh::Error| {
+        tracing::error!("SSH keyboard-interactive auth error: {}", e);
+        SshError::ConnectionFailed(format!("Auth error: {}", e))
+    };
+    tracing::info!("SSH keyboard-interactive auth: attempting as '{}' with the session password", username);
+    let mut password = Some(password);
+    let mut r = handle.authenticate_keyboard_interactive_start(username, None::<String>).await.map_err(err)?;
+    // A server may send a few rounds (an empty one, a banner); bounded so a
+    // server that keeps asking cannot hold the login.
+    for _ in 0..5 {
+        match r {
+            K::Success => {
+                tracing::info!("SSH keyboard-interactive auth result: true");
+                return Ok(true);
+            }
+            K::Failure { .. } => break,
+            K::InfoRequest { prompts, .. } => {
+                let Some(answers) = kbd_answers(&prompts, &mut password) else {
+                    tracing::info!("SSH keyboard-interactive: the server asks something other than the password; skipped");
+                    break;
+                };
+                r = handle.authenticate_keyboard_interactive_respond(answers).await.map_err(err)?;
+            }
+        }
+    }
+    tracing::info!("SSH keyboard-interactive auth result: false");
+    Ok(false)
 }
 
 /// Try every identity from the local SSH agent. Returns Ok(true) on the first
@@ -2907,6 +2969,25 @@ async fn ssh_session_task(
 #[cfg(test)]
 mod shell_tests {
     use super::*;
+
+    fn prompt(text: &str, echo: bool) -> russh::client::Prompt {
+        russh::client::Prompt { prompt: text.into(), echo }
+    }
+
+    /// keyboard-interactive: the session password answers one hidden
+    /// question, once; an empty round needs nothing; anything else is not
+    /// answered for the user.
+    #[test]
+    fn keyboard_interactive_answers_only_the_password_question() {
+        let mut pw = Some("secret");
+        assert_eq!(kbd_answers(&[], &mut pw), Some(vec![]));
+        assert_eq!(kbd_answers(&[prompt("Password: ", false)], &mut pw), Some(vec!["secret".to_string()]));
+        assert_eq!(kbd_answers(&[prompt("Password: ", false)], &mut pw), None, "given once");
+        let mut pw = Some("secret");
+        assert_eq!(kbd_answers(&[prompt("Username: ", true)], &mut pw), None);
+        assert_eq!(kbd_answers(&[prompt("Password: ", false), prompt("OTP: ", false)], &mut pw), None);
+        assert_eq!(pw, Some("secret"));
+    }
 
     fn known_hosts_scratch(name: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!("reach-known-hosts-{name}-{}", uuid::Uuid::new_v4()));

@@ -112,8 +112,25 @@ pub enum RdpStatus {
     Connected,
     /// The server sent its login-complete notification: the desktop is usable.
     LoggedIn,
-    Closed { reason: String },
+    /// `clean`: the session ended as meant to (the user logged off or
+    /// disconnected from the remote desktop), not on an error or a kick.
+    Closed { reason: String, clean: bool },
     Error { message: String },
+}
+
+/// Whether an RDP session that ended without a transport error ended as the
+/// user meant it to: logged off, or disconnected from Windows' own menu. An
+/// idle timeout, another user taking the session, an admin's logoff or a
+/// server going down are not, and keep the panel open to say why.
+fn graceful_is_clean(reason: &ironrdp_session::GracefulDisconnectReason) -> bool {
+    use ironrdp_pdu::rdp::server_error_info::{ErrorInfo, ProtocolIndependentCode};
+    use ironrdp_session::GracefulDisconnectReason as R;
+    match reason {
+        R::UserInitiated | R::ServerInitiated => true,
+        R::Other(text) => [ProtocolIndependentCode::LogoffByUser, ProtocolIndependentCode::RpcInitiatedDisconnectByuser]
+            .into_iter()
+            .any(|c| *text == ErrorInfo::ProtocolIndependentCode(c).description()),
+    }
 }
 
 /// Frame kinds on the wire. Layout is little-endian, header first.
@@ -190,6 +207,11 @@ pub struct Flow {
     pub(crate) notify: Notify,
     /// A new canvas is listening: send it the whole picture next.
     refresh: std::sync::atomic::AtomicBool,
+    /// The session has reported its end (failed or closed). Set before the
+    /// webview hears of it, so a connect that answers the news — a retry —
+    /// starts a new session instead of re-attaching to the one that is
+    /// still winding down its thread.
+    ended: std::sync::atomic::AtomicBool,
 }
 
 impl Flow {
@@ -198,6 +220,7 @@ impl Flow {
             in_flight: AtomicU32::new(0),
             notify: Notify::new(),
             refresh: std::sync::atomic::AtomicBool::new(false),
+            ended: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -207,6 +230,10 @@ impl Flow {
         self.in_flight.store(0, Ordering::Release);
         self.refresh.store(true, Ordering::Release);
         self.notify.notify_one();
+    }
+
+    pub(crate) fn has_ended(&self) -> bool {
+        self.ended.load(Ordering::Acquire)
     }
 
     pub(crate) fn take_refresh(&self) -> bool {
@@ -268,7 +295,7 @@ impl RdpManager {
     /// Whether a desktop is open under `id` and still running: a connect for
     /// it only re-attaches the panel.
     pub fn running(&self, id: &str) -> bool {
-        self.open.get(id).is_some_and(|o| !o.session.is_finished())
+        self.open.get(id).is_some_and(|o| !o.session.is_finished() && !o.flow.has_ended())
     }
 
     /// Open a desktop and start streaming it to `frames`.
@@ -288,7 +315,7 @@ impl RdpManager {
         // was left and returned to. The session is still running; give it the
         // new channel and the whole picture, and say it is connected.
         if let Some(open) = self.open.get(&id) {
-            if !open.session.is_finished() {
+            if !open.session.is_finished() && !open.flow.has_ended() {
                 tracing::info!("RDP {id}: panel re-attached to the running session");
                 *open.frames.lock().unwrap_or_else(|e| e.into_inner()) = frames;
                 open.flow.reattached();
@@ -736,6 +763,9 @@ async fn pump_output(
     flow: Arc<Flow>,
 ) {
     let status = |s: RdpStatus| {
+        if matches!(s, RdpStatus::Error { .. } | RdpStatus::Closed { .. }) {
+            flow.ended.store(true, Ordering::Release);
+        }
         let _ = app.emit(&format!("rdp-status-{id}"), s);
     };
 
@@ -888,15 +918,15 @@ impl Screen {
             }
 
             RdpOutputEvent::Terminated(result) => {
-                let reason = match result {
-                    Ok(graceful) => format!("{graceful:?}"),
+                let (reason, clean) = match result {
+                    Ok(graceful) => (graceful.description(), graceful_is_clean(&graceful)),
                     Err(err) => {
                         tracing::warn!("RDP {id}: session ended with an error: {err:?}");
-                        err.to_string()
+                        (err.to_string(), false)
                     }
                 };
                 tracing::info!("RDP {id}: closed ({reason})");
-                status(RdpStatus::Closed { reason });
+                status(RdpStatus::Closed { reason, clean });
                 return false;
             }
 
@@ -1169,6 +1199,21 @@ mod tests {
 
     fn nz(v: u16) -> NonZeroU16 {
         NonZeroU16::new(v).unwrap()
+    }
+
+    #[test]
+    fn logoff_is_a_clean_end_and_a_kick_is_not() {
+        use ironrdp_pdu::rdp::server_error_info::{ErrorInfo, ProtocolIndependentCode as C};
+        use ironrdp_session::GracefulDisconnectReason as R;
+        let info = |c| R::Other(ErrorInfo::ProtocolIndependentCode(c).description());
+        assert!(graceful_is_clean(&R::UserInitiated));
+        assert!(graceful_is_clean(&R::ServerInitiated));
+        assert!(graceful_is_clean(&info(C::LogoffByUser)));
+        assert!(graceful_is_clean(&info(C::RpcInitiatedDisconnectByuser)));
+        assert!(!graceful_is_clean(&info(C::IdleTimeout)));
+        assert!(!graceful_is_clean(&info(C::DisconnectedByOtherconnection)));
+        assert!(!graceful_is_clean(&info(C::RpcInitiatedLogoff)));
+        assert!(!graceful_is_clean(&info(C::ServerReboot)));
     }
 
     fn header(bytes: &[u8], at: usize) -> (u8, u16, u16, u16, u16, u16, u16) {

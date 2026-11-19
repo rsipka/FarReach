@@ -826,6 +826,7 @@ pub async fn session_create(
         ssh_options: ssh_options.filter(|o| !o.is_empty()),
         credential_id: credential_id.filter(|c| !c.is_empty()),
         favorite: false,
+        order: None,
         credential: None,
         notes,
         custom_fields,
@@ -947,6 +948,13 @@ async fn prepare_update(
         check_folder_vault(&read_folders(manager).await?, session.folder_id.as_deref(), vault.as_deref())?;
     }
 
+    // The place in the list is the stored one (another device may have
+    // moved it since the editor opened); in another folder it starts last.
+    session.order = match stored.as_ref() {
+        Some(s) if s.folder_id == session.folder_id => s.order,
+        _ => None,
+    };
+
     // The approvals kept for a credential's entries are the stored ones,
     // never what the window sent.
     session.credential_ref_approvals = stored.as_ref().map(|s| s.credential_ref_approvals.clone()).unwrap_or_default();
@@ -1018,6 +1026,9 @@ async fn move_to_folder(
             continue;
         }
         obj.insert("folder_id".into(), target);
+        // Its place among the old folder's sessions means nothing in the
+        // new one: it goes after those already ordered there.
+        obj.remove("order");
         let json = serde_json::to_vec(&value).map_err(|e| e.to_string())?;
         manager
             .update_secret(&loc.vault_id, &loc.secret_id, SecretBox::new(Box::new(json)))
@@ -1071,6 +1082,55 @@ pub async fn session_set_favorite(
     }
     tracing::info!("Set favorite={favorite} on {changed} sessions");
     Ok(changed)
+}
+
+/// Put sessions in this order: each gets its index in `session_ids` as its
+/// `order`. Meant for the sessions of one folder (or those outside any),
+/// all of them, so the list reads the same on every device. Like
+/// `session_set_favorite`, only that field changes and a session whose
+/// place is already right is not written again. Returns how many changed;
+/// a session that no longer exists is skipped.
+#[tauri::command]
+#[tracing::instrument(skip(state, session_ids), fields(count = session_ids.len()))]
+pub async fn session_set_order(state: State<'_, AppState>, session_ids: Vec<String>) -> Result<u32, String> {
+    let manager = state.vault_manager.lock().await;
+    if manager.is_locked() {
+        return Err("Vault is locked".to_string());
+    }
+    set_order(&manager, &session_ids).await
+}
+
+async fn set_order(manager: &crate::vault::VaultManager, session_ids: &[String]) -> Result<u32, String> {
+    let mut changed = 0u32;
+    for (index, id) in session_ids.iter().enumerate() {
+        let Some(loc) = locate_session(manager, id).await else { continue };
+        let plaintext = manager.read_secret(&loc.vault_id, &loc.secret_id).await.map_err(|e| e.to_string())?;
+        use secrecy::ExposeSecret;
+        let mut value: serde_json::Value =
+            serde_json::from_slice(plaintext.expose_secret()).map_err(|e| format!("Invalid session data: {e}"))?;
+        let Some(obj) = value.as_object_mut() else { return Err(format!("Invalid session data: {id}")) };
+        let order = u32::try_from(index).map_err(|_| "Too many sessions".to_string())?;
+        if set_order_field(obj, order) {
+            let json = serde_json::to_vec(&value).map_err(|e| e.to_string())?;
+            manager
+                .update_secret(&loc.vault_id, &loc.secret_id, SecretBox::new(Box::new(json)))
+                .await
+                .map_err(|e| e.to_string())?;
+            changed += 1;
+        }
+    }
+    tracing::info!("Reordered {} sessions, {changed} changed", session_ids.len());
+    Ok(changed)
+}
+
+/// Set a stored session's `order`; false when it already had that one.
+fn set_order_field(obj: &mut serde_json::Map<String, serde_json::Value>, order: u32) -> bool {
+    let target = serde_json::Value::from(order);
+    if obj.get("order") == Some(&target) {
+        return false;
+    }
+    obj.insert("order".into(), target);
+    true
 }
 
 /// Delete a session by ID. O(1) delete.
@@ -2595,6 +2655,34 @@ mod folder_vault_tests {
         assert_eq!(move_to_folder(&m, &["mine".to_string()], Some(home.id.clone())).await.unwrap(), 1);
         assert_eq!(folder_of(read_session(&m, &team, "ours").await.unwrap()), Some(servers.id.clone()));
         assert_eq!(move_to_folder(&m, &both, None).await.unwrap(), 2, "out of folders works across vaults");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn the_order_is_stored_on_each_session_and_a_move_clears_it() {
+        let dir = std::env::temp_dir().join(format!("reach-session-order-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut m = crate::vault::VaultManager::new(dir.clone());
+        m.init_identity("session-order").await.unwrap();
+        let private = ensure_sessions_vault(&mut m).await.unwrap();
+        for id in ["a", "b", "c"] {
+            m.create_secret_with_id(&private, id, id, SecretCategory::Session, put_session(id)).await.unwrap();
+        }
+        let order_of = |s: SessionConfig| s.order;
+        assert_eq!(order_of(read_session(&m, &private, "a").await.unwrap()), None, "none before it is set");
+
+        let ids = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(set_order(&m, &ids(&["c", "a", "gone", "b"])).await.unwrap(), 3, "a missing one is skipped");
+        assert_eq!(order_of(read_session(&m, &private, "c").await.unwrap()), Some(0));
+        assert_eq!(order_of(read_session(&m, &private, "b").await.unwrap()), Some(3));
+        assert_eq!(set_order(&m, &ids(&["c", "a", "gone", "b"])).await.unwrap(), 0, "the same order writes nothing");
+        assert_eq!(set_order(&m, &ids(&["a", "c"])).await.unwrap(), 2);
+
+        let home = create_folder(&mut m, "Home".into(), None, None).await.unwrap();
+        move_to_folder(&m, &ids(&["a"]), Some(home.id.clone())).await.unwrap();
+        assert_eq!(order_of(read_session(&m, &private, "a").await.unwrap()), None, "it starts last in the new folder");
+        assert_eq!(order_of(read_session(&m, &private, "c").await.unwrap()), Some(1), "the others keep theirs");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -63,7 +63,7 @@
 	import { untrustedRefsFromError } from '#lib/ipc/sessions.js';
 	import { getSettings, updateSetting } from '#lib/state/settings.svelte.js';
 	import { isMobile } from '#lib/platform.js';
-	import { setTabLink } from '#lib/state/tabs.svelte.js';
+	import { setTabLink, closeTab } from '#lib/state/tabs.svelte.js';
 	import MobileKeyBar, { type BarKey } from '#lib/components/shared/MobileKeyBar.svelte';
 
 	interface Props {
@@ -134,6 +134,8 @@
 		setTabLink(id, phase === 'closed' || phase === 'error' ? 'down' : undefined);
 	});
 	let message = $state('');
+	// Closed because the user logged off or disconnected, not on an error.
+	let ended = $state(false);
 
 	let unlisten: UnlistenFn | null = null;
 	let unlistenClip: UnlistenFn | null = null;
@@ -893,6 +895,30 @@
 		return { width: even(r.width || 1024), height: even(r.height || 768) };
 	}
 
+	/** Whether the current RDP attempt asked for the graphics pipeline, and at what size. */
+	let graphicsPipeline = false;
+	let connectSize = { width: 0, height: 0 };
+
+	/**
+	 * GNOME Remote Desktop serves only clients that offer the graphics
+	 * pipeline. Without it the server hangs up during the capabilities
+	 * exchange with a bare Disconnect Provider Ultimatum, which reaches us as
+	 * a decode error before the session ever connected. When that happens on
+	 * an attempt made without the pipeline, try once more with it; Windows
+	 * and xrdp never get here, so the setting keeps its meaning for them.
+	 * Returns true when a retry was started.
+	 */
+	function retryWithGraphicsPipeline(error: string): boolean {
+		if (isVnc() || graphicsPipeline || phase !== 'connecting') return false;
+		if (!/disconnect provider ultimatum/i.test(error)) return false;
+		graphicsPipeline = true;
+		rdpConnect({ ...(params as RdpConnectParams), ...connectSize, graphicsPipeline: true }, paint).catch((err) => {
+			phase = 'error';
+			message = String(err);
+		});
+		return true;
+	}
+
 	onMount(async () => {
 		const size = fitSize();
 
@@ -903,12 +929,21 @@
 				message = '';
 				resizeNotBefore = Date.now() + SETTLE_MS;
 			} else if (s.state === 'closed') {
+				// Logged off (or disconnected from Windows' menu) after the
+				// desktop was up: the tab goes, if Settings say so.
+				if (s.clean && phase === 'connected' && getSettings().closeTabOnExit) {
+					closeTab(id);
+					return;
+				}
 				phase = 'closed';
-				message = s.reason;
+				ended = s.clean;
+				// A logoff is not an error: no server text to puzzle over.
+				message = s.clean ? '' : s.reason;
 				// Nothing to release on a desktop that has gone; just forget.
 				held.clear();
 				heldKeysyms.clear();
 			} else if (s.state === 'error') {
+				if (retryWithGraphicsPipeline(s.message)) return;
 				phase = 'error';
 				message = s.message;
 			}
@@ -926,7 +961,9 @@
 				// asks for its own size once connected, which some servers allow.
 				await vncConnect(params as VncConnectParams, paint);
 			} else {
-				await rdpConnect({ ...(params as RdpConnectParams), ...size, graphicsPipeline: getSettings().rdpGraphicsPipeline }, paint);
+				graphicsPipeline = (params as RdpConnectParams).graphicsPipeline || getSettings().rdpGraphicsPipeline;
+				connectSize = size;
+				await rdpConnect({ ...(params as RdpConnectParams), ...size, graphicsPipeline }, paint);
 			}
 		} catch (err) {
 			phase = 'error';
@@ -1092,7 +1129,7 @@
 				<span class="spinner" aria-hidden="true"></span>
 				<span>{t('rdp.connecting')}</span>
 			{:else if phase === 'closed'}
-				<span>{t('rdp.closed')}</span>
+				<span>{ended ? t('terminal.session_ended') : t('rdp.closed')}</span>
 				{#if message}<small>{message}</small>{/if}
 			{:else}
 				<span>{t('rdp.error')}</span>

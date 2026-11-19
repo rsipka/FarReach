@@ -49,7 +49,7 @@
 	import UntrustedRefsDialog from '#lib/components/pwmanager/UntrustedRefsDialog.svelte';
 	import { sessionUntrustedSecretRefs, sessionApproveSecretRefs, untrustedRefsFromError, type UntrustedRefs } from '#lib/ipc/sessions.js';
 	import type { SessionKind } from '#lib/ipc/sessions.js';
-	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionRenameFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetFolderCredential, sessionSetFolderTmux, sessionBulkUndo, type BulkResult, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
+	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionRenameFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetOrder, sessionSetFolderCredential, sessionSetFolderTmux, sessionBulkUndo, type BulkResult, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
 	import { DEFAULT_SERIAL_OPTIONS } from '#lib/ipc/serial.js';
@@ -67,7 +67,7 @@
 	import type { SecretRef } from '#lib/ipc/pwmanager.js';
 	import { untrack } from 'svelte';
 	import { positionMenu } from '#lib/utils/positionMenu.js';
-	import { buildFolderTree, canMoveFolder, commonVault, folderPath, foldersInVault, vaultOf, type FolderTreeNode } from '#lib/sessions/folder-tree.js';
+	import { buildFolderTree, byName, bySavedOrder, canMoveFolder, commonVault, folderPath, foldersInVault, moveStep, placeAt, vaultOf, type FolderTreeNode } from '#lib/sessions/folder-tree.js';
 	import { canScanLinkCode, scanLinkCode } from '#lib/state/link-scan.js';
 	import { vaultState, checkState, initIdentity, importIdentity, linkDevice, ALL_VAULTS, loadVaultFilter, type VaultFilter } from '#lib/state/vault.svelte.js';
 	import { tmuxFor } from '#lib/terminal/tmux.js';
@@ -305,7 +305,7 @@
 	}
 
 	function sortSessions(list: SessionConfig[]): SessionConfig[] {
-		if (sortKey === 'default') return list;
+		if (sortKey === 'default') return bySavedOrder(list);
 		const out = [...list];
 		if (sortKey === 'name') out.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 		else if (sortKey === 'host') out.sort((a, b) => a.host.localeCompare(b.host, undefined, { numeric: true }) || a.port - b.port);
@@ -518,6 +518,65 @@
 		}
 	}
 
+	// ---- The saved order within a folder (Move up/down, drag, Sort by name) ---
+	/** Moving sessions in the list needs it to show them all in their saved
+	 *  order: with another sort, a search or a filter on, a step would jump
+	 *  over sessions not shown. */
+	let canReorder = $derived(sortKey === 'default' && !searchQuery.trim() && !filtering);
+
+	/** The sessions shown beside this one: its folder's own, or those
+	 *  outside any folder, in the order on screen. */
+	function siblingsOf(id: string): SessionConfig[] {
+		if (folderTree.ungrouped.some(s => s.id === id)) return folderTree.ungrouped;
+		const walk = (nodes: FolderTreeNode[]): SessionConfig[] | undefined => {
+			for (const node of nodes) {
+				if (node.sessions.some(s => s.id === id)) return node.sessions;
+				const found = walk(node.children);
+				if (found) return found;
+			}
+			return undefined;
+		};
+		return walk(folderTree.roots) ?? [];
+	}
+
+	/** Store this order for a folder's sessions, unless it already is. */
+	async function saveOrder(before: string[], next: string[]): Promise<void> {
+		if (before.join('\n') === next.join('\n') && sessions.filter(s => next.includes(s.id)).every(s => typeof s.order === 'number')) return;
+		try {
+			await sessionSetOrder(next);
+			window.dispatchEvent(new CustomEvent('reach:sessions-changed'));
+		} catch (err) {
+			addToast(String(err), 'error');
+		}
+		await loadSessions();
+	}
+
+	/** Move a session a step up (-1) or down (+1) among those beside it. */
+	async function moveSessionStep(session: SessionConfig, step: -1 | 1): Promise<void> {
+		closeContextMenu();
+		if (!canReorder) return;
+		const ids = siblingsOf(session.id).map(s => s.id);
+		const next = moveStep(ids, session.id, step);
+		if (next !== ids) await saveOrder(ids, next);
+	}
+
+	/** Rewrite the saved order of a folder's sessions, and of every folder
+	 *  inside it, by name; the list then shows the saved order. */
+	async function sortFolderByName(folder: Folder): Promise<void> {
+		closeContextMenu();
+		try {
+			for (const id of foldersInside(folder)) {
+				const own = sessions.filter(s => s.folder_id === id);
+				if (own.length) await sessionSetOrder(byName(own).map(s => s.id));
+			}
+			window.dispatchEvent(new CustomEvent('reach:sessions-changed'));
+		} catch (err) {
+			addToast(String(err), 'error');
+		}
+		sortKey = 'default';
+		await loadSessions();
+	}
+
 	// ---- Editing the selected sessions at once (BulkEditor) -------------------
 	let bulkEditOpen = $state(false);
 	/** Undoes the last bulk edit until the app quits or the vault locks. */
@@ -632,6 +691,7 @@
 	function newSessionIn(folder: Folder): void {
 		closeContextMenu();
 		editingSession = undefined;
+		cloningSession = undefined;
 		newSessionFolder = folder;
 		showEditor = true;
 	}
@@ -828,6 +888,8 @@
 	// Drag & drop via pointer events (HTML5 DnD doesn't work in Tauri WebView2 on Windows)
 	let dragSession = $state<SessionConfig | undefined>();
 	let dropTarget = $state<string | null | undefined>();
+	/** Over a session row: the dragged ones go just before or after it. */
+	let dropSlot = $state<{ id: string; before: boolean } | undefined>();
 	let dragging = $state(false);
 
 	function handleDragStart(e: PointerEvent, session: SessionConfig): void {
@@ -839,7 +901,19 @@
 			if (!dragSession) return;
 			// Find drop target by checking which folder header we're over
 			dropTarget = undefined;
+			dropSlot = undefined;
 			const el = document.elementFromPoint(me.clientX, me.clientY);
+			const row = canReorder ? (el?.closest('[data-session-id]') as HTMLElement | null) : null;
+			if (row) {
+				const id = (row.closest('[data-folder-id]') as HTMLElement | null)?.dataset.folderId;
+				const group = id === undefined || id === '__ungrouped__' ? null : allowed.has(id) ? id : undefined;
+				if (group !== undefined) {
+					const rect = row.getBoundingClientRect();
+					dropTarget = group;
+					dropSlot = { id: row.dataset.sessionId!, before: me.clientY < rect.top + rect.height / 2 };
+					return;
+				}
+			}
 			if (el) {
 				const folderEl = el.closest('[data-folder-id]') as HTMLElement | null;
 				if (folderEl) {
@@ -855,15 +929,37 @@
 			window.removeEventListener('pointerup', onUp);
 			const session = dragSession;
 			const target = dropTarget;
+			const slot = dropSlot;
 			dragSession = undefined;
 			dropTarget = undefined;
+			dropSlot = undefined;
 			dragging = false;
-			if (session && target !== undefined && (selected.has(session.id) || session.folder_id !== target)) {
+			if (session && slot && target !== undefined) {
+				await dropAt(session, target, slot);
+			} else if (session && target !== undefined && (selected.has(session.id) || session.folder_id !== target)) {
 				await moveIds(targetsOf(session), target);
 			}
 		};
 		window.addEventListener('pointermove', onMove);
 		window.addEventListener('pointerup', onUp);
+	}
+
+	/** Drop the dragged sessions just before or after a row, moving them
+	 *  into that row's folder first if they come from another. */
+	async function dropAt(session: SessionConfig, target: string | null, slot: { id: string; before: boolean }): Promise<void> {
+		const siblings = siblingsOf(slot.id).map(s => s.id);
+		const shown = filteredSessions.map(s => s.id);
+		// Several selected ones go in the order they are shown.
+		const moving = targetsOf(session).sort((a, b) => shown.indexOf(a) - shown.indexOf(b));
+		if (moving.includes(slot.id) && moving.length === 1) return;
+		const incoming = moving.filter(id => !siblings.includes(id));
+		if (incoming.length) {
+			await moveIds(incoming, target);
+			// The move was refused (another vault's folder): leave the order alone.
+			if (sessions.some(s => incoming.includes(s.id) && (s.folder_id ?? null) !== target)) return;
+		}
+		const index = siblings.indexOf(slot.id) + (slot.before ? 0 : 1);
+		await saveOrder(siblings, placeAt(siblings, moving, index));
 	}
 
 	// Right-click context menu
@@ -1049,6 +1145,9 @@
 			domain: session.domain ?? undefined,
 			sharePath: session.share_path ?? undefined,
 			clipboard: session.rdp_clipboard ?? null,
+			// GNOME Remote Desktop serves no client without the graphics
+			// pipeline, so a GNOME session asks for it whatever the setting says.
+			graphicsPipeline: session.detected_os === 'gnome' ? true : undefined,
 			width: 0,
 			height: 0,
 		};
@@ -1522,6 +1621,16 @@
 
 	function handleEdit(session: SessionConfig): void {
 		editingSession = session;
+		cloningSession = undefined;
+		showEditor = true;
+	}
+
+	/** Opens the editor on a copy; nothing is saved until Save. */
+	let cloningSession = $state<SessionConfig | undefined>();
+	function handleClone(session: SessionConfig): void {
+		editingSession = undefined;
+		newSessionFolder = null;
+		cloningSession = session;
 		showEditor = true;
 	}
 
@@ -1548,6 +1657,7 @@
 
 	function handleNewSession(): void {
 		editingSession = undefined;
+		cloningSession = undefined;
 		newSessionFolder = null;
 		showEditor = true;
 	}
@@ -1685,8 +1795,8 @@
 			<button class="delete-cancel-btn" onclick={() => (deleteConfirm = null)}>{t('common.cancel')}</button>
 		</div>
 	{:else}
-		<div class:folder-session={depth >= 0} style:padding-left={depth >= 0 ? `${Math.min(depth + 1, 8) * 14}px` : undefined}>
-			<SessionCard {session} vault={selectedVaultId === ALL_VAULTS && session.vault_id ? (vaultState.vaults.get(session.vault_id) ?? null) : null} onconnect={() => handleConnect(session)} onedit={() => handleEdit(session)} ondelete={() => handleDelete(session)} oncontextmenu={(e) => openSessionContextMenu(e, session)} ondragstart={(e) => handleDragStart(e, session)} ondragend={() => {}} {selecting} selected={selected.has(session.id)} onselect={(e) => toggleSelect(session, e)} />
+		<div class:folder-session={depth >= 0} class:drop-before={dropSlot?.id === session.id && dropSlot.before} class:drop-after={dropSlot?.id === session.id && !dropSlot.before} data-session-id={session.id} style:padding-left={depth >= 0 ? `${Math.min(depth + 1, 8) * 14}px` : undefined}>
+			<SessionCard {session} vault={selectedVaultId === ALL_VAULTS && session.vault_id ? (vaultState.vaults.get(session.vault_id) ?? null) : null} onconnect={() => handleConnect(session)} onedit={() => handleEdit(session)} ondelete={() => handleDelete(session)} oncontextmenu={(e) => openSessionContextMenu(e, session)} ondragstart={(e) => handleDragStart(e, session)} ondragend={() => {}} {selecting} selected={selected.has(session.id)} onselect={(e) => toggleSelect(session, e)} viaName={session.via_session_id ? (sessions.find((s) => s.id === session.via_session_id)?.name ?? null) : null} />
 		</div>
 	{/if}
 {/snippet}
@@ -1694,7 +1804,7 @@
 {#snippet folderNode(node: FolderTreeNode)}
 	<div class="folder-node" data-folder-id={node.folder.id}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="folder-header" class:drop-active={dropTarget === node.folder.id && dragging} data-folder-id={node.folder.id} style:padding-left={`${6 + Math.min(node.depth, 8) * 14}px`} oncontextmenu={(e) => openFolderContextMenu(e, node.folder)}>
+		<div class="folder-header" class:drop-active={dropTarget === node.folder.id && dragging && !dropSlot} data-folder-id={node.folder.id} style:padding-left={`${6 + Math.min(node.depth, 8) * 14}px`} oncontextmenu={(e) => openFolderContextMenu(e, node.folder)}>
 			{#if renamingFolderId === node.folder.id}
 			<form class="folder-rename" onsubmit={(e) => { e.preventDefault(); void commitRename(); }}>
 				<input class="new-folder-input" type="text" aria-label={t('folder.rename')} bind:value={renameValue} use:focusSelect onblur={() => void commitRename()} onkeydown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); renamingFolderId = null; } }} />
@@ -1988,16 +2098,16 @@
 			<div class="loading-state"><span class="spinner"></span><span class="loading-text">{t('session.loading')}</span></div>
 		{:else if filteredSessions.length === 0 && folderTree.roots.length === 0}
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<div class="empty-state-area" data-folder-id="__ungrouped__" class:drop-active={dropTarget === null && dragging} oncontextmenu={openBackgroundContextMenu}>
+			<div class="empty-state-area" data-folder-id="__ungrouped__" class:drop-active={dropTarget === null && dragging && !dropSlot} oncontextmenu={openBackgroundContextMenu}>
 				{#if creatingFolder}{@render newFolderRow()}{:else}<p class="empty-state">{searchQuery.trim() ? t('session.no_matches') : t('session.no_sessions_vault')}</p>{/if}
 			</div>
 		{:else}
 			{#if creatingFolder}{@render newFolderRow()}{/if}
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
-			<div class="sessions-scroll" data-folder-id="__ungrouped__" class:drop-active={dropTarget === null && dragging} oncontextmenu={openBackgroundContextMenu} onclick={closeContextMenu} onkeydown={onListKeydown}>
+			<div class="sessions-scroll" data-folder-id="__ungrouped__" class:drop-active={dropTarget === null && dragging && !dropSlot} oncontextmenu={openBackgroundContextMenu} onclick={closeContextMenu} onkeydown={onListKeydown}>
 				{#if dragging}
-					<div class="no-folder-drop" data-folder-id="__ungrouped__" class:drop-active={dropTarget === null}><FaIcon icon={faFolder} size={12} /><span>{t('session.no_folder')}</span></div>
+					<div class="no-folder-drop" data-folder-id="__ungrouped__" class:drop-active={dropTarget === null && !dropSlot}><FaIcon icon={faFolder} size={12} /><span>{t('session.no_folder')}</span></div>
 				{/if}
 				{#each folderTree.roots as node (node.folder.id)}{@render folderNode(node)}{/each}
 				<div class="ungrouped-drop" data-folder-id="__ungrouped__">
@@ -2022,6 +2132,9 @@
 					<button class="context-item" onclick={() => { if (contextMenu?.session) handleEdit(contextMenu.session); closeContextMenu(); }} type="button">
 						{t('session.edit')}
 					</button>
+					<button class="context-item" onclick={() => { if (contextMenu?.session) handleClone(contextMenu.session); closeContextMenu(); }} type="button">
+						{t('session.clone')}
+					</button>
 				{/if}
 				<button class="context-item" onclick={() => { if (contextMenu?.session) void setFavorite(contextMenu.session, !contextMenu.session.favorite); }} type="button">
 					{contextMenu.session.favorite ? t('session.remove_favorite') : t('session.add_favorite')}
@@ -2030,6 +2143,14 @@
 					<button class="context-item" onclick={() => { if (contextMenu?.session) openHistoryPanel({ sessionId: contextMenu.session.id, sessionName: contextMenu.session.name }); closeContextMenu(); }} type="button">
 						{t('history.session_menu')}
 					</button>
+				{/if}
+				{#if !(selected.has(contextMenu.session.id) && selected.size > 1)}
+					{@const sibs = siblingsOf(contextMenu.session.id)}
+					{@const at = sibs.findIndex(s => s.id === contextMenu?.session?.id)}
+					{@const hint = canReorder ? undefined : t('session.reorder_hint')}
+					<div class="context-sep"></div>
+					<button class="context-item" disabled={!canReorder || at <= 0} title={hint} onclick={() => { if (contextMenu?.session) void moveSessionStep(contextMenu.session, -1); }} type="button">{t('session.move_up')}</button>
+					<button class="context-item" disabled={!canReorder || at < 0 || at >= sibs.length - 1} title={hint} onclick={() => { if (contextMenu?.session) void moveSessionStep(contextMenu.session, 1); }} type="button">{t('session.move_down')}</button>
 				{/if}
 				<div class="context-sep"></div>
 				<div class="context-label">{contextMenu.session && selected.has(contextMenu.session.id) && selected.size > 1 ? t('session.move_n_to_folder', { count: String(selected.size) }) : t('session.move_to_folder')}</div>
@@ -2074,6 +2195,7 @@
 					{@const credential = folder.credential_id ? savedCredentials.find(c => c.id === folder.credential_id) : undefined}
 					<button class="context-item" disabled={inside.length === 0} onclick={() => openAllIn(folder)} type="button">{t('folder.open_all', { count: String(inside.length) })}</button>
 					<button class="context-item" onclick={() => newSessionIn(folder)} type="button">{t('folder.new_session')}</button>
+					<button class="context-item" disabled={inside.length === 0 && !sessions.some(s => s.folder_id === folder.id)} onclick={() => void sortFolderByName(folder)} type="button">{t('folder.sort_by_name')}</button>
 					<button class="context-item" onclick={() => contextNewFolder(folder.id)} type="button">{t('folder.new_subfolder')}</button>
 					<button class="context-item" onclick={() => startRename(folder)} type="button">{t('folder.rename')}<kbd class="context-kbd">F2</kbd></button>
 					<div class="context-sep"></div>
@@ -2255,7 +2377,7 @@
 {/if}
 
 <QuickConnect bind:open={showQuickConnect} prefill={quickPrefill} />
-<SessionEditor bind:open={showEditor} editSession={editingSession} vaultId={newSessionFolder ? (newSessionFolder.vault_id ?? null) : targetVaultId} folderId={newSessionFolder?.id ?? null} {folders} onsave={handleEditorSave} />
+<SessionEditor bind:open={showEditor} editSession={editingSession} vaultId={newSessionFolder ? (newSessionFolder.vault_id ?? null) : targetVaultId} folderId={newSessionFolder?.id ?? null} cloneSession={cloningSession} {folders} onsave={handleEditorSave} />
 <SshConfigImport bind:open={() => importOpen('ssh_config'), (v) => setImportOpen('ssh_config', v)} vaultId={targetVaultId} onsave={handleEditorSave} onsource={openImport} />
 <RdpImport bind:open={() => importOpen('rdp'), (v) => setImportOpen('rdp', v)} vaultId={targetVaultId} onsave={handleEditorSave} onsource={openImport} />
 <ManagerImport
@@ -2776,6 +2898,14 @@
 	.folder-delete-btn:hover {
 		background: rgba(255, 69, 58, 0.12);
 		color: var(--color-danger);
+	}
+
+	/* Where a dragged session will land: a line above or below the row. */
+	.drop-before {
+		box-shadow: inset 0 2px 0 var(--color-accent);
+	}
+	.drop-after {
+		box-shadow: inset 0 -2px 0 var(--color-accent);
 	}
 
 	.folder-session {

@@ -134,6 +134,13 @@ pub struct SessionConfig {
     /// syncs with it; omitted from disk when off.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub favorite: bool,
+    /// Where the session stands among the others in its folder (or among
+    /// the sessions outside any folder), lowest first; set by moving it in
+    /// the list or sorting the folder. Kept on the session so it syncs with
+    /// it. Unset: after the ordered ones, as read. Only `session_set_order`
+    /// changes it; a move to another folder clears it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub order: Option<u32>,
     /// Read only: the saved credential this session's login was filled
     /// from when it was read, if one applies. Never stored.
     #[serde(default, skip_serializing_if = "Option::is_none")]

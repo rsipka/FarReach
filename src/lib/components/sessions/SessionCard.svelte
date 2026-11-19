@@ -27,9 +27,11 @@
 		selected?: boolean;
 		/** Ctrl/Cmd or Shift click, or any click while selecting. */
 		onselect?: (e: MouseEvent) => void;
+		/** VNC: the name of the saved SSH session it is reached through. */
+		viaName?: string | null;
 	}
 
-	let { session, vault = null, onconnect, onedit, ondelete, oncontextmenu, ondragstart, ondragend, selecting = false, selected = false, onselect }: Props = $props();
+	let { session, vault = null, onconnect, onedit, ondelete, oncontextmenu, ondragstart, ondragend, selecting = false, selected = false, onselect, viaName = null }: Props = $props();
 	let unavailable = $derived((session.kind === 'wsl' && !isWindows()) || (session.kind === 'serial' && isMobile()));
 	/** Double-click to open (Settings > General): a mouse click only focuses
 	 *  the row. Enter or Space (a click with no detail) and a tap still
@@ -71,6 +73,22 @@
 				: 'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7'
 	);
 
+	/** How the session gets to its server when not directly: through jump
+	 *  hosts or a saved SSH session (VNC), or through a proxy. Remote
+	 *  desktops keep no jump chain or proxy, so stale ones are not shown. */
+	let desktopKind = $derived(session.kind === 'rdp' || session.kind === 'vnc');
+	let jumpTip = $derived.by(() => {
+		if (session.kind === 'vnc') return session.via_session_id ? t('session.via_session', { name: viaName || '?' }) : '';
+		if (desktopKind || !session.jump_chain?.length) return '';
+		const hops = session.jump_chain.map((j) => `${j.username ? `${j.username}@` : ''}${j.host}${j.port && j.port !== 22 ? `:${j.port}` : ''}`);
+		return t('session.via_jump', { hops: hops.join(' → ') });
+	});
+	let proxyTip = $derived(
+		!desktopKind && session.proxy?.host
+			? t('session.via_proxy', { type: session.proxy.proxy_type.toUpperCase(), address: `${session.proxy.host}:${session.proxy.port}` })
+			: ''
+	);
+
 	/** The session's notes and fields, for a tooltip: hidden values stay masked. */
 	let docsTooltip = $derived.by(() => {
 		const notes = session.notes?.trim() ?? '';
@@ -92,6 +110,8 @@
 		const type = t(`session.protocol_${kind}`);
 		lines.push(kind === 'wsl' || kind === 'serial' ? type : `${type} · ${t('session.auth_type', { type: session.auth_method.type })}`);
 		if (kind !== 'wsl' && session.tags.length > 0) lines.push(t('session.tooltip_tags', { tags: session.tags.join(', ') }));
+		if (jumpTip) lines.push(jumpTip);
+		if (proxyTip) lines.push(proxyTip);
 		if (vault) lines.push(t('session.tooltip_vault', { name: vault.name }));
 		if (session.credential) {
 			lines.push(session.credential.missing ? t('credential.missing') : t('credential.chip', { name: session.credential.name }));
@@ -163,6 +183,19 @@
 				{#if session.favorite}
 					<span class="mark-tip" title={t('session.favorite')}><svg class="fav-mark" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label={t('session.favorite')}>
 						<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
+					</svg></span>
+				{/if}
+				<!-- Not a direct connection: a route for jump hosts, a globe for a
+				     proxy. Small marks by the name, so they stay in Compact layout
+				     and on phones, where the other chips are hidden. -->
+				{#if jumpTip}
+					<span class="mark-tip route-mark" title={jumpTip}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label={jumpTip}>
+						<circle cx="6" cy="19" r="3" /><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" /><circle cx="18" cy="5" r="3" />
+					</svg></span>
+				{/if}
+				{#if proxyTip}
+					<span class="mark-tip route-mark" title={proxyTip}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label={proxyTip}>
+						<circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18" />
 					</svg></span>
 				{/if}
 				<!-- Beside the name, which is short, so the address below has the
@@ -655,5 +688,9 @@
 	.mark-tip {
 		display: inline-flex;
 		flex-shrink: 0;
+	}
+
+	.route-mark {
+		color: var(--color-text-tertiary);
 	}
 </style>
