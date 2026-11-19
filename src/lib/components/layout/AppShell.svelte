@@ -15,6 +15,7 @@
 	import Toast from '#lib/components/shared/Toast.svelte';
 	import UpdateBanner from '#lib/components/shared/UpdateBanner.svelte';
 	import UpdateDialog from '#lib/components/shared/UpdateDialog.svelte';
+	import WhatsNewDialog from '#lib/components/shared/WhatsNewDialog.svelte';
 	import ActiveSessionsDialog from '#lib/components/shared/ActiveSessionsDialog.svelte';
 	import HostKeyDialog from '#lib/components/shared/HostKeyDialog.svelte';
 	import AuthPromptDialog from '#lib/components/shared/AuthPromptDialog.svelte';
@@ -250,6 +251,7 @@
 	<Toast />
 	<UpdateBanner />
 	<UpdateDialog open={updater.startupBlocking} />
+	<WhatsNewDialog />
 	<DuplicateVaultsDialog />
 
 	<ActiveSessionsDialog
