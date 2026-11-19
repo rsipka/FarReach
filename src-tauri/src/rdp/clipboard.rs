@@ -8,9 +8,11 @@
 //!
 //! Text and pictures go both ways. Files go both ways too: copy files here
 //! and paste them into the remote, or copy them there and paste them here,
-//! or drop them on the desktop. A phone has no file clipboard, so it is
-//! text only there. A session may turn files off, or the whole clipboard
-//! (see [`ClipboardMode`]).
+//! or drop them on the desktop. A phone has no file clipboard: there files
+//! are picked with the system's picker and offered (see [`Worker::send_files`]
+//! for why such an offer outlasts a focus), and what the remote copies is
+//! downloaded when asked and then saved one by one. A session may turn
+//! files off, or the whole clipboard (see [`ClipboardMode`]).
 //!
 //! Pictures: offered to the remote as CF_DIB, CF_DIBV5 and PNG, encoded
 //! once when offered; taken from the remote as PNG when it has it (alpha
@@ -65,6 +67,13 @@ const FETCH_CHUNK: u32 = 1024 * 1024;
 /// for the user to ask for it rather than coming down on the chance of a
 /// paste.
 pub const ASK_ABOVE: u64 = 100 * 1024 * 1024;
+
+/// Over what size a remote file copy waits for a yes. A phone cannot paste
+/// files anywhere, so there every copy waits: it is downloaded only to be
+/// saved, and only when asked.
+const fn ask_above() -> u64 {
+    if cfg!(mobile) { 0 } else { ASK_ABOVE }
+}
 /// The most a session keeps of what the remote copied unasked, all copies
 /// together. A copy the user asked for is not counted against it.
 const MAX_SESSION_FETCH_TOTAL: u64 = 8 * 1024 * 1024 * 1024;
@@ -138,6 +147,11 @@ enum Cmd {
 /// Dropping it — with the backend and the factory — ends the worker.
 pub struct ClipboardHandle {
     tx: Sender<Cmd>,
+    /// What the last finished download from the remote put here: the items
+    /// at the top of the copy. A phone saves them from here.
+    received: std::sync::Arc<std::sync::Mutex<Vec<PathBuf>>>,
+    /// The session's private folder, where picked files are copied first.
+    temp_dir: PathBuf,
 }
 
 impl ClipboardHandle {
@@ -161,6 +175,30 @@ impl ClipboardHandle {
     /// Stop the transfer in progress.
     pub fn cancel(&self) {
         let _ = self.tx.send(Cmd::Cancel);
+    }
+
+    /// Offer files the app itself put in this session's folder (a phone's
+    /// picks); anything outside it is refused.
+    pub fn send_staged(&self, paths: Vec<PathBuf>) -> Result<(), String> {
+        if paths.iter().any(|p| !p.starts_with(&self.temp_dir) || p.components().any(|c| c == std::path::Component::ParentDir)) {
+            return Err("not a file picked for this desktop".into());
+        }
+        let _ = self.tx.send(Cmd::SendFiles(paths));
+        Ok(())
+    }
+
+    /// The items the last download from the remote brought.
+    pub fn received(&self) -> Vec<PathBuf> {
+        self.received.lock().map(|r| r.clone()).unwrap_or_default()
+    }
+
+    /// A new folder under the session's own, for files picked to be sent.
+    /// Each pick gets its own, so two picks of a same-named file never meet.
+    pub fn staging_dir(&self) -> std::io::Result<PathBuf> {
+        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+        let dir = self.temp_dir.join(format!("out-{stamp}"));
+        fs::create_dir_all(&dir)?;
+        Ok(dir)
     }
 }
 
@@ -186,7 +224,10 @@ pub fn spawn(
     }
 
     let (tx, rx) = mpsc::channel();
+    let received = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let worker = Worker {
+        received: std::sync::Arc::clone(&received),
+        pinned: None,
         id: id.to_string(),
         proxy: Proxy(input),
         events: Events { app: app.clone(), name: format!("rdp-clipboard-{id}") },
@@ -216,7 +257,7 @@ pub fn spawn(
         temp_dir: temp_dir.to_string_lossy().into_owned(),
         files: mode == ClipboardMode::All,
     };
-    Ok((ClipboardHandle { tx }, factory))
+    Ok((ClipboardHandle { tx, received, temp_dir }, factory))
 }
 
 /// Answers from the worker go to the session through its clipboard channel.
@@ -335,7 +376,6 @@ impl CliprdrBackend for Backend {
 
 /// What is on the local clipboard, as far as the remote is concerned.
 enum Local {
-    #[cfg_attr(mobile, expect(dead_code, reason = "a phone's clipboard carries text only"))]
     Files(Vec<PathBuf>),
     Text(String),
     #[cfg_attr(mobile, expect(dead_code, reason = "a phone's clipboard carries text only"))]
@@ -589,6 +629,12 @@ struct Worker {
     outgoing: Outgoing,
     /// A remote copy too large to take unasked, until the user says.
     held: Option<(Vec<FileDescriptor>, Option<u32>)>,
+    /// Shared with the handle: what the last download brought.
+    received: std::sync::Arc<std::sync::Mutex<Vec<PathBuf>>>,
+    /// Files sent that the local clipboard could not take (a phone has no
+    /// file clipboard), with what the local clipboard held at the time.
+    /// They stay offered until the local clipboard changes.
+    pinned: Option<(Fingerprint, Vec<PathBuf>)>,
     /// Offers the server locked, by its lock id: a request that names one
     /// must read from that list even after a newer offer replaced it.
     locked: HashMap<u32, Vec<PathBuf>>,
@@ -652,6 +698,15 @@ impl Worker {
     /// Tell the remote what this machine's clipboard holds, if that changed.
     fn advertise(&mut self, force: bool) {
         let local = self.local.read();
+        if let Some((at, files)) = self.pinned.as_ref() {
+            if Fingerprint::of(&local) == *at {
+                let files = files.clone();
+                self.offer(Local::Files(files), force);
+                return;
+            }
+            // Something new was copied here: that is what goes now.
+            self.pinned = None;
+        }
         self.offer(local, force);
     }
 
@@ -714,6 +769,14 @@ impl Worker {
             return;
         }
         self.local.write_files(&paths);
+        // Where the local clipboard did not take them, a focus would read
+        // something else there and offer it over these: keep them offered
+        // until the local clipboard changes.
+        let now = self.local.read();
+        self.pinned = match now {
+            Local::Files(ref held) if *held == paths => None,
+            other => Some((Fingerprint::of(&other), paths.clone())),
+        };
         self.offer(Local::Files(paths), true);
     }
 
@@ -917,7 +980,7 @@ impl Worker {
         // Each copy is fetched without asking and kept until the session
         // ends, so a server that keeps copying could otherwise fill the disk:
         // past either limit, the user is asked.
-        if total > ASK_ABOVE || self.fetched_total.saturating_add(total) > MAX_SESSION_FETCH_TOTAL {
+        if total > ask_above() || self.fetched_total.saturating_add(total) > MAX_SESSION_FETCH_TOTAL {
             tracing::info!("RDP {}: remote copied {total} bytes of files; waiting to be asked", self.id);
             let count = top_level(&files).count();
             self.held = Some((files, lock));
@@ -1077,8 +1140,11 @@ impl Worker {
         let paths: Vec<PathBuf> = top_level(&fetch.files).map(|f| fetch.root.join(&f.name)).collect();
         tracing::info!("RDP {}: received {} item(s) into {}", self.id, paths.len(), fetch.root.display());
         self.local.write_files(&paths);
+        if let Ok(mut received) = self.received.lock() {
+            *received = paths.clone();
+        }
         // Only worth a word when it took long enough to have been shown.
-        if fetch.last_report.is_some() {
+        if fetch.last_report.is_some() || cfg!(mobile) {
             self.events.emit(ClipEvent::Finished { incoming: true, files: paths.len() });
         }
         self.fingerprint = Some(Fingerprint::Files(paths));

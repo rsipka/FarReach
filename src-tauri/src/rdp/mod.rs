@@ -368,7 +368,7 @@ impl RdpManager {
         // backends serve it: IronRDP's own on Windows, its Unix one on the
         // others. Android has no backend for it and says so.
         if let Some(path) = params.share_path.as_deref().filter(|p| !p.trim().is_empty()) {
-            match drive_factory(path) {
+            match resolve_share(path, &app).and_then(|path| drive_factory(&path)) {
                 Ok(factory) => {
                     tracing::info!("RDP {id}: sharing {path} as a drive");
                     client = client.with_rdpdr_backend_factory(factory);
@@ -420,6 +420,28 @@ impl RdpManager {
             return Err("nothing was dropped".to_string());
         }
         self.with_clipboard(id, |c| c.send_files(paths))
+    }
+
+    /// Where files picked for this desktop are copied before they are
+    /// offered; None when the session has no clipboard.
+    pub fn clipboard_staging_dir(&self, id: &str) -> Result<Option<std::path::PathBuf>, String> {
+        let open = self.open.get(id).ok_or_else(|| format!("no RDP session {id}"))?;
+        open.clipboard.as_ref().map(|c| c.staging_dir().map_err(|e| e.to_string())).transpose()
+    }
+
+    /// Offer files copied into the staging folder.
+    pub fn clipboard_send_staged(&self, id: &str, paths: Vec<std::path::PathBuf>) -> Result<(), String> {
+        let open = self.open.get(id).ok_or_else(|| format!("no RDP session {id}"))?;
+        match open.clipboard.as_ref() {
+            Some(c) => c.send_staged(paths),
+            None => Ok(()),
+        }
+    }
+
+    /// What the last download from this desktop brought.
+    pub fn clipboard_received(&self, id: &str) -> Result<Vec<std::path::PathBuf>, String> {
+        let open = self.open.get(id).ok_or_else(|| format!("no RDP session {id}"))?;
+        Ok(open.clipboard.as_ref().map(|c| c.received()).unwrap_or_default())
     }
 
     /// Download the remote copy that waited for a yes.
@@ -706,6 +728,33 @@ fn clipboard_mode(p: &RdpConnectParams) -> Option<clipboard::ClipboardMode> {
         Some("text") => Some(clipboard::ClipboardMode::NoFiles),
         _ => Some(clipboard::ClipboardMode::All),
     }
+}
+
+/// The saved `share_path` that means "this app's own folder in Files", for
+/// iPhone and iPad, where no other folder can be named.
+pub const APP_FILES_SHARE: &str = "@app-files";
+
+/// The folder a saved `share_path` names. On iOS, [`APP_FILES_SHARE`] is a
+/// folder in the app's Documents, which the Files app shows under the app's
+/// name (Info.ios.plist turns that on); anywhere else it is refused.
+fn resolve_share(path: &str, app: &AppHandle) -> Result<String, String> {
+    if path != APP_FILES_SHARE {
+        return Ok(path.to_string());
+    }
+    app_files_dir(app)
+}
+
+#[cfg(target_os = "ios")]
+fn app_files_dir(app: &AppHandle) -> Result<String, String> {
+    use tauri::Manager;
+    let dir = app.path().document_dir().map_err(|e| e.to_string())?.join("Shared with desktops");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.to_string_lossy().into_owned())
+}
+
+#[cfg(not(target_os = "ios"))]
+fn app_files_dir(_app: &AppHandle) -> Result<String, String> {
+    Err("the app's Files folder is shared only on iPhone and iPad".into())
 }
 
 /// The drive backend for one shared folder, named after the folder: Reach's

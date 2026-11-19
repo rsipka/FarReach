@@ -1113,6 +1113,56 @@ pub(crate) mod picked_file {
         tokio::fs::read(path).await.map_err(|e| format!("Cannot read {path}: {e}"))
     }
 
+    /// The file and the name it goes by: the last part of a path, or what
+    /// Android's picker calls a `content://` link.
+    pub async fn read_named(_app: &AppHandle, path: &str) -> Result<(String, Vec<u8>), String> {
+        #[cfg(target_os = "android")]
+        if is_link(path) {
+            use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+            use tauri::Manager;
+            #[derive(serde::Deserialize)]
+            struct Read {
+                data: String,
+                name: Option<String>,
+            }
+            let read: Read = _app
+                .state::<tauri_plugin_reach_unlock::Unlock<tauri::Wry>>()
+                .call("readUri", serde_json::json!({ "uri": path }))
+                .await?;
+            let name = read.name.unwrap_or_else(|| name_of(path));
+            return Ok((name, BASE64.decode(read.data).map_err(|e| e.to_string())?));
+        }
+        let bytes = tokio::fs::read(path).await.map_err(|e| format!("Cannot read {path}: {e}"))?;
+        Ok((name_of(path), bytes))
+    }
+
+    fn percent_decode(s: &str) -> String {
+        let bytes = s.as_bytes();
+        let mut out = Vec::with_capacity(bytes.len());
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'%' {
+                if let Some(b) = s.get(i + 1..i + 3).and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                    out.push(b);
+                    i += 3;
+                    continue;
+                }
+            }
+            out.push(bytes[i]);
+            i += 1;
+        }
+        String::from_utf8_lossy(&out).into_owned()
+    }
+
+    /// The last part of a path or link, decoded, never empty.
+    pub fn name_of(path: &str) -> String {
+        let last = path.trim_end_matches(['/', '\\']).rsplit(['/', '\\']).next().unwrap_or("");
+        let decoded = percent_decode(last);
+        // A content link's last part may itself be `primary:Download/x.pdf`.
+        let decoded = decoded.rsplit(['/', ':']).next().unwrap_or("").to_string();
+        if decoded.is_empty() { "file".to_string() } else { decoded }
+    }
+
     pub async fn write(_app: &AppHandle, path: &str, bytes: &[u8]) -> Result<(), String> {
         #[cfg(target_os = "android")]
         if is_link(path) {
