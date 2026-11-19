@@ -32,7 +32,8 @@ export interface RdpConnectParams {
 export type RdpStatus =
 	| { state: 'connected' }
 	| { state: 'loggedIn' }
-	| { state: 'closed'; reason: string }
+	/** `clean`: the user logged off or disconnected from the desktop itself. */
+	| { state: 'closed'; reason: string; clean: boolean }
 	| { state: 'error'; message: string };
 
 /** Frame kinds, matching `kind` in src-tauri/src/rdp/mod.rs. */

@@ -75,6 +75,10 @@ export interface SessionConfig {
   credential?: CredentialUse | null;
   /** On the start screen's Favorites. Stored on the session, so it syncs. */
   favorite?: boolean;
+  /** Its place among the sessions of its folder (or those outside any),
+   *  lowest first; unset: after those with one. Stored on the session, so
+   *  it syncs. Changed only by sessionSetOrder. */
+  order?: number | null;
   /** Free text about the server (RDM's Description and Notes). */
   notes?: string | null;
   /** Named values kept with the session, in the user's order. */
@@ -361,6 +365,13 @@ export async function sessionMoveToFolder(sessionIds: string[], folderId: string
  *  changes; returns how many changed. */
 export async function sessionSetFavorite(sessionIds: string[], favorite: boolean): Promise<number> {
   return invoke<number>('session_set_favorite', { sessionIds, favorite });
+}
+
+/** Put sessions in this order: each gets its index as its place. Give
+ *  all the sessions of one folder (or those outside any). Only that place
+ *  changes; returns how many changed. */
+export async function sessionSetOrder(sessionIds: string[]): Promise<number> {
+  return invoke<number>('session_set_order', { sessionIds });
 }
 
 export async function sessionListFolders(): Promise<Folder[]> {
