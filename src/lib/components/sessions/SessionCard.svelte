@@ -8,6 +8,7 @@
 	import { isMobile, isWindows } from '#lib/platform.js';
 	import { getSettings } from '#lib/state/settings.svelte.js';
 	import { tooltip } from '#lib/utils/tooltip.js';
+	import { formatHops, formatProxyAddress, ROUTE_ICON } from '#lib/utils/route.js';
 
 	const settings = getSettings();
 
@@ -80,12 +81,11 @@
 	let jumpTip = $derived.by(() => {
 		if (session.kind === 'vnc') return session.via_session_id ? t('session.via_session', { name: viaName || '?' }) : '';
 		if (desktopKind || !session.jump_chain?.length) return '';
-		const hops = session.jump_chain.map((j) => `${j.username ? `${j.username}@` : ''}${j.host}${j.port && j.port !== 22 ? `:${j.port}` : ''}`);
-		return t('session.via_jump', { hops: hops.join(' → ') });
+		return t('session.via_jump', { hops: formatHops(session.jump_chain) });
 	});
 	let proxyTip = $derived(
 		!desktopKind && session.proxy?.host
-			? t('session.via_proxy', { type: session.proxy.proxy_type.toUpperCase(), address: `${session.proxy.host}:${session.proxy.port}` })
+			? t('session.via_proxy', { type: session.proxy.proxy_type.toUpperCase(), address: formatProxyAddress(session.proxy) })
 			: ''
 	);
 
@@ -190,12 +190,12 @@
 				     and on phones, where the other chips are hidden. -->
 				{#if jumpTip}
 					<span class="mark-tip route-mark" title={jumpTip}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label={jumpTip}>
-						<circle cx="6" cy="19" r="3" /><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" /><circle cx="18" cy="5" r="3" />
+						<path d={ROUTE_ICON.jump} />
 					</svg></span>
 				{/if}
 				{#if proxyTip}
 					<span class="mark-tip route-mark" title={proxyTip}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label={proxyTip}>
-						<circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18" />
+						<path d={ROUTE_ICON.proxy} />
 					</svg></span>
 				{/if}
 				<!-- Beside the name, which is short, so the address below has the
