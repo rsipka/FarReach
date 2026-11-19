@@ -15,6 +15,10 @@ export type SessionRequest =
 	/** `shell` opens the session with another login shell (a container's). */
 	| { kind: 'connect'; sessionId: string; shell?: string }
 	| { kind: 'new-session' }
+	/** Show the session in the list (folders opened, scrolled to, marked). */
+	| { kind: 'locate'; sessionId: string }
+	/** Open the session's editor. */
+	| { kind: 'edit'; sessionId: string }
 	/** `prefill`: an address someone typed, to start the dialog from. */
 	| { kind: 'quick-connect'; prefill?: TypedAddress };
 
