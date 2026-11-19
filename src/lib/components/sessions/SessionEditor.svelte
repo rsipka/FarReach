@@ -33,10 +33,14 @@
 		folders?: Folder[];
 		/** The folder a new session starts in (a folder's "New session here"). */
 		folderId?: string | null;
+		/** A session to copy: the form starts as it, and Save makes a new one. */
+		cloneSession?: SessionConfig;
 		onsave?: () => void;
 	}
 
-	let { open = $bindable(), editSession, vaultId = null, folders = [], folderId = null, onsave }: Props = $props();
+	let { open = $bindable(), editSession, vaultId = null, folders = [], folderId = null, cloneSession, onsave }: Props = $props();
+	/** The session the form was filled from: the one edited, or the one copied. */
+	let source = $derived(editSession ?? cloneSession);
 
 	/**
 	 * SSH or RDP. The two share a name, a host, a port and a username; RDP has
@@ -60,7 +64,7 @@
 	// A picked one is kept: connecting never replaces it.
 	let osChoice = $state('');
 	const osOptions = osChoices();
-	let autoOs = $derived(editSession && !editSession.os_manual && kind === sessionKind(editSession) && !osCleared ? (editSession.detected_os ?? '') : '');
+	let autoOs = $derived(source && !source.os_manual && kind === sessionKind(source) && !osCleared ? (source.detected_os ?? '') : '');
 	let osTitle = (id: string) => (id === 'unknown' ? t('session.os_none') : (osOptions.find((o) => o.id === id)?.title ?? id));
 	let sharePath = $state('');
 	/** VNC only: the saved SSH session to go through, or '' for direct. */
@@ -89,12 +93,12 @@
 	const OWN_LOGIN = 'own';
 	let credentialId = $state('');
 	let allCredentials = $state<SavedCredential[]>([]);
-	let sessionVault = $derived(editSession ? (editSession.vault_id ?? null) : vaultId);
+	let sessionVault = $derived(source ? (source.vault_id ?? null) : vaultId);
 	/** The folders this session can go in: its own vault's. One it is
 	 *  already in from another vault (older versions allowed that) stays
 	 *  listed so saving does not move it out unasked. */
 	let vaultFolders = $derived(
-		folders.filter((f) => (f.vault_id ?? null) === sessionVault || (!!editSession?.folder_id && f.id === editSession.folder_id))
+		folders.filter((f) => (f.vault_id ?? null) === sessionVault || (!!source?.folder_id && f.id === source.folder_id))
 	);
 	let credentials = $derived(credentialsFor(allCredentials, sessionVault));
 
@@ -303,9 +307,42 @@
 	// each run put the fields back: every click in the editor was undone.
 	$effect(() => {
 		const session = editSession;
+		const copy = cloneSession;
 		if (!open) return;
-		untrack(() => fillForm(session));
+		untrack(() => {
+			fillForm(session ?? copy);
+			if (!session && copy) startClone(copy);
+		});
 	});
+
+	/**
+	 * A copy starts as its original, under a new name. A login a saved
+	 * credential filled in stays linked to that credential, but its secrets
+	 * are not copied into the new session as its own.
+	 */
+	function startClone(copy: SessionConfig): void {
+		name = t('session.clone_name', { name: copy.name });
+		if (copy.credential && !copy.credential.missing) {
+			authType = 'Password';
+			password = '';
+			passwordRef = null;
+			keyPath = '';
+			keyId = '';
+			keyPassphrase = '';
+			keyPassphraseRef = null;
+		}
+		for (const h of jumpHops) {
+			if (h.read?.credential && !h.read.credential.missing) {
+				h.authType = 'Password';
+				h.password = '';
+				h.passwordRef = null;
+				h.keyPath = '';
+				h.keyPassphrase = '';
+				h.keyPassphraseRef = null;
+			}
+			h.read = null;
+		}
+	}
 
 	function fillForm(editSession: SessionConfig | undefined): void {
 		osCleared = false;
@@ -606,13 +643,13 @@
 					authMethod: authMethod,
 					folderId: folderIdStr || null,
 					tags,
-					vaultId,
+					vaultId: sessionVault,
 					jumpChain: jumpChain ?? null,
 					proxy: proxyConfig,
 					shell: desktop ? null : (shell.trim() || null),
 					kind,
 					domain: rdp ? domain : null,
-					detectedOs: rdp ? os : (osChoice || null),
+					detectedOs: rdp ? os : (osChoice || autoOs || null),
 					osManual: !rdp && !!osChoice,
 					sharePath: rdp ? sharePath : null,
 					viaSessionId: via,
@@ -706,7 +743,7 @@
 	}
 </script>
 
-<Modal {open} onclose={handleClose} title={isEditing ? t('session.edit_session') : t('session.new')}>
+<Modal {open} onclose={handleClose} title={isEditing ? t('session.edit_session') : cloneSession ? t('session.clone_session') : t('session.new')}>
 	<form class="form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
 		<!-- Same control as the auth method below: one segmented row, and
 		     everything under it follows the choice. -->
@@ -1188,7 +1225,7 @@
 			{/if}
 		</div>
 
-		{#key editSession?.id ?? 'new'}
+		{#key source?.id ?? 'new'}
 			<SshOptionsSection
 				bind:this={sshSection}
 				bind:options={sshOptions}
