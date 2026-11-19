@@ -345,6 +345,7 @@
   "session.os": "Sistema operativo",
   "session.os_windows": "Windows",
   "session.os_linux": "Linux (xrdp)",
+  "session.os_gnome": "GNOME",
   "session.rdp_share_folder": "Share a folder (optional)",
   "session.rdp_share_hint": "Appare nel desktop remoto come un'unità. Non disponibile su Android.",
   "session.rdp_share_browse": "Sfoglia",

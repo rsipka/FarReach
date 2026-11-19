@@ -345,6 +345,7 @@
   "session.os": "Λειτουργικό σύστημα",
   "session.os_windows": "Windows",
   "session.os_linux": "Linux (xrdp)",
+  "session.os_gnome": "GNOME",
   "session.rdp_share_folder": "Share a folder (optional)",
   "session.rdp_share_hint": "Εμφανίζεται στην απομακρυσμένη επιφάνεια εργασίας ως μονάδα δίσκου. Δεν είναι διαθέσιμο στο Android.",
   "session.rdp_share_browse": "Αναζήτηση",

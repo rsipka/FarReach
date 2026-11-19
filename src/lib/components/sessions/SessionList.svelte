@@ -1144,6 +1144,9 @@
 			sessionId: session.id,
 			domain: session.domain ?? undefined,
 			sharePath: session.share_path ?? undefined,
+			// GNOME Remote Desktop serves no client without the graphics
+			// pipeline, so a GNOME session asks for it whatever the setting says.
+			graphicsPipeline: session.detected_os === 'gnome' ? true : undefined,
 			width: 0,
 			height: 0,
 		};

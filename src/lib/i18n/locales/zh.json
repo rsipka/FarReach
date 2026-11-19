@@ -345,6 +345,7 @@
   "session.os": "操作系统",
   "session.os_windows": "Windows",
   "session.os_linux": "Linux (xrdp)",
+  "session.os_gnome": "GNOME",
   "session.rdp_share_folder": "Share a folder (optional)",
   "session.rdp_share_hint": "在远程桌面中显示为一个驱动器。Android 上不可用。",
   "session.rdp_share_browse": "浏览",

@@ -345,6 +345,7 @@
   "session.os": "Операционная система",
   "session.os_windows": "Windows",
   "session.os_linux": "Linux (xrdp)",
+  "session.os_gnome": "GNOME",
   "session.rdp_share_folder": "Share a folder (optional)",
   "session.rdp_share_hint": "Отображается в удалённом рабочем столе как диск. Недоступно на Android.",
   "session.rdp_share_browse": "Обзор",

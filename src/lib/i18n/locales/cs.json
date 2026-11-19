@@ -344,6 +344,7 @@
   "session.os": "Operační systém",
   "session.os_windows": "Windows",
   "session.os_linux": "Linux (xrdp)",
+  "session.os_gnome": "GNOME",
   "session.rdp_share_folder": "Sdílet složku (nepovinné)",
   "session.rdp_share_hint": "Ve vzdálené ploše se zobrazí jako jednotka. Na Androidu není k dispozici.",
   "session.rdp_share_browse": "Procházet",
