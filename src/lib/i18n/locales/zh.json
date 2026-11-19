@@ -291,6 +291,8 @@
   "session.os_none": "无图标",
   "session.os_clear": "清除",
   "session.os_cleared": "已清除。下次连接时将重新检测系统。",
+  "session.os_search": "搜索图标",
+  "session.os_no_match": "没有匹配的图标",
   "session.docs": "文档",
   "session.docs_has_notes": "备注",
   "session.docs_field_count": "字段：{{count}}",

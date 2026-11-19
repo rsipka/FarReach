@@ -291,6 +291,8 @@
   "session.os_none": "Sin icono",
   "session.os_clear": "Borrar",
   "session.os_cleared": "Borrado. El sistema se detectará en la próxima conexión.",
+  "session.os_search": "Buscar iconos",
+  "session.os_no_match": "Ningún icono coincide",
   "session.docs": "Documentación",
   "session.docs_has_notes": "Notas",
   "session.docs_field_count": "Campos: {{count}}",

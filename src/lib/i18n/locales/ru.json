@@ -291,6 +291,8 @@
   "session.os_none": "Без значка",
   "session.os_clear": "Сбросить",
   "session.os_cleared": "Сброшено. ОС будет определена при следующем подключении.",
+  "session.os_search": "Поиск значков",
+  "session.os_no_match": "Нет подходящих значков",
   "session.docs": "Документация",
   "session.docs_has_notes": "Заметки",
   "session.docs_field_count": "Поля: {{count}}",

@@ -291,6 +291,8 @@
   "session.os_none": "Nessuna icona",
   "session.os_clear": "Cancella",
   "session.os_cleared": "Cancellato. Il sistema verrà rilevato alla prossima connessione.",
+  "session.os_search": "Cerca icone",
+  "session.os_no_match": "Nessuna icona corrisponde",
   "session.docs": "Documentazione",
   "session.docs_has_notes": "Note",
   "session.docs_field_count": "Campi: {{count}}",

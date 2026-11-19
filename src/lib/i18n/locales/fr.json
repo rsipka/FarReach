@@ -291,6 +291,8 @@
   "session.os_none": "Aucune icône",
   "session.os_clear": "Effacer",
   "session.os_cleared": "Effacé. Le système sera détecté à la prochaine connexion.",
+  "session.os_search": "Rechercher une icône",
+  "session.os_no_match": "Aucune icône ne correspond",
   "session.docs": "Documentation",
   "session.docs_has_notes": "Notes",
   "session.docs_field_count": "Champs : {{count}}",
