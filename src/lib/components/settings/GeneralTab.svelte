@@ -19,10 +19,11 @@
 	import { effectiveThreshold, MIN_PASTE_THRESHOLD } from '#lib/terminal/paste.js';
 	import { DEFAULT_WORD_SEPARATORS, rightClickMode } from '#lib/terminal/mouse.js';
 	import { t, changeLocale } from '#lib/state/i18n.svelte.js';
+	import { __APP_VERSION__ } from '#lib/version.js';
 
 	/** Which slice of these rows to show: Settings arranges them by topic,
 	 *  so one tab file feeds several pages (see settings-pages.ts). */
-	type Part = 'general' | 'shell' | 'paste' | 'paste-adv' | 'sessions' | 'tmux' | 'about';
+	type Part = 'general' | 'shell' | 'paste' | 'paste-adv' | 'sessions' | 'tmux' | 'updates' | 'about';
 	let { part }: { part: Part } = $props();
 
 	const settings = getSettings();
@@ -171,24 +172,6 @@
 			</div>
 		</div>
 	{/if}
-
-	<div class="setting-row">
-		<div class="setting-info">
-			<span class="setting-label">{t('settings.check_updates')}</span>
-			<span class="setting-description">{t('settings.check_updates_desc')}</span>
-		</div>
-		<div class="setting-control update-controls">
-			<button class="discord-link" onclick={onCheckNow} disabled={checkingUpdates}>
-				<span>{checkingUpdates ? t('settings.check_updates_checking') : t('settings.check_updates_now')}</span>
-			</button>
-			<Toggle
-				hideLabel
-				checked={settings.checkForUpdates}
-				label={t('settings.check_updates')}
-				onchange={onCheckForUpdatesChange}
-			/>
-		</div>
-	</div>
 
 	{/if}
 
@@ -445,6 +428,35 @@
 
 	{/if}
 
+	{#if part === 'updates'}
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.version')}</span>
+		</div>
+		<div class="setting-control"><span class="version">v{__APP_VERSION__}</span></div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.check_updates')}</span>
+			<span class="setting-description">{t('settings.check_updates_desc')}</span>
+		</div>
+		<div class="setting-control update-controls">
+			<button class="discord-link" onclick={onCheckNow} disabled={checkingUpdates}>
+				<span>{checkingUpdates ? t('settings.check_updates_checking') : t('settings.check_updates_now')}</span>
+			</button>
+			<Toggle
+				hideLabel
+				checked={settings.checkForUpdates}
+				label={t('settings.check_updates')}
+				onchange={onCheckForUpdatesChange}
+			/>
+		</div>
+	</div>
+
+	{/if}
+
 	{#if part === 'about'}
 
 	{#if SHOW_COMMUNITY}
@@ -545,6 +557,12 @@
 <style>
 	/* The dropdowns' box: it was the page's black, the one dark well in a
 	   column of grey controls. */
+	.version {
+		font-family: var(--font-mono, monospace);
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
+	}
+
 	.update-controls {
 		display: flex;
 		align-items: center;
