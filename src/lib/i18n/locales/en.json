@@ -296,6 +296,8 @@
   "session.os_none": "No icon",
   "session.os_clear": "Clear",
   "session.os_cleared": "Cleared. The OS is detected again on the next connect.",
+  "session.os_search": "Search icons",
+  "session.os_no_match": "No icon matches",
   "session.docs": "Documentation",
   "session.docs_has_notes": "Notes",
   "session.docs_field_count": "Fields: {{count}}",

@@ -53,6 +53,7 @@
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
 	import { DEFAULT_SERIAL_OPTIONS } from '#lib/ipc/serial.js';
+	import { osNeedsDetection } from '#lib/data/distro-icons.js';
 	import { sshConnect, sshDisconnect, sshDetectOs, sshTmuxChosen, tmuxStartScript, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
 	// Passwords are now stored encrypted in vault, not in memory cache
 	import { createTab, updateTabOs } from '#lib/state/tabs.svelte.js';
@@ -1549,10 +1550,12 @@
 			passwordFallback = false;
 			fallbackPassword = '';
 
-			// Detect OS in background and persist to session
-			if (!session.detected_os && !session.os_manual) {
+			// Detect OS in background and persist to session. A host saved as
+			// plain Linux or unknown is asked again: older versions saved that
+			// for MikroTik and UniFi devices, which have their own logos now.
+			if (osNeedsDetection(session.detected_os, session.os_manual)) {
 				sshDetectOs(id).then(async (osId) => {
-					if (osId) {
+					if (osId && osId !== session.detected_os) {
 						updateTabOs(id, osId);
 						try {
 							// Only the OS changes, on the session as stored. The copy

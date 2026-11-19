@@ -296,6 +296,8 @@
   "session.os_none": "Kein Symbol",
   "session.os_clear": "Zurücksetzen",
   "session.os_cleared": "Zurückgesetzt. Das Betriebssystem wird beim nächsten Verbinden neu erkannt.",
+  "session.os_search": "Symbole suchen",
+  "session.os_no_match": "Kein passendes Symbol",
   "session.docs": "Dokumentation",
   "session.docs_has_notes": "Notizen",
   "session.docs_field_count": "Felder: {{count}}",

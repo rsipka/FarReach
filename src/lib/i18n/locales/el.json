@@ -296,6 +296,8 @@
   "session.os_none": "Χωρίς εικονίδιο",
   "session.os_clear": "Εκκαθάριση",
   "session.os_cleared": "Εκκαθαρίστηκε. Το ΛΣ θα εντοπιστεί ξανά στην επόμενη σύνδεση.",
+  "session.os_search": "Αναζήτηση εικονιδίων",
+  "session.os_no_match": "Κανένα εικονίδιο δεν ταιριάζει",
   "session.docs": "Τεκμηρίωση",
   "session.docs_has_notes": "Σημειώσεις",
   "session.docs_field_count": "Πεδία: {{count}}",

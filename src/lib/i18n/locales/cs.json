@@ -295,6 +295,8 @@
   "session.os_none": "Bez ikony",
   "session.os_clear": "Vymazat",
   "session.os_cleared": "Vymazáno. OS se znovu zjistí při příštím připojení.",
+  "session.os_search": "Hledat ikony",
+  "session.os_no_match": "Žádná ikona neodpovídá",
   "session.docs": "Dokumentace",
   "session.docs_has_notes": "Poznámky",
   "session.docs_field_count": "Pole: {{count}}",

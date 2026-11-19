@@ -3,7 +3,7 @@
 	import Modal from '#lib/components/shared/Modal.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
 	import KeyPicker from './KeyPicker.svelte';
-	import DistroIcon from './DistroIcon.svelte';
+	import OsIconSelect from './OsIconSelect.svelte';
 	import { osChoices } from '#lib/data/distro-icons.js';
 	import Input from '#lib/components/shared/Input.svelte';
 	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField, type TmuxSetting } from '#lib/ipc/sessions.js';
@@ -68,6 +68,18 @@
 	const osOptions = osChoices();
 	let autoOs = $derived(source && !source.os_manual && kind === sessionKind(source) && !osCleared ? (source.detected_os ?? '') : '');
 	let osTitle = (id: string) => (id === 'unknown' ? t('session.os_none') : (osOptions.find((o) => o.id === id)?.title ?? id));
+	// The OS icon list: Automatic (SSH only, showing what was detected), No
+	// icon, a value no logo covers (kept as typed), then every logo.
+	let osIconOptions = $derived([
+		...(kind === 'ssh'
+			? [
+					{ value: '', label: autoOs ? t('session.os_auto_detected', { os: osTitle(autoOs) }) : t('session.os_auto'), osId: autoOs || null },
+					{ value: 'unknown', label: t('session.os_none'), osId: null }
+				]
+			: [{ value: '', label: t('session.os_none'), osId: null }]),
+		...(osChoice && osChoice !== 'unknown' && !osOptions.some((o) => o.id === osChoice) ? [{ value: osChoice, label: osChoice, osId: osChoice }] : []),
+		...osOptions.map((o) => ({ value: o.id, label: o.title, osId: o.id }))
+	]);
 	let sharePath = $state('');
 	/** iPhone and iPad: no folder can be named, the app's own folder in Files can be shared. */
 	const onIos = isIos();
@@ -1273,21 +1285,7 @@
 			<div class="folder-section">
 				<span class="folder-label">{t('session.os_icon')}</span>
 				<div class="os-row">
-					<span class="os-preview"><DistroIcon osId={osChoice || autoOs} size={16} /></span>
-					<select class="folder-select os-select" bind:value={osChoice} disabled={saving}>
-						{#if kind === 'ssh'}
-							<option value="">{autoOs ? t('session.os_auto_detected', { os: osTitle(autoOs) }) : t('session.os_auto')}</option>
-							<option value="unknown">{t('session.os_none')}</option>
-						{:else}
-							<option value="">{t('session.os_none')}</option>
-						{/if}
-						{#if osChoice && osChoice !== 'unknown' && !osOptions.some((o) => o.id === osChoice)}
-							<option value={osChoice}>{osChoice}</option>
-						{/if}
-						{#each osOptions as o (o.id)}
-							<option value={o.id}>{o.title}</option>
-						{/each}
-					</select>
+					<OsIconSelect options={osIconOptions} bind:value={osChoice} disabled={saving} />
 					{#if kind === 'ssh' && !osChoice && autoOs}
 						<Button variant="secondary" size="sm" onclick={() => (osCleared = true)} disabled={saving}>
 							{t('session.os_clear')}
@@ -1513,18 +1511,6 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-	}
-
-	.os-preview {
-		display: inline-flex;
-		width: 16px;
-		justify-content: center;
-		flex-shrink: 0;
-	}
-
-	.os-select {
-		flex: 1;
-		min-width: 0;
 	}
 
 	.os-cleared {

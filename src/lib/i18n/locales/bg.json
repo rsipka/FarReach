@@ -296,6 +296,8 @@
   "session.os_none": "Без икона",
   "session.os_clear": "Изчисти",
   "session.os_cleared": "Изчистено. ОС ще бъде открита отново при следващото свързване.",
+  "session.os_search": "Търсене на икони",
+  "session.os_no_match": "Няма съвпадаща икона",
   "session.docs": "Документация",
   "session.docs_has_notes": "Бележки",
   "session.docs_field_count": "Полета: {{count}}",
