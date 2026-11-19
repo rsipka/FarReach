@@ -57,7 +57,7 @@
 	import { untrustedRefsFromError } from '#lib/ipc/sessions.js';
 	import { getSettings, updateSetting } from '#lib/state/settings.svelte.js';
 	import { isMobile } from '#lib/platform.js';
-	import { setTabLink } from '#lib/state/tabs.svelte.js';
+	import { setTabLink, closeTab } from '#lib/state/tabs.svelte.js';
 	import MobileKeyBar, { type BarKey } from '#lib/components/shared/MobileKeyBar.svelte';
 
 	interface Props {
@@ -128,6 +128,8 @@
 		setTabLink(id, phase === 'closed' || phase === 'error' ? 'down' : undefined);
 	});
 	let message = $state('');
+	// Closed because the user logged off or disconnected, not on an error.
+	let ended = $state(false);
 
 	let unlisten: UnlistenFn | null = null;
 	let sizeObserver: ResizeObserver | null = null;
@@ -793,8 +795,16 @@
 				message = '';
 				resizeNotBefore = Date.now() + SETTLE_MS;
 			} else if (s.state === 'closed') {
+				// Logged off (or disconnected from Windows' menu) after the
+				// desktop was up: the tab goes, if Settings say so.
+				if (s.clean && phase === 'connected' && getSettings().closeTabOnExit) {
+					closeTab(id);
+					return;
+				}
 				phase = 'closed';
-				message = s.reason;
+				ended = s.clean;
+				// A logoff is not an error: no server text to puzzle over.
+				message = s.clean ? '' : s.reason;
 				// Nothing to release on a desktop that has gone; just forget.
 				held.clear();
 				heldKeysyms.clear();
@@ -952,7 +962,7 @@
 				<span class="spinner" aria-hidden="true"></span>
 				<span>{t('rdp.connecting')}</span>
 			{:else if phase === 'closed'}
-				<span>{t('rdp.closed')}</span>
+				<span>{ended ? t('terminal.session_ended') : t('rdp.closed')}</span>
 				{#if message}<small>{message}</small>{/if}
 			{:else}
 				<span>{t('rdp.error')}</span>
