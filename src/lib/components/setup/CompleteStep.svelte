@@ -37,6 +37,18 @@
 				show: !mobile
 			},
 			{
+				label: t('security.auto_lock'),
+				value: settings.autoLockMinutes
+					? t('security.auto_lock_minutes', { count: settings.autoLockMinutes })
+					: t('security.auto_lock_never'),
+				show: true
+			},
+			{
+				label: t('settings.check_updates'),
+				value: t(settings.checkForUpdates ? 'setup.updates_auto' : 'setup.updates_manual'),
+				show: true
+			},
+			{
 				label: t('setup.storage_title'),
 				value: storageLabel + (hasTurso ? ` (${settings.pendingTursoOrg})` : ''),
 				show: !rerun

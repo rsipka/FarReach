@@ -2,6 +2,7 @@
 	import PersonalizeStep from './PersonalizeStep.svelte';
 	import SessionsStep from './SessionsStep.svelte';
 	import LoggingStep from './LoggingStep.svelte';
+	import SecurityStep from './SecurityStep.svelte';
 	import PluginsStep from './PluginsStep.svelte';
 	import TursoStep from './TursoStep.svelte';
 	import CompleteStep from './CompleteStep.svelte';
@@ -72,6 +73,8 @@
 				<SessionsStep onNext={next} onBack={back} />
 			{:else if step === 'logging'}
 				<LoggingStep onNext={next} onBack={back} />
+			{:else if step === 'security'}
+				<SecurityStep onNext={next} onBack={back} />
 			{:else if step === 'plugins'}
 				<PluginsStep onNext={next} onBack={back} />
 			{:else if step === 'storage'}
