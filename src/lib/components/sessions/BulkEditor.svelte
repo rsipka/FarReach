@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PasswordField from '#lib/components/shared/PasswordField.svelte';
 	// Editing many sessions at once. Every field starts as "keep": it shows
 	// the value the sessions share, or "Mixed", and nothing is sent for it.
 	// Typing or picking makes it a change (an accent bar and a revert
@@ -539,14 +540,18 @@
 						{#if passwordClear}
 							<p class="cleared">{t('bulk.will_clear')}</p>
 						{:else}
-							<input
-								id="bulk-password"
-								type="password"
-								autocomplete="new-password"
-								value={password ?? ''}
-								oninput={(e) => (password = e.currentTarget.value)}
-								placeholder={t('bulk.password_set_on', { count: String(withPassword), total: String(count('password')) })}
-							/>
+							<PasswordField>
+								{#snippet children(type)}
+									<input
+										id="bulk-password"
+										{type}
+										autocomplete="new-password"
+										value={password ?? ''}
+										oninput={(e) => (password = e.currentTarget.value)}
+										placeholder={t('bulk.password_set_on', { count: String(withPassword), total: String(count('password')) })}
+									/>
+								{/snippet}
+							</PasswordField>
 						{/if}
 						{#if password && !passwordClear && canCreateCredential}
 							<label class="check">
@@ -593,14 +598,18 @@
 						</select>
 						{#if authType === 'Key'}
 							<KeyPicker bind:path={keyPath} bind:keyId />
-							<input
-								class="sub-input"
-								type="password"
-								autocomplete="new-password"
-								bind:value={keyPassphrase}
-								placeholder={t('session.passphrase_optional')}
-								aria-label={t('session.passphrase_optional')}
-							/>
+							<PasswordField>
+								{#snippet children(type)}
+									<input
+										class="sub-input"
+										{type}
+										autocomplete="new-password"
+										bind:value={keyPassphrase}
+										placeholder={t('session.passphrase_optional')}
+										aria-label={t('session.passphrase_optional')}
+									/>
+								{/snippet}
+							</PasswordField>
 							{#if keyMissing}<p class="hint warn">{t('bulk.key_needed')}</p>{/if}
 						{:else if authType === 'Password'}
 							<p class="hint">{t('bulk.auth_password_hint')}</p>
@@ -718,7 +727,11 @@
 										{/each}
 									</select>
 									{#if hop.login === 'password'}
-										<input type="password" autocomplete="new-password" bind:value={hop.password} placeholder={t('session.password_optional')} aria-label={t('session.password')} />
+										<PasswordField>
+											{#snippet children(type)}
+												<input {type} autocomplete="new-password" bind:value={hop.password} placeholder={t('session.password_optional')} aria-label={t('session.password')} />
+											{/snippet}
+										</PasswordField>
 									{/if}
 								</div>
 							{/each}
@@ -753,7 +766,11 @@
 							</div>
 							{#if proxyType !== 'socks4'}
 								<input type="text" bind:value={proxyUser} placeholder={t('proxy.username_optional')} aria-label={t('proxy.username_optional')} spellcheck="false" />
-								<input type="password" autocomplete="new-password" bind:value={proxyPass} placeholder={t('session.password_optional')} aria-label={t('session.password')} />
+								<PasswordField>
+									{#snippet children(type)}
+										<input {type} autocomplete="new-password" bind:value={proxyPass} placeholder={t('session.password_optional')} aria-label={t('session.password')} />
+									{/snippet}
+								</PasswordField>
 							{/if}
 						{/if}
 						{#if appliesText('proxy')}<p class="applies">{appliesText('proxy')}</p>{/if}

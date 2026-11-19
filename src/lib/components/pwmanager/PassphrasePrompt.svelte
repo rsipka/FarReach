@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PasswordField from '#lib/components/shared/PasswordField.svelte';
 	/**
 	 * The password manager's passphrase, asked for when a sign-in needs it
 	 * (Settings → Password managers → Passphrase: Ask when needed). Mounted
@@ -126,17 +127,21 @@
 				{/if}
 				<label class="field">
 					<span class="label">{t(master ? 'pwmanager.prompt_label_master' : 'pwmanager.prompt_label')}</span>
-					<!-- svelte-ignore a11y_autofocus -->
-					<input
-						class="input"
-						type="password"
-						bind:value
-						autocomplete="off"
-						autocapitalize="off"
-						spellcheck="false"
-						autofocus
-						disabled={sending}
-					/>
+					<PasswordField disabled={sending}>
+						{#snippet children(type)}
+							<!-- svelte-ignore a11y_autofocus -->
+							<input
+								class="input"
+								{type}
+								bind:value
+								autocomplete="off"
+								autocapitalize="off"
+								spellcheck="false"
+								autofocus
+								disabled={sending}
+							/>
+						{/snippet}
+					</PasswordField>
 				</label>
 				{#if sendError}
 					<p class="msg error" role="alert">{sendError}</p>

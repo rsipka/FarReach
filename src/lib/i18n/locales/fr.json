@@ -59,6 +59,8 @@
   "start.actions": "Démarrer",
   "palette.group_snippets": "Extraits",
   "common.reenter_password": "Saisissez à nouveau le mot de passe",
+  "common.show_password": "Afficher le mot de passe",
+  "common.hide_password": "Masquer le mot de passe",
   "common.export_password_hint": "Mot de passe utilisé lors de l’export",
   "common.tls_init_hint": "Laissez vide si vous avez utilisé l’initialisation de type TLS",
   "settings.new_password_placeholder": "Saisissez un nouveau mot de passe",

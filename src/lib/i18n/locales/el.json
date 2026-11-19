@@ -59,6 +59,8 @@
   "start.actions": "Έναρξη",
   "palette.group_snippets": "Αποσπάσματα",
   "common.reenter_password": "Εισαγάγετε ξανά τον κωδικό",
+  "common.show_password": "Εμφάνιση κωδικού",
+  "common.hide_password": "Απόκρυψη κωδικού",
   "common.export_password_hint": "Ο κωδικός που χρησιμοποιήθηκε στην εξαγωγή",
   "common.tls_init_hint": "Αφήστε το κενό αν χρησιμοποιήσατε αρχικοποίηση τύπου TLS",
   "settings.new_password_placeholder": "Εισαγάγετε νέο κωδικό",

@@ -59,6 +59,8 @@
   "start.actions": "Empezar",
   "palette.group_snippets": "Fragmentos",
   "common.reenter_password": "Vuelve a escribir la contraseña",
+  "common.show_password": "Mostrar contraseña",
+  "common.hide_password": "Ocultar contraseña",
   "common.export_password_hint": "Contraseña usada al exportar",
   "common.tls_init_hint": "Déjalo en blanco si usaste la inicialización estilo TLS",
   "settings.new_password_placeholder": "Escribe una contraseña nueva",

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PasswordField from '#lib/components/shared/PasswordField.svelte';
 	/**
 	 * New or edited connection. The engine comes first because it decides
 	 * which fields make sense; "how to reach it" comes next, since for most
@@ -305,13 +306,17 @@
 							}}
 						>
 							{#snippet input()}
-								<input
-									type="password"
-									bind:value={password}
-									autocomplete="new-password"
-									aria-labelledby="db-password-label"
-									placeholder={hasStoredPassword ? t('db.password_kept') : ''}
-								/>
+								<PasswordField>
+									{#snippet children(type)}
+										<input
+											{type}
+											bind:value={password}
+											autocomplete="new-password"
+											aria-labelledby="db-password-label"
+											placeholder={hasStoredPassword ? t('db.password_kept') : ''}
+										/>
+									{/snippet}
+								</PasswordField>
 							{/snippet}
 						</SecretRefField>
 					</div>

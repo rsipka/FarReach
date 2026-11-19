@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PasswordField from '#lib/components/shared/PasswordField.svelte';
 	import { onMount } from 'svelte';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import {
@@ -462,13 +463,17 @@
 									{/each}
 								</select>
 							{:else if schema.fieldType === 'sensitive'}
-								<input
-									id="ds-field-{schema.name}"
-									type="password"
-									class="field-input"
-									value={configFields[schema.name] ?? ''}
-									oninput={(e) => setConfigField(schema.name, e.currentTarget.value)}
-								/>
+								<PasswordField>
+									{#snippet children(type)}
+										<input
+											id="ds-field-{schema.name}"
+											{type}
+											class="field-input"
+											value={configFields[schema.name] ?? ''}
+											oninput={(e) => setConfigField(schema.name, e.currentTarget.value)}
+										/>
+									{/snippet}
+								</PasswordField>
 							{/if}
 
 							{#if schema.helpText}
