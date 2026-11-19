@@ -8,6 +8,7 @@
 	LAN-only sharing that contacts nothing outside.
 -->
 <script lang="ts">
+	import PasswordField from '#lib/components/shared/PasswordField.svelte';
 	import Disclosure from '#lib/components/shared/Disclosure.svelte';
 	import Toggle from '#lib/components/shared/Toggle.svelte';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -143,7 +144,11 @@
 								</label>
 								<label class="field">
 									<span>{t('sharing.credential')}</span>
-									<input type="password" bind:value={server.credential} oninput={touch} autocomplete="new-password" />
+									<PasswordField>
+										{#snippet children(type)}
+											<input {type} bind:value={server.credential} oninput={touch} autocomplete="new-password" />
+										{/snippet}
+									</PasswordField>
 								</label>
 							</div>
 						{/if}

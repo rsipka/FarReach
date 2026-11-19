@@ -60,6 +60,8 @@
   "start.actions": "Starten",
   "palette.group_snippets": "Snippets",
   "common.reenter_password": "Passwort erneut eingeben",
+  "common.show_password": "Passwort anzeigen",
+  "common.hide_password": "Passwort verbergen",
   "common.export_password_hint": "Beim Export verwendetes Passwort",
   "common.tls_init_hint": "Leer lassen, wenn Sie die TLS-artige Initialisierung verwendet haben",
   "settings.new_password_placeholder": "Neues Passwort eingeben",

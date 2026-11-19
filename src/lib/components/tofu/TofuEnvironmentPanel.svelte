@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PasswordField from '#lib/components/shared/PasswordField.svelte';
 	import { onMount } from 'svelte';
 	import { ask } from '#lib/state/ask.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -184,14 +185,18 @@
 									<span class="var-desc">{variable.description}</span>
 								{/if}
 							</label>
-							<input
-								id="var-{variable.name}"
-								type={variable.sensitive ? 'password' : 'text'}
-								class="value-input"
-								value={localValues[variable.name] ?? ''}
-								oninput={(e) => handleValueChange(variable.name, e.currentTarget.value)}
-								placeholder={variable.defaultValue ?? ''}
-							/>
+							<PasswordField secret={variable.sensitive}>
+								{#snippet children(type)}
+									<input
+										id="var-{variable.name}"
+										{type}
+										class="value-input"
+										value={localValues[variable.name] ?? ''}
+										oninput={(e) => handleValueChange(variable.name, e.currentTarget.value)}
+										placeholder={variable.defaultValue ?? ''}
+									/>
+								{/snippet}
+							</PasswordField>
 						</div>
 					{/each}
 
@@ -201,13 +206,17 @@
 								<span class="var-name">{field.varName}</span>
 								<span class="var-desc">{field.label}</span>
 							</label>
-							<input
-								id="prov-{field.varName}"
-								type="password"
-								class="value-input"
-								value={localValues[field.varName] ?? ''}
-								oninput={(e) => handleValueChange(field.varName, e.currentTarget.value)}
-							/>
+							<PasswordField>
+								{#snippet children(type)}
+									<input
+										id="prov-{field.varName}"
+										{type}
+										class="value-input"
+										value={localValues[field.varName] ?? ''}
+										oninput={(e) => handleValueChange(field.varName, e.currentTarget.value)}
+									/>
+								{/snippet}
+							</PasswordField>
 						</div>
 					{/each}
 				</div>

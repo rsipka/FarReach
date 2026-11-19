@@ -60,6 +60,8 @@
   "start.actions": "Začít",
   "palette.group_snippets": "Úryvky",
   "common.reenter_password": "Zadejte heslo znovu",
+  "common.show_password": "Zobrazit heslo",
+  "common.hide_password": "Skrýt heslo",
   "common.export_password_hint": "Heslo použité při exportu",
   "common.tls_init_hint": "Nechte prázdné, pokud jste použili inicializaci ve stylu TLS",
   "settings.new_password_placeholder": "Zadejte nové heslo",

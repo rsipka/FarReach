@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PasswordField from '#lib/components/shared/PasswordField.svelte';
 	/**
 	 * Import hosts from another connection manager: Devolutions Remote
 	 * Desktop Manager, mRemoteNG, MobaXterm, PuTTY, WinSCP or Tabby, as
@@ -407,16 +408,20 @@
 		{#if !parsed && askPassword}
 			<label class="user-field">
 				<span>{t('session.mgr_import_password_label', { app: src.app })}</span>
-				<input
-					class="tool-input"
-					type="password"
-					bind:value={masterPassword}
-					autocomplete="off"
-					onkeydown={(e) => {
-						if (e.key === 'Enter' && masterPassword) read(masterPassword);
-					}}
-					disabled={busy}
-				/>
+				<PasswordField>
+					{#snippet children(type)}
+						<input
+							class="tool-input"
+							{type}
+							bind:value={masterPassword}
+							autocomplete="off"
+							onkeydown={(e) => {
+								if (e.key === 'Enter' && masterPassword) read(masterPassword);
+							}}
+							disabled={busy}
+						/>
+					{/snippet}
+				</PasswordField>
 			</label>
 			<p class="user-hint" class:warn={askPassword.wrong}>
 				{askPassword.wrong ? t('session.mgr_import_password_wrong') : t('session.mgr_import_password_hint')}

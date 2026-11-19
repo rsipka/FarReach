@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PasswordField from '#lib/components/shared/PasswordField.svelte';
 	import { openHistoryPanel } from '#lib/state/history.svelte.js';
 	import QuickConnect, { type QuickConnectPrefill } from './QuickConnect.svelte';
 	import FaIcon from '#lib/components/shared/FaIcon.svelte';
@@ -1733,13 +1734,17 @@
 			</button>
 			<!-- Or join the vaults another device already syncs -->
 			<p class="init-desc">{t('session.link_device_hint')}</p>
-			<input
-				class="import-input"
-				type="password"
-				placeholder={t('session.paste_link_code')}
-				bind:value={linkCode}
-				disabled={importing || initializing}
-			/>
+			<PasswordField disabled={importing || initializing}>
+				{#snippet children(type)}
+					<input
+						class="import-input"
+						{type}
+						placeholder={t('session.paste_link_code')}
+						bind:value={linkCode}
+						disabled={importing || initializing}
+					/>
+				{/snippet}
+			</PasswordField>
 			<div class="recovery-buttons">
 				{#if canScanLinkCode()}
 					<button class="reset-btn" onclick={handleScanLink} disabled={importing || initializing}>{t('sync.scan_qr')}</button>
@@ -1762,13 +1767,17 @@
 			{#if initError}
 				<p class="init-error">{initError}</p>
 			{/if}
-			<input
-				class="import-input"
-				type="password"
-				placeholder={t('session.paste_backup_key')}
-				bind:value={importKey}
-				disabled={importing}
-			/>
+			<PasswordField disabled={importing}>
+				{#snippet children(type)}
+					<input
+						class="import-input"
+						{type}
+						placeholder={t('session.paste_backup_key')}
+						bind:value={importKey}
+						disabled={importing}
+					/>
+				{/snippet}
+			</PasswordField>
 			<div class="recovery-buttons">
 				<button class="init-btn" onclick={handleImport} disabled={importing || !importKey.trim()}>
 					{#if importing}{t('session.restoring')}{:else}{t('session.restore_identity')}{/if}
@@ -2279,32 +2288,44 @@
 			<form class="prompt-form" onsubmit={(e) => { e.preventDefault(); doConnect(); }}>
 				{#if passwordFallback}
 					<div class="fallback-hint">{t('session.fallback_to_password')}</div>
-					<input
-						class="prompt-input"
-						type="password"
-						placeholder={t('session.password')}
-						bind:value={fallbackPassword}
-						bind:this={fallbackInputEl}
-						disabled={connecting}
-					/>
+					<PasswordField disabled={connecting}>
+						{#snippet children(type)}
+							<input
+								class="prompt-input"
+								{type}
+								placeholder={t('session.password')}
+								bind:value={fallbackPassword}
+								bind:this={fallbackInputEl}
+								disabled={connecting}
+							/>
+						{/snippet}
+					</PasswordField>
 				{:else if !askSecret}
 					<!-- Connecting with what the session has: nothing to type. -->
 				{:else if connectSession.auth_method.type === 'Password'}
-					<input
-						class="prompt-input"
-						type="password"
-						placeholder={t('session.password')}
-						bind:value={connectPassword}
-						disabled={connecting}
-					/>
+					<PasswordField disabled={connecting}>
+						{#snippet children(type)}
+							<input
+								class="prompt-input"
+								{type}
+								placeholder={t('session.password')}
+								bind:value={connectPassword}
+								disabled={connecting}
+							/>
+						{/snippet}
+					</PasswordField>
 				{:else if connectSession.auth_method.type === 'Key'}
-					<input
-						class="prompt-input"
-						type="password"
-						placeholder={t('session.key_passphrase_optional')}
-						bind:value={connectKeyPassphrase}
-						disabled={connecting}
-					/>
+					<PasswordField disabled={connecting}>
+						{#snippet children(type)}
+							<input
+								class="prompt-input"
+								{type}
+								placeholder={t('session.key_passphrase_optional')}
+								bind:value={connectKeyPassphrase}
+								disabled={connecting}
+							/>
+						{/snippet}
+					</PasswordField>
 				{/if}
 
 				{#if askSecret && !passwordFallback && promptRef(connectSession)}

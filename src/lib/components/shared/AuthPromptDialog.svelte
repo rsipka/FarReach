@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PasswordField from '#lib/components/shared/PasswordField.svelte';
 	/**
 	 * A question a login asks while it runs: a password, a key's passphrase,
 	 * the server's keyboard-interactive questions (one-time codes and the
@@ -161,16 +162,20 @@
 				{#each current.fields as f, i (i)}
 					<label class="field">
 						<span class="label">{current.kind === 'keyboard' ? f.text : t(`authprompt.field_${current.kind}`)}</span>
-						<!-- svelte-ignore a11y_autofocus -->
-						<input
-							class="input"
-							type={f.echo ? 'text' : 'password'}
-							bind:value={answers[i]}
-							autocomplete="off"
-							autocapitalize="off"
-							spellcheck="false"
-							autofocus={i === 0}
-						/>
+						<PasswordField secret={!f.echo}>
+							{#snippet children(type)}
+								<!-- svelte-ignore a11y_autofocus -->
+								<input
+									class="input"
+									{type}
+									bind:value={answers[i]}
+									autocomplete="off"
+									autocapitalize="off"
+									spellcheck="false"
+									autofocus={i === 0}
+								/>
+							{/snippet}
+						</PasswordField>
 					</label>
 				{/each}
 			{/if}
