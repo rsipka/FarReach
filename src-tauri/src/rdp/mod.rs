@@ -108,8 +108,25 @@ pub enum RdpStatus {
     Connected,
     /// The server sent its login-complete notification: the desktop is usable.
     LoggedIn,
-    Closed { reason: String },
+    /// `clean`: the session ended as meant to (the user logged off or
+    /// disconnected from the remote desktop), not on an error or a kick.
+    Closed { reason: String, clean: bool },
     Error { message: String },
+}
+
+/// Whether an RDP session that ended without a transport error ended as the
+/// user meant it to: logged off, or disconnected from Windows' own menu. An
+/// idle timeout, another user taking the session, an admin's logoff or a
+/// server going down are not, and keep the panel open to say why.
+fn graceful_is_clean(reason: &ironrdp_session::GracefulDisconnectReason) -> bool {
+    use ironrdp_pdu::rdp::server_error_info::{ErrorInfo, ProtocolIndependentCode};
+    use ironrdp_session::GracefulDisconnectReason as R;
+    match reason {
+        R::UserInitiated | R::ServerInitiated => true,
+        R::Other(text) => [ProtocolIndependentCode::LogoffByUser, ProtocolIndependentCode::RpcInitiatedDisconnectByuser]
+            .into_iter()
+            .any(|c| *text == ErrorInfo::ProtocolIndependentCode(c).description()),
+    }
 }
 
 /// Frame kinds on the wire. Layout is little-endian, header first.
@@ -832,15 +849,15 @@ impl Screen {
             }
 
             RdpOutputEvent::Terminated(result) => {
-                let reason = match result {
-                    Ok(graceful) => format!("{graceful:?}"),
+                let (reason, clean) = match result {
+                    Ok(graceful) => (graceful.description(), graceful_is_clean(&graceful)),
                     Err(err) => {
                         tracing::warn!("RDP {id}: session ended with an error: {err:?}");
-                        err.to_string()
+                        (err.to_string(), false)
                     }
                 };
                 tracing::info!("RDP {id}: closed ({reason})");
-                status(RdpStatus::Closed { reason });
+                status(RdpStatus::Closed { reason, clean });
                 return false;
             }
 
@@ -1089,6 +1106,21 @@ mod tests {
 
     fn nz(v: u16) -> NonZeroU16 {
         NonZeroU16::new(v).unwrap()
+    }
+
+    #[test]
+    fn logoff_is_a_clean_end_and_a_kick_is_not() {
+        use ironrdp_pdu::rdp::server_error_info::{ErrorInfo, ProtocolIndependentCode as C};
+        use ironrdp_session::GracefulDisconnectReason as R;
+        let info = |c| R::Other(ErrorInfo::ProtocolIndependentCode(c).description());
+        assert!(graceful_is_clean(&R::UserInitiated));
+        assert!(graceful_is_clean(&R::ServerInitiated));
+        assert!(graceful_is_clean(&info(C::LogoffByUser)));
+        assert!(graceful_is_clean(&info(C::RpcInitiatedDisconnectByuser)));
+        assert!(!graceful_is_clean(&info(C::IdleTimeout)));
+        assert!(!graceful_is_clean(&info(C::DisconnectedByOtherconnection)));
+        assert!(!graceful_is_clean(&info(C::RpcInitiatedLogoff)));
+        assert!(!graceful_is_clean(&info(C::ServerReboot)));
     }
 
     fn header(bytes: &[u8], at: usize) -> (u8, u16, u16, u16, u16, u16, u16) {
