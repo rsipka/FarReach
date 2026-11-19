@@ -2095,7 +2095,7 @@
   "security.lock_on_system_lock": "Zamknout při zamčení počítače",
   "security.lock_on_system_lock_desc": "Zamknout Reach, když zamknete počítač nebo když přejde do režimu spánku.",
   "security.unlock_keys_at_start": "Odemknout klíče přihlašovacích údajů po spuštění",
-  "security.unlock_keys_at_start_desc": "Po otevření se Reach jednou zeptá na heslovou frázi každého klíče chráněného heslovou frází, který používají uložené přihlašovací údaje. Heslové fráze zůstávají jen v paměti, dokud se Reach nezamkne nebo nezavře, takže se na ně při připojování znovu neptá.",
+  "security.unlock_keys_at_start_desc": "Po otevření se Reach jednou zeptá na heslovou frázi každého klíče chráněného heslovou frází, který používají uložené přihlašovací údaje. Heslové fráze zůstávají jen v paměti, dokud se Reach nezamkne nebo nezavře, takže se na ně při připojování znovu neptá, ani u relace, která si stejný klíč vybere sama. Na klíče, které používají jen relace, se zde neptá; heslová fráze zadaná pro takový klíč při připojení se uchová stejně.",
   "security.keys_unlocked": "Odemčené klíče: {{count}}",
   "lock.unlock_biometric": "Odemknout pomocí {{method}}",
   "lock.biometric_failed": "Odemknutí pomocí {{method}} se nezdařilo. Zkuste to znovu, nebo použijte hlavní heslo.",

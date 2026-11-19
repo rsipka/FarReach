@@ -677,6 +677,11 @@ mod tests {
             ("plain".to_string(), "Plain".to_string(), material(PLAIN_KEY, None)),
             ("locked".to_string(), "Locked".to_string(), material(ENCRYPTED_KEY, None)),
             ("saved".to_string(), "Saved".to_string(), material(ENCRYPTED_KEY.trim_end(), Some("hunter2"))),
+            // The same key imported again, encrypted anew: other text.
+            ("copy".to_string(), "Copy".to_string(), material(&{
+                let key = ssh_key::PrivateKey::from_openssh(ENCRYPTED_KEY).unwrap().decrypt("hunter2").unwrap();
+                key.encrypt(&mut rsa::rand_core::OsRng, "hunter2").unwrap().to_openssh(ssh_key::LineEnding::LF).unwrap().to_string()
+            }, None)),
         ];
         let cred = |name: &str, auth: serde_json::Value| -> SavedCredential {
             serde_json::from_value(serde_json::json!({ "id": name, "name": name, "username": "u", "auth_method": auth })).unwrap()
@@ -686,6 +691,7 @@ mod tests {
             cred("plain", serde_json::json!({ "type": "Key", "key_id": "plain" })),
             cred("a", serde_json::json!({ "type": "Key", "key_id": "locked" })),
             cred("b", serde_json::json!({ "type": "Key", "key_id": "locked" })),
+            cred("c", serde_json::json!({ "type": "Key", "key_id": "copy" })),
             // Its passphrase is saved with the key, typed into the
             // credential, or comes from a password manager at connect.
             cred("saved", serde_json::json!({ "type": "Key", "key_id": "saved" })),
@@ -697,7 +703,7 @@ mod tests {
         let keys = locked_keys(&creds, &stored);
         assert_eq!(keys.len(), 1);
         assert_eq!(keys[0].label, "Locked");
-        assert_eq!(keys[0].used_by, ["a", "b"]);
+        assert_eq!(keys[0].used_by, ["a", "b", "c"]);
     }
 
     fn session(folder: Option<&str>, cred: Option<&str>, vault: Option<&str>) -> SessionConfig {

@@ -2111,7 +2111,7 @@
   "security.lock_on_system_lock": "Lock when the computer locks",
   "security.lock_on_system_lock_desc": "Lock Reach when you lock your computer or it goes to sleep.",
   "security.unlock_keys_at_start": "Unlock credential keys at start",
-  "security.unlock_keys_at_start_desc": "When Reach opens, ask once for the passphrase of each passphrase-protected key your saved credentials use. The passphrases are kept in memory only, until Reach locks or closes, so connecting does not ask again.",
+  "security.unlock_keys_at_start_desc": "When Reach opens, ask once for the passphrase of each passphrase-protected key your saved credentials use. The passphrases are kept in memory only, until Reach locks or closes, so connecting does not ask again, also with a session that picks the same key itself. Keys only sessions use are not asked for here; a passphrase typed for one at a connect is kept the same way.",
   "security.keys_unlocked": "Keys unlocked: {{count}}",
   "lock.unlock_biometric": "Unlock with {{method}}",
   "lock.biometric_failed": "{{method}} did not unlock the vault. Try again or use your master password.",
