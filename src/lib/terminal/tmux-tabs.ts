@@ -8,6 +8,7 @@
 import { sshConnect, sshTmuxWindows, type TmuxStart, type TmuxWindow } from '#lib/ipc/ssh.js';
 import { activateTab, createTab, getActiveTab, placeAfter, type Tab } from '#lib/state/tabs.svelte.js';
 import { getSettings } from '#lib/state/settings.svelte.js';
+import { isMobile } from '#lib/platform.js';
 import { addToast } from '#lib/state/toasts.svelte.js';
 import { t } from '#lib/state/i18n.svelte.js';
 import { keepSession } from './duplicate-tab.js';
@@ -64,13 +65,15 @@ export async function openOtherWindows(tab: Tab): Promise<void> {
 }
 
 /** Ctrl+T and the tab bar's +: on a tmux tab, a new tmux window in a new
- *  tab (unless Settings says otherwise); else a local terminal. */
+ *  tab (unless Settings says otherwise); else a local terminal, except on a
+ *  phone or tablet, which has no local shell. */
 export function newTab(): void {
 	const active = getActiveTab();
 	if (getSettings().tmuxNewTabWindow && isTmuxViewTab(active)) {
 		openTmuxWindowTab(active, 'new').catch((err) => addToast(t('tmux.window_failed', { error: String(err) }), 'error'));
 		return;
 	}
+	if (isMobile()) return;
 	createTab('local');
 }
 

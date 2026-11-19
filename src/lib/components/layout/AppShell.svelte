@@ -301,6 +301,21 @@
 		background-color: var(--color-bg-primary);
 	}
 
+	/* iOS lays its keyboard over the page and scrolls the page up instead of
+	   making room (lib/keyboard-viewport.ts). The shell is pinned to the part
+	   still visible, so the bars stay put and the terminal gets shorter. */
+	:global(html.ios) .app-shell {
+		position: fixed;
+		left: 0;
+		top: var(--vv-top, 0px);
+		height: var(--vv-height, 100dvh);
+	}
+
+	/* The home indicator is under the keyboard then: no strip kept for it. */
+	:global(html.keyboard-open) .app-shell {
+		padding-bottom: 0;
+	}
+
 	.app-body {
 		position: relative;
 		display: flex;
