@@ -52,7 +52,7 @@
 	let kind = $state<SessionKind>('ssh');
 	let domain = $state('');
 	/** RDP only: the protocol cannot say what the machine is (xrdp claims to be Windows), so the user does. */
-	let os = $state<'windows' | 'linux'>('windows');
+	let os = $state<'windows' | 'linux' | 'gnome'>('windows');
 	// The OS found on the last connect is kept for good; Clear forgets it, so
 	// the next connect looks again. (From the ReachQ fork by CPTProgrammer.)
 	let osCleared = $state(false);
@@ -313,7 +313,7 @@
 		if (editSession) {
 			kind = sessionKind(editSession);
 			domain = editSession.domain ?? '';
-			os = editSession.detected_os === 'linux' ? 'linux' : 'windows';
+			os = editSession.detected_os === 'linux' || editSession.detected_os === 'gnome' ? editSession.detected_os : 'windows';
 			sharePath = editSession.share_path ?? '';
 			viaSessionId = editSession.via_session_id ?? '';
 			wslDistro = editSession.wsl_distro ?? '';
@@ -843,6 +843,7 @@
 				<div class="auth-toggle">
 					<button type="button" class="auth-btn" class:active={os === 'windows'} disabled={saving} onclick={() => (os = 'windows')}>{t('session.os_windows')}</button>
 					<button type="button" class="auth-btn" class:active={os === 'linux'} disabled={saving} onclick={() => (os = 'linux')}>{t('session.os_linux')}</button>
+					<button type="button" class="auth-btn" class:active={os === 'gnome'} disabled={saving} onclick={() => (os = 'gnome')}>{t('session.os_gnome')}</button>
 				</div>
 			</div>
 			<div class="shell-field">
