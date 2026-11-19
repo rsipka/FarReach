@@ -7,7 +7,10 @@
 	 * that same tab menu, so nothing here is a second copy of it.
 	 */
 	import type { Tab } from '#lib/state/tabs.svelte.js';
-	import { splitWith, unsplit, getSplit } from '#lib/state/tabs.svelte.js';
+	import { splitWith, unsplit, getSplit, getTabs } from '#lib/state/tabs.svelte.js';
+	import { SPLIT_MIN_WIDTH } from '#lib/terminal/split.js';
+	import { isMobile } from '#lib/platform.js';
+	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { isBroadcastTarget, toggleBroadcastTarget } from '#lib/state/broadcast.svelte.js';
 	import { openHistoryPanel, tabHistory } from '#lib/state/history.svelte.js';
 	import { finderFor, pendingFind } from '#lib/state/terminal-find.svelte.js';
@@ -53,6 +56,13 @@
 	let broadcasting = $derived(isBroadcastTarget(tab.id));
 	let split = $derived(getSplit());
 	let inSplit = $derived(!!split && (split.first === tab.id || split.second === tab.id));
+	// A phone or tablet has no local shell to open beside a lone tab, and a
+	// phone's screen is too narrow to show a split at all.
+	const mobile = isMobile();
+	let innerWidth = $state(typeof window === 'undefined' ? 1200 : window.innerWidth);
+	let splitShown = $derived(!mobile || innerWidth >= SPLIT_MIN_WIDTH);
+	let splitBlocked = $derived(mobile && !inSplit && getTabs().length < 2);
+	let splitTip = $derived(inSplit ? t('split.unsplit') : splitBlocked ? t('split.need_second') : t('split.right'));
 
 	// ---- Find ----------------------------------------------------------------
 	let findOpen = $state(false);
@@ -110,7 +120,8 @@
 	}
 
 	function toggleSplit(): void {
-		if (inSplit) unsplit();
+		if (splitBlocked) addToast(t('split.need_second'), 'info');
+		else if (inSplit) unsplit();
 		else splitWith(tab.id, 'right');
 	}
 
@@ -128,6 +139,8 @@
 		<path {d} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
 	</svg>
 {/snippet}
+
+<svelte:window bind:innerWidth />
 
 <div class="term-bar" role="toolbar" aria-label={t('termbar.label')}>
 	<span class="state {linkState}" role="img" aria-label={stateLabel} title={stateLabel}></span>
@@ -167,7 +180,9 @@
 	{/if}
 	<span class="sep"></span>
 	<button class="ib" class:on={broadcasting} type="button" onclick={() => toggleBroadcastTarget(tab.id)} title={t('broadcast.tab_toggle')} aria-label={t('broadcast.tab_toggle')} aria-pressed={broadcasting}>{@render icon(ICONS.broadcast)}</button>
-	<button class="ib" class:on={inSplit} type="button" onclick={toggleSplit} title={inSplit ? t('split.unsplit') : t('split.right')} aria-label={inSplit ? t('split.unsplit') : t('split.right')} aria-pressed={inSplit}>{@render icon(ICONS.split)}</button>
+	{#if splitShown}
+		<button class="ib" class:on={inSplit} type="button" onclick={toggleSplit} class:blocked={splitBlocked} aria-disabled={splitBlocked} title={splitTip} aria-label={splitTip} aria-pressed={inSplit}>{@render icon(ICONS.split)}</button>
+	{/if}
 	<span class="sep"></span>
 	<button class="ib" type="button" onclick={openMore} title={t('termbar.more')} aria-label={t('termbar.more')} aria-haspopup="menu">{@render icon(ICONS.more, 17)}</button>
 </div>
@@ -300,6 +315,10 @@
 		background: var(--color-surface-hover);
 		border-color: var(--color-border);
 		color: var(--color-text-primary);
+	}
+
+	.ib.blocked {
+		opacity: 0.45;
 	}
 
 	.ib.on {

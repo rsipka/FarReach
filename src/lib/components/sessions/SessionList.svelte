@@ -540,6 +540,7 @@
 		const failed = result.results.filter(r => r.status === 'failed').length;
 		if (result.undo) lastBulkUndo = result.undo;
 		if (failed > 0) return; // the editor shows what failed
+		clearSelection(); // done with them; a failure keeps them for Retry
 		const token = result.undo;
 		addToast(
 			t('bulk.done_toast', { count: String(changed) }),

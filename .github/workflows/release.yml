@@ -550,6 +550,8 @@ jobs:
           cp -r src-tauri/icons/android/. src-tauri/gen/android/app/src/main/res/
           # Its activity also makes room for the phone keyboard (#127).
           cp src-tauri/android/MainActivity.kt src-tauri/gen/android/app/src/main/java/com/reachercm/client/MainActivity.kt
+          # R8 keep rules for the QR code scanner's ML Kit.
+          cat src-tauri/android/proguard-rules.pro >> src-tauri/gen/android/app/proguard-rules.pro
 
       # One permanent key, kept as a repository secret. Android installs an
       # update only over an app signed with the same key, so a key made fresh
