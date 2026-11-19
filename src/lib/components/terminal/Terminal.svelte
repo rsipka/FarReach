@@ -1531,6 +1531,19 @@
 				{#if autoReconnecting}
 					<button class="reconnect-cancel" onclick={stopAutoReconnect} type="button">{t('common.cancel')}</button>
 				{/if}
+				{#if cleanEnd}
+					<!-- The shell ended on its own: closing is the likely next
+					     step, and a phone has no quick way to close a tab. -->
+					<button class="reconnect-close" onclick={() => closeTab(ptyId)} type="button">{t('tabs.close_tab')}</button>
+					<label class="reconnect-always">
+						<input
+							type="checkbox"
+							checked={getSettings().closeTabOnExit}
+							onchange={(e) => updateSetting('closeTabOnExit', e.currentTarget.checked)}
+						/>
+						<span>{t('terminal.always_close_tab')}</span>
+					</label>
+				{/if}
 			</div>
 		</div>
 	{/if}
@@ -1714,6 +1727,29 @@
 
 	.reconnect-cancel:hover {
 		color: var(--color-text-primary);
+	}
+
+	.reconnect-close {
+		padding: 6px 20px;
+		border-radius: 6px;
+		border: 1px solid var(--color-border);
+		background: none;
+		color: inherit;
+		font-size: 0.8rem;
+		cursor: pointer;
+	}
+
+	.reconnect-close:hover {
+		background: rgba(255, 255, 255, 0.08);
+	}
+
+	.reconnect-always {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
+		cursor: pointer;
 	}
 
 	.reconnect-btn {

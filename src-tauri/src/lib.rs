@@ -11,6 +11,7 @@ pub mod vnc;
 pub mod container;
 pub mod db;
 pub mod devops;
+mod devops_projects;
 pub mod devops_store;
 pub mod k8s;
 pub mod logfiles;
@@ -425,6 +426,8 @@ pub fn run() {
             rdp_clipboard_send_files,
             rdp_clipboard_fetch,
             rdp_clipboard_cancel,
+            rdp_clipboard_pick_files,
+            rdp_clipboard_save_received,
             rdp_window_fullscreen,
             vnc_connect,
             vnc_disconnect,
@@ -894,6 +897,8 @@ pub fn run() {
             rdp_clipboard_send_files,
             rdp_clipboard_fetch,
             rdp_clipboard_cancel,
+            rdp_clipboard_pick_files,
+            rdp_clipboard_save_received,
             rdp_window_fullscreen,
             vnc_connect,
             vnc_disconnect,

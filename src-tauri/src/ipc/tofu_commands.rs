@@ -30,14 +30,15 @@ use crate::tofu::types::{
 use tauri::{Emitter, State};
 use uuid::Uuid;
 
-/// List all saved tofu projects.
+async fn projects(state: &AppState) -> Result<crate::devops_projects::ProjectStore<'_>, String> {
+    crate::devops_projects::ProjectStore::open(&state.vault_manager, crate::vault::manager::TOFU_PROJECTS_VAULT, "tofu_project").await
+}
+
 #[tauri::command]
-pub async fn tofu_list_projects(state: State<'_, AppState>) -> Result<Vec<TofuProject>, String> {
+pub async fn tofu_list_projects(state: State<'_, AppState>) -> Result<Vec<crate::devops_projects::ProjectSummary>, String> {
     devops::require(Tool::Tofu)?;
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-    Ok(tofu_mgr.list_projects())
+    let store = projects(&state).await?;
+    store.list().await
 }
 
 /// Create a new tofu project: scaffold directory + persist to vault.
@@ -49,8 +50,9 @@ pub async fn tofu_create_project(
     description: String,
 ) -> Result<TofuProject, String> {
     devops::require(Tool::Tofu)?;
+    let store = projects(&state).await?;
     // Scaffold directory
-    crate::tofu::project::TofuProjectManager::scaffold_project(&path, &name)?;
+    crate::tofu::project::scaffold_project(&path, &name)?;
 
     let now = {
         let dur = std::time::SystemTime::now()
@@ -100,10 +102,7 @@ pub async fn tofu_create_project(
         encryption: None,
     };
 
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-    tofu_mgr.add_project(project.clone(), &mut vault_mgr).await?;
+    store.add(&project.id, &project.name, &project).await?;
 
     Ok(project)
 }
@@ -115,10 +114,8 @@ pub async fn tofu_delete_project(
     project_id: String,
 ) -> Result<(), String> {
     devops::require(Tool::Tofu)?;
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-    tofu_mgr.remove_project(&project_id, &mut vault_mgr).await
+    let store = projects(&state).await?;
+    store.remove(&project_id).await
 }
 
 /// Open/load a project and update its last_opened_at timestamp.
@@ -128,14 +125,11 @@ pub async fn tofu_open_project(
     project_id: String,
 ) -> Result<TofuProject, String> {
     devops::require(Tool::Tofu)?;
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-    tofu_mgr.touch_project(&project_id, &mut vault_mgr).await?;
-    tofu_mgr
-        .get_project(&project_id)
-        .cloned()
-        .ok_or_else(|| "Project not found".to_string())
+    let store = projects(&state).await?;
+    let mut project = store.get::<TofuProject>(&project_id).await?;
+    project.last_opened_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    store.update(&project_id, &project).await?;
+    Ok(project)
 }
 
 /// Execute a tofu CLI command, stream output via events. Returns the run_id.
@@ -150,12 +144,8 @@ pub async fn tofu_run_command(
 
     // Get project path, and the encryption passphrase for the run's environment
     let (project_path, extra_env) = {
-        let mut tofu_mgr = state.tofu_project_manager.lock().await;
-        let mut vault_mgr = state.vault_manager.lock().await;
-        tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-        let p = tofu_mgr
-            .get_project(&request.project_id)
-            .ok_or_else(|| "Project not found".to_string())?;
+        let store = projects(&state).await?;
+        let p = store.get::<TofuProject>(&request.project_id).await?;
         let mut env: Vec<(String, String)> = Vec::new();
         if let Some(enc) = p.encryption.as_ref().filter(|e| e.active()) {
             env.push((
@@ -237,10 +227,7 @@ pub async fn tofu_read_file(
     filename: String,
 ) -> Result<String, String> {
     devops::require(Tool::Tofu)?;
-    let tofu_mgr = state.tofu_project_manager.lock().await;
-    let project = tofu_mgr
-        .get_project(&project_id)
-        .ok_or_else(|| "Project not found".to_string())?;
+    let project = projects(&state).await?.get::<TofuProject>(&project_id).await?;
 
     let file_path = std::path::Path::new(&project.path).join(&filename);
     std::fs::read_to_string(&file_path)
@@ -256,10 +243,7 @@ pub async fn tofu_write_file(
     content: String,
 ) -> Result<(), String> {
     devops::require(Tool::Tofu)?;
-    let tofu_mgr = state.tofu_project_manager.lock().await;
-    let project = tofu_mgr
-        .get_project(&project_id)
-        .ok_or_else(|| "Project not found".to_string())?;
+    let project = projects(&state).await?.get::<TofuProject>(&project_id).await?;
 
     let file_path = std::path::Path::new(&project.path).join(&filename);
     std::fs::write(&file_path, content)
@@ -273,10 +257,7 @@ pub async fn tofu_list_files(
     project_id: String,
 ) -> Result<Vec<String>, String> {
     devops::require(Tool::Tofu)?;
-    let tofu_mgr = state.tofu_project_manager.lock().await;
-    let project = tofu_mgr
-        .get_project(&project_id)
-        .ok_or_else(|| "Project not found".to_string())?;
+    let project = projects(&state).await?.get::<TofuProject>(&project_id).await?;
 
     let dir = std::path::Path::new(&project.path);
     if !dir.exists() {
@@ -313,17 +294,12 @@ pub async fn tofu_update_providers(
     providers: Vec<TofuProviderConfig>,
 ) -> Result<TofuProject, String> {
     devops::require(Tool::Tofu)?;
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
+    let store = projects(&state).await?;
 
-    let mut project = tofu_mgr
-        .get_project(&project_id)
-        .cloned()
-        .ok_or_else(|| "Project not found".to_string())?;
+    let mut project = store.get::<TofuProject>(&project_id).await?;
 
     project.providers = providers;
-    tofu_mgr.update_project(project.clone(), &mut vault_mgr).await?;
+    store.update(&project_id, &project).await?;
     Ok(project)
 }
 
@@ -335,17 +311,12 @@ pub async fn tofu_update_variables(
     variables: Vec<TofuVariable>,
 ) -> Result<TofuProject, String> {
     devops::require(Tool::Tofu)?;
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
+    let store = projects(&state).await?;
 
-    let mut project = tofu_mgr
-        .get_project(&project_id)
-        .cloned()
-        .ok_or_else(|| "Project not found".to_string())?;
+    let mut project = store.get::<TofuProject>(&project_id).await?;
 
     project.variables = variables;
-    tofu_mgr.update_project(project.clone(), &mut vault_mgr).await?;
+    store.update(&project_id, &project).await?;
     Ok(project)
 }
 
@@ -358,18 +329,13 @@ pub async fn tofu_update_environments(
     active_environment: Option<String>,
 ) -> Result<TofuProject, String> {
     devops::require(Tool::Tofu)?;
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
+    let store = projects(&state).await?;
 
-    let mut project = tofu_mgr
-        .get_project(&project_id)
-        .cloned()
-        .ok_or_else(|| "Project not found".to_string())?;
+    let mut project = store.get::<TofuProject>(&project_id).await?;
 
     project.environments = environments;
     project.active_environment = active_environment;
-    tofu_mgr.update_project(project.clone(), &mut vault_mgr).await?;
+    store.update(&project_id, &project).await?;
     Ok(project)
 }
 
@@ -380,14 +346,9 @@ pub async fn tofu_generate_hcl(
     project_id: String,
 ) -> Result<HclGenerationResult, String> {
     devops::require(Tool::Tofu)?;
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
+    let store = projects(&state).await?;
 
-    let project = tofu_mgr
-        .get_project(&project_id)
-        .cloned()
-        .ok_or_else(|| "Project not found".to_string())?;
+    let project = store.get::<TofuProject>(&project_id).await?;
 
     let catalog = crate::tofu::catalog::get_provider_catalog();
     let resource_catalog = crate::tofu::resource_catalog::get_resource_catalog();
@@ -405,10 +366,7 @@ pub async fn tofu_write_generated_files(
     files: Vec<GeneratedFile>,
 ) -> Result<(), String> {
     devops::require(Tool::Tofu)?;
-    let tofu_mgr = state.tofu_project_manager.lock().await;
-    let project = tofu_mgr
-        .get_project(&project_id)
-        .ok_or_else(|| "Project not found".to_string())?;
+    let project = projects(&state).await?.get::<TofuProject>(&project_id).await?;
 
     let dir = std::path::Path::new(&project.path);
     for file in &files {
@@ -435,17 +393,12 @@ pub async fn tofu_update_resources(
     resources: Vec<TofuResourceConfig>,
 ) -> Result<TofuProject, String> {
     devops::require(Tool::Tofu)?;
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
+    let store = projects(&state).await?;
 
-    let mut project = tofu_mgr
-        .get_project(&project_id)
-        .cloned()
-        .ok_or_else(|| "Project not found".to_string())?;
+    let mut project = store.get::<TofuProject>(&project_id).await?;
 
     project.resources = resources;
-    tofu_mgr.update_project(project.clone(), &mut vault_mgr).await?;
+    store.update(&project_id, &project).await?;
     Ok(project)
 }
 
@@ -459,13 +412,8 @@ pub async fn tofu_state_list_resources(
     devops::require(Tool::Tofu)?;
     // Get project path
     let project_path = {
-        let mut tofu_mgr = state.tofu_project_manager.lock().await;
-        let mut vault_mgr = state.vault_manager.lock().await;
-        tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-        tofu_mgr
-            .get_project(&project_id)
-            .map(|p| p.path.clone())
-            .ok_or_else(|| "Project not found".to_string())?
+        let store = projects(&state).await?;
+        store.get::<TofuProject>(&project_id).await?.path
     };
 
     let output = match target {
@@ -525,17 +473,12 @@ pub async fn tofu_update_outputs(
     outputs: Vec<TofuOutput>,
 ) -> Result<TofuProject, String> {
     devops::require(Tool::Tofu)?;
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
+    let store = projects(&state).await?;
 
-    let mut project = tofu_mgr
-        .get_project(&project_id)
-        .cloned()
-        .ok_or_else(|| "Project not found".to_string())?;
+    let mut project = store.get::<TofuProject>(&project_id).await?;
 
     project.outputs = outputs;
-    tofu_mgr.update_project(project.clone(), &mut vault_mgr).await?;
+    store.update(&project_id, &project).await?;
     Ok(project)
 }
 
@@ -548,13 +491,8 @@ pub async fn tofu_get_output_values(
 ) -> Result<Vec<TofuOutputValue>, String> {
     devops::require(Tool::Tofu)?;
     let project_path = {
-        let mut tofu_mgr = state.tofu_project_manager.lock().await;
-        let mut vault_mgr = state.vault_manager.lock().await;
-        tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-        tofu_mgr
-            .get_project(&project_id)
-            .map(|p| p.path.clone())
-            .ok_or_else(|| "Project not found".to_string())?
+        let store = projects(&state).await?;
+        store.get::<TofuProject>(&project_id).await?.path
     };
 
     let output = match target {
@@ -633,13 +571,9 @@ pub async fn tofu_get_dependency_graph(
     project_id: String,
 ) -> Result<DependencyGraph, String> {
     devops::require(Tool::Tofu)?;
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
+    let store = projects(&state).await?;
 
-    let project = tofu_mgr
-        .get_project(&project_id)
-        .ok_or_else(|| "Project not found".to_string())?;
+    let project = store.get::<TofuProject>(&project_id).await?;
 
     Ok(crate::tofu::graph::build_dependency_graph(&project.resources))
 }
@@ -665,14 +599,9 @@ pub async fn tofu_apply_template(
         .find(|t| t.id == template_id)
         .ok_or_else(|| format!("Template '{}' not found", template_id))?;
 
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
+    let store = projects(&state).await?;
 
-    let mut project = tofu_mgr
-        .get_project(&project_id)
-        .cloned()
-        .ok_or_else(|| "Project not found".to_string())?;
+    let mut project = store.get::<TofuProject>(&project_id).await?;
 
     // Apply template data with fresh UUIDs for resource IDs
     project.providers = template.providers.clone();
@@ -686,8 +615,8 @@ pub async fn tofu_apply_template(
     }
     project.resources = resources;
 
-    tofu_mgr
-        .update_project(project.clone(), &mut vault_mgr)
+    store
+        .update(&project_id, &project)
         .await?;
     Ok(project)
 }
@@ -700,17 +629,12 @@ pub async fn tofu_update_backend(
     backend: Option<TofuBackendConfig>,
 ) -> Result<TofuProject, String> {
     devops::require(Tool::Tofu)?;
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
+    let store = projects(&state).await?;
 
-    let mut project = tofu_mgr
-        .get_project(&project_id)
-        .cloned()
-        .ok_or_else(|| "Project not found".to_string())?;
+    let mut project = store.get::<TofuProject>(&project_id).await?;
 
     project.backend = backend;
-    tofu_mgr.update_project(project.clone(), &mut vault_mgr).await?;
+    store.update(&project_id, &project).await?;
     Ok(project)
 }
 
@@ -724,13 +648,8 @@ pub async fn tofu_discard_plan(
 ) -> Result<bool, String> {
     devops::require(Tool::Tofu)?;
     let project_path = {
-        let mut tofu_mgr = state.tofu_project_manager.lock().await;
-        let mut vault_mgr = state.vault_manager.lock().await;
-        tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-        tofu_mgr
-            .get_project(&project_id)
-            .map(|p| p.path.clone())
-            .ok_or_else(|| "Project not found".to_string())?
+        let store = projects(&state).await?;
+        store.get::<TofuProject>(&project_id).await?.path
     };
     let plan = std::path::Path::new(&project_path).join(runner::PLAN_FILE);
     if !plan.is_file() {
@@ -748,17 +667,12 @@ pub async fn tofu_update_encryption(
     encryption: Option<TofuEncryptionConfig>,
 ) -> Result<TofuProject, String> {
     devops::require(Tool::Tofu)?;
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
+    let store = projects(&state).await?;
 
-    let mut project = tofu_mgr
-        .get_project(&project_id)
-        .cloned()
-        .ok_or_else(|| "Project not found".to_string())?;
+    let mut project = store.get::<TofuProject>(&project_id).await?;
 
     project.encryption = encryption;
-    tofu_mgr.update_project(project.clone(), &mut vault_mgr).await?;
+    store.update(&project_id, &project).await?;
     Ok(project)
 }
 
@@ -770,17 +684,12 @@ pub async fn tofu_update_data_sources(
     data_sources: Vec<TofuDataSource>,
 ) -> Result<TofuProject, String> {
     devops::require(Tool::Tofu)?;
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
+    let store = projects(&state).await?;
 
-    let mut project = tofu_mgr
-        .get_project(&project_id)
-        .cloned()
-        .ok_or_else(|| "Project not found".to_string())?;
+    let mut project = store.get::<TofuProject>(&project_id).await?;
 
     project.data_sources = data_sources;
-    tofu_mgr.update_project(project.clone(), &mut vault_mgr).await?;
+    store.update(&project_id, &project).await?;
     Ok(project)
 }
 
@@ -799,17 +708,12 @@ pub async fn tofu_update_locals(
     locals: Vec<TofuLocal>,
 ) -> Result<TofuProject, String> {
     devops::require(Tool::Tofu)?;
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
+    let store = projects(&state).await?;
 
-    let mut project = tofu_mgr
-        .get_project(&project_id)
-        .cloned()
-        .ok_or_else(|| "Project not found".to_string())?;
+    let mut project = store.get::<TofuProject>(&project_id).await?;
 
     project.locals = locals;
-    tofu_mgr.update_project(project.clone(), &mut vault_mgr).await?;
+    store.update(&project_id, &project).await?;
     Ok(project)
 }
 
@@ -821,17 +725,12 @@ pub async fn tofu_update_modules(
     modules: Vec<TofuModuleConfig>,
 ) -> Result<TofuProject, String> {
     devops::require(Tool::Tofu)?;
-    let mut tofu_mgr = state.tofu_project_manager.lock().await;
-    let mut vault_mgr = state.vault_manager.lock().await;
-    tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
+    let store = projects(&state).await?;
 
-    let mut project = tofu_mgr
-        .get_project(&project_id)
-        .cloned()
-        .ok_or_else(|| "Project not found".to_string())?;
+    let mut project = store.get::<TofuProject>(&project_id).await?;
 
     project.modules = modules;
-    tofu_mgr.update_project(project.clone(), &mut vault_mgr).await?;
+    store.update(&project_id, &project).await?;
     Ok(project)
 }
 
@@ -851,13 +750,8 @@ pub async fn tofu_workspace_list(
 ) -> Result<TofuWorkspaceInfo, String> {
     devops::require(Tool::Tofu)?;
     let project_path = {
-        let mut tofu_mgr = state.tofu_project_manager.lock().await;
-        let mut vault_mgr = state.vault_manager.lock().await;
-        tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-        tofu_mgr
-            .get_project(&project_id)
-            .map(|p| p.path.clone())
-            .ok_or_else(|| "Project not found".to_string())?
+        let store = projects(&state).await?;
+        store.get::<TofuProject>(&project_id).await?.path
     };
 
     let output = run_tofu_sync(&state, &target, &project_path, &["workspace", "list"]).await?;
@@ -898,13 +792,8 @@ pub async fn tofu_workspace_new(
 ) -> Result<(), String> {
     devops::require(Tool::Tofu)?;
     let project_path = {
-        let mut tofu_mgr = state.tofu_project_manager.lock().await;
-        let mut vault_mgr = state.vault_manager.lock().await;
-        tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-        tofu_mgr
-            .get_project(&project_id)
-            .map(|p| p.path.clone())
-            .ok_or_else(|| "Project not found".to_string())?
+        let store = projects(&state).await?;
+        store.get::<TofuProject>(&project_id).await?.path
     };
 
     run_tofu_sync(&state, &target, &project_path, &["workspace", "new", &name]).await?;
@@ -921,13 +810,8 @@ pub async fn tofu_workspace_select(
 ) -> Result<(), String> {
     devops::require(Tool::Tofu)?;
     let project_path = {
-        let mut tofu_mgr = state.tofu_project_manager.lock().await;
-        let mut vault_mgr = state.vault_manager.lock().await;
-        tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-        tofu_mgr
-            .get_project(&project_id)
-            .map(|p| p.path.clone())
-            .ok_or_else(|| "Project not found".to_string())?
+        let store = projects(&state).await?;
+        store.get::<TofuProject>(&project_id).await?.path
     };
 
     run_tofu_sync(&state, &target, &project_path, &["workspace", "select", &name]).await?;
@@ -944,13 +828,8 @@ pub async fn tofu_workspace_delete(
 ) -> Result<(), String> {
     devops::require(Tool::Tofu)?;
     let project_path = {
-        let mut tofu_mgr = state.tofu_project_manager.lock().await;
-        let mut vault_mgr = state.vault_manager.lock().await;
-        tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-        tofu_mgr
-            .get_project(&project_id)
-            .map(|p| p.path.clone())
-            .ok_or_else(|| "Project not found".to_string())?
+        let store = projects(&state).await?;
+        store.get::<TofuProject>(&project_id).await?.path
     };
 
     run_tofu_sync(
@@ -973,13 +852,8 @@ pub async fn tofu_fmt(
 ) -> Result<TofuFmtResult, String> {
     devops::require(Tool::Tofu)?;
     let project_path = {
-        let mut tofu_mgr = state.tofu_project_manager.lock().await;
-        let mut vault_mgr = state.vault_manager.lock().await;
-        tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-        tofu_mgr
-            .get_project(&project_id)
-            .map(|p| p.path.clone())
-            .ok_or_else(|| "Project not found".to_string())?
+        let store = projects(&state).await?;
+        store.get::<TofuProject>(&project_id).await?.path
     };
 
     let args = if check_only {
@@ -1020,13 +894,8 @@ pub async fn tofu_show_plan_json(
 ) -> Result<TofuPlanSummary, String> {
     devops::require(Tool::Tofu)?;
     let project_path = {
-        let mut tofu_mgr = state.tofu_project_manager.lock().await;
-        let mut vault_mgr = state.vault_manager.lock().await;
-        tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-        tofu_mgr
-            .get_project(&project_id)
-            .map(|p| p.path.clone())
-            .ok_or_else(|| "Project not found".to_string())?
+        let store = projects(&state).await?;
+        store.get::<TofuProject>(&project_id).await?.path
     };
 
     let output =
@@ -1043,14 +912,9 @@ pub async fn tofu_fetch_schema(
     target: TofuExecutionTarget,
 ) -> Result<Vec<ProviderSchema>, String> {
     devops::require(Tool::Tofu)?;
-    let project_path = {
-        let mut tofu_mgr = state.tofu_project_manager.lock().await;
-        let mut vault_mgr = state.vault_manager.lock().await;
-        tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-        tofu_mgr
-            .get_project(&project_id)
-            .map(|p| p.path.clone())
-            .ok_or_else(|| "Project not found".to_string())?
+    let (cache_key, project_path) = {
+        let store = projects(&state).await?;
+        (store.schema_key(&project_id), store.get::<TofuProject>(&project_id).await?.path)
     };
 
     let output =
@@ -1060,7 +924,7 @@ pub async fn tofu_fetch_schema(
 
     // Cache the result
     let mut cache = state.tofu_schema_cache.lock().await;
-    cache.cache.insert(project_id, schemas.clone());
+    cache.cache.insert(cache_key, schemas.clone());
 
     Ok(schemas)
 }
@@ -1072,8 +936,11 @@ pub async fn tofu_get_cached_schema(
     project_id: String,
 ) -> Result<Option<Vec<ProviderSchema>>, String> {
     devops::require(Tool::Tofu)?;
+    let store = projects(&state).await?;
+    store.get::<crate::devops_projects::ProjectSummary>(&project_id).await?;
+    let key = store.schema_key(&project_id);
     let cache = state.tofu_schema_cache.lock().await;
-    Ok(cache.cache.get(&project_id).cloned())
+    Ok(cache.cache.get(&key).cloned())
 }
 
 /// Get resource fields from dynamic schema, falling back to static catalog.
@@ -1085,8 +952,11 @@ pub async fn tofu_get_schema_resource_fields(
 ) -> Result<Vec<ProviderFieldSchema>, String> {
     devops::require(Tool::Tofu)?;
     // Try dynamic schema first
+    let store = projects(&state).await?;
+    store.get::<crate::devops_projects::ProjectSummary>(&project_id).await?;
+    let key = store.schema_key(&project_id);
     let cache = state.tofu_schema_cache.lock().await;
-    if let Some(schemas) = cache.cache.get(&project_id) {
+    if let Some(schemas) = cache.cache.get(&key) {
         for provider in schemas {
             for rs in &provider.resource_schemas {
                 if rs.resource_type == resource_type {
@@ -1257,10 +1127,8 @@ pub async fn tofu_binary_status(
     devops::require(Tool::Tofu)?;
     let dir = match project_id {
         Some(id) => {
-            let mut tofu_mgr = state.tofu_project_manager.lock().await;
-            let mut vault_mgr = state.vault_manager.lock().await;
-            tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-            tofu_mgr.get_project(&id).map(|p| std::path::PathBuf::from(p.path.clone()))
+            let store = projects(&state).await?;
+            Some(std::path::PathBuf::from(store.get::<TofuProject>(&id).await?.path))
         }
         None => None,
     };
@@ -1298,13 +1166,8 @@ pub async fn tofu_binary_pin(
 ) -> Result<BinaryStatus, String> {
     devops::require(Tool::Tofu)?;
     let dir = {
-        let mut tofu_mgr = state.tofu_project_manager.lock().await;
-        let mut vault_mgr = state.vault_manager.lock().await;
-        tofu_mgr.ensure_loaded(&mut vault_mgr).await?;
-        tofu_mgr
-            .get_project(&project_id)
-            .map(|p| std::path::PathBuf::from(p.path.clone()))
-            .ok_or_else(|| "Project not found".to_string())?
+        let store = projects(&state).await?;
+        std::path::PathBuf::from(store.get::<TofuProject>(&project_id).await?.path)
     };
     binary::write_pin(&dir, version.as_deref())?;
     Ok(binary::status(Some(&dir)))

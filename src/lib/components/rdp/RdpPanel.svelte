@@ -35,6 +35,8 @@
 		rdpAck,
 		rdpClipboardCancel,
 		rdpClipboardFetch,
+		rdpClipboardPickFiles,
+		rdpClipboardSaveReceived,
 		rdpClipboardSendFiles,
 		rdpClipboardSync,
 		rdpConnect,
@@ -151,6 +153,32 @@
 	let heldCopy = $state<{ files: number; total: number } | null>(null);
 	/** Files are being dragged over the desktop. */
 	let dropping = $state(false);
+	/** Phone: files came down from the desktop and wait to be saved. */
+	let toSave = $state<number | null>(null);
+
+	/** Phone: pick files and put them on the desktop's clipboard. */
+	function pickFiles(): void {
+		if (clipMode !== 'all') {
+			addToast(t('rdp.drop_files_off'), 'info');
+			return;
+		}
+		rdpClipboardPickFiles(id)
+			.then((count) => {
+				if (count > 0) addToast(t('rdp.pick_ready', { count }), 'success', 5000);
+			})
+			.catch((err) => addToast(String(err), 'error'));
+	}
+
+	/** Phone: save what came down, one Save dialog per file. */
+	function saveReceived(): void {
+		toSave = null;
+		rdpClipboardSaveReceived(id)
+			.then(({ saved, skipped }) => {
+				if (saved > 0) addToast(t('rdp.saved', { count: saved }), 'success');
+				if (skipped > 0) addToast(t('rdp.saved_folders_skipped', { count: skipped }), 'info', 6000);
+			})
+			.catch((err) => addToast(String(err), 'error'));
+	}
 
 	function formatBytes(n: number): string {
 		if (n < 1024) return `${n} B`;
@@ -171,7 +199,10 @@
 				break;
 			case 'finished':
 				// Only a transfer that was shown gets a word that it ended.
-				if (transfer) {
+				if (e.incoming && onPhone) {
+					// Nothing on a phone can paste files: offer to save them.
+					toSave = e.files;
+				} else if (transfer) {
 					addToast(e.incoming ? t('rdp.clip_received', { count: e.files }) : t('rdp.clip_sent', { count: e.files }), 'success');
 				}
 				transfer = null;
@@ -1106,7 +1137,7 @@
 		</div>
 	{/if}
 
-	{#if phase === 'connected' && (transfer || heldCopy)}
+	{#if phase === 'connected' && (transfer || heldCopy || toSave)}
 		<div class="clip-bar" role="status">
 			{#if transfer}
 				<span class="clip-text">
@@ -1119,6 +1150,10 @@
 				<span class="clip-text">{t('rdp.clip_held', { count: heldCopy.files, size: formatBytes(heldCopy.total) })}</span>
 				<button type="button" class="clip-btn primary" onclick={downloadHeld}>{t('rdp.clip_download')}</button>
 				<button type="button" class="clip-btn" onclick={() => (heldCopy = null)}>{t('rdp.clip_ignore')}</button>
+			{:else if toSave}
+				<span class="clip-text">{t('rdp.save_prompt', { count: toSave })}</span>
+				<button type="button" class="clip-btn primary" onclick={saveReceived}>{t('rdp.save')}</button>
+				<button type="button" class="clip-btn" onclick={() => (toSave = null)}>{t('rdp.clip_ignore')}</button>
 			{/if}
 		</div>
 	{/if}
@@ -1162,6 +1197,20 @@
 						void setFullscreen(!fullscreen);
 					}}>{fullscreen ? '⤡' : '⤢'}</button
 				>
+				{#if !isVnc() && clipMode === 'all'}
+					<button
+						type="button"
+						class="bar-button"
+						tabindex="-1"
+						aria-label={t('rdp.send_files')}
+						title={t('rdp.send_files')}
+						onpointerdown={(e) => {
+							e.preventDefault();
+							pickFiles();
+						}}
+						><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M10.5 3.5v7a2.5 2.5 0 0 1-5 0V3a1.5 1.5 0 0 1 3 0v6.5a.5.5 0 0 1-1 0V4H6.5v5.5a1.5 1.5 0 0 0 3 0V3a2.5 2.5 0 0 0-5 0v7.5a3.5 3.5 0 0 0 7 0v-7z"/></svg></button
+					>
+				{/if}
 			{/snippet}
 		</MobileKeyBar>
 	{/if}

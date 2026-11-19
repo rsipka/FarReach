@@ -321,7 +321,7 @@ pub(crate) async fn ssh_for_route(
 }
 
 /// [`ssh_for_route`]; `pin` as for [`forward_route_pinned`].
-async fn ssh_for_route_pinned(
+pub(crate) async fn ssh_for_route_pinned(
     app: &tauri::AppHandle,
     state: &State<'_, AppState>,
     route: &Route,

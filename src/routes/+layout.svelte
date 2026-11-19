@@ -6,6 +6,7 @@
 	import '../app.css';
 	import AppShell from '#lib/components/layout/AppShell.svelte';
 	import WelcomeScreen from '#lib/components/setup/WelcomeScreen.svelte';
+	import { setupWizard } from '#lib/state/setup-wizard.svelte.js';
 	import CommunityPrompt from '#lib/components/shared/CommunityPrompt.svelte';
 	import { SHOW_COMMUNITY } from '#lib/brand.js';
 	import LockScreen from '#lib/components/shared/LockScreen.svelte';
@@ -187,7 +188,9 @@
 {#if isEditorWindow}
 	{@render children()}
 {:else}
-	{#if !settings.setupComplete}
+	<!-- Run again from Settings, setupComplete stays true, so the prompts and
+	     the lock screen below stay mounted under it. -->
+	{#if !settings.setupComplete || setupWizard.rerun}
 		<WelcomeScreen />
 	{/if}
 

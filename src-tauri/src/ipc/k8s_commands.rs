@@ -9,6 +9,7 @@ use tauri::State;
 use crate::db::types::Route;
 use crate::devops::{self, Tool};
 use crate::devops_store::{Cluster as SavedCluster, ClusterView, Environment};
+use crate::k8s::credentials::{label, Selection};
 use crate::k8s::helm::{self, Detail, HelmAction, Revision};
 use crate::k8s::{self, ContextInfo, EventRow, Kind, ObjectRow, PodRow, WorkloadRow};
 use crate::state::AppState;
@@ -92,23 +93,24 @@ pub async fn k8s_cluster_save(
         last_used_at: now_ms(),
     };
     // A changed setting (read-only, route) takes effect on the next open.
-    state.k8s.lock().await.close(&cluster.id);
     let view = cluster.view();
     let mut vault = state.vault_manager.lock().await;
     let mut store = state.devops_store.lock().await;
     store.ensure_loaded(&mut vault).await?;
     store.save_cluster(cluster, &mut vault).await?;
+    state.k8s.lock().await.close(&view.id);
     Ok(view)
 }
 
 #[tauri::command]
 pub async fn k8s_cluster_delete(state: State<'_, AppState>, id: String) -> Result<(), String> {
     devops::require(Tool::Kubernetes)?;
-    state.k8s.lock().await.close(&id);
     let mut vault = state.vault_manager.lock().await;
     let mut store = state.devops_store.lock().await;
     store.ensure_loaded(&mut vault).await?;
-    store.delete(&id, &mut vault).await
+    store.delete(&id, &mut vault).await?;
+    state.k8s.lock().await.close(&id);
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -120,6 +122,15 @@ pub struct OpenedCluster {
     pub read_only: bool,
 }
 
+async fn confirm_access(app: &tauri::AppHandle, message: String) -> bool {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+    let (answer, result) = tokio::sync::oneshot::channel();
+    app.dialog().message(message).title("Kubernetes credential access")
+        .kind(MessageDialogKind::Warning).buttons(MessageDialogButtons::OkCancel)
+        .show(move |allowed| { let _ = answer.send(allowed); });
+    result.await.unwrap_or(false)
+}
+
 /// Connect to a saved cluster. With an SSH route the API server is reached
 /// through it, and its certificate is still checked by name. The kubeconfig
 /// and the read-only setting come from the vault.
@@ -127,23 +138,27 @@ pub struct OpenedCluster {
 pub async fn k8s_open(app: tauri::AppHandle, state: State<'_, AppState>, cluster_id: String) -> Result<OpenedCluster, String> {
     devops::require(Tool::Kubernetes)?;
     let s = saved(&state, &cluster_id).await?;
-    let (list, _) = k8s::contexts(&s.kubeconfig)?;
-    let ctx = list.iter().find(|c| c.name == s.context).ok_or_else(|| format!("No context called {}", s.context))?;
+    let selected = Selection::new(&s.kubeconfig, &s.context)?;
+    let server = selected.server()?.to_owned();
+    let config = selected.authorize(None, |m| confirm_access(&app, m)).await?;
     let forward = match s.route {
         Route::Direct => None,
         ref r => {
-            let (host, port) = k8s::server_addr(&ctx.server)?;
+            let (host, port) = k8s::server_addr(&server)?;
             crate::ipc::db_commands::forward_route(&app, &state, r, host, port).await?
         }
     };
-    let mut cluster = k8s::connect(&s.kubeconfig, Some(&s.context), forward).await?;
+    let mut cluster = k8s::connect(config, forward).await?;
     cluster.read_only = s.read_only;
     let namespace = s.namespace.clone().unwrap_or_else(|| cluster.namespace.clone());
     let opened = OpenedCluster { key: s.id.clone(), version: cluster.version.clone(), namespace, read_only: s.read_only };
-    state.k8s.lock().await.insert(s.id.clone(), cluster);
     {
         let mut vault = state.vault_manager.lock().await;
         let mut store = state.devops_store.lock().await;
+        if store.cluster(&s.id) != Some(&s) {
+            return Err("The saved cluster changed while connecting. Open it again.".into());
+        }
+        state.k8s.lock().await.insert(s.id.clone(), cluster);
         let _ = store.save_cluster(SavedCluster { last_used_at: now_ms(), ..s }, &mut vault).await;
     }
     Ok(opened)
@@ -295,6 +310,13 @@ pub async fn k8s_helm_detail(state: State<'_, AppState>, key: String, namespace:
     cluster(&state, &key).await?.release_detail(&namespace, &name, revision).await
 }
 
+async fn ensure_current(state: &State<'_, AppState>, snapshot: &SavedCluster) -> Result<(), String> {
+    if saved(state, &snapshot.id).await? != *snapshot {
+        return Err("The saved cluster changed. Start the Helm action again.".into());
+    }
+    Ok(())
+}
+
 /// Roll back or uninstall a release of a saved cluster with `helm`, on the
 /// host the cluster is reached through (or this computer for a direct one),
 /// with the cluster's own kubeconfig and context, so it acts as the same
@@ -314,14 +336,30 @@ pub async fn k8s_helm_run(
     if s.read_only {
         return Err("This cluster is read-only. Turn that off in its settings to make changes.".into());
     }
-    let cmd = helm::command(action, &namespace, &name, revision, Some(&s.context))?;
-    let o = match crate::ipc::db_commands::ssh_for_route(&app, &state, &s.route).await? {
-        Some((h, _keep)) => {
+    let args = helm::arguments(action, &namespace, &name, revision, &s.context)?;
+    let selected = Selection::new(&s.kubeconfig, &s.context)?;
+    let o = match &s.route {
+        Route::Direct => {
+            let config = selected.authorize(None, |m| confirm_access(&app, m)).await?;
+            ensure_current(&state, &s).await?;
+            let input = serde_json::to_string(&config).map_err(|e| e.to_string())?;
+            run_helm_here(&args, &input).await?
+        }
+        Route::Session { session_id } => {
+            let session = crate::ipc::session_commands::session_get(state.clone(), session_id.clone()).await?;
+            let destination = format!("{}@{}:{}", label(&session.username), label(&session.host), session.port);
+            let pin = crate::ipc::session_commands::approval_context(&session);
+            let config = selected.authorize(Some(&destination), |m| confirm_access(&app, m)).await?;
+            let (h, _keep) = crate::ipc::db_commands::ssh_for_route_pinned(&app, &state, &s.route, Some(&pin))
+                .await?.ok_or("Missing SSH session")?;
+            ensure_current(&state, &s).await?;
+            let cmd = helm::remote_command(&args);
+            let input = serde_json::to_string(&config).map_err(|e| e.to_string())?;
             crate::container::Shell::Ssh(h)
-                .run_with_input(&helm::with_stdin_kubeconfig(&cmd), Some(s.kubeconfig.as_bytes()), 900)
+                .run_with_input(&helm::with_stdin_kubeconfig(&cmd), Some(input.as_bytes()), 900)
                 .await?
         }
-        None => run_helm_here(&cmd, &s.kubeconfig).await?,
+        Route::Live { .. } => return Err("Remote Helm requires a saved SSH session".into()),
     };
     if !o.ok() {
         return Err(o.failure("helm"));
@@ -331,24 +369,28 @@ pub async fn k8s_helm_run(
 
 /// Helm on this computer: the kubeconfig in a file of Reach's own, readable
 /// by the user only, removed afterwards.
-async fn run_helm_here(cmd: &str, yaml: &str) -> Result<crate::container::Output, String> {
+#[cfg(not(mobile))]
+async fn run_helm_here(args: &[String], yaml: &str) -> Result<crate::container::Output, String> {
+    use std::io::Write;
     let dir = crate::app_data_dir().join("tmp");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let path = dir.join(format!("kubeconfig-{}", uuid::Uuid::new_v4()));
-    let mut o = std::fs::OpenOptions::new();
-    o.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        o.mode(0o600);
-    }
-    {
-        use std::io::Write;
-        let mut f = o.open(&path).map_err(|e| e.to_string())?;
-        f.write_all(yaml.as_bytes()).map_err(|e| e.to_string())?;
-    }
-    let quoted = if cfg!(windows) { format!("\"{}\"", path.display()) } else { crate::container::sh_quote(&path.display().to_string()) };
-    let result = crate::container::Shell::Local.run(&format!("{cmd} --kubeconfig {quoted}"), 900).await;
-    let _ = std::fs::remove_file(&path);
-    result
+    let mut file = tempfile::NamedTempFile::new_in(dir).map_err(|e| e.to_string())?;
+    file.write_all(yaml.as_bytes()).map_err(|e| e.to_string())?;
+    let path = file.into_temp_path();
+    let mut helm = tokio::process::Command::new("helm");
+    helm.args(args).arg("--kubeconfig").arg(&path).kill_on_drop(true);
+    #[cfg(windows)]
+    helm.creation_flags(0x0800_0000);
+    let output = tokio::time::timeout(std::time::Duration::from_secs(900), helm.output()).await
+        .map_err(|_| "No answer from Helm within 900 seconds".to_string())?.map_err(|e| format!("Could not run Helm: {e}"))?;
+    Ok(crate::container::Output {
+        code: output.status.code().map(|code| code as u32),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    })
+}
+
+#[cfg(mobile)]
+async fn run_helm_here(_args: &[String], _yaml: &str) -> Result<crate::container::Output, String> {
+    Err("Local Helm is unavailable on a phone. Choose a saved SSH session.".into())
 }

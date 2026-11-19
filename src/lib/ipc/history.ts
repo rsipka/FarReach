@@ -56,6 +56,8 @@ export interface HistoryHit {
 	name: string;
 	host: string;
 	protocol: string;
+	/** The computer it was recorded on. */
+	device: string;
 }
 
 export type HistoryForget =

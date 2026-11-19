@@ -7,6 +7,7 @@ use base64::Engine;
 pub use tokio_util::sync::CancellationToken;
 use super::backend::{RemoteFs, SftpProtocol};
 use super::pipeline;
+use super::local_download::LocalDownload;
 
 #[derive(Debug, Error)]
 pub enum TransferError {
@@ -14,8 +15,6 @@ pub enum TransferError {
     NotConnected,
     #[error("SSH error: {0}")]
     SshError(#[from] SshError),
-    #[error("File not found: {0}")]
-    FileNotFound(String),
     #[error("IO error: {0}")]
     IoError(String),
     #[error("Transfer cancelled")]
@@ -36,11 +35,7 @@ pub struct TransferProgress {
     pub percent: f64,
 }
 
-/// Download a file from the remote host using streaming base64 over a single SSH exec.
-///
-/// Runs `base64 <file>` once, streams the channel output, decodes line-by-line
-/// and writes to the local file incrementally. Progress events are emitted as
-/// data arrives — no per-chunk SSH roundtrips.
+/// Download to a sibling staging file and publish it after the transfer succeeds.
 pub async fn download_file(
     fs: &RemoteFs,
     remote_path: &str,
@@ -55,20 +50,6 @@ pub async fn download_file(
     download_file_exec(&fs.handle, remote_path, local_path, transfer_id, app_handle, cancel).await
 }
 
-/// The parent of `local_path`, made if missing. A download aimed at a path
-/// that has not been made yet would otherwise fail with a bare "No such file
-/// or directory", which says nothing about which part was missing.
-fn make_local_parent(local_path: &str) -> Result<(), TransferError> {
-    if let Some(parent) = Path::new(local_path).parent() {
-        if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                TransferError::IoError(format!("Failed to create {}: {}", parent.display(), e))
-            })?;
-        }
-    }
-    Ok(())
-}
-
 /// Download over SFTP: many reads in flight, written to the local file in
 /// order as they arrive. Nothing is run on the server, so this works on
 /// SFTP-only accounts and Windows.
@@ -81,8 +62,6 @@ async fn download_file_sftp(
     app_handle: &tauri::AppHandle,
     cancel: &CancellationToken,
 ) -> Result<(), TransferError> {
-    use std::io::Write;
-
     tracing::info!("Downloading {} to {} (sftp)", remote_path, local_path);
     let filename = file_name_of(remote_path);
 
@@ -90,57 +69,51 @@ async fn download_file_sftp(
         Ok(a) if a.attrs.is_dir() => {
             return Err(TransferError::Remote(format!("{remote_path}: is a folder")));
         }
-        Ok(a) => a.attrs.size.unwrap_or(0),
+        Ok(a) => a.attrs.size,
         Err(e) => {
             fs.note_error(&e).await;
             return Err(TransferError::Remote(pipeline::describe(remote_path, &e)));
         }
     };
 
-    make_local_parent(local_path)?;
-    let mut file = std::io::BufWriter::with_capacity(
-        1024 * 1024,
-        std::fs::File::create(local_path)
-            .map_err(|e| TransferError::IoError(format!("Failed to create local file: {}", e)))?,
-    );
-    let emit = |sent: u64| emit_progress(app_handle, transfer_id, &filename, sent, total_bytes);
-    emit(0);
-
-    let mut last = 0u64;
-    let received = pipeline::read_file(
-        proto,
-        remote_path,
-        total_bytes,
-        cancel,
-        |data| file.write_all(data).map_err(|e| TransferError::IoError(format!("Write error: {}", e))),
-        |done| {
-            if done - last >= 256 * 1024 {
-                last = done;
-                emit(done);
-            }
-        },
-    )
-    .await
-    .and_then(|bytes| {
-        file.flush().map_err(|e| TransferError::IoError(format!("Flush error: {}", e)))?;
-        Ok(bytes)
-    });
-    let bytes = match received {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            // What arrived is not the file (#150).
-            drop(file);
-            let _ = std::fs::remove_file(local_path);
-            tracing::warn!("Download of {} failed: {}", remote_path, e);
-            return Err(e);
+    let emit = |sent| {
+        if let Some(total) = total_bytes.filter(|&size| size > 0) {
+            emit_progress(app_handle, transfer_id, &filename, sent, total);
         }
     };
+    emit(0);
+    let bytes = download_sftp_contents(proto, remote_path, Path::new(local_path), total_bytes, cancel, emit).await?;
 
     // The file may have shrunk while it was read; it is whole as it is now.
     emit_progress(app_handle, transfer_id, &filename, bytes, bytes);
     let _ = app_handle.emit(&format!("transfer-complete-{}", transfer_id), ());
     tracing::info!("Download complete: {} ({} bytes)", remote_path, bytes);
     Ok(())
+}
+
+pub(super) async fn download_sftp_contents(
+    proto: &SftpProtocol,
+    remote_path: &str,
+    destination: &Path,
+    size: Option<u64>,
+    cancel: &CancellationToken,
+    mut progress: impl FnMut(u64),
+) -> Result<u64, TransferError> {
+    use std::io::Write;
+    let mut file = LocalDownload::new(destination)?;
+    let mut last = 0;
+    // With no size attribute, EOF is the only available end marker.
+    let bytes = pipeline::read_file(proto, remote_path, size.unwrap_or(u64::MAX), cancel,
+        |data| file.writer.write_all(data).map_err(|e| TransferError::IoError(format!("Write error: {e}"))),
+        |done| {
+            if done - last >= 256 * 1024 {
+                last = done;
+                progress(done);
+            }
+        },
+    ).await?;
+    file.commit(cancel)?;
+    Ok(bytes)
 }
 
 async fn download_file_exec(
@@ -151,8 +124,6 @@ async fn download_file_exec(
     app_handle: &tauri::AppHandle,
     cancel: &CancellationToken,
 ) -> Result<(), TransferError> {
-    use std::io::Write;
-
     tracing::info!("Downloading {} to {}", remote_path, local_path);
 
     let filename = Path::new(remote_path)
@@ -172,24 +143,8 @@ async fn download_file_exec(
     .await?;
     let total_bytes: u64 = size_output.trim().parse().unwrap_or(0);
 
-    if total_bytes == 0 {
-        // Check if the file exists but is empty, or doesn't exist
-        let exists_check = exec_on_connection(
-            handle,
-            &format!("test -f {} && echo EXISTS", shell_escape(remote_path)),
-        )
-        .await?;
-        if !exists_check.trim().contains("EXISTS") {
-            return Err(TransferError::FileNotFound(remote_path.to_string()));
-        }
-        // File exists but is empty -- write an empty file
-        std::fs::write(local_path, b"")
-            .map_err(|e| TransferError::IoError(format!("Failed to write local file: {}", e)))?;
-
-        let _ = app_handle.emit(&format!("transfer-complete-{}", transfer_id), ());
-        tracing::info!("Download complete: {} (empty file)", remote_path);
-        return Ok(());
-    }
+    // Size is a progress hint. Always read the file and require a successful
+    // remote exit, including for zero and unavailable sizes.
 
     // Open a dedicated channel for streaming the base64 output
     let mut channel = {
@@ -197,58 +152,42 @@ async fn download_file_exec(
         guard.channel_open_session().await
             .map_err(|e| SshError::ChannelError(format!("{}", e)))?
     };
-    channel.exec(true, format!("base64 {}", shell_path(remote_path))).await
+    let path = shell_path(remote_path);
+    channel.exec(true, format!("if test -f {path}; then exec base64 {path}; else echo 'Not a regular file or inaccessible' >&2; exit 1; fi")).await
         .map_err(|e| SshError::ChannelError(format!("{}", e)))?;
 
-    make_local_parent(local_path)?;
-    let mut file = std::fs::File::create(local_path)
-        .map_err(|e| TransferError::IoError(format!("Failed to create local file: {}", e)))?;
-
-    // Initial progress
-    let progress = |bytes: u64, percent: f64| {
-        let _ = app_handle.emit(
-            &format!("transfer-progress-{}", transfer_id),
-            &TransferProgress {
-                id: transfer_id.to_string(),
-                filename: filename.clone(),
-                bytes_transferred: bytes,
-                total_bytes,
-                percent,
-            },
-        );
+    let progress = |bytes| {
+        if total_bytes != 0 {
+            emit_progress(app_handle, transfer_id, &filename, bytes, total_bytes);
+        }
     };
-    progress(0, 0.0);
-
-    let received = tokio::select! {
-        r = receive_base64(&mut channel, &mut file, DOWNLOAD_IDLE_LIMIT, |bytes| {
-            progress(bytes, (bytes as f64 / total_bytes as f64 * 100.0).min(100.0));
-        }) => r,
-        _ = cancel.cancelled() => Err(TransferError::Cancelled),
-    };
+    progress(0);
+    let received = download_exec_contents(&mut channel, Path::new(local_path), cancel, progress).await;
     if matches!(received, Err(TransferError::Cancelled)) {
         let _ = channel.close().await;
     }
-    let received = received.and_then(|bytes| {
-        file.flush().map_err(|e| TransferError::IoError(format!("Flush error: {}", e)))?;
-        Ok(bytes)
-    });
-    let bytes_written = match received {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            // What arrived is not the file, and a file of the right name
-            // left behind looks like a finished download (#150).
-            drop(file);
-            let _ = std::fs::remove_file(local_path);
-            tracing::warn!("Download of {} failed: {}", remote_path, e);
-            return Err(e);
-        }
-    };
-
-    progress(bytes_written, 100.0);
+    let bytes_written = received?;
+    emit_progress(app_handle, transfer_id, &filename, bytes_written, bytes_written);
     let _ = app_handle.emit(&format!("transfer-complete-{}", transfer_id), ());
 
     tracing::info!("Download complete: {} ({} bytes)", remote_path, bytes_written);
     Ok(())
+}
+
+async fn download_exec_contents(
+    channel: &mut impl ChannelMessages,
+    destination: &Path,
+    cancel: &CancellationToken,
+    progress: impl FnMut(u64),
+) -> Result<u64, TransferError> {
+    let mut file = LocalDownload::new(destination)?;
+    let bytes = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Err(TransferError::Cancelled),
+        result = receive_base64(channel, &mut file.writer, DOWNLOAD_IDLE_LIMIT, progress) => result?,
+    };
+    file.commit(cancel)?;
+    Ok(bytes)
 }
 
 /// How long a download may go without hearing from the server.
@@ -986,6 +925,52 @@ mod tests {
 
     /// `base64 <file>` as the server answers it, for "hello world\n".
     const HELLO_B64: &str = "aGVsbG8gd29ybGQK\n";
+
+    #[tokio::test]
+    async fn exec_failure_after_receiving_data_preserves_the_destination() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("report");
+        std::fs::write(&path, b"original").unwrap();
+        let mut channel = Sends(VecDeque::from([stdout(HELLO_B64), exit(1), ChannelMsg::Eof]));
+        assert!(download_exec_contents(&mut channel, &path, &CancellationToken::new(), |_| {}).await.is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"original");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    #[tokio::test]
+    async fn exec_replaces_only_on_success_including_an_empty_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("new-folder").join("report");
+        for content in [HELLO_B64, ""] {
+            let mut channel = Sends(VecDeque::from([stdout(content), exit(0), ChannelMsg::Eof]));
+            download_exec_contents(&mut channel, &path, &CancellationToken::new(), |_| {}).await.unwrap();
+            let expected: &[u8] = if content.is_empty() { b"" } else { b"hello world\n" };
+            assert_eq!(std::fs::read(&path).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn late_cancellation_and_failed_publish_clean_only_staging() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("target");
+        std::fs::write(&path, b"original").unwrap();
+        let mut file = LocalDownload::new(&path).unwrap();
+        file.writer.write_all(b"replacement").unwrap();
+        let cancel = CancellationToken::new();
+        cancel.cancel();
+        assert!(matches!(file.commit(&cancel), Err(TransferError::Cancelled)));
+        assert_eq!(std::fs::read(&path).unwrap(), b"original");
+
+        // The target changes while receiving. Finalization cannot replace it.
+        let other = dir.path().join("other");
+        let file = LocalDownload::new(&other).unwrap();
+        std::fs::create_dir(&other).unwrap();
+        std::fs::write(other.join("keep"), b"keep").unwrap();
+        assert!(file.commit(&CancellationToken::new()).is_err());
+        assert_eq!(std::fs::read(other.join("keep")).unwrap(), b"keep");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
+    }
 
     #[tokio::test]
     async fn a_file_that_was_sent_is_received_whole() {

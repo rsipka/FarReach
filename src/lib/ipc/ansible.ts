@@ -1,12 +1,6 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invokeProject as invoke, type ProjectSummary } from './devops-projects.js';
 
-export interface AnsibleProject {
-	id: string;
-	name: string;
-	path: string;
-	description: string;
-	createdAt: string;
-	lastOpenedAt: string;
+export interface AnsibleProject extends ProjectSummary {
 	inventoryHosts: AnsibleInventoryHost[];
 	inventoryGroups: AnsibleInventoryGroup[];
 	vaultPassword: string | null;
@@ -97,8 +91,8 @@ export interface AnsibleCollection {
 	version: string | null;
 }
 
-export async function ansibleListProjects(): Promise<AnsibleProject[]> {
-	return invoke<AnsibleProject[]>('ansible_list_projects');
+export async function ansibleListProjects(): Promise<ProjectSummary[]> {
+	return invoke<ProjectSummary[]>('ansible_list_projects');
 }
 
 export async function ansibleCreateProject(

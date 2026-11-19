@@ -15,8 +15,6 @@ use crate::serial::port::SerialManager;
 use crate::rdp::RdpManager;
 use crate::vnc::VncManager;
 use crate::ssh::client::SshManager;
-use crate::ansible::project::AnsibleProjectManager;
-use crate::tofu::project::TofuProjectManager;
 use crate::tofu::types::SchemaCache;
 use crate::tunnel::manager::TunnelManager;
 use crate::vault::VaultManager;
@@ -412,8 +410,6 @@ pub struct AppState {
     pub plugin_manager: Arc<tokio::sync::Mutex<PluginManager>>,
     /// URL of the marketplace registry JSON file.
     pub marketplace_index_url: Arc<RwLock<String>>,
-    pub ansible_project_manager: Arc<tokio::sync::Mutex<AnsibleProjectManager>>,
-    pub tofu_project_manager: Arc<tokio::sync::Mutex<TofuProjectManager>>,
     pub tofu_schema_cache: Arc<tokio::sync::Mutex<SchemaCache>>,
     /// Saved and open database connections.
     pub db: Arc<tokio::sync::Mutex<crate::db::DbManager>>,
@@ -463,8 +459,6 @@ impl AppState {
             marketplace_index_url: Arc::new(RwLock::new(
                 crate::plugin::marketplace::DEFAULT_INDEX_URL.to_string(),
             )),
-            ansible_project_manager: Arc::new(tokio::sync::Mutex::new(AnsibleProjectManager::new())),
-            tofu_project_manager: Arc::new(tokio::sync::Mutex::new(TofuProjectManager::new())),
             tofu_schema_cache: Arc::new(tokio::sync::Mutex::new(SchemaCache::default())),
             containers: Arc::new(tokio::sync::Mutex::new(crate::container::ContainerManager::default())),
             k8s: Arc::new(tokio::sync::Mutex::new(crate::k8s::K8sManager::default())),
