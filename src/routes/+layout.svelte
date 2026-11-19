@@ -30,6 +30,7 @@
 	import { installSelectMenus } from '#lib/utils/selectMenu.js';
 	import { installTooltips } from '#lib/utils/tooltip.js';
 	import { initScreenEdges } from '#lib/edges.js';
+	import { initKeyboardViewport } from '#lib/keyboard-viewport.js';
 	import { onMount } from 'svelte';
 
 	let { children }: { children: Snippet } = $props();
@@ -78,6 +79,8 @@
 		const stopTooltips = installTooltips();
 		// Android's status bar, navigation bar and camera cutout, for --safe-*.
 		initScreenEdges();
+		// iOS: the app fits above the on-screen keyboard instead of scrolling up.
+		const stopKeyboardViewport = initKeyboardViewport();
 		startupUpdateCheck();
 		startPeriodicChecks();
 
@@ -89,6 +92,7 @@
 			cleanupShortcuts();
 			stopSelectMenus();
 			stopTooltips();
+			stopKeyboardViewport();
 			stopPeriodicChecks();
 		};
 	});
