@@ -65,6 +65,7 @@ export const SETTINGS_INDEX: IndexedRow[] = [
 	{ page: 'general', label: 'settings.startup_behavior', desc: 'settings.restore_tabs_desc', words: 'restore tabs reopen' },
 	{ page: 'general', label: 'settings.minimize_to_tray', desc: 'settings.tray_desc', desktopOnly: true },
 	{ page: 'general', label: 'settings.start_with_system', desc: 'settings.system_startup_desc', desktopOnly: true },
+	{ page: 'general', label: 'settings.rerun_setup', desc: 'settings.rerun_setup_desc', words: 'wizard first run onboarding welcome' },
 	{ page: 'about', label: 'settings.check_updates', desc: 'settings.check_updates_desc', words: 'update version' },
 	{ page: 'terminal', label: 'settings.default_shell', desc: 'settings.shell_desc', words: 'bash zsh powershell cmd' },
 	{ page: 'terminal', label: 'settings.paste_warning', desc: 'settings.paste_warning_desc', words: 'clipboard multiline' },
