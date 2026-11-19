@@ -691,6 +691,7 @@
 	function newSessionIn(folder: Folder): void {
 		closeContextMenu();
 		editingSession = undefined;
+		cloningSession = undefined;
 		newSessionFolder = folder;
 		showEditor = true;
 	}
@@ -1616,6 +1617,16 @@
 
 	function handleEdit(session: SessionConfig): void {
 		editingSession = session;
+		cloningSession = undefined;
+		showEditor = true;
+	}
+
+	/** Opens the editor on a copy; nothing is saved until Save. */
+	let cloningSession = $state<SessionConfig | undefined>();
+	function handleClone(session: SessionConfig): void {
+		editingSession = undefined;
+		newSessionFolder = null;
+		cloningSession = session;
 		showEditor = true;
 	}
 
@@ -1642,6 +1653,7 @@
 
 	function handleNewSession(): void {
 		editingSession = undefined;
+		cloningSession = undefined;
 		newSessionFolder = null;
 		showEditor = true;
 	}
@@ -2116,6 +2128,9 @@
 					<button class="context-item" onclick={() => { if (contextMenu?.session) handleEdit(contextMenu.session); closeContextMenu(); }} type="button">
 						{t('session.edit')}
 					</button>
+					<button class="context-item" onclick={() => { if (contextMenu?.session) handleClone(contextMenu.session); closeContextMenu(); }} type="button">
+						{t('session.clone')}
+					</button>
 				{/if}
 				<button class="context-item" onclick={() => { if (contextMenu?.session) void setFavorite(contextMenu.session, !contextMenu.session.favorite); }} type="button">
 					{contextMenu.session.favorite ? t('session.remove_favorite') : t('session.add_favorite')}
@@ -2358,7 +2373,7 @@
 {/if}
 
 <QuickConnect bind:open={showQuickConnect} prefill={quickPrefill} />
-<SessionEditor bind:open={showEditor} editSession={editingSession} vaultId={newSessionFolder ? (newSessionFolder.vault_id ?? null) : targetVaultId} folderId={newSessionFolder?.id ?? null} {folders} onsave={handleEditorSave} />
+<SessionEditor bind:open={showEditor} editSession={editingSession} vaultId={newSessionFolder ? (newSessionFolder.vault_id ?? null) : targetVaultId} folderId={newSessionFolder?.id ?? null} cloneSession={cloningSession} {folders} onsave={handleEditorSave} />
 <SshConfigImport bind:open={() => importOpen('ssh_config'), (v) => setImportOpen('ssh_config', v)} vaultId={targetVaultId} onsave={handleEditorSave} onsource={openImport} />
 <RdpImport bind:open={() => importOpen('rdp'), (v) => setImportOpen('rdp', v)} vaultId={targetVaultId} onsave={handleEditorSave} onsource={openImport} />
 <ManagerImport
