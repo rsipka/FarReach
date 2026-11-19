@@ -1048,6 +1048,7 @@
 			sessionId: session.id,
 			domain: session.domain ?? undefined,
 			sharePath: session.share_path ?? undefined,
+			clipboard: session.rdp_clipboard ?? null,
 			width: 0,
 			height: 0,
 		};

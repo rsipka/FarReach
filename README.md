@@ -42,6 +42,7 @@ Reacher CM adds what people moving from Remote Desktop Manager and similar tools
 - **Telnet and serial sessions** for switches, routers and console servers, and **macOS login** for Macs over VNC.
 - **tmux on the server**: sessions that survive a dropped connection, with tmux windows as tabs.
 - **Broadcast input**: type into several terminals at once.
+- **RDP clipboard with pictures and file drops**: copy pictures both ways, drop files onto the desktop, see transfer progress, and choose per session what the clipboard carries.
 - **Searchable session history**, encrypted, with secrets masked.
 - **Terminal your way**: hundreds of color schemes and your own themes, cursor style, copy and paste behaviour, and your installed fonts.
 - **Local-first sync**: every vault works offline and syncs in the background, through Turso, a folder, SFTP, Git, an SMB share without mounting it, or an S3 bucket (Amazon, MinIO, Backblaze B2, Wasabi, R2). Conflicting edits are kept as copies, not lost.

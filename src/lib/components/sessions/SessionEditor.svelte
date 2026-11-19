@@ -63,6 +63,8 @@
 	let autoOs = $derived(editSession && !editSession.os_manual && kind === sessionKind(editSession) && !osCleared ? (editSession.detected_os ?? '') : '');
 	let osTitle = (id: string) => (id === 'unknown' ? t('session.os_none') : (osOptions.find((o) => o.id === id)?.title ?? id));
 	let sharePath = $state('');
+	/** What the RDP clipboard carries: '' for everything, 'text' for no files, 'off'. */
+	let rdpClipboard = $state<'' | 'text' | 'off'>('');
 	/** VNC only: the saved SSH session to go through, or '' for direct. */
 	let viaSessionId = $state('');
 	let wslDistro = $state('');
@@ -315,6 +317,7 @@
 			domain = editSession.domain ?? '';
 			os = editSession.detected_os === 'linux' ? 'linux' : 'windows';
 			sharePath = editSession.share_path ?? '';
+			rdpClipboard = editSession.rdp_clipboard ?? '';
 			viaSessionId = editSession.via_session_id ?? '';
 			wslDistro = editSession.wsl_distro ?? '';
 			telnetOptions = { ...DEFAULT_TELNET_OPTIONS, ...(editSession.telnet ?? {}) };
@@ -384,6 +387,7 @@
 			domain = '';
 			os = 'windows';
 			sharePath = '';
+			rdpClipboard = '';
 			viaSessionId = '';
 			telnetOptions = { ...DEFAULT_TELNET_OPTIONS };
 			serialOptions = { ...DEFAULT_SERIAL_OPTIONS };
@@ -576,6 +580,7 @@
 					detected_os: rdp ? os : osChoice ? osChoice : autoOs || null,
 					os_manual: !rdp && !!osChoice,
 					share_path: rdp ? (sharePath.trim() || null) : null,
+					rdp_clipboard: rdp && rdpClipboard ? rdpClipboard : null,
 					via_session_id: via,
 					try_agent_keys: !desktop && authType === 'Key' && tryAgentKeys ? true : null,
 					wsl_distro: kind === 'wsl' ? wslDistro.trim() : null,
@@ -615,6 +620,7 @@
 					detectedOs: rdp ? os : (osChoice || null),
 					osManual: !rdp && !!osChoice,
 					sharePath: rdp ? sharePath : null,
+					rdpClipboard: rdp && rdpClipboard ? rdpClipboard : null,
 					viaSessionId: via,
 					tryAgentKeys: !desktop && authType === 'Key' && tryAgentKeys,
 					sshOptions: sshOptionsToSave,
@@ -855,6 +861,15 @@
 					</Button>
 				</div>
 				<p class="shell-hint">{t('session.rdp_share_hint')}</p>
+			</div>
+			<div class="shell-field">
+				<label class="via-label" for="rdp-clipboard">{t('session.rdp_clipboard')}</label>
+				<select id="rdp-clipboard" class="via-select" bind:value={rdpClipboard} disabled={saving}>
+					<option value="">{t('session.rdp_clipboard_all')}</option>
+					<option value="text">{t('session.rdp_clipboard_text')}</option>
+					<option value="off">{t('session.rdp_clipboard_off')}</option>
+				</select>
+				<p class="shell-hint">{t('session.rdp_clipboard_hint')}</p>
 			</div>
 		{:else if kind === 'vnc'}
 			<div class="shell-field">
