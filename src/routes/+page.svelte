@@ -19,6 +19,7 @@
 	import MonitoringBar from '#lib/components/terminal/MonitoringBar.svelte';
 	import TerminalBar from '#lib/components/terminal/TerminalBar.svelte';
 	import { getSettings } from '#lib/state/settings.svelte.js';
+	import { freshFind, pendingFind } from '#lib/state/terminal-find.svelte.js';
 	import RemoteTerminal from '#lib/components/share/RemoteTerminal.svelte';
 	import * as share from '#lib/state/share.svelte.js';
 	import { monitorBarShown, monitoringWanted } from '#lib/state/monitor-bar.svelte.js';
@@ -66,6 +67,15 @@
 	const appSettings = getSettings();
 	/** The tab whose bar has its find field open: a hover-only bar stays. */
 	let findOpenIn = $state<string | null>(null);
+	// With the bar hidden in Settings, Find (Ctrl+Shift+F, the terminal's
+	// menu) shows it for the search and hides it again when the search closes.
+	let lastFindAt = 0;
+	$effect(() => {
+		const r = pendingFind();
+		if (!r || r.at === lastFindAt) return;
+		lastFindAt = r.at;
+		if (freshFind(r) && getSettings().terminalBar === 'hidden') findOpenIn = r.tabId;
+	});
 	let activeTab = $derived(getActiveTab());
 	let activePage = $derived(getActivePage());
 	let broadcastTargets = $derived(getBroadcastTargets());
@@ -384,7 +394,7 @@
 							{:else if tab.type === 'vnc' && tab.vncConnectParams}
 								<RdpPanel id={tab.id} params={tab.vncConnectParams} protocol="vnc" active={focused} />
 							{:else if tab.type !== 'rdp' && tab.type !== 'vnc'}
-								{#if appSettings.terminalBar !== 'hidden'}
+								{#if appSettings.terminalBar !== 'hidden' || findOpenIn === tab.id}
 									<div class="bar-slot" class:hover-only={appSettings.terminalBar === 'hover' && findOpenIn !== tab.id}>
 										<TerminalBar {tab} onfindopen={(open) => (findOpenIn = open ? tab.id : findOpenIn === tab.id ? null : findOpenIn)} />
 									</div>

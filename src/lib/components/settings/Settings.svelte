@@ -230,6 +230,7 @@
 		<SettingsCard><AppearanceTab part="appearance" /></SettingsCard>
 	{:else if id === 'terminal'}
 		<SettingsCard title={t('settings.section_text')}><AppearanceTab part="text" /></SettingsCard>
+		<SettingsCard title={t('settings.section_scrollback')}><AppearanceTab part="scrollback" /></SettingsCard>
 		<SettingsCard title={t('settings.section_paste')}><GeneralTab part="paste" /></SettingsCard>
 		<SettingsCard title={t('settings.section_shell')}><GeneralTab part="shell" /></SettingsCard>
 		{#if mobile}

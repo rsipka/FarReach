@@ -13,7 +13,7 @@
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { isBroadcastTarget, toggleBroadcastTarget } from '#lib/state/broadcast.svelte.js';
 	import { openHistoryPanel, tabHistory } from '#lib/state/history.svelte.js';
-	import { finderFor, pendingFind } from '#lib/state/terminal-find.svelte.js';
+	import { finderFor, freshFind, pendingFind } from '#lib/state/terminal-find.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { tick } from 'svelte';
 	import { formatHops, formatProxyAddress, ROUTE_ICON } from '#lib/utils/route.js';
@@ -82,12 +82,14 @@
 	let notFound = $state(false);
 	let findEl = $state<HTMLInputElement>();
 
-	async function openFind(): Promise<void> {
+	async function openFind(text?: string): Promise<void> {
 		findOpen = true;
+		if (text) query = text;
 		onfindopen?.(true);
 		await tick();
 		findEl?.focus();
 		findEl?.select();
+		if (text) find();
 	}
 
 	function closeFind(): void {
@@ -111,7 +113,7 @@
 		const r = pendingFind();
 		if (r && r.tabId === tab.id && r.at !== lastRequest) {
 			lastRequest = r.at;
-			void openFind();
+			if (freshFind(r)) void openFind(r.text);
 		}
 	});
 
