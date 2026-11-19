@@ -37,7 +37,8 @@ power.
 
 1. Install **Xcode** from the App Store, open it once, then in Terminal:
    `sudo xcodebuild -license accept`
-2. Install **Homebrew** (https://brew.sh) and then `brew install xcodegen`.
+2. Install **Homebrew** (https://brew.sh) and then `brew install xcodegen cmake cocoapods`
+   (the jobs install any of these that are missing).
 3. Install **Rust** with rustup (https://rustup.rs). The workflows pick the
    Rust version and targets; Node is downloaded by the workflow.
    The jobs put rustup's `~/.cargo/bin` first in PATH and leave MacPorts
