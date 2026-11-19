@@ -56,6 +56,7 @@ export const osIdToSlug: Record<string, string> = {
 	darwin: 'Apple',
 	windows: 'Windows',
 	linux: 'Linux',
+	gnome: 'Linux',
 };
 
 /** Icon SVG data keyed by slug. */
