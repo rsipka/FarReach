@@ -115,3 +115,20 @@ fn snippet_keeps_lines_around_match() {
     let long = format!("{}needle", "x".repeat(500));
     assert!(snippet(&long, "needle").ends_with("needle"));
 }
+
+// A local shell is kept under the computer it ran on, not "localhost".
+#[cfg(desktop)]
+#[tokio::test]
+async fn local_runs_are_kept_under_the_device() {
+    let dir = tempdir("t4");
+    let s = open(dir.as_path()).await;
+    let local = RunMeta { session_id: None, name: String::new(), protocol: "local".into(), host: "localhost".into(), user: String::new() };
+    let run = s.new_run(&local, "laptop-a", 1).await.unwrap();
+    s.add(run, &cmd(2, "uptime")).await.unwrap();
+    let wsl = RunMeta { protocol: "wsl".into(), host: "Ubuntu".into(), ..local.clone() };
+    let run = s.new_run(&wsl, "laptop-a", 3).await.unwrap();
+    s.add(run, &cmd(4, "uname -a")).await.unwrap();
+    let hits = s.search(&Query::default()).await.unwrap();
+    assert_eq!(hits.iter().map(|h| (h.host.as_str(), h.device.as_str())).collect::<Vec<_>>(), vec![("Ubuntu", "laptop-a"), ("laptop-a", "laptop-a")]);
+    assert_eq!(s.search(&Query { host: Some("laptop-a".into()), ..Default::default() }).await.unwrap().len(), 1);
+}

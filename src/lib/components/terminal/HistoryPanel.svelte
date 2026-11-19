@@ -95,6 +95,13 @@
 		}
 		return out;
 	});
+	/** Where a run happened: the server, or for a local shell the computer
+	 *  itself; a WSL distro or serial port says which computer it was on. */
+	function place(h: HistoryHit): string {
+		if ((h.protocol === 'wsl' || h.protocol === 'serial') && h.device && h.device !== h.host) return `${h.host} · ${h.device}`;
+		return h.host;
+	}
+
 	/** Filtered to one session, its name is in the scope menu already. */
 	let oneSession = $derived(scope === 'session' && !!sessionId);
 
@@ -147,7 +154,7 @@
 			<div class="bar">
 				<button type="button" class="link" onclick={() => (transcript = null)}>← {t('history.back')}</button>
 				{#if transcript.hits[0]}
-					<span class="meta">{transcript.hits[0].name || transcript.hits[0].host} · {when(transcript.hits[0].at)}</span>
+					<span class="meta">{#if transcript.hits[0].name}{transcript.hits[0].name} · {/if}{place(transcript.hits[0])} · {when(transcript.hits[0].at)}</span>
 				{/if}
 				<span class="spacer"></span>
 				{#if transcript.hits[0]}
@@ -199,7 +206,7 @@
 			<ul class="hits">
 				{#each groups as g, i (g.run + ':' + i)}
 					<li class="run">
-						<span class="meta">{#if !oneSession}{g.first.name || g.first.host} · {/if}{#if oneSession || g.first.name}{g.first.host} · {/if}{new Date(g.first.at).toLocaleDateString()}</span>
+						<span class="meta">{#if !oneSession && g.first.name}{g.first.name} · {/if}{place(g.first)} · {new Date(g.first.at).toLocaleDateString()}</span>
 					</li>
 					{#each g.hits as h (h.kind + h.id)}
 						<li class="hit {h.kind}">
