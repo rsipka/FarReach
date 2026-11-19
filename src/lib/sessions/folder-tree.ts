@@ -113,3 +113,46 @@ export function canMoveFolder(folderId: string, parentId: string | null, folders
 	if (!folder || !parent || folder.vault_id !== parent.vault_id) return false;
 	return !hasParentCycle(folderId, parentId, folderMap);
 }
+
+// ---- The saved order of the sessions in a folder ---------------------------
+
+/**
+ * Sessions in their saved order: those with a place first, lowest first,
+ * then those without one (made or moved here since, or older than the
+ * order itself) as they came. Stable, so equal places keep their order.
+ */
+export function bySavedOrder<T extends { order?: number | null }>(list: T[]): T[] {
+	const rank = (s: T) => (typeof s.order === 'number' ? s.order : Number.POSITIVE_INFINITY);
+	return list
+		.map((s, i) => ({ s, i }))
+		.sort((a, b) => rank(a.s) - rank(b.s) || a.i - b.i)
+		.map(({ s }) => s);
+}
+
+/**
+ * The ids of a folder's sessions after putting `moving` (in the order
+ * given) at `index` of `ids`, counted before they are taken out. Ids in
+ * `moving` that are not in `ids` (sessions coming from another folder) are
+ * put in too.
+ */
+export function placeAt(ids: string[], moving: string[], index: number): string[] {
+	const set = new Set(moving);
+	const before = ids.slice(0, Math.max(0, Math.min(index, ids.length))).filter((id) => !set.has(id));
+	const after = ids.slice(Math.max(0, index)).filter((id) => !set.has(id));
+	return [...before, ...moving, ...after];
+}
+
+/** The ids with one moved a step up (-1) or down (+1); as they were at an end. */
+export function moveStep(ids: string[], id: string, step: -1 | 1): string[] {
+	const i = ids.indexOf(id);
+	const j = i + step;
+	if (i < 0 || j < 0 || j >= ids.length) return ids;
+	const out = [...ids];
+	[out[i], out[j]] = [out[j], out[i]];
+	return out;
+}
+
+/** Sessions by name, as people read numbers in them (web2 before web10). */
+export function byName<T extends { name: string }>(list: T[]): T[] {
+	return [...list].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+}
