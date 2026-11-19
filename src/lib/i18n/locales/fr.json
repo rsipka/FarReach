@@ -2112,7 +2112,7 @@
   "security.lock_on_system_lock": "Verrouiller quand l’ordinateur se verrouille",
   "security.lock_on_system_lock_desc": "Verrouiller Reach quand vous verrouillez l’ordinateur ou qu’il se met en veille.",
   "security.unlock_keys_at_start": "Unlock credential keys at start",
-  "security.unlock_keys_at_start_desc": "When Reach opens, ask once for the passphrase of each passphrase-protected key your saved credentials use. The passphrases are kept in memory only, until Reach locks or closes, so connecting does not ask again.",
+  "security.unlock_keys_at_start_desc": "When Reach opens, ask once for the passphrase of each passphrase-protected key your saved credentials use. The passphrases are kept in memory only, until Reach locks or closes, so connecting does not ask again, also with a session that picks the same key itself. Keys only sessions use are not asked for here; a passphrase typed for one at a connect is kept the same way.",
   "security.keys_unlocked": "Keys unlocked: {{count}}",
   "lock.unlock_biometric": "Déverrouiller avec {{method}}",
   "lock.biometric_failed": "{{method}} n’a pas déverrouillé le coffre. Réessayez ou utilisez votre mot de passe maître.",
