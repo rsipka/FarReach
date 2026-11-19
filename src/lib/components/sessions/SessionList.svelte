@@ -958,6 +958,11 @@
 	// the modal to "fallback to password" mode without losing context.
 	let passwordFallback = $state(false);
 	let fallbackPassword = $state('');
+	// Whether the prompt asks for the password or key passphrase. Not while a
+	// session that has what it needs (a saved secret, a key unlocked at start,
+	// a passphrase-less key) connects by itself: an empty field there only
+	// distracts. It appears if that attempt fails, so a retry can use one.
+	let askSecret = $state(true);
 
 	let showConnectPrompt = $derived(!!connectSession);
 
@@ -1277,6 +1282,7 @@
 		if (storedPassword || storedPassphrase || passwordRef || passphraseRef || keyReady || session.auth_method.type === 'Agent') {
 			connectSession = session;
 			connectError = undefined;
+			askSecret = false;
 			rememberPassword = true;
 			hasSavedPassword = !!storedPassword || !!storedPassphrase || !!passwordRef || !!passphraseRef;
 
@@ -1297,6 +1303,7 @@
 		connectPassword = '';
 		connectKeyPassphrase = '';
 		connectError = undefined;
+		askSecret = true;
 		rememberPassword = false;
 		hasSavedPassword = false;
 		passwordFallback = false;
@@ -1461,7 +1468,10 @@
 			// changed since the list was read): ask, below, then try again.
 			untrusted = untrustedRefsFromError(err);
 			const errStr = String(err);
-			if (!untrusted) connectError = errStr;
+			if (!untrusted) {
+				connectError = errStr;
+				askSecret = true;
+			}
 			// If the saved auth method got rejected and we haven't already tried the password fallback,
 			// switch the modal to password mode so the user can retry without changing the session.
 			const isAuthRejection = /auth/i.test(errStr) && (
@@ -2276,6 +2286,8 @@
 						bind:this={fallbackInputEl}
 						disabled={connecting}
 					/>
+				{:else if !askSecret}
+					<!-- Connecting with what the session has: nothing to type. -->
 				{:else if connectSession.auth_method.type === 'Password'}
 					<input
 						class="prompt-input"
@@ -2294,12 +2306,12 @@
 					/>
 				{/if}
 
-				{#if !passwordFallback && promptRef(connectSession)}
+				{#if askSecret && !passwordFallback && promptRef(connectSession)}
 					{@const ref = promptRef(connectSession)!}
 					<div class="fallback-hint">{t('pwmanager.prompt_uses_ref', { name: `${providerName(ref.provider)} · ${ref.label?.trim() || ref.entry_id}` })}</div>
 				{/if}
 
-				{#if connectSession.auth_method.type !== 'Agent' && !passwordFallback}
+				{#if askSecret && connectSession.auth_method.type !== 'Agent' && !passwordFallback}
 					<label class="remember-label">
 						<input type="checkbox" class="remember-check" bind:checked={rememberPassword} disabled={connecting} />
 						<span class="remember-text">{hasSavedPassword ? t('session.password_saved') : t('session.remember_password')}</span>
