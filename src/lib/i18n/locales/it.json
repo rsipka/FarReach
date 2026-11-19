@@ -2495,7 +2495,7 @@
   "k8s.kc_usual": "Di solito",
   "k8s.kind": "Tipo",
   "k8s.kubeconfig": "Kubeconfig",
-  "k8s.kubeconfig_hint": "Incolla il contenuto del file o scegli il file. Viene salvato cifrato nel tuo vault e usato solo per raggiungere questo cluster.",
+  "k8s.kubeconfig_hint": "Incolla o scegli un kubeconfig. Viene salvato cifrato nel tuo archivio protetto. Reach chiede il consenso prima di eseguire un programma di autenticazione o inviare le credenziali del contesto selezionato a Helm su un host remoto.",
   "k8s.kubeconfig_keep": "Lascia vuoto per mantenere il kubeconfig salvato",
   "k8s.kubeconfig_keep_hint": "Il kubeconfig salvato resta, a meno che tu non ne incolli o scelga uno nuovo.",
   "k8s.kubeconfig_no_contexts": "Questo kubeconfig non ha contesti.",

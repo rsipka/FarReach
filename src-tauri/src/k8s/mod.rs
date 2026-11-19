@@ -14,6 +14,7 @@
 //! The cluster's own RBAC decides what the user may do; Reach never asks for
 //! more than the kubeconfig's identity has.
 
+pub mod credentials;
 pub mod files;
 pub mod helm;
 
@@ -88,11 +89,11 @@ pub struct Cluster {
     _forward: Option<Forward>,
 }
 
-/// Connect to `context` (or the kubeconfig's current one). With `forward`,
+/// Connect with the approved single-context kubeconfig. With `forward`,
 /// requests go through its loopback port to the API server.
-pub async fn connect(yaml: &str, context: Option<&str>, forward: Option<Forward>) -> Result<Cluster, String> {
-    let kc = Kubeconfig::from_yaml(yaml).map_err(|e| format!("Not a kubeconfig: {e}"))?;
-    let opts = KubeConfigOptions { context: context.map(String::from), ..Default::default() };
+pub async fn connect(kc: Kubeconfig, forward: Option<Forward>) -> Result<Cluster, String> {
+    let context_name = kc.current_context.clone().unwrap_or_default();
+    let opts = KubeConfigOptions::default();
     let mut config = kube::Config::from_custom_kubeconfig(kc, &opts).await.map_err(|e| e.to_string())?;
     let kc_server = config.cluster_url.to_string();
     if let Some(f) = &forward {
@@ -108,7 +109,6 @@ pub async fn connect(yaml: &str, context: Option<&str>, forward: Option<Forward>
             .map_err(|e| format!("{e}"))?;
     }
     let namespace = config.default_namespace.clone();
-    let context_name = context.map(String::from).unwrap_or_default();
     // Named by the kubeconfig's address, not the tunnel's loopback one.
     let server = kc_server.clone();
     let client = Client::try_from(config).map_err(|e| e.to_string())?;

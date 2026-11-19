@@ -2495,7 +2495,7 @@
   "k8s.kc_usual": "Usually",
   "k8s.kind": "Kind",
   "k8s.kubeconfig": "Kubeconfig",
-  "k8s.kubeconfig_hint": "Paste the file's contents or choose the file. It is stored encrypted in your vault and only used to reach this cluster.",
+  "k8s.kubeconfig_hint": "Paste or choose a kubeconfig. It is stored encrypted in your vault. Reach asks before running a credential helper or sharing the selected context’s credentials with remote Helm.",
   "k8s.kubeconfig_keep": "Leave empty to keep the stored kubeconfig",
   "k8s.kubeconfig_keep_hint": "The stored kubeconfig is kept unless you paste or choose a new one.",
   "k8s.kubeconfig_no_contexts": "This kubeconfig has no contexts.",
