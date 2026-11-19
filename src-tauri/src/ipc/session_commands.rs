@@ -837,6 +837,8 @@ pub async fn session_create(
         history,
         tmux,
         credential_ref_approvals: Default::default(),
+        // Trusted by connecting to it, never by what a form sends.
+        host_keys: None,
     };
     session.tidy_documentation();
 
@@ -958,6 +960,9 @@ async fn prepare_update(
     // The approvals kept for a credential's entries are the stored ones,
     // never what the window sent.
     session.credential_ref_approvals = stored.as_ref().map(|s| s.credential_ref_approvals.clone()).unwrap_or_default();
+    // The trusted host keys are the stored ones: a connect may have saved
+    // one while the editor was open, and the editor never changes them.
+    session.host_keys = stored.as_ref().and_then(|s| s.host_keys.clone());
 
     // A login sent is the session's own, unless it is one a credential
     // filled in (the editor shows that one): then the stored own login stays.
@@ -976,6 +981,10 @@ async fn prepare_update(
 #[path = "session_bulk.rs"]
 mod bulk;
 pub use bulk::*;
+
+#[path = "session_hostkeys_cmds.rs"]
+mod hostkeys;
+pub use hostkeys::*;
 
 /// Move many sessions into a folder (`None`: out of any folder) in one
 /// go. Only `folder_id` changes: each stored session is read and written
