@@ -1,20 +1,25 @@
-Reacher CM Dev 26.11.1-dev.4, a pre-release built from the fork's main.
+Reacher CM Dev 26.11.1-dev.5, a pre-release built from the fork's main.
 
-New since v26.11.1-dev.3:
+New since v26.11.1-dev.4:
 
-- Face ID on iPhone and iPad, and SSH keys unlocked with biometrics on phones
-- MikroTik and UniFi devices get their own icon
-- Server fingerprints saved with the session
-- Keys unlocked at start work outside credentials too
-- Local shell history under the computer's name
-- Longer first-run setup, and run it again from Settings
-- Old name gone from messages
-- Website, changelog and license in About
-- Update check moved to About
-- Pictures and file transfers on the RDP clipboard
-- RDP files on phones and tablets
-- See which sessions go through a jump host or proxy
-- Close from the Session ended overlay
+- WinBox 4 sessions
+- Raspberry Pi OS detected
+- Floating session windows
+- Terminals without WebGL2 work
+- Several addresses for one server
+- IronRDP updated
+- Full-pane file manager for SSH tabs
+- Configurable keyboard shortcuts
+- Session sharing works, and Start and Join are in the + menu
+- Split the view any way, and drag panes where you want them
+- Mute sounds, and a configurable terminal bell
+- Find in the terminal's right-click menu, longer scrollback, line numbers and timestamps
+- Log files named after the session
+- Smoother text selection in the terminal on Linux
+- What's new in an update
+- Highlight errors and addresses in the terminal
+- OS logos back in colour, and shown in the OS icon list
+- More in a tab's right-click menu
 
 iPhone and iPad: add https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/apps.json as a source in LiveContainer to get updates.
 Full list of changes: https://github.com/rsipka/ReacherCM/blob/main/CHANGELOG.md
