@@ -15,7 +15,7 @@
 	import { matchesQuery } from '#lib/utils/search.js';
 	import { isMobile } from '#lib/platform.js';
 	import { stepUiZoom, UI_ZOOM_STEPS } from '#lib/state/ui-zoom.js';
-	import { shortcutLabel } from '#lib/state/shortcuts.svelte.js';
+	import { actionLabel } from '#lib/state/shortcuts.svelte.js';
 	import { sessionLogDefaultDir } from '#lib/ipc/ssh.js';
 	import { historyForget, historyStats, type HistoryStats } from '#lib/ipc/history.js';
 	import { pushHistoryRetention } from '#lib/state/history.svelte.js';
@@ -440,7 +440,7 @@
 		<div class="setting-row">
 			<div class="setting-info">
 				<span class="setting-label">{t('settings.ui_zoom')}</span>
-				<span class="setting-description">{t('settings.ui_zoom_hint', { in: shortcutLabel('=', { ctrl: true }), out: shortcutLabel('-', { ctrl: true }), reset: shortcutLabel('0', { ctrl: true }) })}</span>
+				<span class="setting-description">{t('settings.ui_zoom_hint', { in: actionLabel('zoom.in'), out: actionLabel('zoom.out'), reset: actionLabel('zoom.reset') })}</span>
 			</div>
 			<div class="setting-control size-stepper">
 				<button class="size-btn" aria-label={t('keys.smaller')} disabled={uiZoom <= UI_ZOOM_STEPS[0]} onclick={() => stepUiZoom(-1)}>−</button>

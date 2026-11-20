@@ -53,6 +53,8 @@
 		type Transfer
 	} from '#lib/state/transfers.svelte.js';
 	import { runTransfer } from '#lib/explorer/run-transfer.js';
+	import { getActiveTab, canShowFilesView, toggleFilesView } from '#lib/state/tabs.svelte.js';
+	import { actionLabel } from '#lib/state/shortcuts.svelte.js';
 	import { shellQuote } from '#lib/utils/shell.js';
 
 	interface Props {
@@ -73,6 +75,11 @@
 	let explorerEl: HTMLDivElement | undefined = $state();
 
 	let currentPath = $derived(connectionId ? getCurrentPath(connectionId) : '/');
+	/** The SSH tab this explorer shows, when it can open the full-pane view. */
+	let fullTab = $derived.by(() => {
+		const tab = getActiveTab();
+		return tab && tab.connectionId === connectionId && canShowFilesView(tab) ? tab : undefined;
+	});
 	let entries = $derived(connectionId ? getEntries(connectionId) : []);
 	// Only this connection's: another tab's, or one from before a reconnect,
 	// is not this explorer's to show.
@@ -924,6 +931,22 @@
 					<path d="M3 5h18M3 12h18M3 19h18M9 5v14M15 5v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
 				</svg>
 			</button>
+
+			{#if fullTab}
+				<button
+					class="tool-btn"
+					class:on={fullTab.filesView}
+					onclick={() => fullTab && toggleFilesView(fullTab.id)}
+					aria-pressed={!!fullTab.filesView}
+					aria-label={t('files.open_full')}
+					title={`${fullTab.filesView ? t('files.back_to_terminal') : t('files.open_full')} (${actionLabel('files.toggle')})`}
+					type="button"
+				>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+						<path d="M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM12 4v16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+					</svg>
+				</button>
+			{/if}
 
 			<div class="explorer-search">
 				<svg width="11" height="11" viewBox="0 0 24 24" fill="none" class="explorer-search-icon">

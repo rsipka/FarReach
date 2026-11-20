@@ -16,6 +16,7 @@
 	import PhoneKeysSetting from './PhoneKeysSetting.svelte';
 	import SettingsCard from './SettingsCard.svelte';
 	import Advanced from './Advanced.svelte';
+	import KeyboardShortcutsTab from './KeyboardShortcutsTab.svelte';
 	import NewIndicator from '#lib/components/shared/NewIndicator.svelte';
 	import { settingsTabHasNew, markSettingsTabSeen, newSince } from '#lib/state/whats-new.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -53,7 +54,7 @@
 	}
 
 	function pagesIn(group: string | null): SettingsPage[] {
-		return PAGES.filter((p) => p.group === group);
+		return PAGES.filter((p) => p.group === group && !(mobile && p.desktopOnly));
 	}
 
 	// Opening: a target goes straight to its page (and row); otherwise a
@@ -228,6 +229,8 @@
 		<SettingsCard><GeneralTab part="general" /></SettingsCard>
 	{:else if id === 'appearance'}
 		<SettingsCard><AppearanceTab part="appearance" /></SettingsCard>
+	{:else if id === 'shortcuts'}
+		<KeyboardShortcutsTab />
 	{:else if id === 'terminal'}
 		<SettingsCard title={t('settings.section_text')}><AppearanceTab part="text" /></SettingsCard>
 		<SettingsCard title={t('settings.section_scrollback')}><AppearanceTab part="scrollback" /></SettingsCard>

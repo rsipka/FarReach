@@ -80,6 +80,9 @@ const CHANGED = {
 	terminalHighlight: true,
 	terminalHighlightKinds: ['success', 'mac'],
 	terminalHighlightCustom: '/vlan \\d+/i',
+	fileEditor: 'custom',
+	fileEditorCommand: 'subl -w',
+	fileEditorTerminal: true,
 	setupComplete: true,
 	pendingTursoOrg: 'my-org',
 	pendingTursoApiToken: 'token',
@@ -91,7 +94,8 @@ const CHANGED = {
 	autoLockMinutes: 15,
 	lockOnSystemLock: true,
 	unlockKeysAtStart: true,
-	unlockKeysWithBiometrics: true
+	unlockKeysWithBiometrics: true,
+	keyboardShortcuts: { 'tab.new': ['Mod+Alt+T'], 'app.aiPanel': [] }
 };
 
 const restart = (s) => readStoredSettings(JSON.parse(storeSettings(s)));
@@ -128,6 +132,8 @@ check('missing ones are defaults', old.terminalCursorStyle === defaults.terminal
 check('an older install counts as set up', old.setupComplete === true);
 check('an older install keeps Ansible and OpenTofu', same(old.devopsTools, ['ansible', 'tofu']));
 check('an empty theme id is no theme', readStoredSettings({ themeId: '' }).themeId === undefined);
+
+check('an unknown shortcut action is dropped', same(readStoredSettings({ keyboardShortcuts: { nope: ['Mod+X'], 'tab.new': ['Mod+Y', 3] } }).keyboardShortcuts, { 'tab.new': ['Mod+Y'] }));
 
 console.log(failures ? `\n${failures} failed` : '\nall passed');
 process.exit(failures ? 1 : 0);

@@ -19,6 +19,7 @@ import {
 	type CursorStyle,
 	type InactiveCursorStyle
 } from '#lib/terminal/cursor.js';
+import { readOverrides, type KeyOverrides } from '#lib/state/keybindings.js';
 import { DEFAULT_HIGHLIGHT, DEFAULT_HIGHLIGHT_KINDS, highlightKinds, type HighlightKind } from '#lib/terminal/highlight.js';
 
 /** The localStorage key. Kept from Reach, so an update finds what was saved. */
@@ -167,6 +168,13 @@ export interface Settings {
 	terminalHighlightKinds: HighlightKind[];
 	/** The user's own patterns, one regular expression per line. */
 	terminalHighlightCustom: string;
+	/** The program the full-pane file manager's Edit (F4) opens files in:
+	 *  '' for the system's default, a detected editor's id, or 'custom'. */
+	fileEditor: string;
+	/** With 'custom': the command, the file added at the end. */
+	fileEditorCommand: string;
+	/** With 'custom': it runs in a terminal tab (vim, nano...). */
+	fileEditorTerminal: boolean;
 
 	setupComplete: boolean;
 	pendingTursoOrg: string;
@@ -217,6 +225,9 @@ export interface Settings {
 	/** Phones: remember the passphrases typed at start behind Face ID or the
 	 *  fingerprint, so the next start asks for the biometric once. */
 	unlockKeysWithBiometrics: boolean;
+	/** The user's own keyboard shortcuts, by action; only the ones changed
+	 *  from the defaults. See #lib/state/keybindings. */
+	keyboardShortcuts: KeyOverrides;
 }
 
 /** The file name a log gets unless Settings say otherwise: session name, host, date, time. */
@@ -284,6 +295,9 @@ export const defaults: Settings = {
 	terminalHighlight: DEFAULT_HIGHLIGHT,
 	terminalHighlightKinds: [...DEFAULT_HIGHLIGHT_KINDS],
 	terminalHighlightCustom: '',
+	fileEditor: '',
+	fileEditorCommand: '',
+	fileEditorTerminal: false,
 	setupComplete: false,
 	pendingTursoOrg: '',
 	pendingTursoApiToken: '',
@@ -295,7 +309,8 @@ export const defaults: Settings = {
 	autoLockMinutes: 0,
 	lockOnSystemLock: false,
 	unlockKeysAtStart: false,
-	unlockKeysWithBiometrics: false
+	unlockKeysWithBiometrics: false,
+	keyboardShortcuts: {}
 };
 
 /** Settings held in memory only: never written, so never read back. */
@@ -382,6 +397,9 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.terminalHighlight = parsed.terminalHighlight ?? defaults.terminalHighlight;
 	settings.terminalHighlightKinds = highlightKinds(parsed.terminalHighlightKinds);
 	settings.terminalHighlightCustom = typeof parsed.terminalHighlightCustom === 'string' ? parsed.terminalHighlightCustom : defaults.terminalHighlightCustom;
+	settings.fileEditor = typeof parsed.fileEditor === 'string' ? parsed.fileEditor : defaults.fileEditor;
+	settings.fileEditorCommand = typeof parsed.fileEditorCommand === 'string' ? parsed.fileEditorCommand : defaults.fileEditorCommand;
+	settings.fileEditorTerminal = parsed.fileEditorTerminal ?? defaults.fileEditorTerminal;
 	settings.pendingTursoOrg = parsed.pendingTursoOrg ?? defaults.pendingTursoOrg;
 	settings.launches = parsed.launches ?? defaults.launches;
 	settings.communityPromptDismissed =
@@ -400,6 +418,7 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.lockOnSystemLock = parsed.lockOnSystemLock ?? defaults.lockOnSystemLock;
 	settings.unlockKeysAtStart = parsed.unlockKeysAtStart ?? defaults.unlockKeysAtStart;
 	settings.unlockKeysWithBiometrics = parsed.unlockKeysWithBiometrics ?? defaults.unlockKeysWithBiometrics;
+	settings.keyboardShortcuts = readOverrides(parsed.keyboardShortcuts);
 	// Migration: existing users who already have localStorage data get setupComplete: true
 	settings.setupComplete = parsed.setupComplete ?? true;
 	return settings;

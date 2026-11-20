@@ -7,9 +7,10 @@
 	 * that same tab menu, so nothing here is a second copy of it.
 	 */
 	import type { Tab } from '#lib/state/tabs.svelte.js';
-	import { splitWith, unsplit, getSplit, getTabs, getDraggedTab, setDraggedTab } from '#lib/state/tabs.svelte.js';
+	import { splitWith, unsplit, getSplit, getTabs, getDraggedTab, setDraggedTab, canShowFilesView, toggleFilesView } from '#lib/state/tabs.svelte.js';
 	import { SPLIT_MIN_WIDTH, contains } from '#lib/terminal/split.js';
 	import { isMobile } from '#lib/platform.js';
+	import { actionLabel } from '#lib/state/shortcuts.svelte.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { isBroadcastTarget, toggleBroadcastTarget } from '#lib/state/broadcast.svelte.js';
 	import { openHistoryPanel, tabHistory } from '#lib/state/history.svelte.js';
@@ -30,6 +31,8 @@
 	const ICONS = {
 		find: 'M11 4.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM20 20l-4.2-4.2',
 		files: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+		dualPane: 'M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM12 4v16M6 8h3M6 11h3M15 8h3M15 11h3',
+		terminal: 'M4 17l6-5-6-5M12 19h8',
 		snippets: 'M8 6l-5 6 5 6M16 6l5 6-5 6M13.5 4l-3 16',
 		history: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2',
 		broadcast: 'M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM8 8a5.6 5.6 0 0 0 0 8M16 8a5.6 5.6 0 0 1 0 8M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14',
@@ -212,6 +215,9 @@
 	{/if}
 	{#if tab.type === 'ssh'}
 		<button class="ib" type="button" onclick={() => showSection('explorer')} title={t('termbar.files')} aria-label={t('termbar.files')}>{@render icon(ICONS.files)}</button>
+	{/if}
+	{#if canShowFilesView(tab)}
+		<button class="ib" class:on={tab.filesView} type="button" onclick={() => toggleFilesView(tab.id)} title={`${tab.filesView ? t('files.back_to_terminal') : t('files.open_full')} (${actionLabel('files.toggle')})`} aria-label={t('files.open_full')} aria-pressed={!!tab.filesView}>{@render icon(tab.filesView ? ICONS.terminal : ICONS.dualPane)}</button>
 	{/if}
 	<button class="ib" type="button" onclick={() => showSection('snippets')} title={t('sidebar.snippets')} aria-label={t('sidebar.snippets')}>{@render icon(ICONS.snippets)}</button>
 	{#if remote}
