@@ -997,6 +997,15 @@
 			<Toggle hideLabel checked={settings.rdpGraphicsPipeline} label={t('settings.rdp_gfx')} onchange={(v) => updateSetting('rdpGraphicsPipeline', v)} />
 		</div>
 	</div>
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.rdp_gfx_new')}</span>
+			<span class="setting-description">{t('settings.rdp_gfx_new_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle hideLabel checked={settings.rdpNewGraphicsFormats} label={t('settings.rdp_gfx_new')} onchange={(v) => updateSetting('rdpNewGraphicsFormats', v)} />
+		</div>
+	</div>
 	{/if}
 
 </div>

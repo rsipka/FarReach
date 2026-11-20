@@ -91,6 +91,10 @@ pub struct RdpConnectParams {
     /// Advertise the graphics pipeline. Off unless the user turned it on.
     #[serde(default)]
     pub graphics_pipeline: bool,
+    /// Keep the graphics pipeline to the older picture formats (no AVC444,
+    /// no RemoteFX progressive). Off unless the user turned the newer ones off.
+    #[serde(default)]
+    pub older_graphics_formats: bool,
     /// What the clipboard lets through, as saved with the session: unset
     /// for everything, `text` for no files, `off` for no clipboard at all.
     #[serde(default)]
@@ -666,6 +670,7 @@ fn build_config(p: &RdpConnectParams, app: AppHandle) -> Result<ironrdp_client::
         // #1791). With no folder the client attaches its no-op backend.
         .with_rdpdr(true)
         .with_graphics_pipeline(p.graphics_pipeline)
+        .with_egfx_thin_client(p.older_graphics_formats)
         // H.264 for the graphics pipeline, one decoder per connection. With
         // it the client advertises AVC420 and a Windows server sends video as
         // video rather than as tiles. Made here rather than once, because a

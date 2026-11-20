@@ -805,6 +805,8 @@
   "settings.rdp_hw_render_desc": "Paint the desktop through the GPU. Applies to desktops opened after the change.",
   "settings.rdp_gfx": "Graphics pipeline (H.264)",
   "settings.rdp_gfx_desc": "Ask the host for the graphics pipeline, which carries video as H.264 on hosts that encode it. On a host that does not, the picture gets heavier, not lighter.",
+  "settings.rdp_gfx_new": "Newer picture formats",
+  "settings.rdp_gfx_new_desc": "Let the graphics pipeline use AVC444 (sharper text and colour in H.264) and RemoteFX progressive (GNOME Remote Desktop uses it). Turn off if a host shows a broken picture or drops the session; the older formats are then used.",
   "settings.rdp_fs_button": "Full screen button",
   "settings.rdp_fs_button_desc": "Show the Full screen button over a remote desktop. Drag it anywhere to keep it clear of the remote's own buttons; it stays where you put it. Without it, Ctrl+Alt+Enter still toggles full screen.",
   "settings.shell_desc": "Shell used when opening new local terminals.",

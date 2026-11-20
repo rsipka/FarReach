@@ -121,6 +121,8 @@ export interface Settings {
 	rdpHardwareRendering: boolean;
 	/** Remote desktop: advertise the graphics pipeline, for hosts that encode H.264. */
 	rdpGraphicsPipeline: boolean;
+	/** Let the graphics pipeline use AVC444 and RemoteFX progressive. */
+	rdpNewGraphicsFormats: boolean;
 	/** Remote desktop: show the Full screen button over the desktop. */
 	rdpFullscreenButton: boolean;
 	/**
@@ -266,6 +268,7 @@ export const defaults: Settings = {
 	historyPatterns: '',
 	rdpHardwareRendering: true,
 	rdpGraphicsPipeline: false,
+	rdpNewGraphicsFormats: true,
 	rdpFullscreenButton: true,
 	rdpFullscreenButtonAt: null,
 	warnOnMultilinePaste: true,
@@ -361,6 +364,7 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.historyPatterns = parsed.historyPatterns ?? defaults.historyPatterns;
 	settings.rdpHardwareRendering = parsed.rdpHardwareRendering ?? defaults.rdpHardwareRendering;
 	settings.rdpGraphicsPipeline = parsed.rdpGraphicsPipeline ?? defaults.rdpGraphicsPipeline;
+	settings.rdpNewGraphicsFormats = parsed.rdpNewGraphicsFormats ?? defaults.rdpNewGraphicsFormats;
 	settings.rdpFullscreenButton = parsed.rdpFullscreenButton ?? defaults.rdpFullscreenButton;
 	settings.rdpFullscreenButtonAt = parsed.rdpFullscreenButtonAt ?? defaults.rdpFullscreenButtonAt;
 	// These two were saved but never read back, so "don't ask again"

@@ -805,6 +805,8 @@
   "settings.rdp_hw_render_desc": "Dibuja el escritorio a través de la GPU. Se aplica a los escritorios abiertos después del cambio.",
   "settings.rdp_gfx": "Graphics pipeline (H.264)",
   "settings.rdp_gfx_desc": "Pide al host la canalización gráfica, que transporta el vídeo como H.264 en los hosts que lo codifican. En un host que no lo hace, la imagen se vuelve más pesada, no más ligera.",
+  "settings.rdp_gfx_new": "Formatos de imagen más nuevos",
+  "settings.rdp_gfx_new_desc": "Permite que la canalización gráfica use AVC444 (texto y color más nítidos en H.264) y RemoteFX progressive (lo usa GNOME Remote Desktop). Desactívalo si un host muestra una imagen rota o corta la sesión; entonces se usan los formatos antiguos.",
   "settings.rdp_fs_button": "Botón de pantalla completa",
   "settings.rdp_fs_button_desc": "Muestra el botón de pantalla completa sobre un escritorio remoto. Arrástralo a cualquier sitio para que no tape los botones del sistema remoto; se queda donde lo dejes. Sin él, Ctrl+Alt+Intro sigue alternando la pantalla completa.",
   "settings.shell_desc": "Shell que se usa al abrir nuevas terminales locales.",

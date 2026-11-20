@@ -3,8 +3,9 @@
 # to 6 s; a resize to the current size is skipped, and a graphics reset
 # completes a pending resize; RDPDR drives carry the client name instead of
 # "IronRDP"; the sound channel is announced initialized and encrypted
-# (RdpsndAnnounced); the graphics pipeline is announced as a thin client so
-# the server never uses RemoteFX progressive (EgfxHandler). Path dependencies
+# (RdpsndAnnounced); ConfigBuilder::with_egfx_thin_client announces the
+# graphics pipeline as a thin client, keeping the server to the older codecs
+# (EgfxHandler). Path dependencies
 # were rewritten to the same git rev and workspace fields filled in.
 [package]
 name = "ironrdp-client"

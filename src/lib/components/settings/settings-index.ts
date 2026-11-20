@@ -65,6 +65,7 @@ export const SETTINGS_INDEX: IndexedRow[] = [
 	{ page: 'remote', label: 'settings.rdp_hw_render', desc: 'settings.rdp_hw_render_desc' },
 	{ page: 'remote', label: 'settings.rdp_fs_button', desc: 'settings.rdp_fs_button_desc' },
 	{ page: 'remote', label: 'settings.rdp_gfx', desc: 'settings.rdp_gfx_desc', words: 'h.264 h264 video codec', advanced: true },
+	{ page: 'remote', label: 'settings.rdp_gfx_new', desc: 'settings.rdp_gfx_new_desc', words: 'avc444 remotefx progressive codec picture', advanced: true },
 	{ page: 'sync', label: 'backup.export' },
 	{ page: 'sync', label: 'backup.import' },
 	{ page: 'general', label: 'settings.language' },

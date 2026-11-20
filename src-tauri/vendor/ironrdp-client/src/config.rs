@@ -545,6 +545,11 @@ pub struct ChannelConfig {
     ///
     /// [MS-RDPEGFX]: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpegfx/da5c75f9-cd99-450c-98c4-014a496942b0
     pub egfx_persistent_cache: Option<PathBuf>,
+
+    /// Reach: advertise only the V8.1 and V8 thin-client capability sets, so
+    /// the server keeps to AVC420, ClearCodec, planar and uncompressed (no
+    /// RemoteFX progressive, no AVC444). Off by default.
+    pub egfx_thin_client: bool,
 }
 
 impl Default for ChannelConfig {
@@ -598,6 +603,7 @@ impl Default for ChannelConfig {
             pnp: None,
             h264_decoder: crate::h264::H264DecoderFactory::platform_default(),
             egfx_persistent_cache: None,
+            egfx_thin_client: false,
         }
     }
 }
@@ -1664,6 +1670,14 @@ impl ConfigBuilder {
     #[must_use]
     pub fn with_graphics_pipeline(mut self, enabled: bool) -> Self {
         self.graphics_pipeline = Some(enabled);
+        self
+    }
+
+    /// Reach: announce the graphics pipeline as a thin client (older codecs
+    /// only); see [`ChannelConfig::egfx_thin_client`].
+    #[must_use]
+    pub fn with_egfx_thin_client(mut self, thin_client: bool) -> Self {
+        self.channels.egfx_thin_client = thin_client;
         self
     }
 

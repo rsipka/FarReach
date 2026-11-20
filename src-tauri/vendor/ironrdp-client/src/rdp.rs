@@ -2570,17 +2570,22 @@ fn build_connector(
     // only when it returns YUV planes. The decoder starts during the connection sequence
     // and is awaited when the graphics channel opens, so a slow start does not delay
     // connecting.
-    struct EgfxHandler;
+    struct EgfxHandler {
+        thin_client: bool,
+    }
+    struct UpstreamEgfxHandler;
+    impl GraphicsPipelineHandler for UpstreamEgfxHandler {}
     impl GraphicsPipelineHandler for EgfxHandler {
-        // Reach: announced as a thin client (V8.1 and V8 only). That tells the
-        // server not to use the RemoteFX progressive codec, whose decoder
-        // rejected a Windows 11 host's tiles and took the session down with it
-        // in the revision this was written for. What remains is AVC420 for
-        // video and ClearCodec, planar and uncompressed for the rest. Upstream
-        // has fixed progressive decoding since; dropping this override (and
-        // with it gaining AVC444) wants a test against real hosts first.
+        // Reach: optionally announced as a thin client (V8.1 and V8 only),
+        // the setting for older picture formats. That tells the server not to
+        // use RemoteFX progressive or AVC444; what remains is AVC420 for video
+        // and ClearCodec, planar and uncompressed for the rest. Otherwise
+        // IronRDP's own list (V10.7 down to V8).
         fn capabilities(&self) -> Vec<ironrdp_egfx::pdu::CapabilitySet> {
             use ironrdp_egfx::pdu::{CapabilitiesV8Flags, CapabilitiesV81Flags, CapabilitySet};
+            if !self.thin_client {
+                return UpstreamEgfxHandler.capabilities();
+            }
             vec![
                 CapabilitySet::V8_1 {
                     flags: CapabilitiesV81Flags::AVC420_ENABLED
@@ -2610,7 +2615,12 @@ fn build_connector(
             RdpInputProtocolVersion::V300,
         ))
         .with_dynamic_channel({
-            let mut egfx = GraphicsPipelineClient::new(Box::new(EgfxHandler), h264_decoder);
+            let mut egfx = GraphicsPipelineClient::new(
+                Box::new(EgfxHandler {
+                    thin_client: config.channels.egfx_thin_client,
+                }),
+                h264_decoder,
+            );
             if let Some(decoders) = h264_decoders.cloned() {
                 egfx = egfx.with_h264_decoder_factory(Box::new(move || decoders.create()));
             }
