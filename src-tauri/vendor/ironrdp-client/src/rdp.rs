@@ -43,6 +43,8 @@ use ironrdp_pdu::input::mouse_rel::{MouseRelPdu, PointerRelFlags};
     feature = "sound",
     all(windows, feature = "webauthn")
 ))]
+// Reach: only used by the DVC pipe proxy and webauthn channels, so gate it to avoid an unused import warning.
+#[cfg(any(feature = "dvc-pipe-proxy", all(windows, feature = "webauthn")))]
 use ironrdp_pdu::pdu_other_err;
 use ironrdp_pdu::rdp::autodetect::AutoDetectRequest;
 use ironrdp_pdu::rdp::capability_sets::InputFlags;

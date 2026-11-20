@@ -2176,7 +2176,7 @@ pub fn encode_send_data_request<T: Encode>(
     Ok(written)
 }
 
-#[expect(single_use_lifetimes)] // anonymous lifetimes in `impl Trait` are unstable
+// Reach: upstream's #[expect(single_use_lifetimes)] dropped; that lint is only on in the IronRDP workspace.
 fn create_gcc_blocks<'a>(
     config: &Config,
     cluster_data: Option<&gcc::ClientClusterData>,
