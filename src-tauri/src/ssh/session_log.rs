@@ -182,10 +182,10 @@ fn open_file(path: &Path, append: bool) -> io::Result<File> {
     o.open(path)
 }
 
-/// PuTTY's header line, with Reach in place of PuTTY.
+/// PuTTY's header line, with Reacher CM in place of PuTTY.
 pub fn header_line(now: &chrono::DateTime<chrono::Local>) -> String {
     format!(
-        "=~=~=~=~=~=~=~=~=~=~=~= Reach log {} =~=~=~=~=~=~=~=~=~=~=~=\r\n",
+        "=~=~=~=~=~=~=~=~=~=~=~= Reacher CM log {} =~=~=~=~=~=~=~=~=~=~=~=\r\n",
         now.format("%Y.%m.%d %H:%M:%S")
     )
 }
@@ -246,7 +246,7 @@ fn status_of(c: &Control) -> LogStatus {
 
 /// A marker line, so a gap in the log is visible when it is read later.
 fn marker(what: &str) -> Vec<u8> {
-    format!("\r\n=~=~=~=~=~=~=~=~=~=~=~= Reach log {} {} =~=~=~=~=~=~=~=~=~=~=~=\r\n", what, chrono::Local::now().format("%Y.%m.%d %H:%M:%S")).into_bytes()
+    format!("\r\n=~=~=~=~=~=~=~=~=~=~=~= Reacher CM log {} {} =~=~=~=~=~=~=~=~=~=~=~=\r\n", what, chrono::Local::now().format("%Y.%m.%d %H:%M:%S")).into_bytes()
 }
 
 /// The log of `stream`, if it is writing or paused.
