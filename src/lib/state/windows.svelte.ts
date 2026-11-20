@@ -172,7 +172,7 @@ function adopt(p: MovePayload): void {
 	// the other window is only told to let it go. A terminal asks for its
 	// screen once it listens (see takeOver).
 	for (const t of tabs) {
-		if (t.type === 'rdp' || t.type === 'vnc') {
+		if (t.type === 'rdp' || t.type === 'vnc' || t.type === 'spice') {
 			void requestSnapshot(t.id, t.handoff).then(() => clearHandoff(t.id));
 		}
 	}

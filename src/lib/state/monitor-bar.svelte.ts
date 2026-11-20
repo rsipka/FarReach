@@ -27,5 +27,5 @@ export function monitorBarShown(): boolean {
 	if (getActivePage() !== 'terminal' || getTabs().length === 0) return false;
 	const tab = getActiveTab();
 	if (!tab) return false;
-	return tab.type === 'ssh' || !!tab.wslDistro || (share.isEnabled() && tab.type !== 'rdp' && tab.type !== 'vnc');
+	return tab.type === 'ssh' || !!tab.wslDistro || (share.isEnabled() && tab.type !== 'rdp' && tab.type !== 'vnc' && tab.type !== 'spice');
 }

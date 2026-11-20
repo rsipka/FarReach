@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { SecretRef } from './pwmanager';
 import type { TelnetOptions } from './telnet';
 import type { SerialOptions } from './serial';
+import type { SpiceOptions } from './spice';
 import type { HistoryMode } from './history';
 import type { CursorStyle } from '#lib/terminal/cursor.js';
 import { t } from '#lib/state/i18n.svelte.js';
@@ -58,7 +59,7 @@ export interface SessionConfig {
   share_path?: string | null;
   /** RDP only: what the clipboard carries; absent for text, pictures and files. */
   rdp_clipboard?: 'text' | 'off' | null;
-  /** VNC only: a saved SSH session to reach the server through. */
+  /** VNC and SPICE only: a saved SSH session to reach the server through. */
   via_session_id?: string | null;
   /** Key sessions: also offer the SSH agent's keys if this key is refused. Off by default. */
   try_agent_keys?: boolean | null;
@@ -70,6 +71,8 @@ export interface SessionConfig {
   telnet?: TelnetOptions | null;
   /** Serial only: speed, framing, flow control and keys. The port is `host`. */
   serial?: SerialOptions | null;
+  /** SPICE only: TLS port and certificate checks. */
+  spice?: SpiceOptions | null;
   /** A saved credential this session logs in with (see savedCredentials.ts).
    *  Unset: its folder's, if one applies. */
   credential_id?: string | null;
@@ -199,7 +202,7 @@ export interface SshOptions {
 }
 
 /** `winbox`: MikroTik's WinBox 4, started as a program of its own (desktop). */
-export type SessionKind = 'ssh' | 'rdp' | 'vnc' | 'wsl' | 'telnet' | 'serial' | 'winbox';
+export type SessionKind = 'ssh' | 'rdp' | 'vnc' | 'spice' | 'wsl' | 'telnet' | 'serial' | 'winbox';
 
 export function sessionKind(session: Pick<SessionConfig, 'kind'>): SessionKind {
   return session.kind ?? 'ssh';
@@ -260,6 +263,7 @@ export async function sessionCreate(params: {
   credentialId?: string | null;
   telnet?: TelnetOptions | null;
   serial?: SerialOptions | null;
+  spice?: SpiceOptions | null;
   notes?: string | null;
   customFields?: CustomField[] | null;
   terminalTheme?: string | null;
@@ -298,6 +302,7 @@ export async function sessionCreate(params: {
     credentialId: params.credentialId || null,
     telnet: params.kind === 'telnet' ? (params.telnet ?? null) : null,
     serial: params.kind === 'serial' ? (params.serial ?? null) : null,
+    spice: params.kind === 'spice' ? (params.spice ?? null) : null,
     notes: params.notes?.trim() ? params.notes : null,
     customFields: params.customFields?.length ? params.customFields : null,
     terminalTheme: params.terminalTheme || null,
