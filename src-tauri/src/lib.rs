@@ -8,6 +8,7 @@ pub mod monitoring;
 pub mod pty;
 pub mod rdp;
 pub mod vnc;
+pub mod spice;
 pub mod container;
 pub mod db;
 pub mod devops;
@@ -59,6 +60,7 @@ use ipc::font_commands::*;
 use ipc::mcp_commands::*;
 use ipc::rdp_commands::*;
 use ipc::vnc_commands::*;
+use ipc::spice_commands::*;
 use ipc::monitoring_commands::*;
 #[cfg(desktop)]
 use ipc::pty_commands::*;
@@ -463,6 +465,16 @@ pub fn run() {
             vnc_key,
             vnc_resize,
             vnc_clipboard_sync,
+            spice_connect,
+            spice_disconnect,
+            spice_disconnect_all,
+            spice_ack,
+            spice_mouse,
+            spice_key,
+            spice_type,
+            spice_resize,
+            spice_clipboard_sync,
+            spice_read_vv,
             mcp_stop,
             mcp_status,
             mcp_restore,
@@ -958,6 +970,16 @@ pub fn run() {
             vnc_key,
             vnc_resize,
             vnc_clipboard_sync,
+            spice_connect,
+            spice_disconnect,
+            spice_disconnect_all,
+            spice_ack,
+            spice_mouse,
+            spice_key,
+            spice_type,
+            spice_resize,
+            spice_clipboard_sync,
+            spice_read_vv,
             mcp_stop,
             mcp_status,
             mcp_restore,
