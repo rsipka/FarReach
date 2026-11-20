@@ -3705,7 +3705,7 @@
   "password_history.clear_all_confirm": "Zapomenout všechna předchozí hesla? Přijdou o ně i členové sdílených trezorů.",
   "password_history.clear_all_yes": "Smazat vše",
   "password_history.clear_all_button": "Smazat…",
-  "password_history.cleared_all": "Smazáno u {{count}} relací a přihlášení."
+  "password_history.cleared_all": "Smazáno u {{count}} relací a přihlášení.",
   "session.protocol_web": "Web",
   "web.address": "Adresa",
   "web.scheme": "Protokol",

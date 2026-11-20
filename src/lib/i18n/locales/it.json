@@ -3705,7 +3705,7 @@
   "password_history.clear_all_confirm": "Dimenticare tutte le password precedenti? Le perdono anche i membri dei vault condivisi.",
   "password_history.clear_all_yes": "Cancella tutto",
   "password_history.clear_all_button": "Cancella…",
-  "password_history.cleared_all": "Cancellata da {{count}} sessioni e credenziali."
+  "password_history.cleared_all": "Cancellata da {{count}} sessioni e credenziali.",
   "session.protocol_web": "Web",
   "web.address": "Indirizzo",
   "web.scheme": "Protocollo",

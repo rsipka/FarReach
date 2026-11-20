@@ -3705,7 +3705,7 @@
   "password_history.clear_all_confirm": "Forget every previous password? Members of shared vaults lose them too.",
   "password_history.clear_all_yes": "Clear all",
   "password_history.clear_all_button": "Clear…",
-  "password_history.cleared_all": "Cleared from {{count}} sessions and credentials."
+  "password_history.cleared_all": "Cleared from {{count}} sessions and credentials.",
   "session.protocol_web": "Web",
   "web.address": "Address",
   "web.scheme": "Protocol",

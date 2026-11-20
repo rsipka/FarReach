@@ -3705,7 +3705,7 @@
   "password_history.clear_all_confirm": "Oublier tous les mots de passe précédents ? Les membres des coffres partagés les perdent aussi.",
   "password_history.clear_all_yes": "Tout effacer",
   "password_history.clear_all_button": "Effacer…",
-  "password_history.cleared_all": "Effacé pour {{count}} sessions et identifiants."
+  "password_history.cleared_all": "Effacé pour {{count}} sessions et identifiants.",
   "session.protocol_web": "Web",
   "web.address": "Adresse",
   "web.scheme": "Protocole",

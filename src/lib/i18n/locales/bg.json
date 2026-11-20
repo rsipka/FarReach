@@ -3705,7 +3705,7 @@
   "password_history.clear_all_confirm": "Да се забравят ли всички предишни пароли? Членовете на споделени трезори също ги губят.",
   "password_history.clear_all_yes": "Изчисти всичко",
   "password_history.clear_all_button": "Изчисти…",
-  "password_history.cleared_all": "Изчистено от {{count}} сесии и входове."
+  "password_history.cleared_all": "Изчистено от {{count}} сесии и входове.",
   "session.protocol_web": "Уеб",
   "web.address": "Адрес",
   "web.scheme": "Протокол",

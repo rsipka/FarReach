@@ -3705,7 +3705,7 @@
   "password_history.clear_all_confirm": "Να ξεχαστούν όλοι οι προηγούμενοι κωδικοί; Τους χάνουν και τα μέλη των κοινόχρηστων θησαυροφυλακίων.",
   "password_history.clear_all_yes": "Διαγραφή όλων",
   "password_history.clear_all_button": "Διαγραφή…",
-  "password_history.cleared_all": "Διαγράφηκε από {{count}} συνεδρίες και διαπιστευτήρια."
+  "password_history.cleared_all": "Διαγράφηκε από {{count}} συνεδρίες και διαπιστευτήρια.",
   "session.protocol_web": "Web",
   "web.address": "Διεύθυνση",
   "web.scheme": "Πρωτόκολλο",

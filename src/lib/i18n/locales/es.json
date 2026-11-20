@@ -3705,7 +3705,7 @@
   "password_history.clear_all_confirm": "¿Olvidar todas las contraseñas anteriores? Los miembros de bóvedas compartidas también las pierden.",
   "password_history.clear_all_yes": "Borrar todo",
   "password_history.clear_all_button": "Borrar…",
-  "password_history.cleared_all": "Borrado en {{count}} sesiones y credenciales."
+  "password_history.cleared_all": "Borrado en {{count}} sesiones y credenciales.",
   "session.protocol_web": "Web",
   "web.address": "Dirección",
   "web.scheme": "Protocolo",

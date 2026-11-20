@@ -3705,7 +3705,7 @@
   "password_history.clear_all_confirm": "Alle früheren Passwörter vergessen? Auch Mitglieder geteilter Tresore verlieren sie.",
   "password_history.clear_all_yes": "Alles löschen",
   "password_history.clear_all_button": "Löschen…",
-  "password_history.cleared_all": "Bei {{count}} Sitzungen und Anmeldungen gelöscht."
+  "password_history.cleared_all": "Bei {{count}} Sitzungen und Anmeldungen gelöscht.",
   "session.protocol_web": "Web",
   "web.address": "Adresse",
   "web.scheme": "Protokoll",

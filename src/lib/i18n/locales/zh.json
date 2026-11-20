@@ -3705,7 +3705,7 @@
   "password_history.clear_all_confirm": "忘记所有以前的密码？共享保险库的成员也会失去它们。",
   "password_history.clear_all_yes": "全部清除",
   "password_history.clear_all_button": "清除…",
-  "password_history.cleared_all": "已从 {{count}} 个会话和凭据中清除。"
+  "password_history.cleared_all": "已从 {{count}} 个会话和凭据中清除。",
   "session.protocol_web": "网页",
   "web.address": "地址",
   "web.scheme": "协议",

@@ -3705,7 +3705,7 @@
   "password_history.clear_all_confirm": "Забыть все прежние пароли? Участники общих хранилищ тоже их потеряют.",
   "password_history.clear_all_yes": "Очистить всё",
   "password_history.clear_all_button": "Очистить…",
-  "password_history.cleared_all": "Очищено у {{count}} сессий и учётных записей."
+  "password_history.cleared_all": "Очищено у {{count}} сессий и учётных записей.",
   "session.protocol_web": "Веб",
   "web.address": "Адрес",
   "web.scheme": "Протокол",
