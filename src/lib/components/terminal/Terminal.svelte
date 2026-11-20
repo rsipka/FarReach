@@ -62,6 +62,9 @@
 		/** Bumped by Switch tmux session: connect again, into the tmux
 		 *  session sshConnectParams now names. */
 		tmuxSwitch?: number;
+		/** Bumped by the tab menu's Reconnect: drop the connection and make it
+		 *  again (SSH, Telnet, serial). */
+		reconnectRequest?: number;
 		/** Telnet: where to connect. The terminal connects once it listens. */
 		telnetConnectParams?: TelnetConnectParams;
 		/** Serial: the port to open. The terminal opens it once it listens. */
@@ -82,7 +85,7 @@
 		wslDistro?: string | null;
 	}
 
-	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, tmuxSwitch, telnetConnectParams, serialConnectParams, onReconnected, onReady, terminalTheme, cursorStyle, cursorBlink, sessionId, sessionName, historyMode, wslDistro }: Props = $props();
+	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, tmuxSwitch, reconnectRequest, telnetConnectParams, serialConnectParams, onReconnected, onReady, terminalTheme, cursorStyle, cursorBlink, sessionId, sessionName, historyMode, wslDistro }: Props = $props();
 
 	/**
 	 * Start recording this tab's stream into the session history (and, for
@@ -201,6 +204,35 @@
 		lastSwitch = n;
 		untrack(() => void switchTmux());
 	});
+
+	// Reconnect from the tab menu: the same, on a connection that may still
+	// be up (a hung one, say) or already down.
+	let lastReconnect: number | undefined;
+	$effect(() => {
+		const n = reconnectRequest;
+		if (lastReconnect === undefined || n === undefined || n === lastReconnect) {
+			lastReconnect = n ?? 0;
+			return;
+		}
+		lastReconnect = n;
+		untrack(() => void reconnectNow());
+	});
+
+	async function reconnectNow(): Promise<void> {
+		if (!terminal || reconnecting) return;
+		if (termType === 'ssh') {
+			await switchTmux();
+		} else if (termType === 'telnet') {
+			// Not listened to any more, so its end does not close the tab.
+			const old = currentConnectionId;
+			unlistenData?.();
+			unlistenExit?.();
+			if (old && !disconnected) await telnetDisconnect(old).catch(() => {});
+			await connectTelnet(terminal);
+		} else if (termType === 'serial') {
+			await connectSerial(terminal);
+		}
+	}
 
 	async function switchTmux(): Promise<void> {
 		if (!terminal || termType !== 'ssh' || reconnecting) return;

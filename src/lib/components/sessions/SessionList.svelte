@@ -53,6 +53,7 @@
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
 	import { DEFAULT_SERIAL_OPTIONS } from '#lib/ipc/serial.js';
+	import { osNeedsDetection } from '#lib/data/distro-icons.js';
 	import { sshConnect, sshDisconnect, sshDetectOs, sshTmuxChosen, tmuxStartScript, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
 	// Passwords are now stored encrypted in vault, not in memory cache
 	import { createTab, updateTabOs } from '#lib/state/tabs.svelte.js';
@@ -195,6 +196,12 @@
 			takeSessionAction();
 			if (r.kind === 'new-session') {
 				handleNewSession();
+			} else if (r.kind === 'locate') {
+				void locateSession(r.sessionId);
+			} else if (r.kind === 'edit') {
+				void sessionGet(r.sessionId)
+					.then((s) => handleEdit(s))
+					.catch(() => addToast(t('tabs.session_gone'), 'error'));
 			} else if (r.kind === 'quick-connect') {
 				quickPrefill = r.prefill ?? null;
 				showQuickConnect = true;
@@ -1543,10 +1550,12 @@
 			passwordFallback = false;
 			fallbackPassword = '';
 
-			// Detect OS in background and persist to session
-			if (!session.detected_os && !session.os_manual) {
+			// Detect OS in background and persist to session. A host saved as
+			// plain Linux or unknown is asked again: older versions saved that
+			// for MikroTik and UniFi devices, which have their own logos now.
+			if (osNeedsDetection(session.detected_os, session.os_manual)) {
 				sshDetectOs(id).then(async (osId) => {
-					if (osId) {
+					if (osId && osId !== session.detected_os) {
 						updateTabOs(id, osId);
 						try {
 							// Only the OS changes, on the session as stored. The copy
@@ -1617,6 +1626,54 @@
 		connectSession = undefined;
 		passwordFallback = false;
 		fallbackPassword = '';
+	}
+
+	// ---- Locate a tab's session in the list (the tab menu's) ------------------
+	let listEl = $state<HTMLDivElement | undefined>();
+	let vaultSelector = $state<{ select: (filter: VaultFilter) => void } | undefined>();
+	/** The session just located, marked for a moment. */
+	let locatedId = $state<string | null>(null);
+	let locatedTimer: ReturnType<typeof setTimeout> | undefined;
+
+	/** Show a session in the list: whatever hides it (the search, a filter,
+	 *  another vault, a folded folder) is put aside, then it is scrolled to,
+	 *  focused and marked. */
+	async function locateSession(id: string): Promise<void> {
+		tab = 'sessions';
+		let session = sessions.find((s) => s.id === id);
+		if (!session) {
+			await loadSessions();
+			session = sessions.find((s) => s.id === id);
+		}
+		if (!session) {
+			addToast(t('tabs.session_gone'), 'error');
+			return;
+		}
+		if (!filteredSessions.some((s) => s.id === id)) {
+			searchQuery = '';
+			filterFavorites = false;
+			filterKinds = [];
+			filterTags = [];
+		}
+		if (!filteredSessions.some((s) => s.id === id)) vaultSelector?.select(ALL_VAULTS);
+		const open = new Set(collapsedFolders);
+		const seen = new Set<string>();
+		for (let f = session.folder_id; f && !seen.has(f); f = folders.find((x) => x.id === f)?.parent_id ?? null) {
+			seen.add(f);
+			open.delete(f);
+		}
+		if (open.size !== collapsedFolders.size) {
+			collapsedFolders = open;
+			localStorage.setItem('collapsedFolders', JSON.stringify([...open]));
+		}
+		await tick();
+		const row = listEl?.querySelector<HTMLElement>(`[data-session-id="${CSS.escape(id)}"]`);
+		if (!row) return;
+		row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+		row.querySelector<HTMLElement>('.card-main')?.focus({ preventScroll: true });
+		locatedId = id;
+		clearTimeout(locatedTimer);
+		locatedTimer = setTimeout(() => (locatedId = null), 1800);
 	}
 
 	function handleEdit(session: SessionConfig): void {
@@ -1795,7 +1852,7 @@
 			<button class="delete-cancel-btn" onclick={() => (deleteConfirm = null)}>{t('common.cancel')}</button>
 		</div>
 	{:else}
-		<div class:folder-session={depth >= 0} class:drop-before={dropSlot?.id === session.id && dropSlot.before} class:drop-after={dropSlot?.id === session.id && !dropSlot.before} data-session-id={session.id} style:padding-left={depth >= 0 ? `${Math.min(depth + 1, 8) * 14}px` : undefined}>
+		<div class:folder-session={depth >= 0} class:drop-before={dropSlot?.id === session.id && dropSlot.before} class:drop-after={dropSlot?.id === session.id && !dropSlot.before} class:located={locatedId === session.id} data-session-id={session.id} style:padding-left={depth >= 0 ? `${Math.min(depth + 1, 8) * 14}px` : undefined}>
 			<SessionCard {session} vault={selectedVaultId === ALL_VAULTS && session.vault_id ? (vaultState.vaults.get(session.vault_id) ?? null) : null} onconnect={() => handleConnect(session)} onedit={() => handleEdit(session)} ondelete={() => handleDelete(session)} oncontextmenu={(e) => openSessionContextMenu(e, session)} ondragstart={(e) => handleDragStart(e, session)} ondragend={() => {}} {selecting} selected={selected.has(session.id)} onselect={(e) => toggleSelect(session, e)} viaName={session.via_session_id ? (sessions.find((s) => s.id === session.via_session_id)?.name ?? null) : null} />
 		</div>
 	{/if}
@@ -1826,7 +1883,7 @@
 	</div>
 {/snippet}
 
-<div class="session-list">
+<div class="session-list" bind:this={listEl}>
 	{#if !hasIdentity}
 		<!-- First run: Initialize identity (TLS-style, no password) -->
 		<div class="init-section">
@@ -1904,7 +1961,7 @@
 			<p class="init-desc">{t('session.keychain_locked_desc')}</p>
 		</div>
 	{:else}
-		<VaultSelector onvaultselect={(filter) => { selectedVaultId = filter; creatingFolder = false; creatingFolderParentId = null; pendingMove = null; newFolderName = ''; }} onrefresh={() => loadSessions()} />
+		<VaultSelector bind:this={vaultSelector} onvaultselect={(filter) => { selectedVaultId = filter; creatingFolder = false; creatingFolderParentId = null; pendingMove = null; newFolderName = ''; }} onrefresh={() => loadSessions()} />
 
 		<div class="list-tabs" role="tablist">
 			<button class="list-tab" class:active={tab === 'sessions'} role="tab" aria-selected={tab === 'sessions'} onclick={() => (tab = 'sessions')}>{t('credential.tab_sessions')}</button>
@@ -2910,6 +2967,28 @@
 
 	.folder-session {
 		padding-left: 12px;
+	}
+
+	/* A session just located from its tab: marked for a moment. */
+	.located {
+		border-radius: var(--radius-sm, 4px);
+		animation: located 1.8s ease-out;
+	}
+	@keyframes located {
+		0%, 50% {
+			background-color: var(--color-accent-subtle);
+			box-shadow: inset 0 0 0 1px var(--color-accent);
+		}
+		100% {
+			background-color: transparent;
+			box-shadow: inset 0 0 0 1px transparent;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.located {
+			animation: none;
+			box-shadow: inset 0 0 0 1px var(--color-accent);
+		}
 	}
 
 	.context-menu {
