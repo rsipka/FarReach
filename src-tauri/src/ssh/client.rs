@@ -2779,6 +2779,10 @@ async fn ssh_session_task(
     // needs its own carry-over.
     let mut out_decoder = crate::text::Utf8Stream::new();
     let mut err_decoder = crate::text::Utf8Stream::new();
+    // rz/sz on the remote: a ZMODEM transfer over this channel.
+    let mut zmodem = crate::zmodem::Tap::for_app(&app_handle, &connection_id, crate::zmodem::WINDOW_NETWORK);
+    let mut zmodem_tick = tokio::time::interval(std::time::Duration::from_millis(100));
+    zmodem_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     // Hold remote output until the frontend signals it's listening
     // (SessionCommand::Ready) so the motd/banner emitted before the terminal
@@ -2863,7 +2867,14 @@ async fn ssh_session_task(
                 match msg {
                     Some(ChannelMsg::Data { ref data }) => {
                         last_activity = std::time::Instant::now();
-                        let mut text = out_decoder.push(data);
+                        let z = zmodem.input(data);
+                        if !z.wire.is_empty() {
+                            if let Err(e) = channel.data(&z.wire[..]).await {
+                                tracing::error!("SSH '{}' write error: {}", connection_id, e);
+                                break;
+                            }
+                        }
+                        let mut text = out_decoder.push(&z.display);
                         if let Some(f) = flow.as_mut() {
                             text = f.output(&text, std::time::Instant::now());
                         }
@@ -2907,6 +2918,15 @@ async fn ssh_session_task(
                 }
                 if let Some(held) = held {
                     deliver!(held);
+                }
+            }
+            _ = zmodem_tick.tick(), if zmodem.busy() => {
+                let z = zmodem.poll();
+                if !z.wire.is_empty() {
+                    if let Err(e) = channel.data(&z.wire[..]).await {
+                        tracing::error!("SSH '{}' write error: {}", connection_id, e);
+                        break;
+                    }
                 }
             }
             Some(text) = local_rx.recv() => {
@@ -3020,6 +3040,13 @@ async fn ssh_session_task(
 
     // The stream ended; surface any bytes held back mid-character rather
     // than swallowing them.
+    let held = zmodem.flush();
+    if !held.is_empty() {
+        let text = out_decoder.push(&held);
+        if !text.is_empty() {
+            let _ = app_handle.emit(&data_event, &text);
+        }
+    }
     for tail in [out_decoder.flush(), err_decoder.flush()].into_iter().flatten() {
         if let Some(l) = log.as_mut() {
             l.push(&tail);

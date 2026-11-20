@@ -38,6 +38,7 @@ pub mod toolchain;
 pub mod tunnel;
 pub mod vault;
 pub mod wsl;
+pub mod zmodem;
 
 use std::sync::atomic::Ordering;
 
@@ -69,6 +70,7 @@ use ipc::serial_commands::*;
 #[cfg(desktop)]
 use ipc::winbox_commands::*;
 use ipc::telnet_commands::*;
+use ipc::zmodem_commands::*;
 use ipc::saved_credential_commands::*;
 use ipc::session_commands::*;
 use ipc::sftp_commands::*;
@@ -442,6 +444,10 @@ pub fn run() {
             telnet_send,
             telnet_resize,
             telnet_disconnect,
+            // ZMODEM in SSH, Telnet and serial sessions
+            zmodem_upload,
+            zmodem_download,
+            zmodem_cancel,
             rdp_connect,
             rdp_disconnect,
             rdp_mouse,
@@ -947,6 +953,10 @@ pub fn run() {
             telnet_send,
             telnet_resize,
             telnet_disconnect,
+            // ZMODEM in SSH, Telnet and serial sessions
+            zmodem_upload,
+            zmodem_download,
+            zmodem_cancel,
             rdp_connect,
             rdp_disconnect,
             rdp_mouse,

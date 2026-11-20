@@ -61,6 +61,10 @@ pub async fn telnet_send(
     id: String,
     data: Vec<u8>,
 ) -> Result<(), String> {
+    // A ZMODEM transfer holds the line.
+    if crate::zmodem::intercept_input(&id, &data) {
+        return Ok(());
+    }
     crate::history::input(&id, &data);
     state.telnet_manager.lock().await.send(&id, data)
 }

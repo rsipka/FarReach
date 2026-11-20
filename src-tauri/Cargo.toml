@@ -55,6 +55,10 @@ cryptoki-sys = "0.5"
 # OpenSSH dlopens it.
 libloading = "0.9"
 
+# ZMODEM (rz/sz) in terminal sessions (src/zmodem): a sans-IO state machine
+# the session loops drive, tested against lrzsz upstream.
+zmodem2 = "0.7"
+
 # Encryption
 # zeroize: wipe the hashing blocks and the keys ciphers hold when they drop.
 argon2 = { version = "0.6", features = ["zeroize"] }

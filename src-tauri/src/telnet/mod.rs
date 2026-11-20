@@ -138,6 +138,10 @@ async fn run(
     let login_until = tokio::time::Instant::now() + LOGIN_WINDOW;
     let mut decoder = crate::text::Utf8Stream::new();
     let mut buf = vec![0u8; 8192];
+    // rz/sz on the device: a ZMODEM transfer over this connection.
+    let mut zmodem = crate::zmodem::Tap::for_app(&app, &id, crate::zmodem::WINDOW_NETWORK);
+    let mut zmodem_tick = tokio::time::interval(Duration::from_millis(100));
+    zmodem_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     let start = codec.start();
     let mut error: Option<String> = None;
@@ -172,18 +176,30 @@ async fn run(
                         reply.extend_from_slice(&codec.encode(&typed));
                     }
                 }
+                let z = zmodem.input(&received.data);
+                if !z.wire.is_empty() {
+                    reply.extend_from_slice(&codec.encode_raw(&z.wire));
+                }
                 if !reply.is_empty() {
                     if let Err(e) = writer.write_all(&reply).await {
                         error = Some(e.to_string());
                         break;
                     }
                 }
-                let text = decoder.push(&received.data);
+                let text = decoder.push(&z.display);
                 if !text.is_empty() {
                     crate::history::output(&id, &text);
                 }
                 if !text.is_empty() && app.emit(&data_event, text).is_err() {
                     break;
+                }
+            }
+            _ = zmodem_tick.tick(), if zmodem.busy() => {
+                let z = zmodem.poll();
+                if !z.wire.is_empty() {
+                    if let Err(e) = writer.write_all(&codec.encode_raw(&z.wire)).await {
+                        error = Some(e.to_string());
+                    }
                 }
             }
             cmd = commands.recv() => {
@@ -203,6 +219,10 @@ async fn run(
 
     let replaced = replaced.load(Ordering::SeqCst);
     if !replaced {
+        let held = zmodem.flush();
+        if !held.is_empty() {
+            let _ = app.emit(&data_event, decoder.push(&held));
+        }
         if let Some(tail) = decoder.flush() {
             let _ = app.emit(&data_event, tail);
         }
