@@ -24,9 +24,11 @@
 		faTrashCan,
 		faCheck,
 		faChevronLeft,
-		faChevronRight
+		faChevronRight,
+		faShareNodes,
+		faRightToBracket
 	} from '@fortawesome/free-solid-svg-icons';
-	import { registerSessionActions, shortcutLabel } from '#lib/state/shortcuts.svelte.js';
+	import { registerSessionActions, shortcutLabel, actionLabel } from '#lib/state/shortcuts.svelte.js';
 	import { pendingSessionAction, takeSessionAction } from '#lib/state/palette.svelte.js';
 	import { parseAddress } from '#lib/utils/address.js';
 	import { noteSessionUsed, forgetSession, recentSessionIds } from '#lib/state/recents.svelte.js';
@@ -51,6 +53,7 @@
 	import type { SessionKind } from '#lib/ipc/sessions.js';
 	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionRenameFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetOrder, sessionSetFolderCredential, sessionSetFolderTmux, sessionBulkUndo, type BulkResult, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
+	import * as share from '#lib/state/share.svelte.js';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
 	import { DEFAULT_SERIAL_OPTIONS } from '#lib/ipc/serial.js';
 	import { osNeedsDetection } from '#lib/data/distro-icons.js';
@@ -2016,16 +2019,27 @@
 						<button class="menu-item" role="menuitem" onclick={() => fromMenu(handleNewSession)}>
 							<FaIcon icon={faServer} size={12} />
 							<span>{t('session.new_session')}</span>
-							<kbd>{shortcutLabel('n', { ctrl: true })}</kbd>
+							{#if actionLabel('session.new')}<kbd>{actionLabel('session.new')}</kbd>{/if}
 						</button>
 						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => { quickPrefill = null; showQuickConnect = true; })}>
 							<FaIcon icon={faBolt} size={12} />
 							<span>{t('session.quick_connect')}</span>
-							<kbd>{shortcutLabel('n', { ctrl: true, shift: true })}</kbd>
+							{#if actionLabel('session.quickConnect')}<kbd>{actionLabel('session.quickConnect')}</kbd>{/if}
 						</button>
 						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => contextNewFolder())}>
 							<FaIcon icon={faFolderPlus} size={12} />
 							<span>{t('session.new_folder')}</span>
+						</button>
+						<div class="menu-sep"></div>
+						<!-- Sharing lives in the bottom bar too, but that bar only exists
+						     under a terminal: someone joining usually has none open. -->
+						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => share.openDialog('host'))}>
+							<FaIcon icon={faShareNodes} size={12} />
+							<span>{t('sharing.start')}</span>
+						</button>
+						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => share.openDialog('guest'))}>
+							<FaIcon icon={faRightToBracket} size={12} />
+							<span>{t('sharing.join')}</span>
 						</button>
 						<div class="menu-sep"></div>
 						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => openImport(lastImportSource))}>

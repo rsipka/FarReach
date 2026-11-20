@@ -173,6 +173,23 @@ fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// Turn WebKitGTK's WebRTC setting on for the main window. Its default is
+/// off, which removes `RTCPeerConnection` from the page altogether. Where the
+/// system's GStreamer lacks the WebRTC elements the setting stays inert and
+/// the share dialog says what to install.
+#[cfg(target_os = "linux")]
+fn enable_webrtc(app: &tauri::App) {
+    use tauri::Manager;
+    use webkit2gtk::{SettingsExt, WebViewExt};
+    for (_, window) in app.webview_windows() {
+        let _ = window.with_webview(|webview| {
+            if let Some(settings) = webview.inner().settings() {
+                settings.set_enable_webrtc(true);
+            }
+        });
+    }
+}
+
 /// Let a held key repeat instead of offering accented characters.
 ///
 /// macOS ships `ApplePressAndHoldEnabled` on, and WebKit honours it: hold a key
@@ -1367,6 +1384,16 @@ pub fn run() {
             // Before anything can take a keystroke: a held key must repeat.
             #[cfg(target_os = "macos")]
             disable_press_and_hold();
+
+            // Session sharing needs `RTCPeerConnection`, and WebKitGTK ships
+            // with WebRTC switched off: the constructor does not exist, so
+            // every Start or Join failed before it began (see src/share).
+            // Switching it on contacts nothing; the first packet still waits
+            // for the user to click Share. The window already exists here and
+            // its page has not loaded yet, so the setting reaches the first
+            // document.
+            #[cfg(target_os = "linux")]
+            enable_webrtc(app);
 
             // Files fetched so they could be dragged to the desktop do not
             // survive a restart: they were copies made for one gesture, and

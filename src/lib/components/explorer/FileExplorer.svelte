@@ -54,6 +54,7 @@
 	} from '#lib/state/transfers.svelte.js';
 	import { runTransfer } from '#lib/explorer/run-transfer.js';
 	import { getActiveTab, canShowFilesView, toggleFilesView } from '#lib/state/tabs.svelte.js';
+	import { actionLabel } from '#lib/state/shortcuts.svelte.js';
 	import { shellQuote } from '#lib/utils/shell.js';
 
 	interface Props {
@@ -938,7 +939,7 @@
 					onclick={() => fullTab && toggleFilesView(fullTab.id)}
 					aria-pressed={!!fullTab.filesView}
 					aria-label={t('files.open_full')}
-					title={`${fullTab.filesView ? t('files.back_to_terminal') : t('files.open_full')} (Ctrl+Shift+E)`}
+					title={`${fullTab.filesView ? t('files.back_to_terminal') : t('files.open_full')} (${actionLabel('files.toggle')})`}
 					type="button"
 				>
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none">

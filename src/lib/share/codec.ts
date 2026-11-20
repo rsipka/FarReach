@@ -182,6 +182,31 @@ export async function encodeAnswer(sealer: Sealer, sdp: string): Promise<string>
 	return wrap(await sealer.seal(packed));
 }
 
+/**
+ * Which half of the handshake a pasted code is, without the key.
+ *
+ * Both codes start with the same prefix, so pasting the wrong one is easy:
+ * the host pastes back its own invitation, or the guest pastes a reply into
+ * Join. Telling them apart lets the dialog say which mistake it was instead
+ * of "not for this share". A reply is sealed frame zero of the guest's
+ * stream, so it opens with the guest direction tag and a zero counter
+ * (see `crypto.ts`); an invitation opens with a random token, which matches
+ * those twelve bytes about never.
+ */
+export function codeKind(code: string): 'invite' | 'reply' | 'unknown' {
+	let payload: Bytes;
+	try {
+		payload = unwrap(code);
+	} catch {
+		return 'unknown';
+	}
+	const replyHead = [0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0];
+	if (payload.length > replyHead.length && replyHead.every((b, i) => payload[i] === b)) {
+		return 'reply';
+	}
+	return payload.length > TOKEN_BYTES ? 'invite' : 'unknown';
+}
+
 /** Throws unless the answer was sealed with the key this host derived. */
 export async function decodeAnswer(sealer: Sealer, code: string): Promise<string> {
 	const payload = unwrap(code);

@@ -23,6 +23,7 @@
 	import { copyEntry } from '#lib/explorer/dual-copy.js';
 	import { formatModified } from '#lib/explorer/format.js';
 	import { formatBytes } from '#lib/utils/formatters.js';
+	import { actionLabel } from '#lib/state/shortcuts.svelte.js';
 
 	interface Props {
 		connectionId: string;
@@ -645,7 +646,7 @@
 				</button>
 			{/if}
 		{/each}
-		<span class="hint">{t('files.keys_hint')}</span>
+		<span class="hint">{t('files.keys_hint', { key: actionLabel('files.toggle') })}</span>
 	</div>
 </div>
 

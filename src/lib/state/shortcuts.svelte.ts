@@ -3,17 +3,9 @@ import { createTab, closeTab, getActiveTab, getTabs, activateTab, canShowFilesVi
 import { toggleAIPanel } from './ai-chat.svelte';
 import { togglePalette, requestSessionAction } from './palette.svelte';
 import { stepUiZoom } from './ui-zoom';
-import { isMobile } from '#lib/platform.js';
-
-export interface Shortcut {
-	key: string;
-	ctrl?: boolean;
-	shift?: boolean;
-	alt?: boolean;
-	meta?: boolean;
-	action: string;
-	handler: () => void;
-}
+import { isMac, isMobile } from '#lib/platform.js';
+import { getSettings } from './settings.svelte';
+import { canonical, chordFromEvent, displayChord, keyMap, keysFor, type ActionId } from './keybindings';
 
 let settingsOpener: ((target?: string) => void) | null = null;
 
@@ -33,17 +25,38 @@ export function registerSessionActions(actions: SessionActions | null): void {
 	sessionActions = actions;
 }
 
-/** How a shortcut is written on a menu: ⌘N on a Mac, Ctrl+N elsewhere. */
+/** How a fixed shortcut is written on a menu: ⌘N on a Mac, Ctrl+N
+ *  elsewhere. For one the user can change, use actionLabel. */
 export function shortcutLabel(key: string, mods: { ctrl?: boolean; shift?: boolean; alt?: boolean } = {}): string {
 	const k = key.length === 1 ? key.toUpperCase() : key;
-	if (isMac()) {
-		return `${mods.alt ? '⌥' : ''}${mods.shift ? '⇧' : ''}${mods.ctrl ? '⌘' : ''}${k}`;
-	}
-	return [mods.ctrl && 'Ctrl', mods.alt && 'Alt', mods.shift && 'Shift', k].filter(Boolean).join('+');
+	const chord = [mods.ctrl && 'Mod', mods.alt && 'Alt', mods.shift && 'Shift', k].filter(Boolean).join('+');
+	return displayChord(chord, isMac());
 }
 
-function isMac(): boolean {
-	return typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+/** While Settings records a new key, every shortcut stands aside. */
+let recording = false;
+
+/** The keys an action has now (Settings > Keyboard shortcuts). */
+export function actionKeys(id: ActionId): string[] {
+	return keysFor(id, getSettings().keyboardShortcuts, isMac());
+}
+
+/** The first key an action has, as a menu writes it; '' when it has none. */
+export function actionLabel(id: ActionId): string {
+	const [first] = actionKeys(id);
+	return first ? displayChord(first, isMac()) : '';
+}
+
+/** This key press is one of the action's keys. */
+export function matchesAction(e: KeyboardEvent, id: ActionId): boolean {
+	if (recording) return false;
+	const mac = isMac();
+	const chord = chordFromEvent(e, mac);
+	return chord !== null && actionKeys(id).some((k) => canonical(k, mac) === chord);
+}
+
+export function setRecordingShortcut(on: boolean): void {
+	recording = on;
 }
 
 function nextTab(): void {
@@ -62,11 +75,6 @@ function previousTab(): void {
 	const activeIndex = tabs.findIndex((t) => t.active);
 	const prevIndex = (activeIndex - 1 + tabs.length) % tabs.length;
 	activateTab(tabs[prevIndex].id);
-}
-
-function toggleActiveFilesView(): void {
-	const active = getActiveTab();
-	if (active && canShowFilesView(active)) toggleFilesView(active.id);
 }
 
 function closeActiveTab(): void {
@@ -90,58 +98,31 @@ function openCommandPalette(): void {
 }
 
 
-const ruKeyMap: Record<string, string> = {
-	'ф': 'a',
-	'ц': 'w',
-	'е': 't',
-	'з': 'p',
-	'б': ','
-};
-
-function normalizeKey(key: string): string {
-	const lower = key.toLowerCase();
-	return ruKeyMap[lower] ?? lower;
-}
-
-const shortcuts: Shortcut[] = [
-	{ key: 't', ctrl: true, action: 'New tab', handler: newTab },
-	{ key: 'n', ctrl: true, action: 'New session', handler: () => requestSessionAction({ kind: 'new-session' }) },
-	{ key: 'n', ctrl: true, shift: true, action: 'Quick connect', handler: () => requestSessionAction({ kind: 'quick-connect' }) },
-	{ key: 'w', ctrl: true, shift: true, action: 'Close tab', handler: closeActiveTab },
-	{ key: 'Tab', ctrl: true, action: 'Next tab', handler: nextTab },
-	{ key: 'Tab', ctrl: true, shift: true, action: 'Previous tab', handler: previousTab },
-	{ key: ',', ctrl: true, action: 'Open settings', handler: () => openSettings() },
-	{ key: 'p', ctrl: true, shift: true, action: 'Command palette', handler: openCommandPalette },
-	{ key: 'a', ctrl: true, shift: true, action: 'Toggle AI panel', handler: toggleAIPanel },
-	// An SSH tab's full-pane file manager, and back to its terminal.
-	{ key: 'e', ctrl: true, shift: true, action: 'Toggle full-pane files', handler: toggleActiveFilesView },
-	// The interface's size, as in a browser. Plus is Shift+= on most layouts
-	// and plain + on the number pad. Not on a phone: it follows the system.
+/** What each key does anywhere in the app. Terminal-only actions (find,
+ *  copy, split) are handled where the terminal is. */
+const handlers: Partial<Record<ActionId, () => void>> = {
+	'tab.new': newTab,
+	'session.new': () => requestSessionAction({ kind: 'new-session' }),
+	'session.quickConnect': () => requestSessionAction({ kind: 'quick-connect' }),
+	'tab.close': closeActiveTab,
+	'tab.next': nextTab,
+	'tab.previous': previousTab,
+	'app.settings': () => openSettings(),
+	'app.palette': openCommandPalette,
+	'app.aiPanel': toggleAIPanel,
+	'files.toggle': () => {
+		const active = getActiveTab();
+		if (active && canShowFilesView(active)) toggleFilesView(active.id);
+	},
+	// The interface's size, as in a browser. Not on a phone: it follows the system.
 	...(isMobile()
-		? []
-		: [
-				{ key: '=', ctrl: true, action: 'Zoom in', handler: () => stepUiZoom(1) },
-				{ key: '+', ctrl: true, action: 'Zoom in', handler: () => stepUiZoom(1) },
-				{ key: '+', ctrl: true, shift: true, action: 'Zoom in', handler: () => stepUiZoom(1) },
-				{ key: '-', ctrl: true, action: 'Zoom out', handler: () => stepUiZoom(-1) },
-				{ key: '0', ctrl: true, action: 'Reset zoom', handler: () => stepUiZoom(0) }
-			])
-];
-
-function matchesShortcut(e: KeyboardEvent, shortcut: Shortcut): boolean {
-	const mac = isMac();
-	const modKey = mac ? e.metaKey : e.ctrlKey;
-
-	if (shortcut.ctrl && !modKey) return false;
-	if (!shortcut.ctrl && modKey) return false;
-
-	if (shortcut.shift && !e.shiftKey) return false;
-	if (!shortcut.shift && e.shiftKey) return false;
-
-	if (shortcut.alt && !e.altKey) return false;
-
-	return normalizeKey(e.key) === shortcut.key.toLowerCase() || e.key === shortcut.key;
-}
+		? {}
+		: {
+				'zoom.in': () => stepUiZoom(1),
+				'zoom.out': () => stepUiZoom(-1),
+				'zoom.reset': () => stepUiZoom(0)
+			})
+};
 
 /** The keys a browser reloads the page on: F5, Ctrl+R and Ctrl+F5, Cmd+R
  *  on a Mac, each with or without Shift. Reach is one page, so a reload
@@ -153,18 +134,20 @@ export function isReloadKey(e: Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 
 }
 
 function onKeydown(e: KeyboardEvent): void {
+	if (recording) return;
 	// Only the page's own reload is stopped: the key still goes on to the
 	// terminal, where F5 means something to programs like Midnight
 	// Commander and Ctrl+R searches the shell's history.
 	if (isReloadKey(e)) e.preventDefault();
-	for (const shortcut of shortcuts) {
-		if (matchesShortcut(e, shortcut)) {
-			e.preventDefault();
-			e.stopPropagation();
-			shortcut.handler();
-			return;
-		}
-	}
+	const mac = isMac();
+	const chord = chordFromEvent(e, mac);
+	if (!chord) return;
+	const id = keyMap(getSettings().keyboardShortcuts, mac).get(chord);
+	const handler = id ? handlers[id] : undefined;
+	if (!handler) return;
+	e.preventDefault();
+	e.stopPropagation();
+	handler();
 }
 
 let initialized = false;
@@ -179,8 +162,4 @@ export function cleanupShortcuts(): void {
 	if (!initialized) return;
 	document.removeEventListener('keydown', onKeydown, true);
 	initialized = false;
-}
-
-export function getShortcuts(): Shortcut[] {
-	return shortcuts;
 }

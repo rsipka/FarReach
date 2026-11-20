@@ -10,6 +10,7 @@
 	import { splitWith, unsplit, getSplit, getTabs, getDraggedTab, setDraggedTab, canShowFilesView, toggleFilesView } from '#lib/state/tabs.svelte.js';
 	import { SPLIT_MIN_WIDTH, contains } from '#lib/terminal/split.js';
 	import { isMobile } from '#lib/platform.js';
+	import { actionLabel } from '#lib/state/shortcuts.svelte.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { isBroadcastTarget, toggleBroadcastTarget } from '#lib/state/broadcast.svelte.js';
 	import { openHistoryPanel, tabHistory } from '#lib/state/history.svelte.js';
@@ -216,7 +217,7 @@
 		<button class="ib" type="button" onclick={() => showSection('explorer')} title={t('termbar.files')} aria-label={t('termbar.files')}>{@render icon(ICONS.files)}</button>
 	{/if}
 	{#if canShowFilesView(tab)}
-		<button class="ib" class:on={tab.filesView} type="button" onclick={() => toggleFilesView(tab.id)} title={`${tab.filesView ? t('files.back_to_terminal') : t('files.open_full')} (Ctrl+Shift+E)`} aria-label={t('files.open_full')} aria-pressed={!!tab.filesView}>{@render icon(tab.filesView ? ICONS.terminal : ICONS.dualPane)}</button>
+		<button class="ib" class:on={tab.filesView} type="button" onclick={() => toggleFilesView(tab.id)} title={`${tab.filesView ? t('files.back_to_terminal') : t('files.open_full')} (${actionLabel('files.toggle')})`} aria-label={t('files.open_full')} aria-pressed={!!tab.filesView}>{@render icon(tab.filesView ? ICONS.terminal : ICONS.dualPane)}</button>
 	{/if}
 	<button class="ib" type="button" onclick={() => showSection('snippets')} title={t('sidebar.snippets')} aria-label={t('sidebar.snippets')}>{@render icon(ICONS.snippets)}</button>
 	{#if remote}
