@@ -224,8 +224,9 @@ jobs:
           echo "macOS signing enabled."
 
       # The release description, and the notes the in-app updater shows (they
-      # reach latest.json from releaseBody). The dialog prints them as plain
-      # text, so the file is kept short and free of markup.
+      # reach latest.json from releaseBody). The app shows them in its What's
+      # new dialog: "- " lines as a list, "#" lines as headings and http(s)
+      # links clickable, everything else as plain text, so keep it short.
       - name: Read the release notes
         id: notes
         shell: bash

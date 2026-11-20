@@ -47,6 +47,7 @@
     "tofu:test": "node scripts/tofu-json-test.mjs",
     "sshalg:test": "node scripts/ssh-algorithms-test.mjs",
     "bulk-edit:test": "node --import ./scripts/resolve-lib.mjs scripts/bulk-edit-test.mjs",
+    "release-notes:test": "node --import ./scripts/resolve-lib.mjs scripts/release-notes-test.mjs",
     "folder-tree:test": "node --import ./scripts/resolve-lib.mjs scripts/folder-tree-test.mjs",
     "color-schemes:test": "node scripts/color-schemes-test.mjs",
     "app-themes:test": "node scripts/app-themes-test.mjs",

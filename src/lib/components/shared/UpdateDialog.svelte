@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getUpdaterState, downloadAndInstall, skipStartupUpdate } from '#lib/state/updater.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
+	import ReleaseNotes from '#lib/components/shared/ReleaseNotes.svelte';
 
 	interface Props {
 		open: boolean;
@@ -50,7 +51,7 @@
 				<div class="release-notes">
 					<h3 class="release-notes-heading">{t('updater.release_notes')}</h3>
 					<div class="release-notes-content">
-						<pre class="release-notes-text">{updater.updateNotes}</pre>
+						<div class="release-notes-text"><ReleaseNotes notes={updater.updateNotes} /></div>
 					</div>
 				</div>
 			{/if}
@@ -194,14 +195,7 @@
 	}
 
 	.release-notes-text {
-		margin: 0;
 		padding: 12px;
-		font-family: var(--font-sans, 'Inter', system-ui, -apple-system, sans-serif);
-		font-size: 0.8125rem;
-		line-height: 1.55;
-		color: var(--color-text-secondary, var(--color-text-secondary));
-		white-space: pre-wrap;
-		word-wrap: break-word;
 	}
 
 	.release-notes-content::-webkit-scrollbar {
