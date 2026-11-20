@@ -27,3 +27,10 @@ export const ROUTE_ICON = {
 	jump: 'M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15M6 16a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM18 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
 	proxy: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18'
 };
+
+/** The jump chain a session editor saves: none for a desktop session, when
+ *  "Use jump host" is off, or when every hop was removed. Never the chain the
+ *  session had before, so taking jump hosts away sticks. */
+export function jumpChainToSave<T>(desktop: boolean, enabled: boolean, hops: T[]): T[] | null {
+	return !desktop && enabled && hops.length > 0 ? hops : null;
+}

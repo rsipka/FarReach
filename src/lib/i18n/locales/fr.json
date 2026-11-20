@@ -3638,5 +3638,18 @@
   "session.address_check_on": "Activé",
   "session.address_check_off": "Désactivé (silencieux)",
   "session.address_check_hint": "Silencieux : rien n’est envoyé à une adresse avant de l’essayer. Le mode automatique les essaie alors dans l’ordre et passe à la suivante si une est injoignable.",
-  "session.address_not_checked": "Non vérifiée"
+  "session.address_not_checked": "Non vérifiée",
+  "session.protocol_spice": "SPICE",
+  "spice.password_hint": "Le mot de passe SPICE de l'affichage, s'il en a un. Pour Proxmox VE, utilisez plutôt Ouvrir un fichier SPICE avec le fichier du bouton console SPICE.",
+  "spice.tls_port": "Port TLS",
+  "spice.tls_port_placeholder": "Aucun",
+  "spice.tls_port_hint": "Avec un port TLS, tout passe chiffré par lui et le port ci-dessus n'est pas utilisé.",
+  "spice.ca": "Certificat de l'AC",
+  "spice.ca_hint": "Le certificat (PEM) de l'AC qui a signé celui du serveur. Elle seule est alors reconnue, et le nom du serveur n'a pas à correspondre. Vide : les AC publiques habituelles, et le nom doit correspondre.",
+  "spice.host_subject": "Sujet du certificat",
+  "spice.host_subject_hint": "Facultatif : le sujet que doit porter le certificat du serveur, comme host-subject de virt-viewer.",
+  "spice.via_hint": "SPICE sans TLS n'est pas chiffré. Via une session SSH enregistrée, il l'est, et le port peut rester fermé au réseau ; l'hôte ci-dessus est alors tel que ce serveur SSH le voit, par exemple localhost.",
+  "spice.open_vv": "Ouvrir un fichier SPICE (.vv)…",
+  "spice.vv_files": "Fichiers virt-viewer",
+  "spice.vv_failed": "Impossible d'ouvrir le fichier : {{error}}"
 }
