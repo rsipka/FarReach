@@ -288,9 +288,9 @@ export function getDistroIcon(osId: string | undefined | null): DistroIconData |
 
 /** Whether an SSH session's OS is (still) worth detecting on connect: never
  *  for an icon picked by hand; always when nothing is saved, and again when
- *  the saved answer is only "linux" or "unknown", which a better probe (a
- *  MikroTik, a UniFi device) may now name. */
+ *  the saved answer is only "linux", "unknown" or "debian", which a better
+ *  probe (a MikroTik, a UniFi device, Raspberry Pi OS) may now name. */
 export function osNeedsDetection(detected: string | null | undefined, manual: boolean | null | undefined): boolean {
 	if (manual) return false;
-	return !detected || detected === 'linux' || detected === 'unknown';
+	return !detected || detected === 'linux' || detected === 'unknown' || detected === 'debian';
 }
