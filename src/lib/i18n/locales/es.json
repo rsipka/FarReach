@@ -3663,5 +3663,10 @@
   "spice.via_hint": "SPICE sin TLS no está cifrado. A través de una sesión SSH guardada sí, y el puerto puede quedar cerrado a la red; el host de arriba es entonces como lo ve ese servidor SSH, por ejemplo localhost.",
   "spice.open_vv": "Abrir archivo SPICE (.vv)…",
   "spice.vv_files": "Archivos de virt-viewer",
-  "spice.vv_failed": "No se pudo abrir el archivo: {{error}}"
+  "spice.vv_failed": "No se pudo abrir el archivo: {{error}}",
+  "session.address_route": "Ruta",
+  "session.address_route_session": "Hosts de salto o proxy de la sesión",
+  "session.address_route_via": "A través de {{name}}",
+  "session.address_via_missing": "La sesión SSH por la que pasaba ya no existe",
+  "session.address_via_refs": "{{name}} inicia sesión con una entrada del gestor de contraseñas, que no se usa cuando otra sesión pasa por ella. Guarda la contraseña en {{name}} o usa una clave o el agente."
 }

@@ -3663,5 +3663,10 @@
   "spice.via_hint": "SPICE sans TLS n'est pas chiffré. Via une session SSH enregistrée, il l'est, et le port peut rester fermé au réseau ; l'hôte ci-dessus est alors tel que ce serveur SSH le voit, par exemple localhost.",
   "spice.open_vv": "Ouvrir un fichier SPICE (.vv)…",
   "spice.vv_files": "Fichiers virt-viewer",
-  "spice.vv_failed": "Impossible d'ouvrir le fichier : {{error}}"
+  "spice.vv_failed": "Impossible d'ouvrir le fichier : {{error}}",
+  "session.address_route": "Chemin",
+  "session.address_route_session": "Hôtes de rebond ou proxy de la session",
+  "session.address_route_via": "Via {{name}}",
+  "session.address_via_missing": "La session SSH par laquelle elle passait n’existe plus",
+  "session.address_via_refs": "{{name}} se connecte avec une entrée du gestionnaire de mots de passe, qui n’est pas utilisée quand une autre session passe par elle. Enregistrez le mot de passe dans {{name}}, ou utilisez une clé ou l’agent."
 }

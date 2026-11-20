@@ -3663,5 +3663,10 @@
   "spice.via_hint": "SPICE bez TLS není šifrované. Přes uloženou SSH relaci ano a port může zůstat pro síť zavřený; hostitel výše je pak adresa z pohledu toho SSH serveru, například localhost.",
   "spice.open_vv": "Otevřít soubor SPICE (.vv)…",
   "spice.vv_files": "Soubory virt-viewer",
-  "spice.vv_failed": "Soubor nelze otevřít: {{error}}"
+  "spice.vv_failed": "Soubor nelze otevřít: {{error}}",
+  "session.address_route": "Cesta",
+  "session.address_route_session": "Jump hosty nebo proxy relace",
+  "session.address_route_via": "Přes {{name}}",
+  "session.address_via_missing": "SSH relace, přes kterou vedla, už neexistuje",
+  "session.address_via_refs": "{{name}} se přihlašuje heslem ze správce hesel, které se nepoužije, když přes ni vede jiná relace. Uložte heslo přímo do {{name}}, nebo použijte klíč či agenta."
 }

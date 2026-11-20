@@ -3663,5 +3663,10 @@
   "spice.via_hint": "SPICE without TLS is not encrypted. Through a saved SSH session it is, and the port can stay closed to the network; the host above is then as that SSH server sees it, such as localhost.",
   "spice.open_vv": "Open SPICE file (.vv)…",
   "spice.vv_files": "virt-viewer files",
-  "spice.vv_failed": "Could not open the file: {{error}}"
+  "spice.vv_failed": "Could not open the file: {{error}}",
+  "session.address_route": "Route",
+  "session.address_route_session": "Session's jump hosts or proxy",
+  "session.address_route_via": "Through {{name}}",
+  "session.address_via_missing": "The SSH session it went through no longer exists",
+  "session.address_via_refs": "{{name}} logs in with a password manager entry, which is not used when another session goes through it. Save the password in {{name}}, or use a key or the agent."
 }

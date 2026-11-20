@@ -3663,5 +3663,10 @@
   "spice.via_hint": "SPICE без TLS не е криптиран. През запазена SSH сесия е, а портът може да остане затворен за мрежата; хостът по-горе тогава е такъв, какъвто го вижда този SSH сървър, например localhost.",
   "spice.open_vv": "Отвори SPICE файл (.vv)…",
   "spice.vv_files": "Файлове на virt-viewer",
-  "spice.vv_failed": "Файлът не може да бъде отворен: {{error}}"
+  "spice.vv_failed": "Файлът не може да бъде отворен: {{error}}",
+  "session.address_route": "Маршрут",
+  "session.address_route_session": "Междинни хостове или прокси на сесията",
+  "session.address_route_via": "През {{name}}",
+  "session.address_via_missing": "SSH сесията, през която минаваше, вече не съществува",
+  "session.address_via_refs": "{{name}} влиза със запис от мениджъра на пароли, който не се използва, когато друга сесия минава през нея. Запазете паролата в {{name}} или използвайте ключ или агента."
 }

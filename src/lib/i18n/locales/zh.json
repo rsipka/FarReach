@@ -3663,5 +3663,10 @@
   "spice.via_hint": "不使用 TLS 的 SPICE 未加密。通过已保存的 SSH 会话则会加密，端口也可对网络保持关闭；此时上面的主机应按该 SSH 服务器看到的地址填写，例如 localhost。",
   "spice.open_vv": "打开 SPICE 文件（.vv）…",
   "spice.vv_files": "virt-viewer 文件",
-  "spice.vv_failed": "无法打开文件：{{error}}"
+  "spice.vv_failed": "无法打开文件：{{error}}",
+  "session.address_route": "路径",
+  "session.address_route_session": "会话的跳板机或代理",
+  "session.address_route_via": "经由 {{name}}",
+  "session.address_via_missing": "所经由的 SSH 会话已不存在",
+  "session.address_via_refs": "{{name}} 使用密码管理器中的条目登录，其他会话经由它时不会使用该条目。请将密码保存在 {{name}} 中，或使用密钥或代理（agent）。"
 }

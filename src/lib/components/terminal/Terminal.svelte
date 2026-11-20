@@ -1281,7 +1281,9 @@
 				let done = false;
 				for (const a of order) {
 					term.write(`\x1b[33m[${t('session.trying_address', { name: addressName(a, fb.sessionPort) })}]\x1b[0m\r\n`);
-					const moved = { host: a.host, port: a.port, jumpChain: a.routed ? fb.jumpChain : undefined, proxy: a.routed ? fb.proxy : undefined };
+					const own = a.viaSessionId ? fb.viaChains?.[a.viaSessionId] : undefined;
+					if (a.viaSessionId && !own) continue;
+					const moved = { host: a.host, port: a.port, jumpChain: own ?? (a.routed ? fb.jumpChain : undefined), proxy: a.routed && !own ? fb.proxy : undefined };
 					try {
 						await sshConnect({ ...sshConnectParams, ...moved, id: newId, cols: term.cols, rows: term.rows });
 						// Later reconnects, duplicates and tmux windows go there too.
