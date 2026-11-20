@@ -126,14 +126,19 @@ pub(crate) fn approval_context(s: &SessionConfig) -> String {
     if let (Some(alt), Some(list)) = (s.alt_addresses.as_ref(), v.as_array_mut()) {
         list.push(serde_json::json!(alt));
     }
+    // A SPICE session's TLS port and certificate checks decide where its
+    // password goes, so they are part of what was approved too.
+    if let (Some(spice), Some(list)) = (s.spice.as_ref(), v.as_array_mut()) {
+        list.push(serde_json::json!(["spice", spice]));
+    }
     sha2::Sha256::digest(v.to_string().as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// The SSH session a session reaches its server through: a VNC session's
-/// `via_session_id` (the field is VNC only; other kinds ignore it when they
+/// The SSH session a session reaches its server through: a VNC or SPICE
+/// session's `via_session_id` (the field is theirs only; other kinds ignore it when they
 /// connect, so it decides nothing for them).
 pub(crate) fn via_id(s: &SessionConfig) -> Option<&str> {
-    if s.kind != crate::state::SessionKind::Vnc {
+    if !matches!(s.kind, crate::state::SessionKind::Vnc | crate::state::SessionKind::Spice) {
         return None;
     }
     s.via_session_id.as_deref().filter(|v| !v.is_empty())
@@ -765,6 +770,7 @@ pub async fn session_create(
     credential_id: Option<String>,
     telnet: Option<crate::telnet::protocol::TelnetOptions>,
     serial: Option<crate::serial::options::SerialOptions>,
+    spice: Option<crate::spice::SpiceOptions>,
     notes: Option<String>,
     custom_fields: Option<Vec<crate::state::CustomField>>,
     terminal_theme: Option<String>,
@@ -811,6 +817,7 @@ pub async fn session_create(
         wsl_distro,
         telnet: telnet.filter(|_| kind == crate::state::SessionKind::Telnet),
         serial: serial.filter(|_| kind == crate::state::SessionKind::Serial),
+        spice: spice.filter(|o| kind == crate::state::SessionKind::Spice && !o.is_empty()),
         domain: domain.filter(|d| !d.trim().is_empty()),
         share_path: share_path.filter(|d| !d.trim().is_empty()),
         rdp_clipboard: rdp_clipboard_setting(rdp_clipboard, kind),
@@ -823,7 +830,9 @@ pub async fn session_create(
         // out on first connect.
         detected_os: detected_os
             .filter(|os| !os.is_empty())
-            .or_else(|| (kind == crate::state::SessionKind::Rdp).then(|| "windows".to_string())),
+            .or_else(|| (kind == crate::state::SessionKind::Rdp).then(|| "windows".to_string()))
+            // WinBox only ever manages a MikroTik.
+            .or_else(|| (kind == crate::state::SessionKind::Winbox).then(|| "mikrotik".to_string())),
         os_manual: os_manual.unwrap_or(false),
         vault_id: if storage_vault_id != ensure_sessions_vault(&mut manager).await.unwrap_or_default() {
             Some(storage_vault_id.clone())

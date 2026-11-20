@@ -17,6 +17,7 @@ pub mod rdp_commands;
 pub mod telnet_commands;
 pub mod zmodem_commands;
 pub mod vnc_commands;
+pub mod spice_commands;
 pub mod saved_credential_commands;
 pub mod session_commands;
 pub mod sftp_commands;
@@ -24,6 +25,8 @@ pub mod sftp_commands;
 pub mod local_fs_commands;
 #[cfg(desktop)]
 pub mod editor_detect;
+#[cfg(desktop)]
+pub mod winbox_commands;
 pub mod ssh_commands;
 pub mod sshconfig_commands;
 pub mod import_commands;

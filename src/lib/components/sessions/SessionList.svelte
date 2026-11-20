@@ -6,6 +6,7 @@
 	import {
 		faPlus,
 		faBolt,
+		faDisplay,
 		faServer,
 		faFolderPlus,
 		faFileImport,
@@ -56,6 +57,9 @@
 	import * as share from '#lib/state/share.svelte.js';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
 	import { DEFAULT_SERIAL_OPTIONS } from '#lib/ipc/serial.js';
+	import { spiceParamsFromOptions, spiceReadVv } from '#lib/ipc/spice.js';
+	import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
+	import { winboxLaunch } from '#lib/ipc/winbox.js';
 	import { osNeedsDetection } from '#lib/data/distro-icons.js';
 	import { sshConnect, sshDisconnect, sshDetectOs, sshProbeAddresses, sshTmuxChosen, tmuxStartScript, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
 	import { addressName, autoOrder, checksAddresses, plainOrder, connectMode, hasAltAddresses, isUnreachable, lastAddress, rememberAddress, sessionAddresses, type ResolvedAddress } from '#lib/sessions/addresses.js';
@@ -275,7 +279,9 @@
 		{ id: 'ssh', label: 'SSH' },
 		{ id: 'rdp', label: 'RDP' },
 		{ id: 'vnc', label: 'VNC' },
+		{ id: 'spice', label: 'SPICE' },
 		{ id: 'telnet', label: 'Telnet' },
+		{ id: 'winbox', label: 'WinBox' },
 		{ id: 'wsl', label: 'WSL' }
 	];
 	function loadView(): { sort: SortKey; favorites: boolean; kinds: SessionKind[]; tags: string[] } {
@@ -1217,6 +1223,64 @@
 	}
 
 	/**
+	 * Open a saved SPICE session (a virtual machine's display) in a desktop
+	 * tab. Like VNC, a server may ask for no password.
+	 */
+	function openSpice(session: SessionConfig): void {
+		const tab = createTab('spice', session.host, undefined, session.name, session.detected_os ?? null);
+		tab.spiceConnectParams = {
+			id: tab.id,
+			host: session.host,
+			port: session.port,
+			password: session.auth_method.type === 'Password' && !session.auth_method.password_ref ? (session.auth_method.password ?? '') : '',
+			passwordRef: session.auth_method.type === 'Password' ? (session.auth_method.password_ref ?? null) : null,
+			sessionId: session.id,
+			viaSessionId: session.via_session_id ?? null,
+			...spiceParamsFromOptions(session.spice),
+		};
+		addToast(t('session.connected_toast', { name: session.name }), 'success');
+	}
+
+	/**
+	 * Open a virt-viewer file (.vv), as Proxmox VE's SPICE console button and
+	 * virt-manager hand out, in a desktop tab. Not saved as a session: a
+	 * Proxmox ticket in it works once, within about 30 seconds.
+	 */
+	async function openVvFile(): Promise<void> {
+		let path: string | null;
+		try {
+			const picked = await openFileDialog({
+				multiple: false,
+				directory: false,
+				// Phones pick by type, and a .vv file has none they know.
+				filters: isMobile() ? undefined : [{ name: t('spice.vv_files'), extensions: ['vv'] }],
+			});
+			path = typeof picked === 'string' ? picked : null;
+		} catch {
+			return;
+		}
+		if (!path) return;
+		try {
+			const vv = await spiceReadVv(path);
+			const title = vv.title || (vv.host.startsWith('pvespiceproxy:') ? 'SPICE' : vv.host);
+			setActivePage('terminal');
+			const tab = createTab('spice', vv.host, undefined, title, null);
+			tab.spiceConnectParams = {
+				id: tab.id,
+				host: vv.host,
+				port: vv.port,
+				password: vv.password,
+				tlsPort: vv.tlsPort,
+				ca: vv.ca,
+				hostSubject: vv.hostSubject,
+				proxy: vv.proxy,
+			};
+		} catch (e) {
+			addToast(t('spice.vv_failed', { error: String(e) }), 'error');
+		}
+	}
+
+	/**
 	 * Open a saved Telnet session in a terminal tab, which connects by
 	 * itself once it is listening. Telnet has no login of its own: a saved
 	 * user name and password are typed in when the device asks for them.
@@ -1259,6 +1323,36 @@
 			port: session.host,
 			options: { ...DEFAULT_SERIAL_OPTIONS, ...(session.serial ?? {}) },
 		};
+	}
+
+	/**
+	 * Start WinBox 4 on a saved session: a program of its own, so no tab.
+	 * Settings say where it is and how the password reaches it.
+	 */
+	async function openWinbox(session: SessionConfig): Promise<void> {
+		if (isMobile()) {
+			addToast(t('winbox.desktop_only'), 'error');
+			return;
+		}
+		const auth = session.auth_method;
+		const settings = getSettings();
+		try {
+			const launched = await winboxLaunch(
+				{
+					host: session.host,
+					port: session.port,
+					username: session.username || null,
+					password: auth.type === 'Password' && !auth.password_ref ? (auth.password ?? null) : null,
+					passwordRef: auth.type === 'Password' ? (auth.password_ref ?? null) : null,
+					passwordMode: settings.winboxPassword,
+					program: settings.winboxPath || null,
+				},
+				session.id
+			);
+			addToast(t(launched.copied ? 'winbox.started_copied' : 'winbox.started', { name: session.name }), 'success');
+		} catch (err) {
+			addToast(String(err), 'error');
+		}
 	}
 
 	/** Launch a local WSL session as a terminal tab */
@@ -1351,7 +1445,7 @@
 	async function approveRefsFirst(session: SessionConfig): Promise<boolean> {
 		const ids: string[] = [];
 		if (hasRefs(session)) ids.push(session.id);
-		const via = sessionKind(session) === 'vnc' ? session.via_session_id : null;
+		const via = sessionKind(session) === 'vnc' || sessionKind(session) === 'spice' ? session.via_session_id : null;
 		if (via) {
 			const viaSession = sessions.find((s) => s.id === via);
 			if (!viaSession || hasRefs(viaSession)) ids.push(via);
@@ -1383,6 +1477,10 @@
 			openVnc(session);
 			return;
 		}
+		if (sessionKind(session) === 'spice') {
+			openSpice(session);
+			return;
+		}
 		if (sessionKind(session) === 'wsl') {
 			void openWsl(session);
 			return;
@@ -1393,6 +1491,10 @@
 		}
 		if (sessionKind(session) === 'serial') {
 			openSerial(session);
+			return;
+		}
+		if (sessionKind(session) === 'winbox') {
+			void openWinbox(session);
 			return;
 		}
 		// Check if credentials are stored in the session (from vault)
@@ -2090,6 +2192,10 @@
 							<span>{t('session.quick_connect')}</span>
 							{#if actionLabel('session.quickConnect')}<kbd>{actionLabel('session.quickConnect')}</kbd>{/if}
 						</button>
+						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => void openVvFile())}>
+							<FaIcon icon={faDisplay} size={12} />
+							<span>{t('spice.open_vv')}</span>
+						</button>
 						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => contextNewFolder())}>
 							<FaIcon icon={faFolderPlus} size={12} />
 							<span>{t('session.new_folder')}</span>
@@ -2296,7 +2402,7 @@
 				<button class="context-item" onclick={() => { if (contextMenu?.session) void setFavorite(contextMenu.session, !contextMenu.session.favorite); }} type="button">
 					{contextMenu.session.favorite ? t('session.remove_favorite') : t('session.add_favorite')}
 				</button>
-				{#if contextMenu.session.kind !== 'rdp' && contextMenu.session.kind !== 'vnc'}
+				{#if contextMenu.session.kind !== 'rdp' && contextMenu.session.kind !== 'vnc' && contextMenu.session.kind !== 'spice'}
 					<button class="context-item" onclick={() => { if (contextMenu?.session) openHistoryPanel({ sessionId: contextMenu.session.id, sessionName: contextMenu.session.name }); closeContextMenu(); }} type="button">
 						{t('history.session_menu')}
 					</button>

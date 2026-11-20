@@ -34,7 +34,9 @@
 	}
 
 	let { session, vault = null, onconnect, onedit, ondelete, oncontextmenu, ondragstart, ondragend, selecting = false, selected = false, onselect, viaName = null }: Props = $props();
-	let unavailable = $derived((session.kind === 'wsl' && !isWindows()) || (session.kind === 'serial' && isMobile()));
+	let unavailable = $derived((session.kind === 'wsl' && !isWindows()) || ((session.kind === 'serial' || session.kind === 'winbox') && isMobile()));
+	/** WinBox only ever manages a MikroTik: its logo until another is picked. */
+	let osId = $derived(session.detected_os ?? (session.kind === 'winbox' ? 'mikrotik' : null));
 	/** Double-click to open (Settings > General): a mouse click only focuses
 	 *  the row. Enter or Space (a click with no detail) and a tap still
 	 *  connect, as there is no double press for either. */
@@ -78,9 +80,9 @@
 	/** How the session gets to its server when not directly: through jump
 	 *  hosts or a saved SSH session (VNC), or through a proxy. Remote
 	 *  desktops keep no jump chain or proxy, so stale ones are not shown. */
-	let desktopKind = $derived(session.kind === 'rdp' || session.kind === 'vnc');
+	let desktopKind = $derived(session.kind === 'rdp' || session.kind === 'vnc' || session.kind === 'spice');
 	let jumpTip = $derived.by(() => {
-		if (session.kind === 'vnc') return session.via_session_id ? t('session.via_session', { name: viaName || '?' }) : '';
+		if (session.kind === 'vnc' || session.kind === 'spice') return session.via_session_id ? t('session.via_session', { name: viaName || '?' }) : '';
 		if (desktopKind || !session.jump_chain?.length) return '';
 		return t('session.via_jump', { hops: formatHops(session.jump_chain) });
 	});
@@ -165,11 +167,11 @@
 		     OS is known yet: its logo once detected, until then a quiet mark for
 		     the kind of session. -->
 		<span class="os-slot" aria-hidden="true">
-			{#if getDistroIcon(session.detected_os)}
-				<DistroIcon osId={session.detected_os} size={18} />
+			{#if getDistroIcon(osId)}
+				<DistroIcon {osId} size={18} />
 			{:else}
 				<svg class="kind-mark" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-					{#if session.kind === 'rdp' || session.kind === 'vnc'}
+					{#if session.kind === 'rdp' || session.kind === 'vnc' || session.kind === 'spice'}
 						<rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" />
 					{:else if session.kind === 'wsl'}
 						<path d="M5 8l4 4-4 4M11 16h7" />
@@ -279,6 +281,9 @@
 			<span class="auth-badge">WSL</span>
 		{:else if session.kind === 'serial'}
 			<span class="auth-badge">{unavailable ? t('serial.desktop_only_short') : t('session.protocol_serial')}</span>
+		{:else if session.kind === 'winbox'}
+			<!-- Opens in WinBox, not in a tab here. -->
+			<span class="auth-badge">{unavailable ? t('serial.desktop_only_short') : t('session.protocol_winbox')}</span>
 		{:else}
 			<span class="auth-mark" title={`${t('session.auth_type', { type: session.auth_method.type })} · ${authLabel}`} aria-label={authLabel}>
 				<svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">

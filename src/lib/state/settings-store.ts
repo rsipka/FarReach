@@ -20,6 +20,7 @@ import {
 	type InactiveCursorStyle
 } from '#lib/terminal/cursor.js';
 import { readOverrides, type KeyOverrides } from '#lib/state/keybindings.js';
+import type { WinboxPasswordMode } from '#lib/ipc/winbox.js';
 import { DEFAULT_HIGHLIGHT, DEFAULT_HIGHLIGHT_KINDS, highlightKinds, type HighlightKind } from '#lib/terminal/highlight.js';
 
 /** The localStorage key. Kept from Reach, so an update finds what was saved. */
@@ -182,6 +183,10 @@ export interface Settings {
 	fileEditorCommand: string;
 	/** With 'custom': it runs in a terminal tab (vim, nano...). */
 	fileEditorTerminal: boolean;
+	/** WinBox 4 sessions: the program; '' to look for it. */
+	winboxPath: string;
+	/** How a saved password reaches WinBox. See winbox_commands.rs. */
+	winboxPassword: WinboxPasswordMode;
 
 	setupComplete: boolean;
 	pendingTursoOrg: string;
@@ -307,6 +312,8 @@ export const defaults: Settings = {
 	fileEditor: '',
 	fileEditorCommand: '',
 	fileEditorTerminal: false,
+	winboxPath: '',
+	winboxPassword: 'argument',
 	setupComplete: false,
 	pendingTursoOrg: '',
 	pendingTursoApiToken: '',
@@ -411,6 +418,8 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.fileEditor = typeof parsed.fileEditor === 'string' ? parsed.fileEditor : defaults.fileEditor;
 	settings.fileEditorCommand = typeof parsed.fileEditorCommand === 'string' ? parsed.fileEditorCommand : defaults.fileEditorCommand;
 	settings.fileEditorTerminal = parsed.fileEditorTerminal ?? defaults.fileEditorTerminal;
+	settings.winboxPath = typeof parsed.winboxPath === 'string' ? parsed.winboxPath : defaults.winboxPath;
+	settings.winboxPassword = parsed.winboxPassword === 'clipboard' || parsed.winboxPassword === 'none' ? parsed.winboxPassword : defaults.winboxPassword;
 	settings.pendingTursoOrg = parsed.pendingTursoOrg ?? defaults.pendingTursoOrg;
 	settings.launches = parsed.launches ?? defaults.launches;
 	settings.communityPromptDismissed =

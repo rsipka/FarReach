@@ -25,6 +25,8 @@
 	import { __APP_VERSION__ } from '#lib/version.js';
 	import { detectEditors } from '#lib/explorer/editor-launch.js';
 	import type { EditorInfo } from '#lib/ipc/localfs.js';
+	import { winboxFind, type WinboxPasswordMode } from '#lib/ipc/winbox.js';
+	import { open as openDialog } from '@tauri-apps/plugin-dialog';
 
 	/** Which slice of these rows to show: Settings arranges them by topic,
 	 *  so one tab file feeds several pages (see settings-pages.ts). */
@@ -57,6 +59,27 @@
 		editorsLooked = true;
 		void detectEditors().then((found) => (editors = found));
 	});
+	// WinBox 4 sessions: where the program is, as Settings would start it.
+	let winboxFound = $state<string | null | undefined>(undefined);
+	$effect(() => {
+		if (part !== 'sessions' || isMobile()) return;
+		const path = settings.winboxPath;
+		void winboxFind(path).then((found) => (winboxFound = found), () => (winboxFound = null));
+	});
+	const winboxPasswordOptions = $derived<{ label: string; value: WinboxPasswordMode }[]>([
+		{ label: t('settings.winbox_password_argument'), value: 'argument' },
+		{ label: t('settings.winbox_password_clipboard'), value: 'clipboard' },
+		{ label: t('settings.winbox_password_none'), value: 'none' }
+	]);
+	async function browseWinbox(): Promise<void> {
+		try {
+			const picked = await openDialog({ multiple: false, directory: false, title: t('settings.winbox_path') });
+			if (typeof picked === 'string') updateSetting('winboxPath', picked);
+		} catch {
+			// Cancelled.
+		}
+	}
+
 	let editorOptions = $derived([
 		{ label: t('settings.file_editor_system'), value: '' },
 		...editors.map((e) => ({ label: e.terminal ? `${e.name} (${t('settings.file_editor_in_terminal')})` : e.name, value: e.id })),
@@ -558,6 +581,47 @@
 			/>
 		</div>
 	</div>
+
+	<!-- WinBox 4 is a program on this computer: desktop only. -->
+	{#if !isMobile()}
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('settings.winbox_path')}</span>
+				<span class="setting-description">
+					{#if winboxFound}
+						{t('settings.winbox_found', { path: winboxFound })}
+					{:else if winboxFound === null}
+						{settings.winboxPath ? t('settings.winbox_path_bad') : t('settings.winbox_not_found')}
+					{:else}
+						{t('settings.winbox_path_desc')}
+					{/if}
+				</span>
+			</div>
+			<div class="setting-control separators">
+				<input
+					class="threshold-input command-input"
+					type="text"
+					spellcheck="false"
+					autocomplete="off"
+					autocapitalize="off"
+					placeholder={t('settings.winbox_path_auto')}
+					aria-label={t('settings.winbox_path')}
+					value={settings.winboxPath}
+					onchange={(e) => updateSetting('winboxPath', e.currentTarget.value.trim())}
+				/>
+				<button type="button" class="reset-link" onclick={browseWinbox}>{t('settings.winbox_browse')}</button>
+			</div>
+		</div>
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('settings.winbox_password')}</span>
+				<span class="setting-description">{t('settings.winbox_password_desc')}</span>
+			</div>
+			<div class="setting-control">
+				<Dropdown options={winboxPasswordOptions} selected={settings.winboxPassword} onchange={(v) => updateSetting('winboxPassword', v as WinboxPasswordMode)} />
+			</div>
+		</div>
+	{/if}
 
 	<!-- A phone has no X server to point at: desktop only. -->
 

@@ -155,7 +155,7 @@ fn has_login(kind: SessionKind) -> bool {
 
 /// The kinds the session editor offers a saved credential for.
 fn takes_credential(kind: SessionKind) -> bool {
-    matches!(kind, SessionKind::Ssh | SessionKind::Rdp | SessionKind::Telnet)
+    matches!(kind, SessionKind::Ssh | SessionKind::Rdp | SessionKind::Telnet | SessionKind::Winbox)
 }
 
 fn has_terminal(kind: SessionKind) -> bool {
@@ -393,7 +393,7 @@ fn apply_patch(s: &mut SessionConfig, patch: &SessionPatch, uses_credential: imp
         }
     }
     if let Some(v) = &patch.via_session {
-        if s.kind == SessionKind::Vnc {
+        if matches!(s.kind, SessionKind::Vnc | SessionKind::Spice) {
             s.via_session_id = match v {
                 Change::Set(id) if !id.is_empty() && *id != s.id => Some(id.clone()),
                 _ => None,
