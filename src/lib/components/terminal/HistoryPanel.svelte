@@ -8,7 +8,7 @@
 	 */
 	import Modal from '#lib/components/shared/Modal.svelte';
 	import { t } from '#lib/state/i18n.svelte.js';
-	import { closeHistoryPanel, historyPanel } from '#lib/state/history.svelte.js';
+	import { closeHistoryPanel, historyPanel, pasteHistoryCommand } from '#lib/state/history.svelte.js';
 	import { getTerminalInput } from '#lib/state/snippets.svelte.js';
 	import { getTabs } from '#lib/state/tabs.svelte.js';
 	import { historyForget, historySearch, historyTranscript, type HistoryHit } from '#lib/ipc/history.js';
@@ -115,12 +115,7 @@
 	}
 
 	function paste(hit: HistoryHit): void {
-		const input = opened?.tabId ? getTerminalInput(opened.tabId) : undefined;
-		if (!input) return;
-		const line = hit.text.replace(/[\r\n]+/g, ' ');
-		const body = input.bracketed() ? `\x1b[200~${line}\x1b[201~` : line;
-		input.send(Array.from(new TextEncoder().encode(body)));
-		closeHistoryPanel();
+		if (pasteHistoryCommand(opened?.tabId, hit.text)) closeHistoryPanel();
 	}
 
 	async function showRun(hit: HistoryHit): Promise<void> {

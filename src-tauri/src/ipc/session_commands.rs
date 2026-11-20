@@ -783,6 +783,7 @@ pub async fn session_create(
     alt_addresses: Option<Vec<crate::state::SessionAddress>>,
     connect_mode: Option<String>,
     address_check: Option<bool>,
+    web: Option<crate::web::WebOptions>,
 ) -> Result<SessionConfig, String> {
     let mut manager = state.vault_manager.lock().await;
     let kind = kind.unwrap_or_default();
@@ -862,6 +863,11 @@ pub async fn session_create(
         alt_addresses,
         connect_mode,
         address_check,
+        // Certificates are trusted by answering the prompt, never by a form.
+        web: web.filter(|_| kind == crate::state::SessionKind::Web).map(|mut w| {
+            w.certs.clear();
+            w
+        }),
     };
     session.tidy_documentation();
 
@@ -986,6 +992,11 @@ async fn prepare_update(
     // The trusted host keys are the stored ones: a connect may have saved
     // one while the editor was open, and the editor never changes them.
     session.host_keys = stored.as_ref().and_then(|s| s.host_keys.clone());
+    // The certificates a web session trusts likewise: answering the prompt
+    // adds them, `web_session_cert_*` changes them, the editor never does.
+    if let Some(w) = session.web.as_mut() {
+        w.certs = stored.as_ref().and_then(|s| s.web.as_ref()).map(|w| w.certs.clone()).unwrap_or_default();
+    }
 
     // A login sent is the session's own, unless it is one a credential
     // filled in (the editor shows that one): then the stored own login stays.
@@ -1007,6 +1018,9 @@ pub use bulk::*;
 
 #[path = "session_hostkeys_cmds.rs"]
 mod hostkeys;
+#[path = "session_webcerts_cmds.rs"]
+mod webcerts;
+pub use webcerts::*;
 pub use hostkeys::*;
 
 /// Move many sessions into a folder (`None`: out of any folder) in one

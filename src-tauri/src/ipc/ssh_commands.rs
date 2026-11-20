@@ -464,6 +464,10 @@ pub async fn ssh_send(
     connection_id: String,
     data: Vec<u8>,
 ) -> Result<(), String> {
+    // A ZMODEM transfer holds the line.
+    if crate::zmodem::intercept_input(&connection_id, &data) {
+        return Ok(());
+    }
     crate::history::input(&connection_id, &data);
     let manager = state.ssh_manager.lock().await;
     manager.send_data(&connection_id, &data).map_err(|e| e.to_string())
