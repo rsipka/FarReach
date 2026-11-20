@@ -3494,5 +3494,21 @@
   "files.moved": "Přesunuto: {{what}}",
   "files.copy_failed": "Kopírování „{{name}}“ selhalo: {{error}}",
   "files.delete_failed": "Smazání „{{name}}“ selhalo: {{error}}",
-  "files.keys_hint": "Tab přepne stranu · Insert nebo mezerník označí · psaním skočíte na název · Ctrl+Shift+E terminál"
+  "files.keys_hint": "Tab přepne stranu · Insert nebo mezerník označí · psaním skočíte na název · Ctrl+Shift+E terminál",
+  "files.view": "Zobrazit",
+  "files.compare": "Porovnat",
+  "files.compare_files": "Porovnat soubory",
+  "files.lines": "Řádky: {{count}}",
+  "files.identical": "Shodné",
+  "files.changed_lines": "Lišících se řádků: {{count}}",
+  "files.all_lines": "Všechny řádky",
+  "files.wrap": "Zalamovat",
+  "files.unchanged_lines": "Nezměněné řádky: {{count}}",
+  "files.edit_opened": "Otevřeno {{name}}; každé uložení se nahraje na server",
+  "files.edit_uploaded": "{{name}} uloženo na server",
+  "files.edit_upload_failed": "Nahrání {{name}} selhalo: {{error}}. Uložte znovu a zkusí se to znovu.",
+  "files.view_failed": "Nelze zobrazit {{name}}: {{error}}",
+  "files.folders_same": "Žádné rozdíly (shodných souborů: {{count}})",
+  "files.folders_differ": "Rozdíly označeny: na tomto počítači {{left}}, na serveru {{right}}",
+  "files.compare_need_files": "Pro porovnání dejte kurzor na soubor na obou stranách"
 }

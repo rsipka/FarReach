@@ -38,3 +38,28 @@ export async function localJoin(dir: string, name: string): Promise<string> {
 export async function localRoots(): Promise<string[]> {
 	return invoke<string[]>('local_roots');
 }
+
+/** A local file as text (UTF-8, up to 5 MB), for the viewer and Compare. */
+export async function localReadText(path: string): Promise<string> {
+	return invoke<string>('local_read_text', { path });
+}
+
+export interface LocalStat {
+	modifiedMs: number;
+	size: number;
+}
+
+export async function localStat(path: string): Promise<LocalStat> {
+	return invoke<LocalStat>('local_stat', { path });
+}
+
+/** Where to put a server file opened in another program: a fresh
+ *  temporary folder, under the file's own name. */
+export async function localEditCopyPath(name: string): Promise<string> {
+	return invoke<string>('local_edit_copy_path', { name });
+}
+
+/** Open a local file in the program the system uses for it. */
+export async function localOpen(path: string): Promise<void> {
+	return invoke('local_open', { path });
+}

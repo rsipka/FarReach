@@ -3494,5 +3494,21 @@
   "files.moved": "Spostato: {{what}}",
   "files.copy_failed": "Copia di \"{{name}}\" non riuscita: {{error}}",
   "files.delete_failed": "Eliminazione di \"{{name}}\" non riuscita: {{error}}",
-  "files.keys_hint": "Tab cambia lato · Ins o Spazio contrassegna · digita per saltare · Ctrl+Maiusc+E terminale"
+  "files.keys_hint": "Tab cambia lato · Ins o Spazio contrassegna · digita per saltare · Ctrl+Maiusc+E terminale",
+  "files.view": "Visualizza",
+  "files.compare": "Confronta",
+  "files.compare_files": "Confronta file",
+  "files.lines": "{{count}} righe",
+  "files.identical": "Identici",
+  "files.changed_lines": "{{count}} righe diverse",
+  "files.all_lines": "Tutte le righe",
+  "files.wrap": "A capo",
+  "files.unchanged_lines": "{{count}} righe invariate",
+  "files.edit_opened": "{{name}} aperto; ogni salvataggio viene caricato sul server",
+  "files.edit_uploaded": "{{name}} salvato sul server",
+  "files.edit_upload_failed": "Caricamento di {{name}} non riuscito: {{error}}. Salva di nuovo per riprovare.",
+  "files.view_failed": "Impossibile mostrare {{name}}: {{error}}",
+  "files.folders_same": "Nessuna differenza ({{count}} file uguali)",
+  "files.folders_differ": "Differenze contrassegnate: {{left}} su questo computer, {{right}} sul server",
+  "files.compare_need_files": "Metti il cursore su un file in ciascun lato per confrontarli"
 }

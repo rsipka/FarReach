@@ -3494,5 +3494,21 @@
   "files.moved": "Преместено: {{what}}",
   "files.copy_failed": "Копирането на „{{name}}“ не успя: {{error}}",
   "files.delete_failed": "Изтриването на „{{name}}“ не успя: {{error}}",
-  "files.keys_hint": "Tab сменя страната · Insert или интервал отбелязва · пишете, за да отидете на име · Ctrl+Shift+E терминал"
+  "files.keys_hint": "Tab сменя страната · Insert или интервал отбелязва · пишете, за да отидете на име · Ctrl+Shift+E терминал",
+  "files.view": "Преглед",
+  "files.compare": "Сравняване",
+  "files.compare_files": "Сравняване на файлове",
+  "files.lines": "Редове: {{count}}",
+  "files.identical": "Еднакви",
+  "files.changed_lines": "Различни редове: {{count}}",
+  "files.all_lines": "Всички редове",
+  "files.wrap": "Пренасяне",
+  "files.unchanged_lines": "Непроменени редове: {{count}}",
+  "files.edit_opened": "{{name}} е отворен; всяко записване се качва на сървъра",
+  "files.edit_uploaded": "{{name}} е записан на сървъра",
+  "files.edit_upload_failed": "Качването на {{name}} не успя: {{error}}. Запишете отново, за да опитате пак.",
+  "files.view_failed": "{{name}} не може да се покаже: {{error}}",
+  "files.folders_same": "Няма разлики (еднакви файлове: {{count}})",
+  "files.folders_differ": "Разликите са отбелязани: {{left}} на този компютър, {{right}} на сървъра",
+  "files.compare_need_files": "Поставете курсора върху файл от всяка страна, за да ги сравните"
 }

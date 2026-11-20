@@ -14,6 +14,7 @@
 	import { updateStats, removeStats } from '#lib/state/monitoring.svelte.js';
 	import Terminal from '#lib/components/terminal/Terminal.svelte';
 	import DualPane from '#lib/components/explorer/DualPane.svelte';
+	import { stopExternalEdits } from '#lib/explorer/external-edit.js';
 	import RdpPanel from '#lib/components/rdp/RdpPanel.svelte';
 	import BroadcastBar from '#lib/components/terminal/BroadcastBar.svelte';
 	import { getBroadcastTargets, toggleBroadcastTarget } from '#lib/state/broadcast.svelte.js';
@@ -343,6 +344,7 @@
 		for (const connId of connectedSsh) {
 			if (!activeConnectionIds.has(connId)) {
 				connectedSsh.delete(connId);
+				stopExternalEdits(connId);
 				sshDisconnect(connId).catch((err) => {
 					console.error(`Failed to disconnect SSH ${connId}:`, err);
 				});

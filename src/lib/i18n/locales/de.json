@@ -3494,5 +3494,21 @@
   "files.moved": "{{what}} verschoben",
   "files.copy_failed": "Kopieren von \"{{name}}\" fehlgeschlagen: {{error}}",
   "files.delete_failed": "Löschen von \"{{name}}\" fehlgeschlagen: {{error}}",
-  "files.keys_hint": "Tab wechselt die Seite · Einfg oder Leertaste markiert · tippen springt · Strg+Umschalt+E Terminal"
+  "files.keys_hint": "Tab wechselt die Seite · Einfg oder Leertaste markiert · tippen springt · Strg+Umschalt+E Terminal",
+  "files.view": "Ansehen",
+  "files.compare": "Vergleichen",
+  "files.compare_files": "Dateien vergleichen",
+  "files.lines": "{{count}} Zeilen",
+  "files.identical": "Identisch",
+  "files.changed_lines": "{{count}} Zeilen unterschiedlich",
+  "files.all_lines": "Alle Zeilen",
+  "files.wrap": "Umbrechen",
+  "files.unchanged_lines": "{{count}} unveränderte Zeilen",
+  "files.edit_opened": "{{name}} geöffnet; jedes Speichern wird auf den Server hochgeladen",
+  "files.edit_uploaded": "{{name}} auf dem Server gespeichert",
+  "files.edit_upload_failed": "Hochladen von {{name}} fehlgeschlagen: {{error}}. Erneut speichern, um es nochmal zu versuchen.",
+  "files.view_failed": "{{name}} kann nicht angezeigt werden: {{error}}",
+  "files.folders_same": "Keine Unterschiede ({{count}} Dateien gleich)",
+  "files.folders_differ": "Unterschiede markiert: {{left}} auf diesem Computer, {{right}} auf dem Server",
+  "files.compare_need_files": "Zum Vergleichen auf jeder Seite den Cursor auf eine Datei setzen"
 }

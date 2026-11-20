@@ -3494,5 +3494,21 @@
   "files.moved": "Moved {{what}}",
   "files.copy_failed": "Copying \"{{name}}\" failed: {{error}}",
   "files.delete_failed": "Deleting \"{{name}}\" failed: {{error}}",
-  "files.keys_hint": "Tab switches side · Insert or Space marks · type to jump · Ctrl+Shift+E terminal"
+  "files.keys_hint": "Tab switches side · Insert or Space marks · type to jump · Ctrl+Shift+E terminal",
+  "files.view": "View",
+  "files.compare": "Compare",
+  "files.compare_files": "Compare files",
+  "files.lines": "{{count}} lines",
+  "files.identical": "Identical",
+  "files.changed_lines": "{{count}} lines differ",
+  "files.all_lines": "All lines",
+  "files.wrap": "Wrap",
+  "files.unchanged_lines": "{{count}} unchanged lines",
+  "files.edit_opened": "Opened {{name}}; each save is uploaded to the server",
+  "files.edit_uploaded": "Saved {{name}} to the server",
+  "files.edit_upload_failed": "Uploading {{name}} failed: {{error}}. Save again to retry.",
+  "files.view_failed": "Cannot show {{name}}: {{error}}",
+  "files.folders_same": "No differences ({{count}} files the same)",
+  "files.folders_differ": "Marked the differences: {{left}} on this computer, {{right}} on the server",
+  "files.compare_need_files": "Put the cursor on a file on each side to compare them"
 }

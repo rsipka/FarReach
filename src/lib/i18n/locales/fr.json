@@ -3494,5 +3494,21 @@
   "files.moved": "Déplacé : {{what}}",
   "files.copy_failed": "Échec de la copie de \"{{name}}\" : {{error}}",
   "files.delete_failed": "Échec de la suppression de \"{{name}}\" : {{error}}",
-  "files.keys_hint": "Tab change de côté · Inser ou Espace marque · tapez pour aller à un nom · Ctrl+Maj+E terminal"
+  "files.keys_hint": "Tab change de côté · Inser ou Espace marque · tapez pour aller à un nom · Ctrl+Maj+E terminal",
+  "files.view": "Afficher",
+  "files.compare": "Comparer",
+  "files.compare_files": "Comparer les fichiers",
+  "files.lines": "{{count}} lignes",
+  "files.identical": "Identiques",
+  "files.changed_lines": "{{count}} lignes différentes",
+  "files.all_lines": "Toutes les lignes",
+  "files.wrap": "Retour à la ligne",
+  "files.unchanged_lines": "{{count}} lignes inchangées",
+  "files.edit_opened": "{{name}} ouvert ; chaque enregistrement est envoyé au serveur",
+  "files.edit_uploaded": "{{name}} enregistré sur le serveur",
+  "files.edit_upload_failed": "Échec de l'envoi de {{name}} : {{error}}. Enregistrez à nouveau pour réessayer.",
+  "files.view_failed": "Impossible d'afficher {{name}} : {{error}}",
+  "files.folders_same": "Aucune différence ({{count}} fichiers identiques)",
+  "files.folders_differ": "Différences marquées : {{left}} sur cet ordinateur, {{right}} sur le serveur",
+  "files.compare_need_files": "Placez le curseur sur un fichier de chaque côté pour les comparer"
 }

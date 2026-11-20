@@ -3494,5 +3494,21 @@
   "files.moved": "已移动 {{what}}",
   "files.copy_failed": "复制“{{name}}”失败：{{error}}",
   "files.delete_failed": "删除“{{name}}”失败：{{error}}",
-  "files.keys_hint": "Tab 切换窗格 · Insert 或空格标记 · 输入名称跳转 · Ctrl+Shift+E 终端"
+  "files.keys_hint": "Tab 切换窗格 · Insert 或空格标记 · 输入名称跳转 · Ctrl+Shift+E 终端",
+  "files.view": "查看",
+  "files.compare": "比较",
+  "files.compare_files": "比较文件",
+  "files.lines": "{{count}} 行",
+  "files.identical": "完全相同",
+  "files.changed_lines": "{{count}} 行不同",
+  "files.all_lines": "全部行",
+  "files.wrap": "自动换行",
+  "files.unchanged_lines": "{{count}} 行未更改",
+  "files.edit_opened": "已打开 {{name}}；每次保存都会上传到服务器",
+  "files.edit_uploaded": "已将 {{name}} 保存到服务器",
+  "files.edit_upload_failed": "上传 {{name}} 失败：{{error}}。再次保存即可重试。",
+  "files.view_failed": "无法显示 {{name}}：{{error}}",
+  "files.folders_same": "没有差异（{{count}} 个文件相同）",
+  "files.folders_differ": "已标记差异：本机 {{left}} 个，服务器 {{right}} 个",
+  "files.compare_need_files": "请在两侧各将光标放在一个文件上以进行比较"
 }

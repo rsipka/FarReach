@@ -14,7 +14,10 @@
 	import { getCurrentPath, type FileEntry, type SortKey } from '#lib/state/explorer.svelte.js';
 	import { getTransfers, type Transfer } from '#lib/state/transfers.svelte.js';
 	import { sftpDelete, sftpListDir, sftpMkdir, sftpReadFile, sftpRename, sftpTerminalCwd } from '#lib/ipc/sftp.js';
-	import { localDelete, localListDir, localMkdir, localRename } from '#lib/ipc/localfs.js';
+	import { localDelete, localListDir, localMkdir, localOpen, localReadText, localRename } from '#lib/ipc/localfs.js';
+	import { editExternally } from '#lib/explorer/external-edit.js';
+	import { compareFolders } from '#lib/explorer/compare.js';
+	import TextPanel from './TextPanel.svelte';
 	import { Pane, findByPrefix, remoteJoin, remoteParent, type Row } from '#lib/explorer/pane.svelte.js';
 	import { copyEntry } from '#lib/explorer/dual-copy.js';
 	import { formatModified } from '#lib/explorer/format.js';
@@ -212,8 +215,33 @@
 		void tick().then(() => rootEl?.focus());
 	}
 
-	/** F4: a server file opens in the editor, as the sidebar's Edit does. */
-	async function edit(row: Row | undefined = pane.current): Promise<void> {
+	/** F4: the file opens in the program this computer uses for it. A
+	 *  server file is fetched to a temporary copy, and each save there is
+	 *  uploaded back. */
+	async function edit(row: Row | undefined = pane.current, p: Pane = pane): Promise<void> {
+		if (!row || row.isDirectory) return;
+		try {
+			if (p.kind === 'local') {
+				await localOpen(row.path);
+				return;
+			}
+			const remotePath = row.path;
+			await editExternally(connectionId, remotePath, row.name, row.size, {
+				onUploaded: (name) => {
+					addToast(t('files.edit_uploaded', { name }), 'success');
+					if (remote.path === remoteParent(remotePath)) void remote.refresh();
+				},
+				onError: (error) => addToast(t('files.edit_upload_failed', { name: row.name, error }), 'error')
+			});
+			addToast(t('files.edit_opened', { name: row.name }), 'info');
+		} catch (err) {
+			addToast(t('explorer.open_file_error', { error: errorText(err) }), 'error');
+		}
+	}
+
+	/** Shift+F4: a server file in Reacher CM's own editor, as the sidebar's
+	 *  Edit does. */
+	async function editInApp(row: Row | undefined = pane.current): Promise<void> {
 		if (!row || row.isDirectory || pane.kind !== 'remote') return;
 		try {
 			const content = await sftpReadFile(connectionId, row.path);
@@ -221,6 +249,60 @@
 		} catch (err) {
 			addToast(t('explorer.open_file_error', { error: errorText(err) }), 'error');
 		}
+	}
+
+	// ---- View and Compare ---------------------------------------------------
+
+	type PanelContent =
+		| { kind: 'view'; title: string; text: string }
+		| { kind: 'diff'; leftTitle: string; left: string; rightTitle: string; right: string };
+	let panel = $state<PanelContent | undefined>();
+
+	function readText(p: Pane, row: FileEntry): Promise<string> {
+		return p.kind === 'local' ? localReadText(row.path) : sftpReadFile(connectionId, row.path);
+	}
+
+	/** F3: the file under the cursor as text. */
+	async function view(row: Row | undefined = pane.current, p: Pane = pane): Promise<void> {
+		if (!row || row.isDirectory) return;
+		try {
+			panel = { kind: 'view', title: row.path, text: await readText(p, row) };
+		} catch (err) {
+			addToast(t('files.view_failed', { name: row.name, error: errorText(err) }), 'error');
+		}
+	}
+
+	/** F9: mark the files that differ between the two folders: those the
+	 *  other side lacks, and the newer copy of those on both. */
+	function compareDirs(): void {
+		const diff = compareFolders(local.entries, remote.entries);
+		local.marked.clear();
+		remote.marked.clear();
+		for (const path of diff.left) local.marked.add(path);
+		for (const path of diff.right) remote.marked.add(path);
+		const differ = diff.left.length + diff.right.length;
+		addToast(differ === 0 ? t('files.folders_same', { count: diff.same }) : t('files.folders_differ', { left: diff.left.length, right: diff.right.length }), differ === 0 ? 'success' : 'info');
+	}
+
+	/** Shift+F9: the two files under the cursors, side by side. */
+	async function compareFiles(): Promise<void> {
+		const a = local.current;
+		const b = remote.current;
+		if (!a || !b || a.isDirectory || b.isDirectory) {
+			addToast(t('files.compare_need_files'), 'info');
+			return;
+		}
+		try {
+			const [left, right] = await Promise.all([readText(local, a), readText(remote, b)]);
+			panel = { kind: 'diff', leftTitle: a.path, left, rightTitle: b.path, right };
+		} catch (err) {
+			addToast(t('files.view_failed', { name: `${a.name} / ${b.name}`, error: errorText(err) }), 'error');
+		}
+	}
+
+	function closePanel(): void {
+		panel = undefined;
+		void tick().then(() => rootEl?.focus());
 	}
 
 	async function goToTerminalFolder(): Promise<void> {
@@ -258,7 +340,7 @@
 	}
 
 	function onKeydown(e: KeyboardEvent): void {
-		if (prompt || editingPath) return;
+		if (prompt || editingPath || panel) return;
 		if (e.target instanceof HTMLInputElement) return;
 		const mod = e.ctrlKey || e.metaKey;
 		const p = pane;
@@ -288,7 +370,7 @@
 				side = side === 'local' ? 'remote' : 'local';
 				break;
 			case 'Enter':
-				if (!p.enter()) void edit();
+				if (!p.enter()) void view();
 				break;
 			case 'Backspace':
 				p.up();
@@ -300,8 +382,16 @@
 			case 'F2':
 				startRename();
 				break;
+			case 'F3':
+				void view();
+				break;
 			case 'F4':
-				void edit();
+				if (e.shiftKey) void editInApp();
+				else void edit();
+				break;
+			case 'F9':
+				if (e.shiftKey) void compareFiles();
+				else compareDirs();
 				break;
 			case 'F5':
 				void copy();
@@ -374,7 +464,7 @@
 
 	function openRow(p: Pane, i: number): void {
 		const row = p.rows[i];
-		if (!p.enter(row) && p.kind === 'remote') void edit(row);
+		if (!p.enter(row)) void view(row, p);
 	}
 
 	function sizeText(row: Row): string {
@@ -403,11 +493,14 @@
 
 	const KEYS: { key: string; label: string; run: () => void; remoteOnly?: boolean }[] = [
 		{ key: 'F2', label: 'explorer.rename', run: startRename },
-		{ key: 'F4', label: 'explorer.edit', run: () => void edit(), remoteOnly: true },
+		{ key: 'F3', label: 'files.view', run: () => void view() },
+		{ key: 'F4', label: 'explorer.edit', run: () => void edit() },
 		{ key: 'F5', label: 'files.copy', run: () => void copy() },
 		{ key: 'F6', label: 'files.move', run: () => void copy(true) },
 		{ key: 'F7', label: 'explorer.new_folder', run: startMkdir },
 		{ key: 'F8', label: 'common.delete', run: () => void remove() },
+		{ key: 'F9', label: 'files.compare', run: compareDirs },
+		{ key: '⇧F9', label: 'files.compare_files', run: () => void compareFiles() },
 		{ key: 'F10', label: 'files.terminal', run: () => onclose() }
 	];
 </script>
@@ -520,6 +613,10 @@
 				</div>
 			{/each}
 		</div>
+	{/if}
+
+	{#if panel}
+		<TextPanel content={panel} onclose={closePanel} />
 	{/if}
 
 	{#if prompt}

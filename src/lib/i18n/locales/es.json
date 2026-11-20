@@ -3494,5 +3494,21 @@
   "files.moved": "Movido: {{what}}",
   "files.copy_failed": "Error al copiar \"{{name}}\": {{error}}",
   "files.delete_failed": "Error al eliminar \"{{name}}\": {{error}}",
-  "files.keys_hint": "Tab cambia de lado · Insert o Espacio marca · escribe para saltar · Ctrl+Mayús+E terminal"
+  "files.keys_hint": "Tab cambia de lado · Insert o Espacio marca · escribe para saltar · Ctrl+Mayús+E terminal",
+  "files.view": "Ver",
+  "files.compare": "Comparar",
+  "files.compare_files": "Comparar archivos",
+  "files.lines": "{{count}} líneas",
+  "files.identical": "Idénticos",
+  "files.changed_lines": "{{count}} líneas distintas",
+  "files.all_lines": "Todas las líneas",
+  "files.wrap": "Ajustar",
+  "files.unchanged_lines": "{{count}} líneas sin cambios",
+  "files.edit_opened": "{{name}} abierto; cada guardado se sube al servidor",
+  "files.edit_uploaded": "{{name}} guardado en el servidor",
+  "files.edit_upload_failed": "Error al subir {{name}}: {{error}}. Guarda de nuevo para reintentar.",
+  "files.view_failed": "No se puede mostrar {{name}}: {{error}}",
+  "files.folders_same": "Sin diferencias ({{count}} archivos iguales)",
+  "files.folders_differ": "Diferencias marcadas: {{left}} en este equipo, {{right}} en el servidor",
+  "files.compare_need_files": "Pon el cursor sobre un archivo en cada lado para compararlos"
 }

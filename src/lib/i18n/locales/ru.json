@@ -3494,5 +3494,21 @@
   "files.moved": "Перемещено: {{what}}",
   "files.copy_failed": "Не удалось скопировать «{{name}}»: {{error}}",
   "files.delete_failed": "Не удалось удалить «{{name}}»: {{error}}",
-  "files.keys_hint": "Tab переключает сторону · Insert или пробел отмечает · набор текста переходит к имени · Ctrl+Shift+E терминал"
+  "files.keys_hint": "Tab переключает сторону · Insert или пробел отмечает · набор текста переходит к имени · Ctrl+Shift+E терминал",
+  "files.view": "Просмотр",
+  "files.compare": "Сравнить",
+  "files.compare_files": "Сравнить файлы",
+  "files.lines": "Строк: {{count}}",
+  "files.identical": "Совпадают",
+  "files.changed_lines": "Различающихся строк: {{count}}",
+  "files.all_lines": "Все строки",
+  "files.wrap": "Перенос",
+  "files.unchanged_lines": "Без изменений строк: {{count}}",
+  "files.edit_opened": "{{name}} открыт; каждое сохранение загружается на сервер",
+  "files.edit_uploaded": "{{name}} сохранён на сервере",
+  "files.edit_upload_failed": "Не удалось загрузить {{name}}: {{error}}. Сохраните ещё раз, чтобы повторить.",
+  "files.view_failed": "Не удаётся показать {{name}}: {{error}}",
+  "files.folders_same": "Различий нет (одинаковых файлов: {{count}})",
+  "files.folders_differ": "Различия отмечены: на этом компьютере {{left}}, на сервере {{right}}",
+  "files.compare_need_files": "Поставьте курсор на файл с каждой стороны, чтобы сравнить их"
 }

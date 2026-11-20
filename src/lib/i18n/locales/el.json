@@ -3494,5 +3494,21 @@
   "files.moved": "Μετακινήθηκε: {{what}}",
   "files.copy_failed": "Η αντιγραφή του «{{name}}» απέτυχε: {{error}}",
   "files.delete_failed": "Η διαγραφή του «{{name}}» απέτυχε: {{error}}",
-  "files.keys_hint": "Tab αλλάζει πλευρά · Insert ή Διάστημα σημειώνει · πληκτρολογήστε για μετάβαση · Ctrl+Shift+E τερματικό"
+  "files.keys_hint": "Tab αλλάζει πλευρά · Insert ή Διάστημα σημειώνει · πληκτρολογήστε για μετάβαση · Ctrl+Shift+E τερματικό",
+  "files.view": "Προβολή",
+  "files.compare": "Σύγκριση",
+  "files.compare_files": "Σύγκριση αρχείων",
+  "files.lines": "{{count}} γραμμές",
+  "files.identical": "Ίδια",
+  "files.changed_lines": "{{count}} γραμμές διαφέρουν",
+  "files.all_lines": "Όλες οι γραμμές",
+  "files.wrap": "Αναδίπλωση",
+  "files.unchanged_lines": "{{count}} αμετάβλητες γραμμές",
+  "files.edit_opened": "Άνοιξε το {{name}}· κάθε αποθήκευση ανεβαίνει στον διακομιστή",
+  "files.edit_uploaded": "Το {{name}} αποθηκεύτηκε στον διακομιστή",
+  "files.edit_upload_failed": "Η αποστολή του {{name}} απέτυχε: {{error}}. Αποθηκεύστε ξανά για νέα προσπάθεια.",
+  "files.view_failed": "Δεν είναι δυνατή η εμφάνιση του {{name}}: {{error}}",
+  "files.folders_same": "Καμία διαφορά ({{count}} ίδια αρχεία)",
+  "files.folders_differ": "Σημειώθηκαν οι διαφορές: {{left}} σε αυτόν τον υπολογιστή, {{right}} στον διακομιστή",
+  "files.compare_need_files": "Βάλτε τον κέρσορα σε ένα αρχείο σε κάθε πλευρά για σύγκριση"
 }

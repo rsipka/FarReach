@@ -165,6 +165,55 @@ fn roots() -> Vec<String> {
     out
 }
 
+/// The most the viewer and Compare read of one file, as the server side's
+/// editor allows.
+const MAX_TEXT: u64 = 5 * 1024 * 1024;
+
+/// A local file as text, for the viewer and Compare. Refuses what is too
+/// big to show or not text.
+pub(crate) fn read_text(path: &str) -> Result<String, String> {
+    let meta = std::fs::metadata(path).map_err(|e| format!("{path}: {e}"))?;
+    if meta.is_dir() {
+        return Err(format!("{path}: is a folder"));
+    }
+    if meta.len() > MAX_TEXT {
+        return Err(format!("File too large ({} bytes, max {MAX_TEXT})", meta.len()));
+    }
+    let bytes = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
+    String::from_utf8(bytes).map_err(|_| "File is not valid UTF-8 text".to_string())
+}
+
+/// When a file last changed (milliseconds) and its size, so an edit in
+/// another program can be noticed.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalStat {
+    pub modified_ms: u64,
+    pub size: u64,
+}
+
+pub(crate) fn stat(path: &str) -> Result<LocalStat, String> {
+    let meta = std::fs::metadata(path).map_err(|e| format!("{path}: {e}"))?;
+    let modified_ms = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    Ok(LocalStat { modified_ms, size: meta.len() })
+}
+
+/// A path for a server file opened in another program: `name` in a fresh
+/// folder of its own under the temporary folder, so two files of the same
+/// name never meet and the program shows the real name.
+pub(crate) fn edit_copy_path(name: &str) -> Result<String, String> {
+    let dir = std::env::temp_dir()
+        .join("reachercm-edit")
+        .join(uuid::Uuid::new_v4().to_string());
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", path_string(&dir)))?;
+    Ok(path_string(&dir.join(plain_name(name)?)))
+}
+
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
     tokio::task::spawn_blocking(f).await.map_err(|e| e.to_string())?
 }
@@ -190,6 +239,30 @@ pub async fn local_rename(path: String, new_name: String) -> Result<String, Stri
 #[tauri::command]
 pub async fn local_delete(path: String) -> Result<(), String> {
     blocking(move || delete(&path)).await
+}
+
+#[tauri::command]
+pub async fn local_read_text(path: String) -> Result<String, String> {
+    blocking(move || read_text(&path)).await
+}
+
+#[tauri::command]
+pub async fn local_stat(path: String) -> Result<LocalStat, String> {
+    blocking(move || stat(&path)).await
+}
+
+#[tauri::command]
+pub async fn local_edit_copy_path(name: String) -> Result<String, String> {
+    blocking(move || edit_copy_path(&name)).await
+}
+
+/// Open a local file in the program the system uses for it.
+#[tauri::command]
+pub async fn local_open(path: String) -> Result<(), String> {
+    if !Path::new(&path).is_file() {
+        return Err(format!("{path}: not a file"));
+    }
+    tauri_plugin_opener::open_path(&path, None::<&str>).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -229,6 +302,31 @@ mod tests {
 
         delete(&made).unwrap();
         assert!(!Path::new(&made).exists(), "a folder goes with what is in it");
+    }
+
+    #[test]
+    fn reads_text_and_stats() {
+        let tmp = tempfile::tempdir().unwrap();
+        let text = tmp.path().join("t.txt");
+        std::fs::write(&text, "ahoj\n").unwrap();
+        assert_eq!(read_text(&path_string(&text)).unwrap(), "ahoj\n");
+        assert_eq!(stat(&path_string(&text)).unwrap().size, 5);
+        let bin = tmp.path().join("b.bin");
+        std::fs::write(&bin, [0xff, 0xfe, 0x00]).unwrap();
+        assert!(read_text(&path_string(&bin)).is_err());
+        assert!(read_text(&path_string(tmp.path())).is_err(), "a folder is not read");
+    }
+
+    #[test]
+    fn edit_copies_get_their_own_folder() {
+        let a = edit_copy_path("nginx.conf").unwrap();
+        let b = edit_copy_path("nginx.conf").unwrap();
+        assert_ne!(a, b);
+        assert!(a.ends_with("nginx.conf"));
+        assert!(edit_copy_path("../x").is_err());
+        for p in [a, b] {
+            let _ = std::fs::remove_dir(Path::new(&p).parent().unwrap());
+        }
     }
 
     #[test]
