@@ -3638,5 +3638,18 @@
   "session.address_check_on": "Zapnuto",
   "session.address_check_off": "Vypnuto (tichý režim)",
   "session.address_check_hint": "Tichý režim: na adresu se nic nepošle, dokud se nezkouší. Automatický výběr je pak zkouší popořadě a při nedostupnosti přejde na další.",
-  "session.address_not_checked": "Neověřeno"
+  "session.address_not_checked": "Neověřeno",
+  "x11desktop.label": "X11 plocha",
+  "x11desktop.off": "Vypnuto (terminál)",
+  "x11desktop.gnome": "GNOME",
+  "x11desktop.kde": "KDE Plasma",
+  "x11desktop.xfce": "Xfce",
+  "x11desktop.mate": "MATE",
+  "x11desktop.cinnamon": "Cinnamon",
+  "x11desktop.lxqt": "LXQt",
+  "x11desktop.openbox": "Openbox",
+  "x11desktop.custom": "Vlastní příkaz",
+  "x11desktop.command": "Příkaz pro spuštění plochy",
+  "x11desktop.hint": "Spustí na serveru celou plochu a zobrazí ji ve vlastním okně. Server potřebuje X11Forwarding yes a xauth. Tento počítač potřebuje Xephyr (Linux), X11 server z Nastavení (Windows) nebo XQuartz (macOS).",
+  "x11desktop.command_needed": "Zadejte příkaz, který spustí plochu."
 }

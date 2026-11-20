@@ -3638,5 +3638,18 @@
   "session.address_check_on": "Activé",
   "session.address_check_off": "Désactivé (silencieux)",
   "session.address_check_hint": "Silencieux : rien n’est envoyé à une adresse avant de l’essayer. Le mode automatique les essaie alors dans l’ordre et passe à la suivante si une est injoignable.",
-  "session.address_not_checked": "Non vérifiée"
+  "session.address_not_checked": "Non vérifiée",
+  "x11desktop.label": "Bureau X11",
+  "x11desktop.off": "Désactivé (terminal)",
+  "x11desktop.gnome": "GNOME",
+  "x11desktop.kde": "KDE Plasma",
+  "x11desktop.xfce": "Xfce",
+  "x11desktop.mate": "MATE",
+  "x11desktop.cinnamon": "Cinnamon",
+  "x11desktop.lxqt": "LXQt",
+  "x11desktop.openbox": "Openbox",
+  "x11desktop.custom": "Commande personnalisée",
+  "x11desktop.command": "Commande de démarrage du bureau",
+  "x11desktop.hint": "Démarre un bureau complet sur le serveur et l’affiche dans sa propre fenêtre. Le serveur doit avoir X11Forwarding yes et xauth. Cet ordinateur a besoin de Xephyr (Linux), du serveur X11 des Paramètres (Windows) ou de XQuartz (macOS).",
+  "x11desktop.command_needed": "Saisissez la commande qui démarre le bureau."
 }

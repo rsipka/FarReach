@@ -3638,5 +3638,18 @@
   "session.address_check_on": "Ενεργό",
   "session.address_check_off": "Ανενεργό (σιωπηλά)",
   "session.address_check_hint": "Σιωπηλά: δεν στέλνεται τίποτα σε μια διεύθυνση πριν δοκιμαστεί. Η αυτόματη επιλογή τις δοκιμάζει με τη σειρά και περνά στην επόμενη αν μία δεν είναι προσβάσιμη.",
-  "session.address_not_checked": "Χωρίς έλεγχο"
+  "session.address_not_checked": "Χωρίς έλεγχο",
+  "x11desktop.label": "Επιφάνεια εργασίας X11",
+  "x11desktop.off": "Ανενεργό (τερματικό)",
+  "x11desktop.gnome": "GNOME",
+  "x11desktop.kde": "KDE Plasma",
+  "x11desktop.xfce": "Xfce",
+  "x11desktop.mate": "MATE",
+  "x11desktop.cinnamon": "Cinnamon",
+  "x11desktop.lxqt": "LXQt",
+  "x11desktop.openbox": "Openbox",
+  "x11desktop.custom": "Δική σας εντολή",
+  "x11desktop.command": "Εντολή εκκίνησης επιφάνειας εργασίας",
+  "x11desktop.hint": "Ξεκινά μια πλήρη επιφάνεια εργασίας στον διακομιστή και τη δείχνει σε δικό της παράθυρο. Ο διακομιστής χρειάζεται X11Forwarding yes και xauth. Αυτός ο υπολογιστής χρειάζεται Xephyr (Linux), τον διακομιστή X11 από τις Ρυθμίσεις (Windows) ή XQuartz (macOS).",
+  "x11desktop.command_needed": "Εισαγάγετε την εντολή που ξεκινά την επιφάνεια εργασίας."
 }

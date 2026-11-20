@@ -3638,5 +3638,18 @@
   "session.address_check_on": "Вкл.",
   "session.address_check_off": "Выкл. (тихий)",
   "session.address_check_hint": "Тихий режим: на адрес ничего не отправляется, пока его не пробуют. Автоматический выбор пробует их по порядку и переходит к следующему, если адрес недоступен.",
-  "session.address_not_checked": "Не проверен"
+  "session.address_not_checked": "Не проверен",
+  "x11desktop.label": "Рабочий стол X11",
+  "x11desktop.off": "Выкл. (терминал)",
+  "x11desktop.gnome": "GNOME",
+  "x11desktop.kde": "KDE Plasma",
+  "x11desktop.xfce": "Xfce",
+  "x11desktop.mate": "MATE",
+  "x11desktop.cinnamon": "Cinnamon",
+  "x11desktop.lxqt": "LXQt",
+  "x11desktop.openbox": "Openbox",
+  "x11desktop.custom": "Своя команда",
+  "x11desktop.command": "Команда запуска рабочего стола",
+  "x11desktop.hint": "Запускает на сервере полноценный рабочий стол и показывает его в отдельном окне. На сервере нужны X11Forwarding yes и xauth. На этом компьютере нужен Xephyr (Linux), X11-сервер из настроек (Windows) или XQuartz (macOS).",
+  "x11desktop.command_needed": "Введите команду, которая запускает рабочий стол."
 }

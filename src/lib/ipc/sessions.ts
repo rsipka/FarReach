@@ -102,6 +102,9 @@ export interface SessionConfig {
   /** Start its terminals in tmux on the server; unset: as its folder says
    *  (see #lib/terminal/tmux). */
   tmux?: TmuxSetting | null;
+  /** SSH only: start this desktop over X11 forwarding, in a window of its
+   *  own, instead of a shell. */
+  x11_desktop?: X11Desktop | null;
   /** The server keys it trusts, one per server it goes through. Read
    *  only: saved by connecting (Accept and save) and changed with
    *  sessionHostKeyRemove / sessionHostKeyReplace; a save keeps them. */
@@ -141,6 +144,17 @@ export interface SavedHostKey {
   fingerprint: string;
   /** Seconds since 1970. */
   saved_at?: number | null;
+}
+
+/** The desktops an X11 Desktop session can start. */
+export const X11_DESKTOPS = ['gnome', 'kde', 'xfce', 'mate', 'cinnamon', 'lxqt', 'openbox', 'custom'] as const;
+export type X11DesktopKind = (typeof X11_DESKTOPS)[number];
+
+/** A session's X11 desktop (see `ssh::x11_desktop`). */
+export interface X11Desktop {
+  desktop: X11DesktopKind;
+  /** The start command, for `custom`. */
+  command?: string | null;
 }
 
 /** A session's own tmux choice. */
@@ -268,6 +282,7 @@ export async function sessionCreate(params: {
   monitoring?: boolean | null;
   history?: HistoryMode | null;
   tmux?: TmuxSetting | null;
+  x11Desktop?: X11Desktop | null;
   hostLabel?: string | null;
   altAddresses?: SessionAddress[] | null;
   connectMode?: ConnectMode | null;
@@ -306,6 +321,7 @@ export async function sessionCreate(params: {
     monitoring: params.monitoring ?? null,
     history: params.history || null,
     tmux: params.tmux ?? null,
+    x11Desktop: params.kind === 'ssh' || !params.kind ? (params.x11Desktop ?? null) : null,
     hostLabel: params.hostLabel?.trim() || null,
     altAddresses: params.altAddresses?.length ? params.altAddresses : null,
     connectMode: params.altAddresses?.length ? (params.connectMode ?? null) : null,

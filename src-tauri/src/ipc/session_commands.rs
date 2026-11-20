@@ -773,6 +773,7 @@ pub async fn session_create(
     monitoring: Option<bool>,
     history: Option<String>,
     tmux: Option<crate::ssh::tmux::TmuxSetting>,
+    x11_desktop: Option<crate::ssh::x11_desktop::X11Desktop>,
     host_label: Option<String>,
     alt_addresses: Option<Vec<crate::state::SessionAddress>>,
     connect_mode: Option<String>,
@@ -848,6 +849,7 @@ pub async fn session_create(
         monitoring,
         history,
         tmux,
+        x11_desktop,
         credential_ref_approvals: Default::default(),
         // Trusted by connecting to it, never by what a form sends.
         host_keys: None,

@@ -3638,5 +3638,18 @@
   "session.address_check_on": "Вкл.",
   "session.address_check_off": "Изкл. (тих)",
   "session.address_check_hint": "Тих режим: към адрес не се изпраща нищо, докато не бъде опитан. Автоматичният избор ги опитва подред и минава на следващия, ако някой е недостъпен.",
-  "session.address_not_checked": "Непроверен"
+  "session.address_not_checked": "Непроверен",
+  "x11desktop.label": "Работен плот X11",
+  "x11desktop.off": "Изключено (терминал)",
+  "x11desktop.gnome": "GNOME",
+  "x11desktop.kde": "KDE Plasma",
+  "x11desktop.xfce": "Xfce",
+  "x11desktop.mate": "MATE",
+  "x11desktop.cinnamon": "Cinnamon",
+  "x11desktop.lxqt": "LXQt",
+  "x11desktop.openbox": "Openbox",
+  "x11desktop.custom": "Собствена команда",
+  "x11desktop.command": "Команда за стартиране на работния плот",
+  "x11desktop.hint": "Стартира цял работен плот на сървъра и го показва в отделен прозорец. Сървърът трябва да има X11Forwarding yes и xauth. Този компютър се нуждае от Xephyr (Linux), X11 сървъра от Настройки (Windows) или XQuartz (macOS).",
+  "x11desktop.command_needed": "Въведете командата, която стартира работния плот."
 }

@@ -3638,5 +3638,18 @@
   "session.address_check_on": "On",
   "session.address_check_off": "Off (silent)",
   "session.address_check_hint": "Silent: nothing is sent to an address until it is tried. Automatic then tries them in order and moves on when one cannot be reached.",
-  "session.address_not_checked": "Not checked"
+  "session.address_not_checked": "Not checked",
+  "x11desktop.label": "X11 desktop",
+  "x11desktop.off": "Off (terminal)",
+  "x11desktop.gnome": "GNOME",
+  "x11desktop.kde": "KDE Plasma",
+  "x11desktop.xfce": "Xfce",
+  "x11desktop.mate": "MATE",
+  "x11desktop.cinnamon": "Cinnamon",
+  "x11desktop.lxqt": "LXQt",
+  "x11desktop.openbox": "Openbox",
+  "x11desktop.custom": "Custom command",
+  "x11desktop.command": "Desktop start command",
+  "x11desktop.hint": "Starts a whole desktop on the server and shows it in a window of its own. The server needs X11Forwarding yes and xauth. This computer needs Xephyr (Linux), the X11 server from Settings (Windows) or XQuartz (macOS).",
+  "x11desktop.command_needed": "Enter the command that starts the desktop."
 }

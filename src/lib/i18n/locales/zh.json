@@ -3638,5 +3638,18 @@
   "session.address_check_on": "开启",
   "session.address_check_off": "关闭（静默）",
   "session.address_check_hint": "静默：在尝试某个地址之前不会向其发送任何内容。自动模式按顺序尝试，无法连接时换下一个。",
-  "session.address_not_checked": "未检查"
+  "session.address_not_checked": "未检查",
+  "x11desktop.label": "X11 桌面",
+  "x11desktop.off": "关闭（终端）",
+  "x11desktop.gnome": "GNOME",
+  "x11desktop.kde": "KDE Plasma",
+  "x11desktop.xfce": "Xfce",
+  "x11desktop.mate": "MATE",
+  "x11desktop.cinnamon": "Cinnamon",
+  "x11desktop.lxqt": "LXQt",
+  "x11desktop.openbox": "Openbox",
+  "x11desktop.custom": "自定义命令",
+  "x11desktop.command": "桌面启动命令",
+  "x11desktop.hint": "在服务器上启动完整桌面，并在单独的窗口中显示。服务器需要 X11Forwarding yes 和 xauth。本机需要 Xephyr（Linux）、设置中的 X11 服务器（Windows）或 XQuartz（macOS）。",
+  "x11desktop.command_needed": "请输入启动桌面的命令。"
 }

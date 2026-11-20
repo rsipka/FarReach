@@ -66,15 +66,28 @@ pub struct ForwardTable {
     x11: Mutex<Option<super::x11::X11Auth>>,
     /// X11 was set up (or tried and failed) for this connection already.
     x11_tried: std::sync::atomic::AtomicBool,
+    /// Why X11 setup failed, for a session that cannot go on without it.
+    x11_error: Mutex<Option<String>>,
 }
 
 impl ForwardTable {
     pub fn new(policy: ForwardPolicy) -> Arc<Self> {
-        Arc::new(ForwardTable { remote: Mutex::new(Vec::new()), policy: Mutex::new(policy), x11: Mutex::new(None), x11_tried: Default::default() })
+        Arc::new(ForwardTable { remote: Mutex::new(Vec::new()), policy: Mutex::new(policy), x11: Mutex::new(None), x11_tried: Default::default(), x11_error: Mutex::new(None) })
     }
 
     fn policy(&self) -> ForwardPolicy {
         self.policy.lock().unwrap().clone()
+    }
+
+    /// X11 forwarding as the session itself asks (an X11 Desktop session),
+    /// whatever ssh_config says.
+    pub fn force_x11(&self, cfg: super::x11::X11Config) {
+        self.policy.lock().unwrap().x11 = Some(cfg);
+    }
+
+    /// Why `prepare_x11` failed, if it did.
+    pub fn x11_error(&self) -> Option<String> {
+        self.x11_error.lock().unwrap().clone()
     }
 
     /// The X11 cookies prepared already (`prepare_x11`), if any.
@@ -97,6 +110,7 @@ impl ForwardTable {
             }
             Err(e) => {
                 tracing::warn!("X11 forwarding: {e}");
+                *self.x11_error.lock().unwrap() = Some(e);
                 None
             }
         }

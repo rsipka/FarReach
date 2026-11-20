@@ -3638,5 +3638,18 @@
   "session.address_check_on": "Activado",
   "session.address_check_off": "Desactivado (silencioso)",
   "session.address_check_hint": "Silencioso: no se envía nada a una dirección hasta probarla. La opción automática las prueba en orden y pasa a la siguiente si una no responde.",
-  "session.address_not_checked": "Sin comprobar"
+  "session.address_not_checked": "Sin comprobar",
+  "x11desktop.label": "Escritorio X11",
+  "x11desktop.off": "Desactivado (terminal)",
+  "x11desktop.gnome": "GNOME",
+  "x11desktop.kde": "KDE Plasma",
+  "x11desktop.xfce": "Xfce",
+  "x11desktop.mate": "MATE",
+  "x11desktop.cinnamon": "Cinnamon",
+  "x11desktop.lxqt": "LXQt",
+  "x11desktop.openbox": "Openbox",
+  "x11desktop.custom": "Comando propio",
+  "x11desktop.command": "Comando de inicio del escritorio",
+  "x11desktop.hint": "Inicia un escritorio completo en el servidor y lo muestra en una ventana propia. El servidor necesita X11Forwarding yes y xauth. Este equipo necesita Xephyr (Linux), el servidor X11 de Ajustes (Windows) o XQuartz (macOS).",
+  "x11desktop.command_needed": "Escribe el comando que inicia el escritorio."
 }
