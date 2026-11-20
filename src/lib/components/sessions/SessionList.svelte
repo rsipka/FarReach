@@ -1659,8 +1659,9 @@
 			fallbackPassword = '';
 
 			// Detect OS in background and persist to session. A host saved as
-			// plain Linux or unknown is asked again: older versions saved that
-			// for MikroTik and UniFi devices, which have their own logos now.
+			// plain Linux, unknown or Debian is asked again: older versions saved
+			// that for MikroTik and UniFi devices and Raspberry Pi OS, which have
+			// their own logos now.
 			if (osNeedsDetection(session.detected_os, session.os_manual)) {
 				sshDetectOs(id).then(async (osId) => {
 					if (osId && osId !== session.detected_os) {
