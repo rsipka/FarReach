@@ -844,6 +844,8 @@ mod tests {
             vault_id: vault.map(Into::into),
             credential_id: cred.map(Into::into),
             tmux: None,
+            icon: None,
+            color: None,
         }
     }
 

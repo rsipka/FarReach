@@ -492,6 +492,15 @@ pub struct Folder {
     /// unless a session or a nearer folder says otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tmux: Option<bool>,
+    /// The icon shown for the folder in the session list: `fa:<name>` for
+    /// one of the app's own symbols, `os:<id>` for an OS or vendor logo.
+    /// `None`: the plain folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    /// The colour of that icon, by name (`red`, `blue`…). `None`: the
+    /// theme's folder colour, or a logo's own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
 }
 
 /// Configuration for a port-forwarding tunnel.
