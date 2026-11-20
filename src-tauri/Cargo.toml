@@ -187,21 +187,21 @@ subtle = "2"
 # difference between a cursor blink costing a few hundred bytes and costing
 # eight megabytes. All three crates come from the same revision so their types
 # agree. Move back to versions when the next release carries this.
-ironrdp-client = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59", default-features = false, features = ["rustls", "clipboard", "rdpdr"] }
-ironrdp-cliprdr = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
+ironrdp-client = { git = "https://github.com/Devolutions/IronRDP", rev = "a8da54ba4d849370bc92e1d5230cc18e99cf5ff1", default-features = false, features = ["rustls", "clipboard", "rdpdr"] }
+ironrdp-cliprdr = { git = "https://github.com/Devolutions/IronRDP", rev = "a8da54ba4d849370bc92e1d5230cc18e99cf5ff1" }
 # Pictures on the RDP clipboard: DIB to and from PNG (IronRDP's converters),
 # and PNG to and from the RGBA the local clipboard speaks.
-ironrdp-cliprdr-format = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
+ironrdp-cliprdr-format = { git = "https://github.com/Devolutions/IronRDP", rev = "a8da54ba4d849370bc92e1d5230cc18e99cf5ff1" }
 image = { version = "0.25", default-features = false, features = ["png"] }
-ironrdp-rdpdr = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
-ironrdp-svc = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
-ironrdp-tls = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59", default-features = false, features = ["rustls"] }
+ironrdp-rdpdr = { git = "https://github.com/Devolutions/IronRDP", rev = "a8da54ba4d849370bc92e1d5230cc18e99cf5ff1" }
+ironrdp-svc = { git = "https://github.com/Devolutions/IronRDP", rev = "a8da54ba4d849370bc92e1d5230cc18e99cf5ff1" }
+ironrdp-tls = { git = "https://github.com/Devolutions/IronRDP", rev = "a8da54ba4d849370bc92e1d5230cc18e99cf5ff1", default-features = false, features = ["rustls"] }
 # H.264 for the graphics pipeline: OpenH264 compiled in (the user's call; see the changelog).
-ironrdp-egfx = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59", features = ["openh264-bundled"] }
-ironrdp-pdu = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
-ironrdp-graphics = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
+ironrdp-egfx = { git = "https://github.com/Devolutions/IronRDP", rev = "a8da54ba4d849370bc92e1d5230cc18e99cf5ff1", features = ["openh264-bundled"] }
+ironrdp-pdu = { git = "https://github.com/Devolutions/IronRDP", rev = "a8da54ba4d849370bc92e1d5230cc18e99cf5ff1" }
+ironrdp-graphics = { git = "https://github.com/Devolutions/IronRDP", rev = "a8da54ba4d849370bc92e1d5230cc18e99cf5ff1" }
 # Named for how a session ended (logged off or an error), to close its tab on a clean end.
-ironrdp-session = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
+ironrdp-session = { git = "https://github.com/Devolutions/IronRDP", rev = "a8da54ba4d849370bc92e1d5230cc18e99cf5ff1" }
 smallvec = "1"
 # Docker and Podman: the Engine API client. Remote engines go over an SSH
 # channel of Reach's own (src/container/transport.rs); `pipe` is the local
@@ -234,7 +234,7 @@ arboard = { version = "3.6", default-features = false, features = ["image-data"]
 # Sound for RDP. The same crate again with one more feature: Cargo unions the
 # features, so playback (cpal + a bundled Opus) is built for the desktops only.
 # Android would need the NDK C++ toolchain for cpal and has no listener yet.
-ironrdp-client = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59", default-features = false, features = ["sound"] }
+ironrdp-client = { git = "https://github.com/Devolutions/IronRDP", rev = "a8da54ba4d849370bc92e1d5230cc18e99cf5ff1", default-features = false, features = ["sound"] }
 portable-pty = "0.9"
 serialport = "4"
 tauri-plugin-autostart = "2"
@@ -372,11 +372,12 @@ opt-level = 3
 [profile.release]
 strip = true
 
-# The client crate with one addition of ours, `with_h264_decoder`; see vendor/ironrdp-client/Cargo.toml.
+# The client crate with a few fixes of ours (resize timing, sound channel
+# options, drive name, thin-client graphics); see vendor/ironrdp-client/Cargo.toml.
 [patch."https://github.com/Devolutions/IronRDP"]
 ironrdp-client = { path = "vendor/ironrdp-client" }
-# sspi 0.22 and picky rc.26, so russh can take the RustCrypto releases it
-# needs; see the header of vendor/ironrdp-connector/Cargo.toml.
+# Tolerates share data before the Font Map (xrdp); see the header of
+# vendor/ironrdp-connector/Cargo.toml.
 ironrdp-connector = { path = "vendor/ironrdp-connector" }
 
 # Free space of the volume a shared RDP folder is on.
@@ -425,7 +426,7 @@ libsql = { path = "vendor/libsql" }
 # russh with the older MACs and sntrup761x25519-sha512 an ssh_config may ask
 # for, none of them offered by default; see the header of vendor/russh/Cargo.toml.
 russh = { path = "vendor/russh" }
-# smb with sspi 0.22, the release the rest of the tree uses; see the header
+# smb with sspi 0.23, the release the rest of the tree uses; see the header
 # of vendor/smb/Cargo.toml.
 smb = { path = "vendor/smb" }
 
