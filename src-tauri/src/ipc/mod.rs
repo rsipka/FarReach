@@ -19,6 +19,8 @@ pub mod vnc_commands;
 pub mod saved_credential_commands;
 pub mod session_commands;
 pub mod sftp_commands;
+#[cfg(desktop)]
+pub mod local_fs_commands;
 pub mod ssh_commands;
 pub mod sshconfig_commands;
 pub mod import_commands;

@@ -73,6 +73,9 @@ export interface Tab {
 	tmuxWindow?: { id: string; name: string };
 	/** That session's history choice; unset: the default from Settings. */
 	historyMode?: HistoryMode | null;
+	/** An SSH tab showing the full-pane file manager (this computer beside
+	 *  the server) in place of its terminal, which keeps running behind it. */
+	filesView?: boolean;
 }
 
 let tabs = $state<Tab[]>([]);
@@ -218,6 +221,19 @@ export function updateTabTitle(id: string, title: string): void {
 }
 
 /** Set by the tab's terminal; undefined when the connection is up. */
+/** Whether a tab can show the full-pane file manager: an SSH tab on a
+ *  desktop, where there is a local side to show beside the server. */
+export function canShowFilesView(tab: Tab | undefined): boolean {
+	return !!tab && tab.type === 'ssh' && !isMobile();
+}
+
+/** Switch an SSH tab between its terminal and the full-pane file manager. */
+export function toggleFilesView(id: string, on?: boolean): void {
+	const tab = tabs.find((t) => t.id === id);
+	if (!canShowFilesView(tab)) return;
+	tab!.filesView = on ?? !tab!.filesView;
+}
+
 export function setTabLink(id: string, link: Tab['link']): void {
 	const tab = tabs.find((t) => t.id === id);
 	if (tab && tab.link !== link) tab.link = link;

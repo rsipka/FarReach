@@ -1,5 +1,5 @@
 import { newTab } from '#lib/terminal/tmux-tabs.js';
-import { createTab, closeTab, getActiveTab, getTabs, activateTab } from './tabs.svelte';
+import { createTab, closeTab, getActiveTab, getTabs, activateTab, canShowFilesView, toggleFilesView } from './tabs.svelte';
 import { toggleAIPanel } from './ai-chat.svelte';
 import { togglePalette, requestSessionAction } from './palette.svelte';
 import { stepUiZoom } from './ui-zoom';
@@ -64,6 +64,11 @@ function previousTab(): void {
 	activateTab(tabs[prevIndex].id);
 }
 
+function toggleActiveFilesView(): void {
+	const active = getActiveTab();
+	if (active && canShowFilesView(active)) toggleFilesView(active.id);
+}
+
 function closeActiveTab(): void {
 	const active = getActiveTab();
 	if (active) {
@@ -108,6 +113,8 @@ const shortcuts: Shortcut[] = [
 	{ key: ',', ctrl: true, action: 'Open settings', handler: () => openSettings() },
 	{ key: 'p', ctrl: true, shift: true, action: 'Command palette', handler: openCommandPalette },
 	{ key: 'a', ctrl: true, shift: true, action: 'Toggle AI panel', handler: toggleAIPanel },
+	// An SSH tab's full-pane file manager, and back to its terminal.
+	{ key: 'e', ctrl: true, shift: true, action: 'Toggle full-pane files', handler: toggleActiveFilesView },
 	// The interface's size, as in a browser. Plus is Shift+= on most layouts
 	// and plain + on the number pad. Not on a phone: it follows the system.
 	...(isMobile()
