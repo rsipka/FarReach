@@ -2507,6 +2507,11 @@ pub(crate) async fn verify_host_identity(
     verify_host_identity_with(app_handle, host, port, host_id, fingerprint, key_type, crate::ssh::hostkeys::Strict::Ask, None).await
 }
 
+/// The fingerprint this device previously accepted for the given identity.
+pub(crate) fn on_device_fingerprint(host_id: &str) -> Option<String> {
+    load_known_hosts(&SshClientHandler::known_hosts_path()).entries.remove(host_id)
+}
+
 /// The same, under a StrictHostKeyChecking setting, for a saved session
 /// when `trust` is given: then a key saved on the session decides, and an
 /// accepted key is saved there (see `session_hostkeys`). A key this device
@@ -2529,7 +2534,7 @@ pub(crate) async fn verify_host_identity_with(
         let _ = std::fs::create_dir_all(parent);
     }
 
-    let on_device = load_known_hosts(&path).entries.get(host_id).cloned();
+    let on_device = on_device_fingerprint(host_id);
     let on_session = trust.and_then(|t| t.lookup(host_id));
     let known = on_session.clone().or(on_device);
 
