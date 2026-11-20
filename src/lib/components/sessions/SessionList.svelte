@@ -3373,7 +3373,8 @@
 		bottom: 0;
 		min-width: 0;
 		max-width: none;
-		max-height: calc(80dvh - var(--safe-top));
+		/* Half the screen at most: the list stays in view, the rest scrolls. */
+		max-height: 55dvh;
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		padding: 6px max(4px, var(--safe-right)) max(10px, var(--safe-bottom)) max(4px, var(--safe-left));
@@ -3383,7 +3384,12 @@
 	}
 
 	.context-sheet-title {
-		padding: 8px 12px 6px;
+		position: sticky;
+		top: -6px;
+		z-index: 1;
+		padding: 6px 12px 5px;
+		background-color: var(--color-bg-elevated);
+		font-size: var(--text-sm, 0.8125rem);
 		font-weight: 600;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -3393,12 +3399,13 @@
 	}
 
 	.context-sheet .context-item {
-		min-height: 44px;
-		font-size: var(--text-base, 0.9375rem);
+		min-height: 38px;
+		padding-top: 4px;
+		padding-bottom: 4px;
 	}
 
 	.context-sheet .context-folders {
-		max-height: 220px;
+		max-height: 152px;
 	}
 
 	@keyframes sheet-up {

@@ -200,6 +200,7 @@ try {
 	const sheet = await page.locator('.context-menu').boundingBox();
 	const vp = page.viewportSize();
 	check('sits along the bottom edge', Math.abs(sheet.y + sheet.height - vp.height) < 2 && sheet.width >= vp.width - 1, JSON.stringify(sheet));
+	check('covers at most about half the screen', sheet.height <= vp.height * 0.56, JSON.stringify(sheet));
 
 	console.log('\nclosing');
 	await page.mouse.click(vp.width / 2, 40);
