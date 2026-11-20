@@ -7,7 +7,8 @@
     "windows"
   ],
   "windows": [
-    "main"
+    "main",
+    "float-*"
   ],
   "permissions": [
     "core:tray:default",

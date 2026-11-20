@@ -47,6 +47,9 @@ export function startAutoLock(): void {
 		}
 	}, CHECK_EVERY_MS);
 
+	// Use of a floating session window (#lib/state/windows) is use of the app.
+	void listen('float-activity', noteActivity);
+
 	// Sent by the backend when the OS session locks or the machine sleeps.
 	void listen('system-locked', () => {
 		if (settings.lockOnSystemLock) void lockNow('the computer locked');

@@ -85,6 +85,8 @@ use ipc::toolchain_commands::*;
 use ipc::tunnel_commands::*;
 use ipc::vault_commands::*;
 use ipc::editor_commands::*;
+#[cfg(desktop)]
+use ipc::window_commands::*;
 use ipc::snippet_commands::*;
 use ipc::recipe_commands::*;
 use ipc::share_commands::*;
@@ -833,6 +835,11 @@ pub fn run() {
             editor_open_file,
             editor_get_pending_file,
             editor_hide_window,
+            // Floating session windows
+            float_window_open,
+            float_window_take,
+            float_window_list,
+            float_window_focus,
             // Snippet commands
             snippet_list,
             snippet_create,
@@ -1766,6 +1773,13 @@ pub fn run() {
             // clipboard sends only files that really were dropped.
             if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
                 rdp::note_drop(paths);
+            }
+            // The main window gone (the app closing): its floating windows go too.
+            #[cfg(desktop)]
+            if let tauri::WindowEvent::Destroyed = event {
+                if window.label() == "main" {
+                    ipc::window_commands::close_floating(tauri::Manager::app_handle(window));
+                }
             }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 // Editor windows: ALWAYS hide instead of close (prevents WebView2 crash on Windows)

@@ -147,11 +147,19 @@ export function dismissCommunityPrompt(): void {
 	saveSettings();
 }
 
+/** Told after every save: other windows read the settings again (#lib/state/windows). */
+let afterSave: (() => void) | null = null;
+
+export function onSettingsSaved(fn: () => void): void {
+	afterSave = fn;
+}
+
 export function saveSettings(): void {
 	if (typeof localStorage === 'undefined') return;
 
 	try {
 		localStorage.setItem(STORAGE_KEY, storeSettings(settings));
+		afterSave?.();
 	} catch {
 		// Storage might be full or unavailable
 	}
