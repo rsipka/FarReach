@@ -105,6 +105,18 @@ impl OutputDecoder {
             }
         }
     }
+
+    /// What is held when the stream ends mid-character, decoded lossily.
+    pub fn flush(&mut self) -> Option<String> {
+        match self {
+            Self::Utf8(s) => s.flush(),
+            Self::Other(d) => {
+                let mut out = String::with_capacity(16);
+                let _ = d.decode_to_string(b"", &mut out, true);
+                (!out.is_empty()).then_some(out)
+            }
+        }
+    }
 }
 
 /// What the terminal sends, as the server expects it.
