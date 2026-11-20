@@ -2,6 +2,7 @@
 	import Toggle from '#lib/components/shared/Toggle.svelte';
 	import Dropdown from '#lib/components/shared/Dropdown.svelte';
 	import { CURSOR_STYLES, CURSOR_WIDTHS, INACTIVE_CURSOR_STYLES, cursorStyle, cursorWidth, inactiveCursorStyle } from '#lib/terminal/cursor.js';
+	import { SCROLLBACK_CHOICES, UNLIMITED_SCROLLBACK, scrollbackSetting } from '#lib/terminal/scrollback.js';
 	import TerminalThemeSettings from './TerminalThemeSettings.svelte';
 	import { HIGHLIGHT_KINDS, highlightKinds, parseCustomRules, type HighlightKind } from '#lib/terminal/highlight.js';
 	import { themeState, applyTheme, loadInstalledThemes, DARK, LIGHT, BUILT_IN_IDS, BUNDLED_IDS } from '#lib/state/theme.svelte.js';
@@ -9,7 +10,7 @@
 	import { themeFetchRegistry, themeInstall, themeUninstall, type ThemeEntry } from '#lib/ipc/theme.js';
 	import { validateTheme } from '#lib/state/theme.svelte.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
-	import { getSettings, updateSetting } from '#lib/state/settings.svelte.js';
+	import { getSettings, updateSetting, DEFAULT_LOG_NAME } from '#lib/state/settings.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { matchesQuery } from '#lib/utils/search.js';
 	import { isMobile } from '#lib/platform.js';
@@ -24,7 +25,7 @@
 
 	/** Which slice of these rows to show: Settings arranges them by topic,
 	 *  so one tab file feeds several pages (see settings-pages.ts). */
-	type Part = 'appearance' | 'text' | 'term-adv' | 'logging' | 'history' | 'rdp' | 'rdp-adv';
+	type Part = 'appearance' | 'text' | 'scrollback' | 'term-adv' | 'logging' | 'history' | 'rdp' | 'rdp-adv';
 	let { part }: { part: Part } = $props();
 
 	const settings = getSettings();
@@ -34,6 +35,14 @@
 			label: s === 'outline' || s === 'none' ? t(`cursor.inactive_${s}`) : t(`cursor.style_${s}`),
 			value: s
 		}))
+	);
+	// A number set some other way (a synced vault) is offered too.
+	let scrollbackOptions = $derived(
+		[...new Set<number>([...SCROLLBACK_CHOICES.filter((n) => n !== UNLIMITED_SCROLLBACK), settings.terminalScrollback])]
+			.filter((n) => n !== UNLIMITED_SCROLLBACK)
+			.sort((a, b) => a - b)
+			.map((n) => ({ label: t('settings.scrollback_lines', { count: n.toLocaleString() }), value: String(n) }))
+			.concat([{ label: t('settings.scrollback_unlimited'), value: String(UNLIMITED_SCROLLBACK) }])
 	);
 	let cursorWidthOptions = $derived(CURSOR_WIDTHS.map((w) => ({ label: t('cursor.width_px', { count: w }), value: String(w) })));
 	let shownKinds = $derived(highlightKinds(settings.terminalHighlightKinds));
@@ -697,6 +706,52 @@
 	{/if}
 	{/if}
 
+	{#if part === 'scrollback'}
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.scrollback')}</span>
+			<span class="setting-description">{t('settings.scrollback_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Dropdown
+				options={scrollbackOptions}
+				selected={String(settings.terminalScrollback)}
+				onchange={(v) => updateSetting('terminalScrollback', scrollbackSetting(Number(v)))}
+			/>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.line_numbers')}</span>
+			<span class="setting-description">{t('settings.line_numbers_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.terminalLineNumbers}
+				label={t('settings.line_numbers')}
+				onchange={(v) => updateSetting('terminalLineNumbers', v)}
+			/>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.timestamps')}</span>
+			<span class="setting-description">{t('settings.timestamps_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.terminalTimestamps}
+				label={t('settings.timestamps')}
+				onchange={(v) => updateSetting('terminalTimestamps', v)}
+			/>
+		</div>
+	</div>
+	{/if}
+
 	{#if part === 'term-adv'}
 	<div class="setting-row">
 		<div class="setting-info">
@@ -789,10 +844,10 @@
 					class="log-field"
 					type="text"
 					spellcheck="false"
-					placeholder="&H-&Y&M&D-&T.log"
+					placeholder={DEFAULT_LOG_NAME}
 					aria-label={t('settings.log_name')}
 					value={settings.sessionLogName}
-					onchange={(e) => updateSetting('sessionLogName', e.currentTarget.value.trim() || '&H-&Y&M&D-&T.log')}
+					onchange={(e) => updateSetting('sessionLogName', e.currentTarget.value.trim() || DEFAULT_LOG_NAME)}
 				/>
 			</div>
 		</div>
