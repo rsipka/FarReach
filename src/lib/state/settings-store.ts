@@ -64,6 +64,14 @@ export interface Settings {
 	/** The chime when a notification (toast) appears. Off by default on phones
 	 *  and tablets, where the system's own sounds already say enough. */
 	playSounds: boolean;
+	/** The terminal bell (^G) plays a short sound (and Play sounds is on).
+	 *  On by default on desktop. See #lib/terminal/bell. */
+	terminalBellSound: boolean;
+	/** The bell flashes the terminal. On by default on phones and tablets. */
+	terminalBellFlash: boolean;
+	/** The bell sends a system notification when its tab is not in view or
+	 *  the app is in the background. Off by default: it asks permission. */
+	terminalBellNotify: boolean;
 	fontFamily: string;
 	defaultShell: string;
 	openLastSession: boolean;
@@ -213,6 +221,9 @@ export const defaults: Settings = {
 	serverMonitoring: true,
 	checkForUpdates: true,
 	playSounds: !isMobile(),
+	terminalBellSound: !isMobile(),
+	terminalBellFlash: isMobile(),
+	terminalBellNotify: false,
 	fontFamily: 'monospace',
 	defaultShell: '/bin/bash',
 	openLastSession: false,
@@ -296,6 +307,9 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.serverMonitoring = parsed.serverMonitoring ?? defaults.serverMonitoring;
 	settings.checkForUpdates = parsed.checkForUpdates ?? defaults.checkForUpdates;
 	settings.playSounds = parsed.playSounds ?? defaults.playSounds;
+	settings.terminalBellSound = parsed.terminalBellSound ?? defaults.terminalBellSound;
+	settings.terminalBellFlash = parsed.terminalBellFlash ?? defaults.terminalBellFlash;
+	settings.terminalBellNotify = parsed.terminalBellNotify ?? defaults.terminalBellNotify;
 	settings.fontFamily = parsed.fontFamily ?? defaults.fontFamily;
 	settings.defaultShell = parsed.defaultShell ?? defaults.defaultShell;
 	settings.openLastSession = parsed.openLastSession ?? defaults.openLastSession;

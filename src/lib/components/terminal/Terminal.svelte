@@ -39,6 +39,7 @@
 	import { readText as clipboardReadText, writeText as clipboardWriteText } from '@tauri-apps/plugin-clipboard-manager';
 	import { openUrl } from '@tauri-apps/plugin-opener';
 	import { URL_PATTERN } from '#lib/terminal/links.js';
+	import { bellActions, playBell, lastBellSound, windowSeen, notifyBell } from '#lib/terminal/bell.js';
 	import Modal from '#lib/components/shared/Modal.svelte';
 	import { openSettings } from '#lib/state/shortcuts.svelte.js';
 	import MobileKeyBar, { type BarKey } from '#lib/components/shared/MobileKeyBar.svelte';
@@ -1204,8 +1205,13 @@
 
 			// Detect user changes (e.g. sudo su -) via OSC 2 terminal title updates
 			term.onTitleChange((title: string) => {
+				lastTitle = title;
 				onTitleChange?.(title);
 			});
+
+			// The bell (^G): a sound, a flash, a notification, as set in
+			// Settings > Terminal > Bell (#lib/terminal/bell).
+			term.onBell(onBell);
 
 			// A right click opens a menu, pastes, or copies the selection:
 			// the user's choice in Settings (#lib/terminal/mouse).
@@ -1501,6 +1507,31 @@
 		untrack(() => terminal?.focus());
 	});
 
+	let lastTitle = '';
+	let lastNotified = 0;
+	let flashing = $state(false);
+	let flashTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function onBell(): void {
+		const s = getSettings();
+		const now = Date.now();
+		const act = bellActions(
+			{ sound: s.terminalBellSound, flash: s.terminalBellFlash, notify: s.terminalBellNotify },
+			{ seen: !!active && shown && windowSeen(), lastNotified, lastSound: lastBellSound(), now, soundsOn: s.playSounds }
+		);
+		if (act.sound) playBell(now);
+		if (act.flash && !flashing) {
+			flashing = true;
+			clearTimeout(flashTimer);
+			flashTimer = setTimeout(() => (flashing = false), 150);
+		}
+		if (act.notify) {
+			lastNotified = now;
+			const name = sessionName || lastTitle || t('terminal.bell_terminal');
+			void notifyBell('Reacher CM', t('terminal.bell_notify', { name }));
+		}
+	}
+
 </script>
 
 <div
@@ -1508,7 +1539,7 @@
 	style:display={shown ? 'flex' : 'none'}
 	style:--term-bg={palette.background}
 >
-	<div bind:this={containerEl} class="terminal-container"></div>
+	<div bind:this={containerEl} class="terminal-container" class:bell-flash={flashing}></div>
 	{#if onPhone && !disconnected}
 		<MobileKeyBar bind:ctrl={barCtrl} bind:alt={barAlt} zoom onkey={onBarKey} />
 	{/if}
@@ -1577,6 +1608,21 @@
 </Modal>
 
 <style>
+	/* The visual bell: a short wash over the terminal, not an inverted
+	   screen, which is hard on the eyes in a dark room. */
+	.terminal-container.bell-flash {
+		position: relative;
+	}
+
+	.terminal-container.bell-flash::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: 10;
+		pointer-events: none;
+		box-shadow: inset 0 0 0 2px var(--color-accent), inset 0 0 48px color-mix(in srgb, var(--color-accent) 35%, transparent);
+	}
+
 	.paste-dont-ask {
 		display: flex;
 		align-items: center;
