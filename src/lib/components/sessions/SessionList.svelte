@@ -82,6 +82,7 @@
 	import type { SecretRef } from '#lib/ipc/pwmanager.js';
 	import { untrack } from 'svelte';
 	import { positionMenu } from '#lib/utils/positionMenu.js';
+	import { longPress } from '#lib/utils/longPress.js';
 	import { buildFolderTree, byName, bySavedOrder, canMoveFolder, commonVault, folderPath, foldersInVault, moveStep, placeAt, vaultOf, type FolderTreeNode } from '#lib/sessions/folder-tree.js';
 	import { canScanLinkCode, scanLinkCode } from '#lib/state/link-scan.js';
 	import { vaultState, checkState, initIdentity, importIdentity, linkDevice, ALL_VAULTS, loadVaultFilter, type VaultFilter } from '#lib/state/vault.svelte.js';
@@ -1001,14 +1002,22 @@
 	// Right-click context menu
 	let contextMenu = $state<{ x: number; y: number; session?: SessionConfig; folder?: Folder } | undefined>();
 
+	/** On a phone the session and folder menus come up from the bottom, in
+	 *  reach of the thumb, with rows a finger can hit. A tablet keeps the
+	 *  menu at the finger, as a mouse has it. */
+	const SHEET_MAX_WIDTH = 640;
+	let sheetMenu = $state(false);
+
 	function openSessionContextMenu(e: MouseEvent, session: SessionConfig): void {
 		e.preventDefault();
 		e.stopPropagation();
+		sheetMenu = isMobile() && window.innerWidth < SHEET_MAX_WIDTH;
 		contextMenu = { x: e.clientX, y: e.clientY, session };
 	}
 
 	function openBackgroundContextMenu(e: MouseEvent): void {
 		e.preventDefault();
+		sheetMenu = false;
 		contextMenu = { x: e.clientX, y: e.clientY };
 	}
 
@@ -1019,6 +1028,7 @@
 		e.preventDefault();
 		e.stopPropagation();
 		folderMenuPage = 'main';
+		sheetMenu = isMobile() && window.innerWidth < SHEET_MAX_WIDTH;
 		contextMenu = { x: e.clientX, y: e.clientY, folder };
 	}
 
@@ -1026,6 +1036,7 @@
 		e.stopPropagation();
 		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
 		folderMenuPage = 'main';
+		sheetMenu = isMobile() && window.innerWidth < SHEET_MAX_WIDTH;
 		contextMenu = { x: rect.right, y: rect.bottom, folder };
 	}
 
@@ -2154,7 +2165,7 @@
 {#snippet folderNode(node: FolderTreeNode)}
 	<div class="folder-node" data-folder-id={node.folder.id}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="folder-header" class:drop-active={dropTarget === node.folder.id && dragging && !dropSlot} data-folder-id={node.folder.id} style:padding-left={`${6 + Math.min(node.depth, 8) * 14}px`} oncontextmenu={(e) => openFolderContextMenu(e, node.folder)}>
+		<div class="folder-header" class:drop-active={dropTarget === node.folder.id && dragging && !dropSlot} data-folder-id={node.folder.id} style:padding-left={`${6 + Math.min(node.depth, 8) * 14}px`} oncontextmenu={(e) => openFolderContextMenu(e, node.folder)} use:longPress={renamingFolderId !== node.folder.id}>
 			{#if renamingFolderId === node.folder.id}
 			<form class="folder-rename" onsubmit={(e) => { e.preventDefault(); void commitRename(); }}>
 				<input class="new-folder-input" type="text" aria-label={t('folder.rename')} bind:value={renameValue} use:focusSelect onblur={() => void commitRename()} onkeydown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); renamingFolderId = null; } }} />
@@ -2484,7 +2495,10 @@
 	{/if}
 	{#if contextMenu}
 		<ContextMenuBackdrop onclose={closeContextMenu} />
-		<div class="context-menu pop-in" use:positionMenu={{ x: contextMenu.x, y: contextMenu.y }}>
+		<div class="context-menu" class:pop-in={!sheetMenu} class:context-sheet={sheetMenu} use:positionMenu={{ x: contextMenu.x, y: contextMenu.y }}>
+			{#if sheetMenu && (contextMenu.session || contextMenu.folder)}
+				<div class="context-sheet-title">{contextMenu.session ? (selected.has(contextMenu.session.id) && selected.size > 1 ? t('session.selected_n', { count: String(selected.size) }) : contextMenu.session.name) : contextMenu.folder?.name}</div>
+			{/if}
 			{#if contextMenu.session}
 				<button class="context-item" onclick={() => { if (contextMenu?.session) handleConnect(contextMenu.session); closeContextMenu(); }} type="button">
 					{t('session.connect')}
@@ -3214,6 +3228,7 @@
 		gap: 2px;
 		padding: 5px 6px;
 		border-radius: 6px;
+		-webkit-touch-callout: none;
 		transition: background-color 0.15s ease, outline 0.15s ease;
 	}
 
@@ -3347,6 +3362,52 @@
 		border-radius: 8px;
 		box-shadow: var(--shadow-elevated);
 		z-index: 1000;
+	}
+
+	/* Phone: a sheet along the bottom edge. positionMenu still writes left
+	   and top inline, so they are overridden here. */
+	.context-menu.context-sheet {
+		left: 0 !important;
+		right: 0;
+		top: auto !important;
+		bottom: 0;
+		min-width: 0;
+		max-width: none;
+		max-height: calc(80dvh - var(--safe-top));
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		padding: 6px max(4px, var(--safe-right)) max(10px, var(--safe-bottom)) max(4px, var(--safe-left));
+		border-width: 1px 0 0;
+		border-radius: 14px 14px 0 0;
+		animation: sheet-up 0.18s var(--ease-default, ease-out);
+	}
+
+	.context-sheet-title {
+		padding: 8px 12px 6px;
+		font-weight: 600;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		border-bottom: 1px solid var(--color-border);
+		margin-bottom: 4px;
+	}
+
+	.context-sheet .context-item {
+		min-height: 44px;
+		font-size: var(--text-base, 0.9375rem);
+	}
+
+	.context-sheet .context-folders {
+		max-height: 220px;
+	}
+
+	@keyframes sheet-up {
+		from { transform: translateY(100%); }
+		to { transform: translateY(0); }
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.context-menu.context-sheet { animation: none; }
 	}
 
 	/* Folder list scrolls so a huge number of folders can't blow out the menu
