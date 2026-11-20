@@ -6,7 +6,7 @@
  * Run: node --import ./scripts/resolve-lib.mjs scripts/addresses-test.mjs
  */
 
-import { addressKey, autoOrder, checksAddresses, plainOrder, connectMode, hasAltAddresses, isUnreachable, sessionAddresses } from '../src/lib/sessions/addresses.ts';
+import { addressKey, addressLabelled, autoOrder, checksAddresses, plainOrder, connectMode, hasAltAddresses, isUnreachable, sessionAddresses } from '../src/lib/sessions/addresses.ts';
 
 let failures = 0;
 const check = (name, cond, extra = '') => {
@@ -37,6 +37,10 @@ check('blank addresses are left out', all.length === 3, JSON.stringify(all));
 check('main first, through the jump host', all[0].host === 'server.example.com' && all[0].routed && all[0].label === 'Internet');
 check('a direct address skips the route', !all[1].routed && all[1].port === 22);
 check("an address without a port takes the session's", all[2].port === 2222);
+const viaS = { host: '10.0.0.5', port: 22, alt_addresses: [{ label: 'Branch', host: '10.0.1.5', via_session_id: 'gw', direct: true }] };
+const viaAll = sessionAddresses(viaS);
+check('an address through a saved session is routed, not direct', viaAll[1].routed && viaAll[1].viaSessionId === 'gw');
+check('a session without a route keeps its main address direct', !viaAll[0].routed && !viaAll[0].viaSessionId);
 check('mode defaults to auto', connectMode(s) === 'auto');
 check('ask is kept', connectMode({ ...s, connect_mode: 'ask' }) === 'ask');
 check('other kinds ignore other addresses', !hasAltAddresses({ ...s, kind: 'rdp' }));
@@ -68,6 +72,14 @@ check('a key error does not', !isUnreachable('Connection failed: Auth error: bad
 check('an unknown server key turned down does not', !isUnreachable('Connection failed: Unknown server key'));
 check('a name that does not resolve moves on', isUnreachable('Connection failed: failed to lookup address information: Name or service not known'));
 check('a rejected host key does not', !isUnreachable('Connection failed: Host key rejected by user'));
+
+console.log('Tooltip text');
+{
+	const s = { ...plain, alt_addresses: [{ label: 'Office', host: '10.0.0.5' }, { label: '', host: '10.0.0.6', port: 2222 }] };
+	const [, office, bare] = sessionAddresses(s);
+	check('label with its address', addressLabelled(office, 22) === 'Office (10.0.0.5)');
+	check('no label: the address alone, with its own port', addressLabelled(bare, 22) === '10.0.0.6:2222');
+}
 
 if (failures) {
 	console.log(`\n${failures} failed`);

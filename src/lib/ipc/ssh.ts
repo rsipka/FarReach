@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { SshOptions } from './sessions';
+import type { SshOptions, X11Desktop } from './sessions';
 import type { SecretRef } from './pwmanager';
 
 /** What a connect asks of tmux on the server (see #lib/terminal/tmux). */
@@ -113,6 +113,9 @@ export interface SshConnectParams {
   /** Start inside this tmux session on the server (attach or create);
    *  absent: no tmux. See #lib/terminal/tmux. */
   tmux?: TmuxStart | null;
+  /** Start this desktop over X11 forwarding, in a window of its own,
+   *  instead of a shell (desktop apps only). */
+  x11Desktop?: X11Desktop | null;
   /** The session's other addresses, for a reconnect to fall back on when
    *  the one it used no longer answers (a laptop that left the office).
    *  Kept on the tab only; not sent to the backend. */
@@ -121,7 +124,10 @@ export interface SshConnectParams {
 
 /** See `SshConnectParams.fallback`. */
 export interface AddressFallback {
-  addresses: { host: string; port: number; routed: boolean; label: string; index: number }[];
+  addresses: { host: string; port: number; routed: boolean; label: string; index: number; viaSessionId?: string }[];
+  /** The hops of addresses that go through another saved session, by
+   *  that session's id. */
+  viaChains?: Record<string, JumpHostConnectParams[]>;
   /** The session's route, for addresses that go through it. */
   jumpChain?: JumpHostConnectParams[];
   proxy?: ProxyConfig;
@@ -198,6 +204,7 @@ export async function sshConnect(params: SshConnectParams): Promise<string> {
     sshOptions: params.sshOptions ?? null,
     sessionId: params.sessionId ?? null,
     tmux: params.tmux ?? null,
+    x11Desktop: params.x11Desktop ?? null,
   });
 }
 
@@ -285,6 +292,23 @@ export async function sshDisconnect(connectionId: string): Promise<void> {
 
 export async function sshListConnections(): Promise<ConnectionInfo[]> {
   return invoke<ConnectionInfo[]>('ssh_list_connections');
+}
+
+/** What a connection's key exchange settled on. The MACs are empty for a
+ *  cipher that carries its own (GCM, ChaCha20-Poly1305). */
+export interface NegotiatedAlgorithms {
+  kex: string;
+  host_key: string;
+  cipher: string;
+  mac_out: string;
+  mac_in: string;
+  compression_out: string;
+  compression_in: string;
+}
+
+/** `null` before the first key exchange, or on a shared (ControlMaster) connection. */
+export async function sshConnectionAlgorithms(connectionId: string): Promise<NegotiatedAlgorithms | null> {
+  return invoke<NegotiatedAlgorithms | null>('ssh_connection_algorithms', { connectionId });
 }
 
 export async function sshDetectOs(connectionId: string): Promise<string> {

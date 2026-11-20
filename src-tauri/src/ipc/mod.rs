@@ -15,6 +15,7 @@ pub mod pty_commands;
 pub mod serial_commands;
 pub mod rdp_commands;
 pub mod telnet_commands;
+pub mod zmodem_commands;
 pub mod vnc_commands;
 pub mod spice_commands;
 pub mod saved_credential_commands;

@@ -54,6 +54,9 @@ pub enum SessionKind {
     Winbox,
     /// A SPICE display (KVM/QEMU, Proxmox, libvirt).
     Spice,
+    /// A web management page (iDRAC, iLO, Proxmox VE...), shown in a window
+    /// of its own that cannot reach the app; see `crate::web`.
+    Web,
 }
 
 impl SessionKind {
@@ -184,6 +187,10 @@ pub struct SessionConfig {
     /// `ssh::tmux`); unset: as its folder says, else not.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tmux: Option<crate::ssh::tmux::TmuxSetting>,
+    /// SSH only: start a whole desktop over X11 forwarding, shown in a
+    /// window of its own here, instead of a shell (see `ssh::x11_desktop`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x11_desktop: Option<crate::ssh::x11_desktop::X11Desktop>,
     /// Approvals of the password manager entries a saved credential brings
     /// to this session, by slot (`password`, `jump:0:passphrase`). An entry
     /// in a credential is approved per session and person like one of the
@@ -232,6 +239,9 @@ pub struct PastPassword {
     pub password: String,
     /// When it was replaced, in Unix seconds.
     pub replaced_at: i64,
+    /// Web only: address, storage, sign-in and trusted certificates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub web: Option<crate::web::WebOptions>,
 }
 
 /// One more address of a session's server.
@@ -249,6 +259,12 @@ pub struct SessionAddress {
     /// office address of a server reached from outside through a gateway).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub direct: bool,
+    /// Reached through another saved SSH session instead: its own jump
+    /// hosts, then that session's server as the last hop. Wins over
+    /// `direct` and the session's route. Each address can go its own way:
+    /// the office one straight, the internet one through a gateway.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via_session_id: Option<String>,
 }
 
 /// One named value of a session's documentation.
@@ -287,10 +303,20 @@ impl SessionConfig {
         if !matches!(self.history.as_deref(), None | Some("off" | "commands" | "output")) {
             self.history = None;
         }
+        if self.kind != SessionKind::Ssh || self.x11_desktop.as_ref().is_some_and(|d| d.check().is_err()) {
+            self.x11_desktop = None;
+        }
         if self.kind != SessionKind::Spice || self.spice.as_ref().is_some_and(|o| o.is_empty()) {
             self.spice = None;
         }
         self.tidy_addresses();
+        if self.kind == SessionKind::Web {
+            if let Some(w) = self.web.as_mut() {
+                w.tidy();
+            }
+        } else {
+            self.web = None;
+        }
     }
 
     /// Other addresses without a host are dropped, as is a mode nobody
@@ -301,6 +327,16 @@ impl SessionConfig {
                 // An IPv6 address as typed in a URL: the brackets go.
                 a.host = a.host.trim().trim_start_matches('[').trim_end_matches(']').to_string();
                 a.label = a.label.trim().to_string();
+            }
+            let own = self.id.clone();
+            for a in list.iter_mut() {
+                // Through itself is no way in; an empty choice is none.
+                if a.via_session_id.as_deref().is_some_and(|v| v.trim().is_empty() || v == own) {
+                    a.via_session_id = None;
+                }
+                if a.via_session_id.is_some() {
+                    a.direct = false;
+                }
             }
             list.retain(|a| !a.host.is_empty());
         }

@@ -22,8 +22,11 @@ export interface ResolvedAddress {
 	label: string;
 	host: string;
 	port: number;
-	/** Goes through the session's jump hosts or proxy. */
+	/** Goes through jump hosts or a proxy, so it cannot be checked. */
 	routed: boolean;
+	/** Goes through this saved SSH session rather than the session's own
+	 *  route. */
+	viaSessionId?: string;
 }
 
 type AddressSession = Pick<SessionConfig, 'host' | 'port' | 'host_label' | 'alt_addresses' | 'connect_mode' | 'jump_chain' | 'proxy' | 'kind'>;
@@ -66,7 +69,8 @@ export function sessionAddresses(s: AddressSession): ResolvedAddress[] {
 	(s.alt_addresses ?? []).forEach((a: SessionAddress, i) => {
 		const host = a.host.trim();
 		if (!host) return;
-		out.push({ index: i + 1, label: a.label?.trim() ?? '', host, port: a.port || s.port, routed: routed && !a.direct });
+		const via = a.via_session_id?.trim() || undefined;
+		out.push({ index: i + 1, label: a.label?.trim() ?? '', host, port: a.port || s.port, routed: via ? true : routed && !a.direct, viaSessionId: via });
 	});
 	return out;
 }
@@ -85,6 +89,12 @@ export function addressText(a: Pick<ResolvedAddress, 'host' | 'port'>, sessionPo
 /** The label, else the address itself. */
 export function addressName(a: ResolvedAddress, sessionPort: number): string {
 	return a.label || addressText(a, sessionPort);
+}
+
+/** The label with the address beside it, else the address alone. */
+export function addressLabelled(a: ResolvedAddress, sessionPort: number): string {
+	const text = addressText(a, sessionPort);
+	return a.label ? `${a.label} (${text})` : text;
 }
 
 /**

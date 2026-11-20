@@ -6,7 +6,7 @@
 		tabsBeside, requestCloseBeside, getPendingClose, confirmPendingClose, cancelPendingClose, isDesktopTab
 	} from '#lib/state/tabs.svelte.js';
 	import { canDuplicate, duplicateTab } from '#lib/terminal/duplicate-tab.js';
-	import { sshTmuxKill, sshTmuxList, sshTmuxWindows, sshTmuxWindow, type TmuxListed, type TmuxWindow, type TmuxWindowOp } from '#lib/ipc/ssh.js';
+	import { sshConnectionAlgorithms, sshTmuxKill, sshTmuxList, sshTmuxWindows, sshTmuxWindow, type NegotiatedAlgorithms, type TmuxListed, type TmuxWindow, type TmuxWindowOp } from '#lib/ipc/ssh.js';
 	import { validTmuxName, newViewTag } from '#lib/terminal/tmux.js';
 	import { newTab, isTmuxViewTab, openTmuxWindowTab } from '#lib/terminal/tmux-tabs.js';
 	import { SPLIT_MIN_WIDTH, contains, leaves } from '#lib/terminal/split.js';
@@ -17,7 +17,7 @@
 		getBroadcastTargets, isTerminalTab, toggleBroadcastTarget, broadcastToAll, stopBroadcast
 	} from '#lib/state/broadcast.svelte.js';
 	import { BROADCAST_ICON } from '#lib/terminal/broadcast.js';
-	import { openTabHistory } from '#lib/state/history.svelte.js';
+	import { openTabHistory, openTabCommandPicker } from '#lib/state/history.svelte.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { requestSessionAction } from '#lib/state/palette.svelte.js';
 	import { writeText } from '@tauri-apps/plugin-clipboard-manager';
@@ -138,6 +138,42 @@
 	let split = $derived(getSplit());
 	let dragged = $derived(getDraggedTab());
 	let menu = $state<{ x: number; y: number; id: string } | null>(null);
+
+	/** What each SSH connection's key exchange settled on, by connection id,
+	 *  read once per connection for the tab's tooltip. */
+	let algorithms = $state<Record<string, NegotiatedAlgorithms>>({});
+	const asked = new Set<string>();
+	$effect(() => {
+		for (const tab of tabs) {
+			const id = tab.connectionId;
+			if (tab.type !== 'ssh' || !id || tab.link || asked.has(id)) continue;
+			asked.add(id);
+			sshConnectionAlgorithms(id)
+				.then((a) => { if (a) algorithms[id] = a; })
+				.catch(() => asked.delete(id));
+		}
+	});
+
+	/** One direction's name, or both when they differ (out / in). */
+	function bothWays(out: string, inn: string): string {
+		return out === inn ? out : `${out} / ${inn}`;
+	}
+
+	/** The tab's title, then, on a connected SSH tab, the algorithms in use. */
+	function tabTooltip(tab: Tab): string {
+		const a = tab.type === 'ssh' && tab.connectionId && !tab.link ? algorithms[tab.connectionId] : undefined;
+		if (!a) return tab.title;
+		const mac = a.mac_out || a.mac_in ? bothWays(a.mac_out, a.mac_in) : t('tabs.algo_mac_aead');
+		return [
+			tab.title,
+			'',
+			t('tabs.algo_kex', { name: a.kex }),
+			t('tabs.algo_host_key', { name: a.host_key }),
+			t('tabs.algo_cipher', { name: a.cipher }),
+			t('tabs.algo_mac', { name: mac }),
+			t('tabs.algo_compression', { name: bothWays(a.compression_out, a.compression_in) })
+		].join('\n');
+	}
 	let pageMenu = $state<{ x: number; y: number } | null>(null);
 	/** Saved split layouts: the menu of the button beside +, and the dialog to save and manage them. */
 	let layoutMenu = $state<{ x: number; y: number } | null>(null);
@@ -213,7 +249,11 @@
 		items.push(...broadcastItems(tab));
 		items.push(...windowItems(id));
 		if (tab && !isDesktopTab(tab)) {
-			items.push({ label: '', separator: true }, { label: t('history.search_menu'), hint: `${mod}H`, action: () => openTabHistory(tab) });
+			items.push(
+				{ label: '', separator: true },
+				{ label: t('history.picker_menu'), hint: actionLabel('terminal.commandPicker'), action: () => openTabCommandPicker(tab) },
+				{ label: t('history.search_menu'), hint: `${mod}H`, action: () => openTabHistory(tab) }
+			);
 		}
 
 		// Duplicate and close, as a browser's tab menu has them (#160).
@@ -578,7 +618,7 @@
 					role="tab"
 					tabindex="0"
 					aria-selected={tab.id === activeTab?.id}
-					title={tab.title}
+					title={tabTooltip(tab)}
 				>
 					{#if tab.type === 'ssh' && tab.detectedOs}
 						<DistroIcon osId={tab.detectedOs} size={14} />

@@ -1016,17 +1016,62 @@ pub struct HopOptions {
     /// The saved session being connected and the host keys it trusts;
     /// shared by every hop. `None`: this device's own list only.
     pub trust: Option<Arc<crate::ssh::session_hostkeys::SessionTrust>>,
+    /// What the target's key exchange settled on (target only), for the
+    /// tab's tooltip.
+    pub negotiated: Negotiated,
+}
+
+/// The algorithms a connection's last key exchange settled on, as the
+/// server and client agreed them; filled in by the handler's `kex_done`.
+#[derive(Debug, Clone, Default, serde::Serialize, PartialEq)]
+pub struct NegotiatedAlgorithms {
+    pub kex: String,
+    pub host_key: String,
+    pub cipher: String,
+    /// MACs each way; empty for a cipher that carries its own (GCM,
+    /// ChaCha20-Poly1305).
+    pub mac_out: String,
+    pub mac_in: String,
+    pub compression_out: String,
+    pub compression_in: String,
+}
+
+pub type Negotiated = Arc<std::sync::Mutex<Option<NegotiatedAlgorithms>>>;
+
+fn compression_name(c: &russh::compression::Compression) -> &'static str {
+    match c {
+        russh::compression::Compression::None => "none",
+        russh::compression::Compression::Zlib => "zlib",
+        russh::compression::Compression::ZlibOpenSSH => "zlib@openssh.com",
+    }
+}
+
+impl NegotiatedAlgorithms {
+    pub(crate) fn from_names(names: &russh::Names) -> Self {
+        let cipher: &str = names.cipher.as_ref();
+        let aead = cipher.contains("gcm") || cipher.contains("poly1305");
+        let mac = |m: &russh::mac::Name| if aead { String::new() } else { AsRef::<str>::as_ref(m).to_string() };
+        Self {
+            kex: AsRef::<str>::as_ref(&names.kex).to_string(),
+            host_key: names.key.as_str().to_string(),
+            cipher: cipher.to_string(),
+            mac_out: mac(&names.client_mac),
+            mac_in: mac(&names.server_mac),
+            compression_out: compression_name(&names.client_compression).to_string(),
+            compression_in: compression_name(&names.server_compression).to_string(),
+        }
+    }
 }
 
 impl Default for HopOptions {
     fn default() -> Self {
-        Self { config: Arc::new(russh::client::Config::default()), socket: Default::default(), auth: None, hostkeys: None, session: None, refused: None, proxy_command: None, forwards: None, log: None, connlog: None, control: None, trust: None }
+        Self { config: Arc::new(russh::client::Config::default()), socket: Default::default(), auth: None, hostkeys: None, session: None, refused: None, proxy_command: None, forwards: None, log: None, connlog: None, control: None, trust: None, negotiated: Default::default() }
     }
 }
 
 impl From<crate::ssh::sshconf::apply::Plan> for HopOptions {
     fn from(p: crate::ssh::sshconf::apply::Plan) -> Self {
-        Self { config: Arc::new(p.config), socket: p.socket, auth: p.auth, hostkeys: p.hostkeys.map(Arc::new), session: p.session.map(Arc::new), refused: p.refused, proxy_command: p.proxy_command, forwards: p.forwards.map(crate::ssh::forwarding::ForwardTable::new), log: p.log, connlog: None, control: p.control, trust: None }
+        Self { config: Arc::new(p.config), socket: p.socket, auth: p.auth, hostkeys: p.hostkeys.map(Arc::new), session: p.session.map(Arc::new), refused: p.refused, proxy_command: p.proxy_command, forwards: p.forwards.map(crate::ssh::forwarding::ForwardTable::new), log: p.log, connlog: None, control: p.control, trust: None, negotiated: Default::default() }
     }
 }
 
@@ -1074,6 +1119,9 @@ pub(crate) struct ActiveConnection {
     /// These are intentionally stored but never directly read — dropping them closes the tunnels.
     #[allow(dead_code)]
     jump_handles: Vec<SharedHandle>,
+    /// What the key exchange settled on; empty on a shared (ControlMaster)
+    /// connection, whose handshake was another tab's.
+    negotiated: Negotiated,
 }
 
 /// See [`SshManager::open_headless`]. Dropping it closes the connection.
@@ -1158,7 +1206,7 @@ impl SshManager {
         if let Some(cp) = &opts.control {
             crate::ssh::control::register(cp, &shared, &[], &crate::ssh::control::target(&info.username, &info.host, info.port));
         }
-        into_active_connection(channel, shared, info, shell.as_deref(), login, app_handle, Vec::new(), opts.session.clone(), tty, opts.forwards.clone(), opts.connlog.clone()).await
+        into_active_connection(channel, shared, info, shell.as_deref(), login, app_handle, Vec::new(), opts.session.clone(), tty, opts.forwards.clone(), opts.connlog.clone(), opts.negotiated.clone()).await
     }
 
     /// Connect and authenticate, directly or through a proxy. Opens no channel:
@@ -1181,6 +1229,7 @@ impl SshManager {
             .with_hostkeys(opts.hostkeys.clone())
             .with_trust(opts.trust.clone())
             .with_forwards(opts.forwards.clone())
+            .with_negotiated(&opts.negotiated)
             .with_stage(stage.cloned());
         let begin = |s: &str| {
             if let Some(stage) = stage {
@@ -1390,7 +1439,7 @@ impl SshManager {
         if let Some(cp) = &opts.control {
             crate::ssh::control::register(cp, &shared, &jump_handles, &crate::ssh::control::target(&info.username, &info.host, info.port));
         }
-        into_active_connection(channel, shared, info, shell.as_deref(), login, app_handle, jump_handles, opts.session.clone(), tty, opts.forwards.clone(), opts.connlog.clone()).await
+        into_active_connection(channel, shared, info, shell.as_deref(), login, app_handle, jump_handles, opts.session.clone(), tty, opts.forwards.clone(), opts.connlog.clone(), opts.negotiated.clone()).await
     }
 
     /// Connect and authenticate on the target through each jump host in turn.
@@ -1506,7 +1555,7 @@ impl SshManager {
 
             let stream = channel.into_stream();
             let config = target_opts.engine_config(target_host).await;
-            let handler = SshClientHandler::new(target_host, target_port, Some(app_handle.clone())).with_hostkeys(target_opts.hostkeys.clone()).with_trust(target_opts.trust.clone()).with_forwards(target_opts.forwards.clone());
+            let handler = SshClientHandler::new(target_host, target_port, Some(app_handle.clone())).with_hostkeys(target_opts.hostkeys.clone()).with_trust(target_opts.trust.clone()).with_forwards(target_opts.forwards.clone()).with_negotiated(&target_opts.negotiated);
 
             let mut target_handle =
                 russh::client::connect_stream(config, stream, handler)
@@ -1555,7 +1604,7 @@ impl SshManager {
 
             let stream = channel.into_stream();
             let config = target_opts.engine_config(target_host).await;
-            let handler = SshClientHandler::new(target_host, target_port, Some(app_handle.clone())).with_hostkeys(target_opts.hostkeys.clone()).with_trust(target_opts.trust.clone()).with_forwards(target_opts.forwards.clone());
+            let handler = SshClientHandler::new(target_host, target_port, Some(app_handle.clone())).with_hostkeys(target_opts.hostkeys.clone()).with_trust(target_opts.trust.clone()).with_forwards(target_opts.forwards.clone()).with_negotiated(&target_opts.negotiated);
 
             let mut target_handle =
                 russh::client::connect_stream(config, stream, handler)
@@ -1661,6 +1710,12 @@ impl SshManager {
 
     pub fn list_connections(&self) -> Vec<ConnectionInfo> {
         self.connections.values().map(|c| c.info.clone()).collect()
+    }
+
+    /// The algorithms the connection's last key exchange settled on.
+    pub fn algorithms(&self, id: &str) -> Result<Option<NegotiatedAlgorithms>, SshError> {
+        let conn = self.connections.get(id).ok_or_else(|| SshError::NotFound(id.to_string()))?;
+        Ok(conn.negotiated.lock().unwrap_or_else(|e| e.into_inner()).clone())
     }
 
     pub fn is_connected(&self, id: &str) -> bool {
@@ -2085,11 +2140,13 @@ pub struct SshClientHandler {
     stage: Option<ConnectStage>,
     /// The saved session being connected (see `session_hostkeys`).
     trust: Option<Arc<crate::ssh::session_hostkeys::SessionTrust>>,
+    /// Where `kex_done` notes the algorithms (target hop only).
+    negotiated: Option<Negotiated>,
 }
 
 impl SshClientHandler {
     pub fn new(host: impl Into<String>, port: u16, app_handle: Option<tauri::AppHandle>) -> Self {
-        Self { host: host.into(), port, app_handle, hostkeys: None, forwards: None, dns_match: None, hostkey_update: Default::default(), stage: None, trust: None }
+        Self { host: host.into(), port, app_handle, hostkeys: None, forwards: None, dns_match: None, hostkey_update: Default::default(), stage: None, trust: None, negotiated: None }
     }
 
     /// Report the host-key step to the connect dialog (see `ConnectStage`).
@@ -2101,6 +2158,12 @@ impl SshClientHandler {
     /// Answer channels the server opens for forwards (see `forwarding`).
     pub fn with_forwards(mut self, table: Option<Arc<crate::ssh::forwarding::ForwardTable>>) -> Self {
         self.forwards = table;
+        self
+    }
+
+    /// Note the negotiated algorithms here (see `NegotiatedAlgorithms`).
+    pub(crate) fn with_negotiated(mut self, slot: &Negotiated) -> Self {
+        self.negotiated = Some(slot.clone());
         self
     }
 
@@ -2315,6 +2378,9 @@ impl russh::client::Handler for SshClientHandler {
         names: &russh::Names,
         _session: &mut russh::client::Session,
     ) -> Result<(), Self::Error> {
+        if let Some(slot) = &self.negotiated {
+            *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some(NegotiatedAlgorithms::from_names(names));
+        }
         let kex: &str = names.kex.as_ref();
         let pq = matches!(kex, "mlkem768x25519-sha256" | "sntrup761x25519-sha512" | "sntrup761x25519-sha512@openssh.com");
         if !pq && self.hostkeys.as_ref().is_some_and(|p| p.warn_weak_crypto) {
@@ -2607,7 +2673,7 @@ async fn shared_session(
             return None;
         }
     };
-    Some(into_active_connection(channel, shared, info.clone(), shell, login.clone(), app_handle.clone(), jumps, opts.session.clone(), tty, opts.forwards.clone(), opts.connlog.clone()).await)
+    Some(into_active_connection(channel, shared, info.clone(), shell, login.clone(), app_handle.clone(), jumps, opts.session.clone(), tty, opts.forwards.clone(), opts.connlog.clone(), opts.negotiated.clone()).await)
 }
 
 #[expect(clippy::too_many_arguments, reason = "everything a finished login hands to its session")]
@@ -2623,6 +2689,7 @@ async fn into_active_connection(
     tty: bool,
     forwards: Option<Arc<crate::ssh::forwarding::ForwardTable>>,
     connlog: Option<Arc<crate::ssh::connlog::ConnLog>>,
+    negotiated: Negotiated,
 ) -> Result<ActiveConnection, SshError> {
     // Inject shell-appropriate color/prompt init (chosen per shell family so a
     // fish login never gets bash syntax), unless the user disabled it. `None`
@@ -2697,6 +2764,7 @@ async fn into_active_connection(
         handle: shared,
         sftp: Default::default(),
         jump_handles,
+        negotiated,
     })
 }
 
@@ -2779,6 +2847,10 @@ async fn ssh_session_task(
     // needs its own carry-over.
     let mut out_decoder = crate::text::Utf8Stream::new();
     let mut err_decoder = crate::text::Utf8Stream::new();
+    // rz/sz on the remote: a ZMODEM transfer over this channel.
+    let mut zmodem = crate::zmodem::Tap::for_app(&app_handle, &connection_id, crate::zmodem::WINDOW_NETWORK);
+    let mut zmodem_tick = tokio::time::interval(std::time::Duration::from_millis(100));
+    zmodem_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     // Hold remote output until the frontend signals it's listening
     // (SessionCommand::Ready) so the motd/banner emitted before the terminal
@@ -2863,7 +2935,14 @@ async fn ssh_session_task(
                 match msg {
                     Some(ChannelMsg::Data { ref data }) => {
                         last_activity = std::time::Instant::now();
-                        let mut text = out_decoder.push(data);
+                        let z = zmodem.input(data);
+                        if !z.wire.is_empty() {
+                            if let Err(e) = channel.data(&z.wire[..]).await {
+                                tracing::error!("SSH '{}' write error: {}", connection_id, e);
+                                break;
+                            }
+                        }
+                        let mut text = out_decoder.push(&z.display);
                         if let Some(f) = flow.as_mut() {
                             text = f.output(&text, std::time::Instant::now());
                         }
@@ -2907,6 +2986,15 @@ async fn ssh_session_task(
                 }
                 if let Some(held) = held {
                     deliver!(held);
+                }
+            }
+            _ = zmodem_tick.tick(), if zmodem.busy() => {
+                let z = zmodem.poll();
+                if !z.wire.is_empty() {
+                    if let Err(e) = channel.data(&z.wire[..]).await {
+                        tracing::error!("SSH '{}' write error: {}", connection_id, e);
+                        break;
+                    }
                 }
             }
             Some(text) = local_rx.recv() => {
@@ -3020,6 +3108,13 @@ async fn ssh_session_task(
 
     // The stream ended; surface any bytes held back mid-character rather
     // than swallowing them.
+    let held = zmodem.flush();
+    if !held.is_empty() {
+        let text = out_decoder.push(&held);
+        if !text.is_empty() {
+            let _ = app_handle.emit(&data_event, &text);
+        }
+    }
     for tail in [out_decoder.flush(), err_decoder.flush()].into_iter().flatten() {
         if let Some(l) = log.as_mut() {
             l.push(&tail);

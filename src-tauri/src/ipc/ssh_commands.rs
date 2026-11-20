@@ -72,6 +72,7 @@ fn proxy_endpoint(p: &crate::state::ProxyConfig) -> (&str, &str, u16, Option<&st
 /// Their approvals were given for exactly that (`approval_context`).
 pub(crate) fn check_matches_session(
     stored: &crate::state::SessionConfig,
+    via: Option<&crate::state::SessionConfig>,
     host: &str,
     port: u16,
     username: &str,
@@ -83,17 +84,28 @@ pub(crate) fn check_matches_session(
     let stored_jumps: Vec<(&str, u16, &str)> =
         stored.jump_chain.iter().flatten().map(|j| (j.host.as_str(), j.port, j.username.as_str())).collect();
     // The main address goes the session's way; another of its addresses
-    // goes that way too, or straight when it is marked direct.
-    let direct = stored.host != host || stored.port != port;
-    let (addr_ok, straight) = if direct {
+    // goes that way too, straight when it is marked direct, or through the
+    // saved SSH session it names (`via`, as stored now).
+    let other = stored.host != host || stored.port != port;
+    let (addr_ok, straight, through) = if other {
         match stored.alt_address(host, port) {
-            Some(a) => (true, a.direct),
-            None => (false, false),
+            Some(a) => (true, a.direct, a.via_session_id.as_deref()),
+            None => (false, false, None),
         }
     } else {
-        (true, false)
+        (true, false, None)
     };
-    let route_ok = if straight {
+    let route_ok = if let Some(via_id) = through {
+        match via.filter(|v| v.id == via_id && v.kind == crate::state::SessionKind::Ssh) {
+            Some(v) => {
+                let mut want: Vec<(&str, u16, &str)> =
+                    v.jump_chain.iter().flatten().map(|j| (j.host.as_str(), j.port, j.username.as_str())).collect();
+                want.push((v.host.as_str(), v.port, v.username.as_str()));
+                jumps == want && proxy.is_none()
+            }
+            None => false,
+        }
+    } else if straight {
         jumps.is_empty() && proxy.is_none()
     } else {
         jumps == stored_jumps && proxy.map(proxy_endpoint) == stored.proxy.as_ref().map(proxy_endpoint)
@@ -205,6 +217,7 @@ pub async fn ssh_connect(
     key_passphrase_ref: Option<crate::pwmanager::SecretRef>,
     session_id: Option<String>,
     tmux: Option<crate::ssh::tmux::TmuxStart>,
+    x11_desktop: Option<crate::ssh::x11_desktop::X11Desktop>,
 ) -> Result<String, String> {
     // Boxed: Tauri builds a command's future on the main thread and passes it
     // by value before spawning it, and the main thread's stack is small
@@ -213,6 +226,12 @@ pub async fn ssh_connect(
         // Only the approvals of the person connecting count: a session synced
         // from a vault others can write to cannot approve its own commands.
         let mut ssh_options = ssh_options.map(|o| o.effective());
+        // X11 Desktop: the channel starts the desktop, never a shell or tmux.
+        let tmux = if x11_desktop.is_some() { None } else { tmux };
+        let shell = match &x11_desktop {
+            Some(d) => Some(d.launcher()?),
+            None => shell,
+        };
         // Nothing is typed into the user's shell unless the caller asks for it
         // (Settings → Appearance): a caller that does not say gets no setup. The
         // login message is shown unless asked otherwise.
@@ -235,7 +254,7 @@ pub async fn ssh_connect(
             _ => shell,
         };
         let login = crate::ssh::client::LoginOptions {
-            inject_colors: inject_colors.unwrap_or(false) && tmux.is_none(),
+            inject_colors: inject_colors.unwrap_or(false) && tmux.is_none() && x11_desktop.is_none(),
             show_login_message: show_login_message.unwrap_or(true),
             log: session_log,
             tmux_ask,
@@ -269,7 +288,20 @@ pub async fn ssh_connect(
         if !wanted.is_empty() {
             let sid = crate::ipc::session_commands::require_session_id(session_id.as_deref())?;
             let stored = crate::ipc::session_commands::stored_session(&state, sid).await?;
-            check_matches_session(&stored, &host, port, &username, jump_chain.as_deref(), proxy.as_ref())?;
+            // An address that goes through another saved session: that
+            // session's route as stored now. Its hops' password manager
+            // entries are that session's, not this one's, so none are used.
+            let through = stored.alt_address(&host, port).and_then(|a| a.via_session_id.clone()).filter(|_| stored.host != host || stored.port != port);
+            let via = match &through {
+                Some(v) => {
+                    if wanted.iter().any(|s| s.starts_with("jump:")) {
+                        return Err(format!("'{}' goes through another saved session here, whose password manager entries are not used for it. Save the jump host's password in that session, or use a key or the agent.", stored.name));
+                    }
+                    Some(crate::ipc::session_commands::stored_session(&state, v).await?)
+                }
+                None => None,
+            };
+            check_matches_session(&stored, via.as_ref(), &host, port, &username, jump_chain.as_deref(), proxy.as_ref())?;
             crate::ipc::session_commands::require_trusted_refs(&stored, None, &wanted)?;
             // The ssh_config settings decide where the login really goes
             // (HostName, ProxyJump): the stored session's, which the approvals
@@ -324,6 +356,9 @@ pub async fn ssh_connect(
         // A saved session keeps the host keys it trusts, for every hop.
         let trust = crate::ipc::session_commands::session_trust(&state, session_id.as_deref()).await;
         target_opts.trust = trust.clone();
+        if x11_desktop.is_some() {
+            crate::ssh::x11_desktop::apply(&mut target_opts, &host, &format!("{username}@{host}")).await?;
+        }
         let connlog = target_opts.log.as_ref().map(|(level, verbose)| crate::ssh::connlog::ConnLog::new(level.as_deref(), verbose));
         target_opts.connlog = connlog.clone();
         let span = connlog.as_ref().map_or_else(tracing::Span::none, |l| l.span());
@@ -464,6 +499,10 @@ pub async fn ssh_send(
     connection_id: String,
     data: Vec<u8>,
 ) -> Result<(), String> {
+    // A ZMODEM transfer holds the line.
+    if crate::zmodem::intercept_input(&connection_id, &data) {
+        return Ok(());
+    }
     crate::history::input(&connection_id, &data);
     let manager = state.ssh_manager.lock().await;
     manager.send_data(&connection_id, &data).map_err(|e| e.to_string())
@@ -562,6 +601,17 @@ pub async fn ssh_list_connections(
 ) -> Result<Vec<ConnectionInfo>, String> {
     let manager = state.ssh_manager.lock().await;
     Ok(manager.list_connections())
+}
+
+/// The algorithms the connection's key exchange settled on, for the tab's
+/// tooltip; `None` before the first one or on a shared connection.
+#[tauri::command]
+pub async fn ssh_connection_algorithms(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+) -> Result<Option<crate::ssh::client::NegotiatedAlgorithms>, String> {
+    let manager = state.ssh_manager.lock().await;
+    manager.algorithms(&connection_id).map_err(|e| e.to_string())
 }
 
 /// OS probes answer at once or not at all.

@@ -5,7 +5,7 @@
 	import { getDistroIcon } from '#lib/data/distro-icons.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { sessionAddress } from '#lib/utils/address.js';
-	import { addressName, hasAltAddresses, sessionAddresses } from '#lib/sessions/addresses.js';
+	import { addressLabelled, hasAltAddresses, sessionAddresses } from '#lib/sessions/addresses.js';
 	import { isMobile, isWindows } from '#lib/platform.js';
 	import { getSettings } from '#lib/state/settings.svelte.js';
 	import { tooltip } from '#lib/utils/tooltip.js';
@@ -34,7 +34,7 @@
 	}
 
 	let { session, vault = null, onconnect, onedit, ondelete, oncontextmenu, ondragstart, ondragend, selecting = false, selected = false, onselect, viaName = null }: Props = $props();
-	let unavailable = $derived((session.kind === 'wsl' && !isWindows()) || ((session.kind === 'serial' || session.kind === 'winbox') && isMobile()));
+	let unavailable = $derived((session.kind === 'wsl' && !isWindows()) || ((session.kind === 'serial' || session.kind === 'winbox' || !!session.x11_desktop) && isMobile()));
 	/** WinBox only ever manages a MikroTik: its logo until another is picked. */
 	let osId = $derived(session.detected_os ?? (session.kind === 'winbox' ? 'mikrotik' : null));
 	/** Double-click to open (Settings > General): a mouse click only focuses
@@ -107,7 +107,7 @@
 	/** The session's other addresses, for the tooltips. */
 	let otherAddresses = $derived(
 		hasAltAddresses(session)
-			? t('session.more_addresses', { addresses: sessionAddresses(session).slice(1).map((a) => addressName(a, session.port)).join(', ') })
+			? t('session.more_addresses', { addresses: sessionAddresses(session).slice(1).map((a) => addressLabelled(a, session.port)).join(', ') })
 			: ''
 	);
 	let detailsTooltip = $derived.by(() => {
@@ -178,6 +178,9 @@
 					{:else if session.kind === 'telnet'}
 						<!-- A console: a network device's prompt rather than a server. -->
 						<rect x="3" y="5" width="18" height="14" rx="2" /><path d="M7 10l3 2-3 2M12 14h5" />
+					{:else if session.kind === 'web'}
+						<!-- A globe: a device's web page. -->
+						<circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" />
 					{:else if session.kind === 'serial'}
 						<!-- A serial (DB9) connector. -->
 						<path d="M3 7h18l-2.5 10h-13z" /><path d="M8 10h.01M12 10h.01M16 10h.01M10 14h.01M14 14h.01" />
@@ -281,6 +284,9 @@
 			<span class="auth-badge">WSL</span>
 		{:else if session.kind === 'serial'}
 			<span class="auth-badge">{unavailable ? t('serial.desktop_only_short') : t('session.protocol_serial')}</span>
+		{:else if session.x11_desktop}
+			<!-- A whole desktop, in a window of its own. -->
+			<span class="auth-badge" title={t(`x11desktop.${session.x11_desktop.desktop}`)}>{unavailable ? t('serial.desktop_only_short') : 'X11'}</span>
 		{:else if session.kind === 'winbox'}
 			<!-- Opens in WinBox, not in a tab here. -->
 			<span class="auth-badge">{unavailable ? t('serial.desktop_only_short') : t('session.protocol_winbox')}</span>

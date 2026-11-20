@@ -51,7 +51,9 @@
 	import Button from '#lib/components/shared/Button.svelte';
 	import UntrustedRefsDialog from '#lib/components/pwmanager/UntrustedRefsDialog.svelte';
 	import { sessionUntrustedSecretRefs, sessionApproveSecretRefs, untrustedRefsFromError, type UntrustedRefs } from '#lib/ipc/sessions.js';
-	import type { SessionKind } from '#lib/ipc/sessions.js';
+	import type { SessionKind, JumpHostConfig } from '#lib/ipc/sessions.js';
+	import { webSessionOpen, webSessionUrl } from '#lib/ipc/sessions.js';
+	import { openUrl } from '@tauri-apps/plugin-opener';
 	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionRenameFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetOrder, sessionSetFolderCredential, sessionSetFolderTmux, sessionBulkUndo, type BulkResult, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
 	import * as share from '#lib/state/share.svelte.js';
@@ -282,6 +284,7 @@
 		{ id: 'spice', label: 'SPICE' },
 		{ id: 'telnet', label: 'Telnet' },
 		{ id: 'winbox', label: 'WinBox' },
+		{ id: 'web', label: 'Web' },
 		{ id: 'wsl', label: 'WSL' }
 	];
 	function loadView(): { sort: SortKey; favorites: boolean; kinds: SessionKind[]; tags: string[] } {
@@ -1191,7 +1194,7 @@
 		addToast(t('session.connected_toast', { name: session.name }), 'success');
 
 		const stored = session.auth_method.type === 'Password' ? session.auth_method.password : undefined;
-		if (remember && !passwordRef && password && password !== stored) {
+		if (remember && !passwordRef && password && password !== stored && !oneOffCredential(session)) {
 			try {
 				await sessionUpdate({ ...session, auth_method: { type: 'Password', password } });
 				await loadSessions();
@@ -1432,6 +1435,50 @@
 		}
 	}
 
+	// ---- Connect with: one connect with another saved credential ---------
+	/** A session as one connect sees it with credential `c` in place of its
+	 *  own login. Never saved: openRdp and the prompt's Remember leave it be. */
+	type OneOff = SessionConfig & { one_off_credential: string };
+	function withCredential(session: SessionConfig, c: SavedCredential): OneOff {
+		return {
+			...session,
+			username: c.username,
+			auth_method: c.auth_method,
+			domain: c.domain?.trim() ? c.domain : session.domain,
+			credential: { id: c.id, name: c.name, folder_id: null, missing: false },
+			one_off_credential: c.id,
+		};
+	}
+	function oneOffCredential(s: SessionConfig): string | undefined {
+		return (s as Partial<OneOff>).one_off_credential;
+	}
+	/** Kinds that log in with a user name and a password or key. */
+	function takesCredential(s: SessionConfig): boolean {
+		const k = sessionKind(s);
+		return k === 'ssh' || k === 'rdp' || k === 'telnet';
+	}
+	/** The credentials the session's menu offers: its vault's, and for RDP
+	 *  and Telnet only those with a password. */
+	function connectWithChoices(s: SessionConfig): SavedCredential[] {
+		const k = sessionKind(s);
+		return credentialsFor(savedCredentials, s.vault_id).filter((c) => k === 'ssh' || c.auth_method.type === 'Password');
+	}
+	/** Why a credential cannot be used once (a tooltip), or undefined. A
+	 *  password manager entry is approved for the session it is linked to,
+	 *  and the backend reads it from the stored session; the same holds for
+	 *  the entries of the jump hosts and proxy, approved for its user name. */
+	function connectWithBlocked(s: SessionConfig, c: SavedCredential): string | undefined {
+		const a = c.auth_method;
+		if ((a.type === 'Password' && a.password_ref) || (a.type === 'Key' && a.passphrase_ref)) return t('session.connect_with_ref');
+		const routeRefs = (s.jump_chain ?? []).some((j) => (j.auth_method.type === 'Password' && j.auth_method.password_ref) || (j.auth_method.type === 'Key' && j.auth_method.passphrase_ref)) || !!s.proxy?.password_ref;
+		if (routeRefs && c.username !== s.username) return t('session.connect_with_route');
+		return undefined;
+	}
+	function connectWith(session: SessionConfig, c: SavedCredential): void {
+		closeContextMenu();
+		void handleConnect(withCredential(session, c));
+	}
+
 	function hasRefs(s: SessionConfig): boolean {
 		const ref = (a: SessionConfig['auth_method']) => !!(a.type === 'Password' ? a.password_ref : a.type === 'Key' ? a.passphrase_ref : null);
 		return ref(s.auth_method) || (s.jump_chain ?? []).some((j) => ref(j.auth_method)) || !!s.proxy?.password_ref;
@@ -1461,6 +1508,23 @@
 			if (asked && !(await askToApprove(asked))) return false;
 		}
 		return true;
+	}
+
+	/**
+	 * A web session: its own window (no tab), which the backend opens and
+	 * signs in; or the system's browser, which nothing here can sign in.
+	 */
+	async function openWeb(session: SessionConfig): Promise<void> {
+		try {
+			if (session.web?.open_in === 'browser' || isMobile()) {
+				await openUrl(webSessionUrl(session));
+				addToast(t('web.opening_browser'), 'success');
+			} else {
+				await webSessionOpen(session.id);
+			}
+		} catch (err) {
+			addToast(String(err), 'error');
+		}
 	}
 
 	async function handleConnect(session: SessionConfig, address?: ResolvedAddress): Promise<void> {
@@ -1495,6 +1559,10 @@
 		}
 		if (sessionKind(session) === 'winbox') {
 			void openWinbox(session);
+			return;
+		}
+		if (sessionKind(session) === 'web') {
+			void openWeb(session);
 			return;
 		}
 		// Check if credentials are stored in the session (from vault)
@@ -1589,8 +1657,7 @@
 		const passwordToSave = authType === 'Password' ? (passwordFallback ? fallbackPassword : connectPassword) : connectKeyPassphrase;
 
 		// Build jump chain from session config if present
-		const jumpChain: JumpHostConnectParams[] | undefined = session.jump_chain && session.jump_chain.length > 0
-			? session.jump_chain.map(j => ({
+		const hopParams = (j: JumpHostConfig): JumpHostConnectParams => ({
 				host: j.host,
 				port: j.port,
 				username: j.username,
@@ -1602,8 +1669,29 @@
 				keyId: j.auth_method.type === 'Key' ? j.auth_method.key_id : undefined,
 				keyPassphrase: j.auth_method.type === 'Key' && !j.auth_method.passphrase_ref ? j.auth_method.passphrase : undefined,
 				keyPassphraseRef: j.auth_method.type === 'Key' ? (j.auth_method.passphrase_ref ?? undefined) : undefined,
-			}))
+			});
+		const jumpChain: JumpHostConnectParams[] | undefined = session.jump_chain && session.jump_chain.length > 0
+			? session.jump_chain.map(hopParams)
 			: undefined;
+		// An address through another saved SSH session: that session's jump
+		// hosts, then its server, logged in to as that session does. Its
+		// password manager entries are its own, so they are not used here.
+		const viaChain = (viaId: string): JumpHostConnectParams[] => {
+			const via = sessions.find((s) => s.id === viaId && sessionKind(s) === 'ssh');
+			if (!via) throw t('session.address_via_missing');
+			const hops = [...(via.jump_chain ?? []), { host: via.host, port: via.port, username: via.username, auth_method: via.auth_method }].map(hopParams);
+			if (hops.some((h) => h.passwordRef || h.keyPassphraseRef)) throw t('session.address_via_refs', { name: via.name });
+			return hops;
+		};
+		const viaChains: Record<string, JumpHostConnectParams[]> = {};
+		for (const a of sessionAddresses(session)) {
+			if (!a.viaSessionId) continue;
+			try {
+				viaChains[a.viaSessionId] = viaChain(a.viaSessionId);
+			} catch {
+				// Said when that address is tried.
+			}
+		}
 
 		// The addresses to try, in order: the one picked, the main one, or
 		// all of them as Auto orders them.
@@ -1651,7 +1739,9 @@
 				cols: 80,
 				rows: 24,
 				shell: session.shell ?? undefined,
-				tmux: tmuxView(tmuxFor(session, folders)),
+				// An X11 desktop starts the desktop, never tmux.
+				tmux: session.x11_desktop ? null : tmuxView(tmuxFor(session, folders)),
+				x11Desktop: session.x11_desktop ?? null,
 				injectColors: getSettings().typeShellSetup,
 				sessionLog: sessionLogConfig(session.name),
 				showLoginMessage: getSettings().showLoginMessage,
@@ -1661,8 +1751,8 @@
 				sessionId: session.id,
 				// An address marked direct goes straight, without the session's
 				// jump hosts or proxy.
-				jumpChain: addr.routed ? jumpChain : undefined,
-				proxy: addr.routed && session.proxy ? {
+				jumpChain: addr.viaSessionId ? viaChain(addr.viaSessionId) : addr.routed ? jumpChain : undefined,
+				proxy: addr.routed && !addr.viaSessionId && session.proxy ? {
 					proxy_type: session.proxy.proxy_type,
 					host: session.proxy.host,
 					port: session.proxy.port,
@@ -1672,7 +1762,7 @@
 				} : undefined,
 			});
 			// A reconnect may need another address: the tab keeps them all.
-			const fallback = hasAltAddresses(session) ? { addresses: all, jumpChain, proxy: paramsFor(all[0]).proxy ?? undefined, sessionPort: session.port, check: checksAddresses(session, getSettings().checkAddresses) } : undefined;
+			const fallback = hasAltAddresses(session) ? { addresses: all, jumpChain, viaChains, proxy: paramsFor(all[0]).proxy ?? undefined, sessionPort: session.port, check: checksAddresses(session, getSettings().checkAddresses) } : undefined;
 			// Each address in turn, while the last one could not be reached.
 			// A refused login stops here: it is the same server.
 			let connectParams = paramsFor(targets[0]);
@@ -2387,6 +2477,22 @@
 					{/each}
 					<div class="context-sep"></div>
 				{/if}
+				{#if takesCredential(contextMenu.session) && connectWithChoices(contextMenu.session).length > 0}
+					{@const menuSession = contextMenu.session}
+					{@const linked = menuSession.credential && !menuSession.credential.missing ? menuSession.credential.id : null}
+					<div class="context-label" title={t('session.connect_with_hint')}>{t('session.connect_with')}</div>
+					<!-- Scrollable like the folders below: a vault can hold many. -->
+					<div class="context-folders">
+						{#each connectWithChoices(menuSession) as c (c.id)}
+							{@const blocked = connectWithBlocked(menuSession, c)}
+							<button class="context-item context-via" class:context-current={linked === c.id} disabled={!!blocked} title={blocked ?? t('session.connect_with_hint')} onclick={() => connectWith(menuSession, c)} type="button">
+								{c.name}
+								<span class="context-hint">{c.domain?.trim() ? `${c.domain}\\` : ''}{c.username}</span>
+							</button>
+						{/each}
+					</div>
+					<div class="context-sep"></div>
+				{/if}
 				{#if selected.has(contextMenu.session.id) && selected.size > 1}
 					<button class="context-item" onclick={openBulkEdit} type="button">
 						{t('bulk.edit_n', { count: String(selected.size) })}
@@ -2727,7 +2833,7 @@
 					<div class="fallback-hint">{t('pwmanager.prompt_uses_ref', { name: `${providerName(ref.provider)} · ${ref.label?.trim() || ref.entry_id}` })}</div>
 				{/if}
 
-				{#if askSecret && connectSession.auth_method.type !== 'Agent' && !passwordFallback}
+				{#if askSecret && connectSession.auth_method.type !== 'Agent' && !passwordFallback && !oneOffCredential(connectSession)}
 					<label class="remember-label">
 						<input type="checkbox" class="remember-check" bind:checked={rememberPassword} disabled={connecting} />
 						<span class="remember-text">{hasSavedPassword ? t('session.password_saved') : t('session.remember_password')}</span>
