@@ -447,6 +447,8 @@
   "session.rdp_client_freerdp": "FreeRDP (отделен прозорец)",
   "session.rdp_client_freerdp_hint": "Използва клиента FreeRDP 3, настроен в Настройки › Отдалечен работен плот.",
   "session.rdp_clipboard_hint": "Какво пренася копирането и поставянето между този компютър и работния плот.",
+  "session.rdp_forward_lock_keys": "Препращане на натисканията на клавишите за заключване",
+  "session.rdp_forward_lock_keys_hint": "Изпраща натисканията на Caps Lock, Num Lock и Scroll Lock към отдалечения работен плот за клавишни комбинации. Състоянията им се синхронизират независимо от настройката.",
   "session.rdp_domain": "Домейн (по избор)",
   "rdp.fullscreen": "Цял екран",
   "rdp.exit_fullscreen": "Изход от цял екран",

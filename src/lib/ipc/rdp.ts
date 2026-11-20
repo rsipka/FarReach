@@ -28,6 +28,8 @@ export interface RdpConnectParams {
 	olderGraphicsFormats?: boolean;
 	/** What the clipboard carries: unset for everything, `text` for no files, `off` for nothing. */
 	clipboard?: RdpClipboardMode | null;
+	/** Whether the desktop panel forwards lock key presses. Enabled by default. */
+	forwardLockKeys?: boolean;
 	/** The size the panel can show. The server renders at this size. */
 	width: number;
 	height: number;
@@ -97,7 +99,7 @@ export async function rdpConnect(
 		new Uint8Array(copy).set(bytes);
 		onFrame(copy);
 	};
-	const { sessionId, ...rest } = params;
+	const { sessionId, forwardLockKeys: _forwardLockKeys, ...rest } = params;
 	await invoke('rdp_connect', { params: rest, sessionId: sessionId ?? null, onFrame: onFrameChannel });
 }
 

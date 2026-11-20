@@ -447,6 +447,8 @@
   "session.rdp_client_freerdp": "FreeRDP (ventana independiente)",
   "session.rdp_client_freerdp_hint": "Usa el cliente FreeRDP 3 configurado en Ajustes › Escritorio remoto.",
   "session.rdp_clipboard_hint": "Lo que copiar y pegar transfiere entre este equipo y el escritorio.",
+  "session.rdp_forward_lock_keys": "Enviar las pulsaciones de las teclas de bloqueo",
+  "session.rdp_forward_lock_keys_hint": "Envía las pulsaciones de Bloq Mayús, Bloq Num y Bloq Despl al escritorio remoto para usar atajos. Sus estados se sincronizan siempre.",
   "session.rdp_domain": "Dominio (opcional)",
   "rdp.fullscreen": "Pantalla completa",
   "rdp.exit_fullscreen": "Salir de pantalla completa",

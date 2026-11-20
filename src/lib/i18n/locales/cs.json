@@ -446,6 +446,8 @@
   "session.rdp_client_freerdp": "FreeRDP (samostatné okno)",
   "session.rdp_client_freerdp_hint": "Použije klienta FreeRDP 3 nastaveného v Nastavení › Vzdálená plocha.",
   "session.rdp_clipboard_hint": "Co se přenáší kopírováním a vkládáním mezi tímto počítačem a plochou.",
+  "session.rdp_forward_lock_keys": "Předávat stisky kláves zámku",
+  "session.rdp_forward_lock_keys_hint": "Odesílá stisky kláves Caps Lock, Num Lock a Scroll Lock na vzdálenou plochu pro použití ve zkratkách. Stavy těchto kláves se synchronizují vždy.",
   "session.rdp_domain": "Doména (nepovinné)",
   "rdp.fullscreen": "Celá obrazovka",
   "rdp.exit_fullscreen": "Ukončit celou obrazovku",

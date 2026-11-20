@@ -447,6 +447,8 @@
   "session.rdp_client_freerdp": "FreeRDP (finestra separata)",
   "session.rdp_client_freerdp_hint": "Usa il client FreeRDP 3 configurato in Impostazioni › Desktop remoto.",
   "session.rdp_clipboard_hint": "Cosa trasferisce copia e incolla tra questo computer e il desktop.",
+  "session.rdp_forward_lock_keys": "Inoltra la pressione dei tasti di blocco",
+  "session.rdp_forward_lock_keys_hint": "Invia al desktop remoto la pressione di Bloc Maiusc, Bloc Num e Bloc Scorr per le scorciatoie. Lo stato dei tasti resta sempre sincronizzato.",
   "session.rdp_domain": "Dominio (facoltativo)",
   "rdp.fullscreen": "Schermo intero",
   "rdp.exit_fullscreen": "Esci da schermo intero",

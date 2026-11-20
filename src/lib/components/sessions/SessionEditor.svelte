@@ -94,6 +94,7 @@
 	/** What the RDP clipboard carries: '' for everything, 'text' for no files, 'off'. */
 	let rdpClipboard = $state<'' | 'text' | 'off'>('');
 	let rdpClient = $state<'ironrdp' | 'freerdp'>('ironrdp');
+	let rdpForwardLockKeys = $state(true);
 	/** VNC only: the saved SSH session to go through, or '' for direct. */
 	let viaSessionId = $state('');
 	let wslDistro = $state('');
@@ -524,6 +525,7 @@
 			sharePath = editSession.share_path ?? '';
 			rdpClipboard = editSession.rdp_clipboard ?? '';
 			rdpClient = editSession.rdp_use_freerdp ? 'freerdp' : 'ironrdp';
+			rdpForwardLockKeys = editSession.rdp_forward_lock_keys ?? true;
 			viaSessionId = editSession.via_session_id ?? '';
 			wslDistro = editSession.wsl_distro ?? '';
 			telnetOptions = { ...DEFAULT_TELNET_OPTIONS, ...(editSession.telnet ?? {}) };
@@ -608,6 +610,7 @@
 			sharePath = '';
 			rdpClipboard = '';
 			rdpClient = 'ironrdp';
+			rdpForwardLockKeys = true;
 			viaSessionId = '';
 			telnetOptions = { ...DEFAULT_TELNET_OPTIONS };
 			serialOptions = { ...DEFAULT_SERIAL_OPTIONS };
@@ -840,6 +843,7 @@
 					share_path: rdp ? (sharePath.trim() || null) : null,
 					rdp_clipboard: rdp && rdpClipboard ? rdpClipboard : null,
 					rdp_use_freerdp: rdp && rdpClient === 'freerdp',
+					rdp_forward_lock_keys: rdp ? rdpForwardLockKeys : null,
 					via_session_id: via,
 					try_agent_keys: !desktop && authType === 'Key' && tryAgentKeys ? true : null,
 					wsl_distro: kind === 'wsl' ? wslDistro.trim() : null,
@@ -889,6 +893,7 @@
 					sharePath: rdp ? sharePath : null,
 					rdpClipboard: rdp && rdpClipboard ? rdpClipboard : null,
 					rdpUseFreerdp: rdp && rdpClient === 'freerdp',
+					rdpForwardLockKeys: rdp ? rdpForwardLockKeys : null,
 					viaSessionId: via,
 					tryAgentKeys: !desktop && authType === 'Key' && tryAgentKeys,
 					sshOptions: sshOptionsToSave,
@@ -1199,6 +1204,15 @@
 				</select>
 				<p class="shell-hint">{t('session.rdp_clipboard_hint')}</p>
 			</div>
+			{#if rdpClient === 'ironrdp' || isMobile()}
+				<div class="shell-field">
+					<label class="jump-toggle">
+						<input type="checkbox" bind:checked={rdpForwardLockKeys} disabled={saving} aria-describedby="rdp-forward-lock-keys-hint" />
+						<span class="jump-toggle-text">{t('session.rdp_forward_lock_keys')}</span>
+					</label>
+					<p id="rdp-forward-lock-keys-hint" class="shell-hint">{t('session.rdp_forward_lock_keys_hint')}</p>
+				</div>
+			{/if}
 		{:else if kind === 'vnc'}
 			<div class="shell-field">
 				<Input label={t('session.vnc_mac_username')} bind:value={username} placeholder={t('session.vnc_mac_username_placeholder')} disabled={saving} />

@@ -447,6 +447,8 @@
   "session.rdp_client_freerdp": "FreeRDP (отдельное окно)",
   "session.rdp_client_freerdp_hint": "Использует клиент FreeRDP 3, выбранный в разделе «Настройки › Удалённый рабочий стол».",
   "session.rdp_clipboard_hint": "Что передаётся копированием и вставкой между этим компьютером и рабочим столом.",
+  "session.rdp_forward_lock_keys": "Передавать нажатия клавиш блокировки",
+  "session.rdp_forward_lock_keys_hint": "Передаёт нажатия Caps Lock, Num Lock и Scroll Lock на удалённый рабочий стол для сочетаний клавиш. Состояние клавиш синхронизируется в любом случае.",
   "session.rdp_domain": "Домен (необязательно)",
   "rdp.fullscreen": "Полный экран",
   "rdp.exit_fullscreen": "Выйти из полноэкранного режима",

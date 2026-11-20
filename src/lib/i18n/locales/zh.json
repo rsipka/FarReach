@@ -447,6 +447,8 @@
   "session.rdp_client_freerdp": "FreeRDP（独立窗口）",
   "session.rdp_client_freerdp_hint": "使用在“设置 › 远程桌面”中配置的 FreeRDP 3 客户端。",
   "session.rdp_clipboard_hint": "复制粘贴在本机和远程桌面之间传递的内容。",
+  "session.rdp_forward_lock_keys": "转发锁定键按键事件",
+  "session.rdp_forward_lock_keys_hint": "将 Caps Lock、Num Lock 和 Scroll Lock 的按键事件发送到远程桌面，以便使用快捷键。无论是否开启此选项，锁定状态都会同步。",
   "session.rdp_domain": "域（可选）",
   "rdp.fullscreen": "全屏",
   "rdp.exit_fullscreen": "退出全屏",

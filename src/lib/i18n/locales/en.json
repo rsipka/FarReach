@@ -447,6 +447,8 @@
   "session.rdp_client_freerdp": "FreeRDP (separate window)",
   "session.rdp_client_freerdp_hint": "Uses the FreeRDP 3 client configured in Settings › Remote desktop.",
   "session.rdp_clipboard_hint": "What copy and paste carries between this computer and the desktop.",
+  "session.rdp_forward_lock_keys": "Forward lock key presses",
+  "session.rdp_forward_lock_keys_hint": "Send Caps Lock, Num Lock and Scroll Lock presses to the remote desktop for shortcuts. The lock states stay synced either way.",
   "session.rdp_domain": "Domain (optional)",
   "rdp.fullscreen": "Full screen",
   "rdp.exit_fullscreen": "Exit full screen",
