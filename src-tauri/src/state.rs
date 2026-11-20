@@ -50,6 +50,8 @@ pub enum SessionKind {
     Telnet,
     /// A local serial port (`host` is the port name). Desktop only.
     Serial,
+    /// MikroTik WinBox 4, started as a program of its own. Desktop only.
+    Winbox,
     /// A SPICE display (KVM/QEMU, Proxmox, libvirt).
     Spice,
 }

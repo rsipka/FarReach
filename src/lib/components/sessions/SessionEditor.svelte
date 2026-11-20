@@ -263,13 +263,14 @@
 		return list.length ? list : null;
 	}
 
-	const DEFAULT_PORT: Record<SessionKind, string> = { ssh: '22', rdp: '3389', vnc: '5900', spice: '5900', wsl: '0', telnet: '23', serial: '0' };
+	const DEFAULT_PORT: Record<SessionKind, string> = { ssh: '22', rdp: '3389', vnc: '5900', spice: '5900', wsl: '0', telnet: '23', serial: '0', winbox: '8291' };
 
 	function setKind(next: SessionKind): void {
 		if (next === kind) return;
 		if (portStr === DEFAULT_PORT[kind] || portStr.trim() === '') portStr = DEFAULT_PORT[next];
 		if (next !== 'ssh' && username === 'root') username = '';
 		if (next === 'ssh' && username === '') username = 'root';
+		if (next === 'winbox' && username === '') username = 'admin';
 		// A VNC user name means a Mac's own login: not one carried over.
 		if (next === 'vnc' || next === 'spice' || next === 'serial') username = '';
 		// A port name is not a host name, nor the other way round.
@@ -548,8 +549,9 @@
 		const wsl = kind === 'wsl';
 		const telnet = kind === 'telnet';
 		const serial = kind === 'serial';
+		const winbox = kind === 'winbox';
 		/** Jump hosts, proxies, login shells and ssh_config are SSH's alone. */
-		const desktop = rdp || vnc || spice || wsl || telnet || serial;
+		const desktop = rdp || vnc || spice || wsl || telnet || serial || winbox;
 		const via = vnc || spice ? viaSessionId || null : null;
 		const tlsPort = parseInt(spiceTlsPort, 10);
 		const spiceToSave: SpiceOptions | null = spice
@@ -560,7 +562,7 @@
 				}
 			: null;
 		/** WSL and VNC have no username to share; their login stays their own. */
-		const credential = rdp || telnet || kind === 'ssh' ? credentialId || null : null;
+		const credential = rdp || telnet || winbox || kind === 'ssh' ? credentialId || null : null;
 		// RDP and VNC are password logons; the toggle below is SSH-only and
 		// its value is ignored here rather than trusted. WSL signs in by
 		// itself: nothing to keep, so a password left in the form is not saved.
@@ -587,13 +589,15 @@
 				: { type: 'Agent' };
 		const tags = tagsStr.split(',').map(t => t.trim()).filter(Boolean);
 		const notesToSave = notes.trim() ? notes : null;
-		// Remote desktops paint their own screen: no terminal colours.
-		const themeToSave = kind === 'rdp' || kind === 'vnc' || kind === 'spice' ? null : terminalTheme || null;
-		const cursorToSave = kind === 'rdp' || kind === 'vnc' || kind === 'spice' ? null : cursorChoice || null;
-		const blinkToSave = kind === 'rdp' || kind === 'vnc' || kind === 'spice' || !blinkChoice ? null : blinkChoice === 'on';
+		// Remote desktops paint their own screen, and WinBox is its own
+		// program: no terminal colours.
+		const noTerminal = kind === 'rdp' || kind === 'vnc' || kind === 'spice' || winbox;
+		const themeToSave = noTerminal ? null : terminalTheme || null;
+		const cursorToSave = noTerminal ? null : cursorChoice || null;
+		const blinkToSave = noTerminal || !blinkChoice ? null : blinkChoice === 'on';
 		// Only SSH and WSL sessions have a server to monitor.
 		const monitoringToSave = (kind === 'ssh' || kind === 'wsl') && monitoringChoice ? monitoringChoice === 'on' : null;
-		const historyToSave = kind === 'rdp' || kind === 'vnc' || kind === 'spice' ? null : historyChoice || null;
+		const historyToSave = noTerminal ? null : historyChoice || null;
 		// tmux runs on an SSH server only. A name is kept only beside a choice
 		// or a folder that turns it on.
 		const tmuxNameToSave = tmuxName.trim();
@@ -682,7 +686,7 @@
 					// Picked by hand: kept. Automatic: what the last connect
 					// found, unless cleared, switched from a picked one, or
 					// the protocol changed (so did the machine type).
-					detected_os: rdp ? os : osChoice ? osChoice : autoOs || null,
+					detected_os: rdp ? os : osChoice ? osChoice : autoOs || (winbox ? 'mikrotik' : null),
 					os_manual: !rdp && !!osChoice,
 					share_path: rdp ? (sharePath.trim() || null) : null,
 					rdp_clipboard: rdp && rdpClipboard ? rdpClipboard : null,
@@ -727,7 +731,7 @@
 					shell: desktop ? null : (shell.trim() || null),
 					kind,
 					domain: rdp ? domain : null,
-					detectedOs: rdp ? os : (osChoice || autoOs || null),
+					detectedOs: rdp ? os : (osChoice || autoOs || (winbox ? 'mikrotik' : null)),
 					osManual: !rdp && !!osChoice,
 					sharePath: rdp ? sharePath : null,
 					rdpClipboard: rdp && rdpClipboard ? rdpClipboard : null,
@@ -849,6 +853,12 @@
 				<button type="button" class="auth-btn" class:active={kind === 'telnet'} disabled={saving} onclick={() => setKind('telnet')}>
 					{t('session.protocol_telnet')}
 				</button>
+				<!-- WinBox is a program on this computer: none on a phone. -->
+				{#if !isMobile() || kind === 'winbox'}
+					<button type="button" class="auth-btn" class:active={kind === 'winbox'} disabled={saving} onclick={() => setKind('winbox')}>
+						{t('session.protocol_winbox')}
+					</button>
+				{/if}
 				<!-- A serial port is on this computer: none on a phone. -->
 				{#if !isMobile() || kind === 'serial'}
 					<button type="button" class="auth-btn" class:active={kind === 'serial'} disabled={saving} onclick={() => setKind('serial')}>
@@ -864,7 +874,7 @@
 			</div>
 		</div>
 
-		<Input label={t('session.name')} bind:value={name} placeholder={kind === 'rdp' ? 'Office PC' : kind === 'telnet' ? 'Core switch' : kind === 'serial' ? 'Switch console' : 'My Server'} disabled={saving} />
+		<Input label={t('session.name')} bind:value={name} placeholder={kind === 'rdp' ? 'Office PC' : kind === 'telnet' ? 'Core switch' : kind === 'serial' ? 'Switch console' : kind === 'winbox' ? 'Router' : 'My Server'} disabled={saving} />
 
 		{#if kind === 'wsl'}
 			<div class="shell-field">
@@ -928,7 +938,7 @@
 			{/if}
 		{/if}
 
-		{#if kind === 'ssh' || kind === 'rdp' || kind === 'telnet'}
+		{#if kind === 'ssh' || kind === 'rdp' || kind === 'telnet' || kind === 'winbox'}
 			<div class="shell-field">
 				<label class="via-label" for="session-login">{t('credential.login')}</label>
 				<select id="session-login" class="via-select" value={credentialId} onchange={(e) => pickCredential(e.currentTarget.value)} disabled={saving}>
@@ -954,7 +964,7 @@
 		{/if}
 
 		{#if kind !== 'vnc' && kind !== 'spice' && kind !== 'wsl' && kind !== 'serial' && !usedCredential}
-			<Input label={kind === 'telnet' ? t('session.telnet_username') : t('session.username')} bind:value={username} placeholder={kind === 'rdp' ? 'Administrator' : kind === 'telnet' ? 'admin' : 'root'} disabled={saving} />
+			<Input label={kind === 'telnet' ? t('session.telnet_username') : t('session.username')} bind:value={username} placeholder={kind === 'rdp' ? 'Administrator' : kind === 'telnet' || kind === 'winbox' ? 'admin' : 'root'} disabled={saving} />
 		{/if}
 
 		{#if kind === 'rdp'}
@@ -1158,6 +1168,15 @@
 				</label>
 				<p class="shell-hint">{t('serial.hint')}</p>
 			</div>
+		{:else if kind === 'winbox'}
+			<!-- WinBox logs in by itself with what is saved here; how the
+			     password reaches it is Settings' choice (Sessions). -->
+			{#if !usedCredential}
+				<div class="shell-field">
+					<SecretRefField approvable label={t('session.password_optional')} bind:value={password} bind:secretRef={passwordRef} placeholder={t('session.stored_encrypted')} disabled={saving} onpick={(e) => (username = nameFromEntry(username, e))} />
+				</div>
+			{/if}
+			<p class="shell-hint">{t('winbox.editor_hint')}</p>
 		{:else if kind === 'wsl'}
 			<!-- wsl.exe signs in by itself: no password, key, jump host, proxy or
 			     ssh_config here. Only which Linux user, if not the distro's default. -->
@@ -1379,7 +1398,7 @@
 
 		<Input label={t('session.tags')} bind:value={tagsStr} placeholder={kind === 'rdp' ? 'office, windows' : 'production, web, linux'} disabled={saving} />
 
-		{#if kind === 'ssh' || kind === 'telnet' || kind === 'vnc' || kind === 'spice'}
+		{#if kind === 'ssh' || kind === 'telnet' || kind === 'vnc' || kind === 'spice' || kind === 'winbox'}
 			<div class="folder-section">
 				<span class="folder-label">{t('session.os_icon')}</span>
 				<div class="os-row">
@@ -1408,7 +1427,7 @@
 			</div>
 		{/if}
 
-		{#if kind !== 'rdp' && kind !== 'vnc' && kind !== 'spice'}
+		{#if kind !== 'rdp' && kind !== 'vnc' && kind !== 'spice' && kind !== 'winbox'}
 			<Disclosure title={t('termtheme.session_title')} summary={colorsSummary} bind:open={colorsOpen}>
 				<TerminalThemeList
 					selected={terminalTheme}

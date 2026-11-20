@@ -571,7 +571,8 @@ const OS_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10)
 /// 1. `/etc/os-release` (Linux; MSYS2/Cygwin on Windows ship one too)
 /// 2. `uname -s` (macOS, BSDs; Git Bash on Windows answers `MINGW64_NT-10.0`)
 /// 3. `cmd /c ver` (Windows, whatever its default shell)
-/// Returns a lowercase distro ID (e.g. "debian", "ubuntu", "alpine"),
+/// Returns a lowercase distro ID (e.g. "debian", "ubuntu", "alpine",
+/// "raspbian" for Raspberry Pi OS),
 /// "windows", or "unknown" when nothing answered: a router or a restricted
 /// shell is not Linux, and guessing so put a penguin on it for good.
 /// (Ported from the ReachQ fork by CPTProgrammer.)
@@ -611,6 +612,14 @@ pub async fn ssh_detect_os(
                 return Ok("unifi".to_string());
             }
         }
+        // Raspberry Pi OS (64-bit, and 32-bit since Bookworm) says ID=debian;
+        // only the old 32-bit Raspbian says ID=raspbian. Ubuntu or another
+        // distro on a Pi keeps its own name.
+        if os == "debian" || os == "linux" {
+            if let Ok((_, _, 0)) = exec_on_connection_with_exit_code_timeout(&handle, RASPBERRY_PI_PROBE, OS_PROBE_TIMEOUT).await {
+                return Ok("raspbian".to_string());
+            }
+        }
         return Ok(os);
     }
     if let Ok((out, _, 0)) = exec_on_connection_with_exit_code_timeout(&handle, "cmd /c ver", OS_PROBE_TIMEOUT).await {
@@ -631,6 +640,10 @@ pub async fn ssh_detect_os(
 /// `ubnt-device-info`, access points and switches `/etc/board.info` and
 /// `mca-cli-op`.
 const UNIFI_PROBE: &str = "test -e /etc/board.info || test -e /usr/bin/ubnt-device-info || test -e /sbin/ubnt-device-info || command -v mca-cli-op >/dev/null 2>&1";
+
+/// Succeeds only on a Raspberry Pi running Raspberry Pi OS, which ships
+/// `/etc/rpi-issue`; the board's device-tree model names it too.
+const RASPBERRY_PI_PROBE: &str = "test -e /etc/rpi-issue || grep -qa 'Raspberry Pi' /proc/device-tree/model 2>/dev/null";
 
 /// The RouterOS CLI's answer to a command it does not have, such as
 /// `bad command name cat (line 1 column 1)`.

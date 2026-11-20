@@ -40,7 +40,7 @@ function kindOf(s: Pick<SessionConfig, 'kind'>): SessionKind {
 /** The kinds the session editor offers a saved credential for. */
 export function takesCredential(s: Pick<SessionConfig, 'kind'>): boolean {
 	const k = kindOf(s);
-	return k === 'ssh' || k === 'rdp' || k === 'telnet';
+	return k === 'ssh' || k === 'rdp' || k === 'telnet' || k === 'winbox';
 }
 
 /** Whether a saved credential fills in the session's login, once the

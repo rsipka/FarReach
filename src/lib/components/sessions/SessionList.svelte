@@ -59,6 +59,7 @@
 	import { DEFAULT_SERIAL_OPTIONS } from '#lib/ipc/serial.js';
 	import { spiceParamsFromOptions, spiceReadVv } from '#lib/ipc/spice.js';
 	import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
+	import { winboxLaunch } from '#lib/ipc/winbox.js';
 	import { osNeedsDetection } from '#lib/data/distro-icons.js';
 	import { sshConnect, sshDisconnect, sshDetectOs, sshProbeAddresses, sshTmuxChosen, tmuxStartScript, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
 	import { addressName, autoOrder, checksAddresses, plainOrder, connectMode, hasAltAddresses, isUnreachable, lastAddress, rememberAddress, sessionAddresses, type ResolvedAddress } from '#lib/sessions/addresses.js';
@@ -280,6 +281,7 @@
 		{ id: 'vnc', label: 'VNC' },
 		{ id: 'spice', label: 'SPICE' },
 		{ id: 'telnet', label: 'Telnet' },
+		{ id: 'winbox', label: 'WinBox' },
 		{ id: 'wsl', label: 'WSL' }
 	];
 	function loadView(): { sort: SortKey; favorites: boolean; kinds: SessionKind[]; tags: string[] } {
@@ -1323,6 +1325,36 @@
 		};
 	}
 
+	/**
+	 * Start WinBox 4 on a saved session: a program of its own, so no tab.
+	 * Settings say where it is and how the password reaches it.
+	 */
+	async function openWinbox(session: SessionConfig): Promise<void> {
+		if (isMobile()) {
+			addToast(t('winbox.desktop_only'), 'error');
+			return;
+		}
+		const auth = session.auth_method;
+		const settings = getSettings();
+		try {
+			const launched = await winboxLaunch(
+				{
+					host: session.host,
+					port: session.port,
+					username: session.username || null,
+					password: auth.type === 'Password' && !auth.password_ref ? (auth.password ?? null) : null,
+					passwordRef: auth.type === 'Password' ? (auth.password_ref ?? null) : null,
+					passwordMode: settings.winboxPassword,
+					program: settings.winboxPath || null,
+				},
+				session.id
+			);
+			addToast(t(launched.copied ? 'winbox.started_copied' : 'winbox.started', { name: session.name }), 'success');
+		} catch (err) {
+			addToast(String(err), 'error');
+		}
+	}
+
 	/** Launch a local WSL session as a terminal tab */
 	async function openWsl(session: SessionConfig): Promise<void> {
 		const distro = session.wsl_distro?.trim();
@@ -1459,6 +1491,10 @@
 		}
 		if (sessionKind(session) === 'serial') {
 			openSerial(session);
+			return;
+		}
+		if (sessionKind(session) === 'winbox') {
+			void openWinbox(session);
 			return;
 		}
 		// Check if credentials are stored in the session (from vault)
@@ -1689,8 +1725,9 @@
 			fallbackPassword = '';
 
 			// Detect OS in background and persist to session. A host saved as
-			// plain Linux or unknown is asked again: older versions saved that
-			// for MikroTik and UniFi devices, which have their own logos now.
+			// plain Linux, unknown or Debian is asked again: older versions saved
+			// that for MikroTik and UniFi devices and Raspberry Pi OS, which have
+			// their own logos now.
 			if (osNeedsDetection(session.detected_os, session.os_manual)) {
 				sshDetectOs(id).then(async (osId) => {
 					if (osId && osId !== session.detected_os) {

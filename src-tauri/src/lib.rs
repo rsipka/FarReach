@@ -66,6 +66,8 @@ use ipc::monitoring_commands::*;
 use ipc::pty_commands::*;
 #[cfg(desktop)]
 use ipc::serial_commands::*;
+#[cfg(desktop)]
+use ipc::winbox_commands::*;
 use ipc::telnet_commands::*;
 use ipc::saved_credential_commands::*;
 use ipc::session_commands::*;
@@ -664,6 +666,9 @@ pub fn run() {
             serial_send,
             serial_break,
             serial_disconnect,
+            // WinBox 4, started as its own program
+            winbox_find,
+            winbox_launch,
             // Monitoring commands
             monitoring_start,
             monitoring_start_wsl,
