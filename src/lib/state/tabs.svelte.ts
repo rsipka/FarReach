@@ -6,7 +6,7 @@ import type { SerialConnectParams } from '#lib/ipc/serial.js';
 import type { HistoryMode } from '#lib/ipc/history.js';
 import * as splits from '#lib/terminal/split.js';
 import { isMobile } from '#lib/platform.js';
-import type { Direction, Split } from '#lib/terminal/split.js';
+import type { Direction, Layout, Side } from '#lib/terminal/split.js';
 
 export type TabType = 'local' | 'ssh' | 'rdp' | 'vnc' | 'telnet' | 'serial';
 
@@ -79,42 +79,96 @@ let tabs = $state<Tab[]>([]);
 
 let activeTab = $derived<Tab | undefined>(tabs.find((t) => t.active));
 
-/** Two tabs side by side (#106); see #lib/terminal/split. */
-let split = $state<Split | null>(null);
-/** A tab being dragged from the tab bar, for the terminal area to drop beside. */
+/** Tabs side by side, split any way (#106); see #lib/terminal/split. */
+let split = $state.raw<Layout>(null);
+/** A tab being dragged (from the tab bar or a pane's bar), for the terminal area to drop. */
 let draggedTab = $state<string | null>(null);
 
-export function getSplit(): Split | null {
+export function getSplit(): Layout {
 	return split;
 }
 
+/** Is this tab one of the panes on screen? */
+export function isInSplit(id: string): boolean {
+	return splits.contains(split, id);
+}
+
+/** A new local terminal for a split, without it taking the focused pane. */
+function freshLocal(): string | null {
+	if (isMobile()) return null;
+	const keep = split;
+	const fresh = createTab('local');
+	split = keep;
+	return fresh.id;
+}
+
 /**
- * Show `tabId` beside the focused tab, which keeps its place. The focused
- * tab itself (dragged out, say) goes beside its neighbour in the bar; with no
- * tab to pair it with, a new local terminal opens beside it; not on a phone
- * or tablet, which has no local shell, so there nothing happens.
+ * Show `tabId` on `side` of the focused pane, which keeps its place. Asked
+ * for the focused tab itself (its menu, its bar's button), the next tab not on
+ * screen comes in on that side instead; with none, a new local terminal (not
+ * on a phone or tablet, which has no local shell: there nothing happens).
  */
-export function splitWith(tabId: string, direction: Direction): void {
-	let first = activeTab?.id;
-	if (first === tabId) first = splits.neighbour(tabs.map((t) => t.id), tabId) ?? undefined;
-	if (!first) {
-		if (isMobile()) return;
-		const fresh = createTab('local');
-		split = splits.open(tabId, fresh.id, direction, split?.ratio ?? 0.5);
-		return;
+export function splitWith(tabId: string, direction: Direction | Side): void {
+	const side = direction === 'right' || direction === 'down' ? splits.sideOf(direction) : direction;
+	const focused = activeTab?.id;
+	if (!focused) return;
+	let incoming = tabId;
+	if (tabId === focused) {
+		const other = splits.neighbour(tabs.map((t) => t.id), focused, splits.leaves(split)) ?? freshLocal();
+		if (!other) return;
+		incoming = other;
 	}
-	const next = splits.open(first, tabId, direction, split?.ratio ?? 0.5);
+	const next = splits.insert(split, focused, incoming, side);
 	if (!next) return;
 	split = next;
+	activateTab(incoming);
+}
+
+/**
+ * A dragged tab let go over the terminal area (see splits.dropAt): beside a
+ * pane, along a whole side, or into a pane (two panes trade places).
+ */
+export function dropTab(tabId: string, drop: Pick<splits.Drop, 'target' | 'zone'>): void {
+	const { target, zone } = drop;
+	if (target === null) {
+		if (zone !== 'center') split = splits.insertAtEdge(split, tabId, zone);
+		activateTab(tabId);
+		return;
+	}
+	if (zone === 'center') {
+		if (split) split = splits.place(split, target, tabId);
+		activateTab(tabId);
+		return;
+	}
+	if (target === tabId) {
+		// Its own pane: with no split, it goes to that side and the next tab
+		// takes the rest; in a split it is already there.
+		if (split) return;
+		const other = splits.neighbour(tabs.map((t) => t.id), tabId) ?? freshLocal();
+		if (!other) return;
+		split = splits.insert(null, other, tabId, zone);
+	} else {
+		split = splits.insert(split, target, tabId, zone);
+	}
 	activateTab(tabId);
 }
 
+/** Back to one tab at a time. */
 export function unsplit(): void {
 	split = null;
 }
 
-export function setSplitRatio(ratio: number): void {
-	if (split) split.ratio = splits.clampRatio(ratio);
+/** Take one tab out of the split; it stays open as a tab. */
+export function removeFromSplit(id: string): void {
+	const wasFocused = activeTab?.id === id;
+	const after = splits.remove(split, id);
+	split = after.layout;
+	if (wasFocused && after.focus) activateTab(after.focus);
+}
+
+/** Move one divider (by its node's path, see splits.setRatio). */
+export function setSplitRatio(path: string, ratio: number): void {
+	split = splits.setRatio(split, path, ratio);
 }
 
 export function getDraggedTab(): string | null {
@@ -183,14 +237,14 @@ export function closeTab(id: string): void {
 	}
 
 	const wasActive = tabs[index].active;
-	// One of a split's two closing ends the split; the other keeps focus.
-	const after = splits.close(split, id);
-	split = after.split;
+	// A pane closing: the one beside it gets its room, and the focus.
+	const after = splits.remove(split, id);
+	split = after.layout;
 
 	tabs.splice(index, 1);
 	dropEmptyGroups();
 
-	if (after.focus) {
+	if (wasActive && after.focus) {
 		activateTab(after.focus);
 	} else if (wasActive && tabs.length > 0) {
 		// If the closed tab was active and there are remaining tabs, activate an adjacent one
@@ -203,7 +257,7 @@ export function activateTab(id: string): void {
 	// A tab shown is never hidden in a folded group.
 	const g = groupOfTab(id);
 	if (g?.collapsed) g.collapsed = false;
-	// In a split, a tab other than the two takes the focused pane.
+	// In a split, a tab not on screen takes the focused pane.
 	split = splits.activate(split, activeTab?.id, id);
 	for (const tab of tabs) {
 		tab.active = tab.id === id;

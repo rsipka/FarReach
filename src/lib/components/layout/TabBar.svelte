@@ -1,6 +1,6 @@
 <script lang="ts">
 	import {
-		getTabs, getActiveTab, createTab, closeTab, activateTab, getSplit, splitWith, unsplit, getDraggedTab, setDraggedTab, type Tab,
+		getTabs, getActiveTab, createTab, closeTab, activateTab, getSplit, splitWith, unsplit, removeFromSplit, getDraggedTab, setDraggedTab, type Tab,
 		getGroups, createGroup, addToGroup, removeFromGroup, renameGroup, setGroupColor, toggleGroup, groupHidden, ungroup, closeGroup,
 		GROUP_COLORS, type GroupColor, type TabGroup,
 		tabsBeside, requestCloseBeside, getPendingClose, confirmPendingClose, cancelPendingClose
@@ -9,7 +9,7 @@
 	import { sshTmuxKill, sshTmuxList, sshTmuxWindows, sshTmuxWindow, type TmuxListed, type TmuxWindow, type TmuxWindowOp } from '#lib/ipc/ssh.js';
 	import { validTmuxName, newViewTag } from '#lib/terminal/tmux.js';
 	import { newTab, isTmuxViewTab, openTmuxWindowTab } from '#lib/terminal/tmux-tabs.js';
-	import { SPLIT_MIN_WIDTH } from '#lib/terminal/split.js';
+	import { SPLIT_MIN_WIDTH, contains } from '#lib/terminal/split.js';
 	import { isMobile } from '#lib/platform.js';
 	import { getSettings } from '#lib/state/settings.svelte.js';
 	import { shortcutLabel } from '#lib/state/shortcuts.svelte.js';
@@ -103,7 +103,7 @@
 		closeTab(id);
 	}
 
-	// Split view (#106): drag a tab onto the terminal, or use its menu.
+	// Split view (#106): drag a tab onto a pane's side or into it, or use its menu.
 	let split = $derived(getSplit());
 	let dragged = $derived(getDraggedTab());
 	let menu = $state<{ x: number; y: number; id: string } | null>(null);
@@ -143,7 +143,7 @@
 	}
 
 	function inSplit(id: string): boolean {
-		return !!split && (split.first === id || split.second === id);
+		return contains(split, id);
 	}
 
 	function menuItems(id: string): MenuItem[] {
@@ -156,6 +156,7 @@
 			{ label: t('split.right'), hint: `${mod}E`, disabled: noSplit, action: () => splitWith(id, 'right') },
 			{ label: t('split.down'), hint: `${mod}O`, disabled: noSplit, action: () => splitWith(id, 'down') }
 		);
+		if (split && contains(split, id)) items.push({ label: t('split.remove'), action: () => removeFromSplit(id) });
 		if (split) items.push({ label: t('split.unsplit'), hint: `${mod}U`, action: unsplit });
 
 		// Groups: a new one, any other there is, or out of the one it is in.
