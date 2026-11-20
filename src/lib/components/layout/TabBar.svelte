@@ -17,7 +17,7 @@
 		getBroadcastTargets, isTerminalTab, toggleBroadcastTarget, broadcastToAll, stopBroadcast
 	} from '#lib/state/broadcast.svelte.js';
 	import { BROADCAST_ICON } from '#lib/terminal/broadcast.js';
-	import { openTabHistory } from '#lib/state/history.svelte.js';
+	import { openTabHistory, openTabCommandPicker } from '#lib/state/history.svelte.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { requestSessionAction } from '#lib/state/palette.svelte.js';
 	import { writeText } from '@tauri-apps/plugin-clipboard-manager';
@@ -213,7 +213,11 @@
 		items.push(...broadcastItems(tab));
 		items.push(...windowItems(id));
 		if (tab && !isDesktopTab(tab)) {
-			items.push({ label: '', separator: true }, { label: t('history.search_menu'), hint: `${mod}H`, action: () => openTabHistory(tab) });
+			items.push(
+				{ label: '', separator: true },
+				{ label: t('history.picker_menu'), hint: actionLabel('terminal.commandPicker'), action: () => openTabCommandPicker(tab) },
+				{ label: t('history.search_menu'), hint: `${mod}H`, action: () => openTabHistory(tab) }
+			);
 		}
 
 		// Duplicate and close, as a browser's tab menu has them (#160).

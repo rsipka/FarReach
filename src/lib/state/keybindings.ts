@@ -28,6 +28,7 @@ export type ActionId =
 	| 'zoom.reset'
 	| 'terminal.find'
 	| 'terminal.history'
+	| 'terminal.commandPicker'
 	| 'terminal.copy'
 	| 'terminal.paste'
 	| 'split.right'
@@ -71,6 +72,8 @@ export const ACTIONS: ActionDef[] = [
 	{ id: 'zoom.reset', group: 'app', label: 'shortcuts.zoom_reset', defaults: ['Mod+0'] },
 	{ id: 'terminal.find', group: 'terminal', label: 'shortcuts.find', defaults: ['Mod+Shift+F'] },
 	{ id: 'terminal.history', group: 'terminal', label: 'shortcuts.history', defaults: ['Mod+Shift+H'] },
+	// A shell's own Ctrl+R stays with the shell.
+	{ id: 'terminal.commandPicker', group: 'terminal', label: 'shortcuts.command_picker', defaults: ['Mod+Shift+R'] },
 	// Only while text is selected: otherwise Ctrl+C still interrupts.
 	// The Control key copies and pastes on a Mac as well, as it always has.
 	{ id: 'terminal.copy', group: 'terminal', label: 'shortcuts.copy', defaults: ['Mod+C'], macDefaults: ['Mod+C', 'Ctrl+C'] },

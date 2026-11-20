@@ -12,6 +12,7 @@
 	import Sidebar from './Sidebar.svelte';
 	import StatusBar from './StatusBar.svelte';
 	import HistoryPanel from '#lib/components/terminal/HistoryPanel.svelte';
+	import CommandPicker from '#lib/components/terminal/CommandPicker.svelte';
 	import { monitorBarShown } from '#lib/state/monitor-bar.svelte.js';
 	import Toast from '#lib/components/shared/Toast.svelte';
 	import UpdateBanner from '#lib/components/shared/UpdateBanner.svelte';
@@ -250,6 +251,7 @@
 	<!-- Outside the bar's condition: an SSH or WSL tab swaps the status bar
 	     for the monitor bar, and the panel must open over those too. -->
 	<HistoryPanel />
+	<CommandPicker />
 	<Toast />
 	<UpdateBanner />
 	<UpdateDialog open={updater.startupBlocking} />

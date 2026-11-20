@@ -6,6 +6,7 @@
 import { historyConfigure, historyPause, type TapStatus } from '#lib/ipc/history.js';
 import { sessionLogPause, sessionLogStatus, sessionLogStop } from '#lib/ipc/ssh.js';
 import { getSettings } from '#lib/state/settings.svelte.js';
+import { getTerminalInput } from '#lib/state/snippets.svelte.js';
 
 /** A tab's file log: where it writes (null until known) and whether it is paused. */
 export interface TabLog {
@@ -105,4 +106,39 @@ export function pushHistoryRetention(): void {
 /** Opens the search on a tab's session, pasting back into that tab. */
 export function openTabHistory(tab: { id: string; sessionId?: string | null; sessionName?: string | null } | undefined, text?: string): void {
 	openHistoryPanel({ text, sessionId: tab?.sessionId ?? null, sessionName: tab?.sessionName ?? null, tabId: tab?.id ?? null });
+}
+
+/** The quick command picker (Ctrl+Shift+R): a small list of earlier
+ *  commands to paste into a tab, beside the full search panel. */
+let picker = $state<HistoryPanelOpen | null>(null);
+
+export function openCommandPicker(opts: HistoryPanelOpen = {}): void {
+	picker = { ...opts };
+}
+
+export function closeCommandPicker(): void {
+	picker = null;
+}
+
+export function commandPicker(): HistoryPanelOpen | null {
+	return picker;
+}
+
+/** Opens the picker on a tab's session, pasting into that tab. */
+export function openTabCommandPicker(tab: { id: string; sessionId?: string | null; sessionName?: string | null } | undefined, text?: string): void {
+	openCommandPicker({ text, sessionId: tab?.sessionId ?? null, sessionName: tab?.sessionName ?? null, tabId: tab?.id ?? null });
+}
+
+/**
+ * Types a command from history into a tab as one pasted line (bracketed
+ * when the shell asks for it). With `run` Enter follows; without, the
+ * line waits for the user. False when the tab has no terminal to type into.
+ */
+export function pasteHistoryCommand(tabId: string | null | undefined, command: string, run = false): boolean {
+	const input = tabId ? getTerminalInput(tabId) : undefined;
+	if (!input) return false;
+	const line = command.replace(/[\r\n]+/g, ' ');
+	const body = (input.bracketed() ? `\x1b[200~${line}\x1b[201~` : line) + (run ? '\r' : '');
+	input.send(Array.from(new TextEncoder().encode(body)));
+	return true;
 }
