@@ -2470,6 +2470,17 @@ pub(crate) async fn verify_host_identity_with(
         }
         return true;
     }
+    // The session's server reached on another of its addresses: the key it
+    // trusts there is the same server's, and is kept under this one too.
+    // Only when this address has none of its own: a saved key that differs
+    // is still a changed key.
+    if let (Some(t), None) = (trust, &on_session) {
+        if t.known_under_other_address(host_id, fingerprint) {
+            tracing::info!("Host identity for {} matches the session's key under another of its addresses", host_id);
+            t.save(app_handle.as_ref(), host_id, key_type, fingerprint);
+            return true;
+        }
+    }
 
     let (changed, old_fingerprint) = match known {
         Some(existing) => {

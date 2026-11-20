@@ -91,6 +91,7 @@ export const SETTINGS_INDEX: IndexedRow[] = [
 	{ page: 'sessions', label: 'settings.double_click_open', desc: 'settings.double_click_open_desc' },
 	{ page: 'sessions', label: 'settings.close_tab_on_exit', desc: 'settings.close_tab_on_exit_desc' },
 	{ page: 'sessions', label: 'settings.server_monitoring', desc: 'settings.server_monitoring_desc', words: 'cpu memory disk stats' },
+	{ page: 'sessions', label: 'settings.check_addresses', desc: 'settings.check_addresses_desc', words: 'address silent probe reachability ip' },
 	{ page: 'about', label: 'settings.website', desc: 'settings.website_desc', words: 'home page download' },
 	{ page: 'about', label: 'settings.changelog', desc: 'settings.changelog_desc', words: 'release notes what is new history' },
 	{ page: 'about', label: 'settings.license', desc: 'settings.license_desc', words: 'mit copyright licence' },

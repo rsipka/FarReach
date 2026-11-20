@@ -106,6 +106,29 @@ export interface SessionConfig {
    *  only: saved by connecting (Accept and save) and changed with
    *  sessionHostKeyRemove / sessionHostKeyReplace; a save keeps them. */
   host_keys?: SavedHostKey[] | null;
+  /** A name for the main address, shown when there are others ("Office"). */
+  host_label?: string | null;
+  /** Other addresses of the same server, by priority after the main one
+   *  (see #lib/sessions/addresses). SSH only for now. */
+  alt_addresses?: SessionAddress[] | null;
+  /** How a session with other addresses picks one; unset: `auto`. */
+  connect_mode?: ConnectMode | null;
+  /** Check which addresses answer before connecting; unset: as Settings says. */
+  address_check?: boolean | null;
+}
+
+/** `auto`: by priority, skipping what does not answer; `ask`: a picker on
+ *  every connect; `main`: the main address only. */
+export type ConnectMode = 'auto' | 'ask' | 'main';
+
+/** One more address of a session's server. */
+export interface SessionAddress {
+  label?: string;
+  host: string;
+  /** Unset: the session's port. */
+  port?: number | null;
+  /** Reached straight, without the session's jump hosts or proxy. */
+  direct?: boolean;
 }
 
 /** A server key a session trusts. */
@@ -244,6 +267,10 @@ export async function sessionCreate(params: {
   monitoring?: boolean | null;
   history?: HistoryMode | null;
   tmux?: TmuxSetting | null;
+  hostLabel?: string | null;
+  altAddresses?: SessionAddress[] | null;
+  connectMode?: ConnectMode | null;
+  addressCheck?: boolean | null;
 }): Promise<SessionConfig> {
   return invoke<SessionConfig>('session_create', {
     name: params.name,
@@ -278,6 +305,10 @@ export async function sessionCreate(params: {
     monitoring: params.monitoring ?? null,
     history: params.history || null,
     tmux: params.tmux ?? null,
+    hostLabel: params.hostLabel?.trim() || null,
+    altAddresses: params.altAddresses?.length ? params.altAddresses : null,
+    connectMode: params.altAddresses?.length ? (params.connectMode ?? null) : null,
+    addressCheck: params.altAddresses?.length ? (params.addressCheck ?? null) : null,
   });
 }
 

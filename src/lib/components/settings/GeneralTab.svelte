@@ -526,6 +526,21 @@
 		</div>
 	</div>
 
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.check_addresses')}</span>
+			<span class="setting-description">{t('settings.check_addresses_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.checkAddresses}
+				label={t('settings.check_addresses')}
+				onchange={(v) => updateSetting('checkAddresses', v)}
+			/>
+		</div>
+	</div>
+
 	<!-- A phone has no X server to point at: desktop only. -->
 
 	{#if !isMobile()}

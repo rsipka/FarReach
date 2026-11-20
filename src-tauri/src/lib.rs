@@ -473,6 +473,7 @@ pub fn run() {
             mcp_confirm_response,
             // SSH commands
             ssh_connect,
+            crate::ipc::ssh_commands::ssh_probe_addresses,
             ssh_disconnect,
             ssh_send,
             ssh_ready,
@@ -959,6 +960,7 @@ pub fn run() {
             mcp_confirm_response,
             // SSH commands
             ssh_connect,
+            crate::ipc::ssh_commands::ssh_probe_addresses,
             ssh_disconnect,
             ssh_send,
             ssh_ready,

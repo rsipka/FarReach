@@ -87,11 +87,30 @@ pub fn parse_typed(fingerprint: &str) -> Option<String> {
 pub struct SessionTrust {
     pub session_id: String,
     saved: Mutex<Vec<SavedHostKey>>,
+    /// Every `host:port` the session's own server is reached on (its main
+    /// address and its other ones): one server, so a key saved under one of
+    /// them is that server's key under all of them.
+    addresses: Vec<String>,
 }
 
 impl SessionTrust {
     pub fn new(session_id: impl Into<String>, saved: Vec<SavedHostKey>) -> Arc<Self> {
-        Arc::new(Self { session_id: session_id.into(), saved: Mutex::new(saved) })
+        Self::with_addresses(session_id, saved, Vec::new())
+    }
+
+    pub fn with_addresses(session_id: impl Into<String>, saved: Vec<SavedHostKey>, addresses: Vec<String>) -> Arc<Self> {
+        Arc::new(Self { session_id: session_id.into(), saved: Mutex::new(saved), addresses })
+    }
+
+    /// Whether `fingerprint` (bare) is saved for the session's server under
+    /// another of its addresses than `host_id`, itself one of them. A jump
+    /// host's key never counts for the server, nor the other way round.
+    pub fn known_under_other_address(&self, host_id: &str, fingerprint: &str) -> bool {
+        if !self.addresses.iter().any(|a| a == host_id) {
+            return false;
+        }
+        let saved = self.saved.lock().unwrap_or_else(|e| e.into_inner());
+        saved.iter().any(|k| k.host != host_id && self.addresses.contains(&k.host) && bare(&k.fingerprint) == fingerprint)
     }
 
     /// The bare fingerprint saved for `host_id`, if any.
@@ -164,6 +183,23 @@ mod tests {
         assert_eq!(parse_typed("SHA256:short"), None);
         assert_eq!(parse_typed(&format!("MD5:{b}")), None);
         assert_eq!(parse_typed(&format!("SHA256:{}", b.replace('A', "-"))), None);
+    }
+
+    #[test]
+    fn a_key_counts_for_every_address_of_the_server() {
+        let key = |host: &str, fp: &str| SavedHostKey { host: host.into(), key_type: String::new(), fingerprint: with_prefix(fp), saved_at: None };
+        let t = SessionTrust::with_addresses(
+            "s1",
+            vec![key("10.0.0.5:22", "AAA"), key("bastion.example.com:22", "JJJ")],
+            vec!["10.0.0.5:22".into(), "server.example.com:2222".into()],
+        );
+        assert!(t.known_under_other_address("server.example.com:2222", "AAA"));
+        // Another key under the other address: asked about, as a new one.
+        assert!(!t.known_under_other_address("server.example.com:2222", "BBB"));
+        // A jump host's key is not the server's.
+        assert!(!t.known_under_other_address("server.example.com:2222", "JJJ"));
+        // Nor is an address outside the session's.
+        assert!(!t.known_under_other_address("other.example.com:22", "AAA"));
     }
 
     #[test]
