@@ -14,6 +14,7 @@ use crate::pty::manager::PtyManager;
 use crate::serial::port::SerialManager;
 use crate::rdp::RdpManager;
 use crate::vnc::VncManager;
+use crate::spice::SpiceManager;
 use crate::ssh::client::SshManager;
 use crate::tofu::types::SchemaCache;
 use crate::tunnel::manager::TunnelManager;
@@ -51,6 +52,11 @@ pub enum SessionKind {
     Serial,
     /// MikroTik WinBox 4, started as a program of its own. Desktop only.
     Winbox,
+    /// A SPICE display (KVM/QEMU, Proxmox, libvirt).
+    Spice,
+    /// A web management page (iDRAC, iLO, Proxmox VE...), shown in a window
+    /// of its own that cannot reach the app; see `crate::web`.
+    Web,
 }
 
 impl SessionKind {
@@ -86,7 +92,7 @@ pub struct SessionConfig {
     /// is refused. Off unless the user turned it on; see `build_auth`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub try_agent_keys: Option<bool>,
-    /// VNC only: a saved SSH session to reach the server through.
+    /// VNC and SPICE only: a saved SSH session to reach the server through.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub via_session_id: Option<String>,
     /// WSL only: distribution name (e.g. "Ubuntu")
@@ -95,6 +101,9 @@ pub struct SessionConfig {
     /// Telnet only: how it talks to the device (mode, Enter, Backspace).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub telnet: Option<crate::telnet::protocol::TelnetOptions>,
+    /// SPICE only: TLS port and how the server's certificate is checked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spice: Option<crate::spice::SpiceOptions>,
     /// Serial only: speed, framing, flow control and keys.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub serial: Option<crate::serial::options::SerialOptions>,
@@ -216,6 +225,9 @@ pub struct SessionConfig {
     /// them in order without checking first.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub address_check: Option<bool>,
+    /// Web only: address, storage, sign-in and trusted certificates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub web: Option<crate::web::WebOptions>,
 }
 
 /// One more address of a session's server.
@@ -274,7 +286,17 @@ impl SessionConfig {
         if self.kind != SessionKind::Ssh || self.x11_desktop.as_ref().is_some_and(|d| d.check().is_err()) {
             self.x11_desktop = None;
         }
+        if self.kind != SessionKind::Spice || self.spice.as_ref().is_some_and(|o| o.is_empty()) {
+            self.spice = None;
+        }
         self.tidy_addresses();
+        if self.kind == SessionKind::Web {
+            if let Some(w) = self.web.as_mut() {
+                w.tidy();
+            }
+        } else {
+            self.web = None;
+        }
     }
 
     /// Other addresses without a host are dropped, as is a mode nobody
@@ -497,6 +519,7 @@ pub struct AppState {
     pub rdp_manager: Arc<tokio::sync::Mutex<RdpManager>>,
     pub telnet_manager: Arc<tokio::sync::Mutex<crate::telnet::TelnetManager>>,
     pub vnc_manager: Arc<tokio::sync::Mutex<VncManager>>,
+    pub spice_manager: Arc<tokio::sync::Mutex<SpiceManager>>,
     pub vault_manager: Arc<tokio::sync::Mutex<VaultManager>>,
     pub plugin_manager: Arc<tokio::sync::Mutex<PluginManager>>,
     /// URL of the marketplace registry JSON file.
@@ -545,6 +568,7 @@ impl AppState {
             rdp_manager: Arc::new(tokio::sync::Mutex::new(RdpManager::new())),
             telnet_manager: Arc::new(tokio::sync::Mutex::new(crate::telnet::TelnetManager::new())),
             vnc_manager: Arc::new(tokio::sync::Mutex::new(VncManager::new())),
+            spice_manager: Arc::new(tokio::sync::Mutex::new(SpiceManager::new())),
             vault_manager: Arc::new(tokio::sync::Mutex::new(VaultManager::new(app_dir.clone()))),
             plugin_manager: Arc::new(tokio::sync::Mutex::new(PluginManager::new(app_dir.join("plugins")))),
             marketplace_index_url: Arc::new(RwLock::new(

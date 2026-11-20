@@ -474,6 +474,10 @@ pub async fn ssh_send(
     connection_id: String,
     data: Vec<u8>,
 ) -> Result<(), String> {
+    // A ZMODEM transfer holds the line.
+    if crate::zmodem::intercept_input(&connection_id, &data) {
+        return Ok(());
+    }
     crate::history::input(&connection_id, &data);
     let manager = state.ssh_manager.lock().await;
     manager.send_data(&connection_id, &data).map_err(|e| e.to_string())
@@ -572,6 +576,17 @@ pub async fn ssh_list_connections(
 ) -> Result<Vec<ConnectionInfo>, String> {
     let manager = state.ssh_manager.lock().await;
     Ok(manager.list_connections())
+}
+
+/// The algorithms the connection's key exchange settled on, for the tab's
+/// tooltip; `None` before the first one or on a shared connection.
+#[tauri::command]
+pub async fn ssh_connection_algorithms(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+) -> Result<Option<crate::ssh::client::NegotiatedAlgorithms>, String> {
+    let manager = state.ssh_manager.lock().await;
+    manager.algorithms(&connection_id).map_err(|e| e.to_string())
 }
 
 /// OS probes answer at once or not at all.

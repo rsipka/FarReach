@@ -291,6 +291,23 @@ export async function sshListConnections(): Promise<ConnectionInfo[]> {
   return invoke<ConnectionInfo[]>('ssh_list_connections');
 }
 
+/** What a connection's key exchange settled on. The MACs are empty for a
+ *  cipher that carries its own (GCM, ChaCha20-Poly1305). */
+export interface NegotiatedAlgorithms {
+  kex: string;
+  host_key: string;
+  cipher: string;
+  mac_out: string;
+  mac_in: string;
+  compression_out: string;
+  compression_in: string;
+}
+
+/** `null` before the first key exchange, or on a shared (ControlMaster) connection. */
+export async function sshConnectionAlgorithms(connectionId: string): Promise<NegotiatedAlgorithms | null> {
+  return invoke<NegotiatedAlgorithms | null>('ssh_connection_algorithms', { connectionId });
+}
+
 export async function sshDetectOs(connectionId: string): Promise<string> {
   return invoke<string>('ssh_detect_os', { connectionId });
 }

@@ -126,14 +126,19 @@ pub(crate) fn approval_context(s: &SessionConfig) -> String {
     if let (Some(alt), Some(list)) = (s.alt_addresses.as_ref(), v.as_array_mut()) {
         list.push(serde_json::json!(alt));
     }
+    // A SPICE session's TLS port and certificate checks decide where its
+    // password goes, so they are part of what was approved too.
+    if let (Some(spice), Some(list)) = (s.spice.as_ref(), v.as_array_mut()) {
+        list.push(serde_json::json!(["spice", spice]));
+    }
     sha2::Sha256::digest(v.to_string().as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// The SSH session a session reaches its server through: a VNC session's
-/// `via_session_id` (the field is VNC only; other kinds ignore it when they
+/// The SSH session a session reaches its server through: a VNC or SPICE
+/// session's `via_session_id` (the field is theirs only; other kinds ignore it when they
 /// connect, so it decides nothing for them).
 pub(crate) fn via_id(s: &SessionConfig) -> Option<&str> {
-    if s.kind != crate::state::SessionKind::Vnc {
+    if !matches!(s.kind, crate::state::SessionKind::Vnc | crate::state::SessionKind::Spice) {
         return None;
     }
     s.via_session_id.as_deref().filter(|v| !v.is_empty())
@@ -765,6 +770,7 @@ pub async fn session_create(
     credential_id: Option<String>,
     telnet: Option<crate::telnet::protocol::TelnetOptions>,
     serial: Option<crate::serial::options::SerialOptions>,
+    spice: Option<crate::spice::SpiceOptions>,
     notes: Option<String>,
     custom_fields: Option<Vec<crate::state::CustomField>>,
     terminal_theme: Option<String>,
@@ -778,6 +784,7 @@ pub async fn session_create(
     alt_addresses: Option<Vec<crate::state::SessionAddress>>,
     connect_mode: Option<String>,
     address_check: Option<bool>,
+    web: Option<crate::web::WebOptions>,
 ) -> Result<SessionConfig, String> {
     let mut manager = state.vault_manager.lock().await;
     let kind = kind.unwrap_or_default();
@@ -812,6 +819,7 @@ pub async fn session_create(
         wsl_distro,
         telnet: telnet.filter(|_| kind == crate::state::SessionKind::Telnet),
         serial: serial.filter(|_| kind == crate::state::SessionKind::Serial),
+        spice: spice.filter(|o| kind == crate::state::SessionKind::Spice && !o.is_empty()),
         domain: domain.filter(|d| !d.trim().is_empty()),
         share_path: share_path.filter(|d| !d.trim().is_empty()),
         rdp_clipboard: rdp_clipboard_setting(rdp_clipboard, kind),
@@ -857,6 +865,11 @@ pub async fn session_create(
         alt_addresses,
         connect_mode,
         address_check,
+        // Certificates are trusted by answering the prompt, never by a form.
+        web: web.filter(|_| kind == crate::state::SessionKind::Web).map(|mut w| {
+            w.certs.clear();
+            w
+        }),
     };
     session.tidy_documentation();
 
@@ -981,6 +994,11 @@ async fn prepare_update(
     // The trusted host keys are the stored ones: a connect may have saved
     // one while the editor was open, and the editor never changes them.
     session.host_keys = stored.as_ref().and_then(|s| s.host_keys.clone());
+    // The certificates a web session trusts likewise: answering the prompt
+    // adds them, `web_session_cert_*` changes them, the editor never does.
+    if let Some(w) = session.web.as_mut() {
+        w.certs = stored.as_ref().and_then(|s| s.web.as_ref()).map(|w| w.certs.clone()).unwrap_or_default();
+    }
 
     // A login sent is the session's own, unless it is one a credential
     // filled in (the editor shows that one): then the stored own login stays.
@@ -1002,6 +1020,9 @@ pub use bulk::*;
 
 #[path = "session_hostkeys_cmds.rs"]
 mod hostkeys;
+#[path = "session_webcerts_cmds.rs"]
+mod webcerts;
+pub use webcerts::*;
 pub use hostkeys::*;
 
 /// Move many sessions into a folder (`None`: out of any folder) in one

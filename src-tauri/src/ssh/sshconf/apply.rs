@@ -259,6 +259,18 @@ fn weak_algorithm(name: &str) -> Option<&'static str> {
     })
 }
 
+/// The group exchange range for a key exchange list a config set. russh
+/// asks for 3072 to 8192 bits, which old servers whose largest prime is
+/// 2048 bits cannot meet ("DH prime size not within requested range").
+/// OpenSSH asks for at least 2048, so a config's list does too, and 1024
+/// once 1024-bit diffie-hellman-group1-sha1 is offered anyway. Without a
+/// KexAlgorithms line russh's stricter range stays.
+fn gex_range(kex: &[russh::kex::Name]) -> russh::client::GexParams {
+    use russh::client::GexParams;
+    let min = if kex.contains(&russh::kex::DH_G1_SHA1) { 1024 } else { 2048 };
+    GexParams::for_legacy_client(min, 8192, 8192).unwrap_or_default()
+}
+
 /// `kex_assemble_names`: a list as written (`+`, `-`, `^` or plain) against
 /// a default and the full set. Returns the names in order, and the names it
 /// asked for that the engine lacks.
@@ -371,6 +383,7 @@ impl Plan {
                     kex.push(marker);
                 }
             }
+            self.config.gex = gex_range(&kex);
             self.config.preferred.kex = Cow::Owned(kex);
         }
         let table = supported::ciphers();
@@ -576,6 +589,32 @@ mod tests {
         assert!(matches!(used(Kw::HostKeyAlgorithms), Use::Partly(m) if m.contains("not available: ssh-dss")));
         let p = Plan::new(&r, russh::client::Config::default(), &["MACs hmac-md5".into()], true);
         assert!(p.config.preferred.mac.contains(&russh::mac::HMAC_MD5));
+    }
+
+    fn resolved_with(line: &str) -> Resolved {
+        let text = format!("Host old\n  HostName 10.0.0.1\n{line}\n");
+        let src = super::super::resolve::Source { path: "c".into(), text: Some(text), user: true };
+        let env = super::super::env::SystemEnv::new(super::super::env::ExecPolicy::Never);
+        super::super::resolve::resolve(&[src], &super::super::resolve::Query { host: "old".into(), ..Default::default() }, &env)
+    }
+
+    #[test]
+    fn a_kex_line_widens_the_group_exchange_range() {
+        let base = || russh::client::Config::default();
+        let p = Plan::new(&resolved_with(""), base(), &[], true);
+        assert_eq!(p.config.gex.min_group_size(), 3072);
+        let gex1 = || "KexAlgorithms diffie-hellman-group-exchange-sha1".to_string();
+        let g1 = || "KexAlgorithms diffie-hellman-group1-sha1".to_string();
+        let r = resolved_with("  KexAlgorithms +diffie-hellman-group-exchange-sha1");
+        let p = Plan::new(&r, base(), &[gex1()], true);
+        assert!(p.config.preferred.kex.contains(&russh::kex::DH_GEX_SHA1));
+        assert_eq!((p.config.gex.min_group_size(), p.config.gex.max_group_size()), (2048, 8192));
+        let r = resolved_with("  KexAlgorithms +diffie-hellman-group-exchange-sha1,diffie-hellman-group1-sha1");
+        let p = Plan::new(&r, base(), &[gex1(), g1()], true);
+        assert_eq!(p.config.gex.min_group_size(), 1024);
+        // group1 written but not approved: not offered, so 2048 stays.
+        let p = Plan::new(&r, base(), &[gex1()], true);
+        assert_eq!(p.config.gex.min_group_size(), 2048);
     }
 
     #[test]

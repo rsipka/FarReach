@@ -22,7 +22,7 @@
 	let tap = $derived(tabHistory(activeTab?.id));
 	let recording = $derived(tap?.status.recording ?? null);
 	let log = $derived(tap?.log ?? null);
-	let terminal = $derived(!!activeTab && activeTab.type !== 'rdp' && activeTab.type !== 'vnc');
+	let terminal = $derived(!!activeTab && activeTab.type !== 'rdp' && activeTab.type !== 'vnc' && activeTab.type !== 'spice');
 
 	let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
 

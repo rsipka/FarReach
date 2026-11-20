@@ -176,11 +176,38 @@ fn read_loop(
 ) {
     let mut decoder = crate::text::Utf8Stream::new();
     let mut buf = vec![0u8; 4096];
+    // rz/sz on the device: a ZMODEM transfer over the line. Its replies
+    // are written from here, raw; what is typed is held back meanwhile.
+    let mut zmodem = crate::zmodem::Tap::for_app(&app, &id, crate::zmodem::WINDOW_SERIAL);
+    let write_wire = |port: &mut Box<dyn SerialPort>, wire: &[u8]| -> bool {
+        if wire.is_empty() {
+            return true;
+        }
+        match write_patiently(port, wire, &stop) {
+            Ok(()) => true,
+            Err(e) => {
+                failure.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert(e.to_string());
+                false
+            }
+        }
+    };
     while !stop.load(Ordering::SeqCst) {
         match port.read(&mut buf) {
-            Ok(0) => continue,
+            Ok(0) => {
+                if zmodem.busy() && !write_wire(&mut port, &zmodem.poll().wire) {
+                    break;
+                }
+                continue;
+            }
             Ok(n) => {
-                let text = decoder.push(&buf[..n]);
+                let z = zmodem.input(&buf[..n]);
+                if !write_wire(&mut port, &z.wire) {
+                    break;
+                }
+                if zmodem.busy() && !write_wire(&mut port, &zmodem.poll().wire) {
+                    break;
+                }
+                let text = decoder.push(&z.display);
                 if text.is_empty() {
                     continue;
                 }
@@ -189,7 +216,11 @@ fn read_loop(
                     break;
                 }
             }
-            Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::Interrupted | std::io::ErrorKind::WouldBlock) => {}
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::Interrupted | std::io::ErrorKind::WouldBlock) => {
+                if zmodem.busy() && !write_wire(&mut port, &zmodem.poll().wire) {
+                    break;
+                }
+            }
             Err(e) => {
                 // Unplugged, mostly.
                 failure.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert(e.to_string());
@@ -205,11 +236,39 @@ fn read_loop(
     if replaced.load(Ordering::SeqCst) {
         return;
     }
+    let held = zmodem.flush();
+    drop(zmodem);
+    if !held.is_empty() {
+        let _ = app.emit(&data_event, decoder.push(&held));
+    }
     if let Some(tail) = decoder.flush() {
         let _ = app.emit(&data_event, tail);
     }
     crate::history::stop(&id);
     let _ = app.emit(&format!("serial-exit-{id}"), serde_json::json!({ "error": error }));
+}
+
+/// Write all of `data`, however slow the line: the port's timeout is short
+/// (it is the read timeout too), and at a low speed a ZMODEM frame takes
+/// seconds to go out.
+fn write_patiently(port: &mut Box<dyn SerialPort>, mut data: &[u8], stop: &AtomicBool) -> std::io::Result<()> {
+    let give_up = std::time::Instant::now() + Duration::from_secs(60);
+    while !data.is_empty() {
+        if stop.load(Ordering::SeqCst) {
+            return Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "closed"));
+        }
+        match port.write(data) {
+            Ok(0) => return Err(std::io::ErrorKind::WriteZero.into()),
+            Ok(n) => data = &data[n..],
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::Interrupted | std::io::ErrorKind::WouldBlock) => {
+                if std::time::Instant::now() > give_up {
+                    return Err(e);
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    port.flush()
 }
 
 #[allow(clippy::too_many_arguments)]

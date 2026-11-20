@@ -17,6 +17,10 @@
 	 * A VNC desktop uses this same panel: its backend sends frames in the same
 	 * format, and only the commands differ. VNC wants the character a key
 	 * produced, not its position, so there keys go as X11 keysyms.
+	 *
+	 * A SPICE desktop (a KVM/QEMU virtual machine) does too. SPICE takes keys
+	 * by position like RDP, so it gets the same scancodes; text with no key
+	 * behind it is typed as US-layout keystrokes.
 	 */
 	import { onDestroy, onMount } from 'svelte';
 	import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -60,6 +64,16 @@
 		vncResize,
 		type VncConnectParams,
 	} from '#lib/ipc/vnc.js';
+	import {
+		spiceAck,
+		spiceClipboardSync,
+		spiceConnect,
+		spiceKey,
+		spiceMouse,
+		spiceResize,
+		spiceType,
+		type SpiceConnectParams,
+	} from '#lib/ipc/spice.js';
 	import { keysymForChar, keysymForCode, keysymForEvent } from '#lib/vnc/keysym.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { untrustedRefsFromError } from '#lib/ipc/sessions.js';
@@ -70,25 +84,34 @@
 
 	interface Props {
 		id: string;
-		params: RdpConnectParams | VncConnectParams;
+		params: RdpConnectParams | VncConnectParams | SpiceConnectParams;
 		/** Which protocol the desktop speaks. RDP unless said otherwise. */
-		protocol?: 'rdp' | 'vnc';
+		protocol?: 'rdp' | 'vnc' | 'spice';
 		active: boolean;
 	}
 
 	let { id, params, protocol = 'rdp', active }: Props = $props();
 
 	const isVnc = (): boolean => protocol === 'vnc';
+	const isSpice = (): boolean => protocol === 'spice';
 	/** Who the desktop is, for the full-screen bar. */
 	const label = $derived('username' in params && params.username ? `${params.username}@${params.host}` : params.host);
 
 	/** The commands both protocols have, each sent the right way. */
 	const remote = {
-		ack: () => (isVnc() ? vncAck(id) : rdpAck(id)),
+		ack: () => (isVnc() ? vncAck(id) : isSpice() ? spiceAck(id) : rdpAck(id)),
 		mouse: (x: number, y: number, action: MouseAction, button = 0, delta = 0) =>
-			isVnc() ? vncMouse(id, x, y, action, button, delta) : rdpMouse(id, x, y, action, button, delta),
-		resize: (width: number, height: number) => (isVnc() ? vncResize(id, width, height) : rdpResize(id, width, height)),
-		clipboardSync: () => (isVnc() ? vncClipboardSync(id) : rdpClipboardSync(id)),
+			isVnc()
+				? vncMouse(id, x, y, action, button, delta)
+				: isSpice()
+					? spiceMouse(id, x, y, action, button, delta)
+					: rdpMouse(id, x, y, action, button, delta),
+		resize: (width: number, height: number) =>
+			isVnc() ? vncResize(id, width, height) : isSpice() ? spiceResize(id, width, height) : rdpResize(id, width, height),
+		clipboardSync: () => (isVnc() ? vncClipboardSync(id) : isSpice() ? spiceClipboardSync(id) : rdpClipboardSync(id)),
+		/** A key by its scancode (RDP and SPICE). */
+		key: (scancode: number, extended: boolean, release: boolean) =>
+			isSpice() ? spiceKey(id, scancode, extended, release) : rdpKey(id, scancode, extended, release),
 	};
 
 	/**
@@ -108,7 +131,7 @@
 			return;
 		}
 		const entry = SCANCODES[code];
-		if (entry) await rdpKey(id, entry[0], entry[1], !down);
+		if (entry) await remote.key(entry[0], entry[1], !down);
 	}
 
 	/** Type one character that came without a key: an IME commit, a phone keyboard. */
@@ -118,6 +141,10 @@
 			if (keysym === null) return;
 			await vncKey(id, keysym, true);
 			await vncKey(id, keysym, false);
+			return;
+		}
+		if (isSpice()) {
+			await spiceType(id, String.fromCodePoint(point));
 			return;
 		}
 		await rdpUnicode(id, point, false);
@@ -146,7 +173,7 @@
 	/* --- clipboard transfers (RDP) ----------------------------------------- */
 
 	/** What the session's clipboard carries; see the session editor. */
-	const clipMode = $derived(isVnc() ? 'off' : ((params as RdpConnectParams).clipboard ?? 'all'));
+	const clipMode = $derived(isVnc() || isSpice() ? 'off' : ((params as RdpConnectParams).clipboard ?? 'all'));
 	/** A file transfer in progress, for the bar at the bottom of the desktop. */
 	let transfer = $state<{ incoming: boolean; done: number; total: number; files: number } | null>(null);
 	/** Files the desktop copied that wait for a yes before coming down. */
@@ -876,7 +903,7 @@
 		if (entry) {
 			e.preventDefault();
 			held.add(e.code);
-			sendInput(rdpKey(id, entry[0], entry[1], false));
+			sendInput(remote.key(entry[0], entry[1], false));
 			return;
 		}
 		// No position for this key here (a dead-key result, an IME commit):
@@ -897,13 +924,13 @@
 		if (!entry) return;
 		e.preventDefault();
 		held.delete(e.code);
-		sendInput(rdpKey(id, entry[0], entry[1], true));
+		sendInput(remote.key(entry[0], entry[1], true));
 	}
 
 	function releaseAll(): void {
 		for (const code of held) {
 			const entry = SCANCODES[code];
-			if (entry) sendInput(rdpKey(id, entry[0], entry[1], true));
+			if (entry) sendInput(remote.key(entry[0], entry[1], true));
 		}
 		held.clear();
 		for (const keysym of heldKeysyms.values()) sendInput(vncKey(id, keysym, false));
@@ -940,7 +967,7 @@
 	 * Returns true when a retry was started.
 	 */
 	function retryWithGraphicsPipeline(error: string): boolean {
-		if (isVnc() || graphicsPipeline || phase !== 'connecting') return false;
+		if (isVnc() || isSpice() || graphicsPipeline || phase !== 'connecting') return false;
 		if (!/disconnect provider ultimatum/i.test(error)) return false;
 		graphicsPipeline = true;
 		rdpConnect({ ...(params as RdpConnectParams), ...connectSize, graphicsPipeline: true, olderGraphicsFormats: !getSettings().rdpNewGraphicsFormats }, paint).catch((err) => {
@@ -953,7 +980,7 @@
 	onMount(async () => {
 		const size = fitSize();
 
-		unlisten = await listen<RdpStatus>(`${isVnc() ? 'vnc' : 'rdp'}-status-${id}`, (event) => {
+		unlisten = await listen<RdpStatus>(`${protocol}-status-${id}`, (event) => {
 			const s = event.payload;
 			if (s.state === 'connected' || s.state === 'loggedIn') {
 				phase = 'connected';
@@ -991,6 +1018,11 @@
 				// A VNC desktop comes at the size its server has; the panel
 				// asks for its own size once connected, which some servers allow.
 				await vncConnect(params as VncConnectParams, paint);
+			} else if (isSpice()) {
+				// A virtual machine comes at the size its guest has; the
+				// panel asks for its own once connected, which the guest's
+				// SPICE agent does.
+				await spiceConnect(params as SpiceConnectParams, paint);
 			} else {
 				graphicsPipeline = (params as RdpConnectParams).graphicsPipeline || getSettings().rdpGraphicsPipeline;
 				connectSize = size;
@@ -1029,6 +1061,12 @@
 			// never resized, as noVNC does by default. RDP still resizes: each
 			// RDP login is a session of its own.
 			if (isVnc()) return;
+			// A tab switched away from (or a page left) is display: none and
+			// measures 0 x 0. That is not a size to render at: sent on, the
+			// server shrank to the fallback size and grew back on return,
+			// moving every window on the remote desktop. Keep the last size.
+			const r = (screen ?? host).getBoundingClientRect();
+			if (r.width < 1 || r.height < 1) return;
 			const s = fitSize();
 			// The size the desktop already has is not a resize. Asking for
 			// it anyway leaves a request the server never answers.
