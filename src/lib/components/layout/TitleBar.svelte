@@ -2,7 +2,7 @@
 	import Settings from '#lib/components/settings/Settings.svelte';
 	import NewIndicator from '#lib/components/shared/NewIndicator.svelte';
 	import { settingsHaveNew, newSince } from '#lib/state/whats-new.svelte.js';
-	import { registerSettingsOpener, shortcutLabel } from '#lib/state/shortcuts.svelte.js';
+	import { registerSettingsOpener, actionLabel } from '#lib/state/shortcuts.svelte.js';
 	import { togglePalette } from '#lib/state/palette.svelte.js';
 	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import { getAISettings } from '#lib/state/ai.svelte.js';
@@ -89,7 +89,7 @@
 			<path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
 		</svg>
 		<span class="search-text">{t('palette.search')}</span>
-		<kbd class="search-key">{shortcutLabel('P', { ctrl: true, shift: true })}</kbd>
+		{#if actionLabel('app.palette')}<kbd class="search-key">{actionLabel('app.palette')}</kbd>{/if}
 	</button>
 
 	{#if !isMobile() && !macWindow}

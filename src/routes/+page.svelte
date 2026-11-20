@@ -19,6 +19,7 @@
 	import MonitoringBar from '#lib/components/terminal/MonitoringBar.svelte';
 	import TerminalBar from '#lib/components/terminal/TerminalBar.svelte';
 	import { getSettings } from '#lib/state/settings.svelte.js';
+	import { matchesAction } from '#lib/state/shortcuts.svelte.js';
 	import { freshFind, pendingFind } from '#lib/state/terminal-find.svelte.js';
 	import RemoteTerminal from '#lib/components/share/RemoteTerminal.svelte';
 	import ShareDialog from '#lib/components/share/ShareDialog.svelte';
@@ -166,23 +167,24 @@
 	});
 
 	// Ctrl+Shift+E splits right, Ctrl+Shift+O down (as Terminator), Ctrl+Shift+U
-	// back to one, Ctrl+Shift+B in or out of the broadcast. Caught before the terminal sees them: no shell binds them.
+	// back to one, Ctrl+Shift+B in or out of the broadcast, unless changed in
+	// Settings > Keyboard shortcuts. Caught before the terminal sees them.
 	$effect(() => {
 		const onKey = (e: KeyboardEvent) => {
-			if (activePage !== 'terminal' || !(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return;
-			const k = e.key.toLowerCase();
-			if (k === 'e' || k === 'o') {
+			if (activePage !== 'terminal') return;
+			const right = matchesAction(e, 'split.right');
+			if (right || matchesAction(e, 'split.down')) {
 				const focused = activeTab?.id;
 				if (!focused) return;
 				e.preventDefault();
 				e.stopPropagation();
 				const other = neighbour(tabs.map((x) => x.id), focused, leaves(split));
-				splitWith(other ?? focused, k === 'e' ? 'right' : 'down');
-			} else if (k === 'u' && split) {
+				splitWith(other ?? focused, right ? 'right' : 'down');
+			} else if (split && matchesAction(e, 'split.unsplit')) {
 				e.preventDefault();
 				e.stopPropagation();
 				unsplit();
-			} else if (k === 'b' && activeTab) {
+			} else if (activeTab && matchesAction(e, 'broadcast.toggle')) {
 				// In or out of the broadcast: typing into several terminals at once.
 				e.preventDefault();
 				e.stopPropagation();
