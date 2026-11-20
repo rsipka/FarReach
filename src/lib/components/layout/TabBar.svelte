@@ -23,6 +23,8 @@
 	import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
 	import Modal from '#lib/components/shared/Modal.svelte';
+	import LayoutsDialog from './LayoutsDialog.svelte';
+	import { getLayouts, openLayout } from '#lib/state/layouts.svelte.js';
 	import Button from '#lib/components/shared/Button.svelte';
 	import { getActivePage, setActivePage, type Page } from '#lib/state/navigation.svelte.js';
 	import { getEnabledDevopsTools } from '#lib/state/devops.svelte.js';
@@ -108,6 +110,17 @@
 	let dragged = $derived(getDraggedTab());
 	let menu = $state<{ x: number; y: number; id: string } | null>(null);
 	let pageMenu = $state<{ x: number; y: number } | null>(null);
+	/** Saved split layouts: the menu of the button beside +, and the dialog to save and manage them. */
+	let layoutMenu = $state<{ x: number; y: number } | null>(null);
+	let layoutsOpen = $state(false);
+	const LAYOUT_ICON = 'M3 4h18v16H3zM12 4v16M12 12h9';
+
+	function layoutItems(): MenuItem[] {
+		const items: MenuItem[] = getLayouts().map((l) => ({ label: l.name, icon: LAYOUT_ICON, action: () => openLayout(l.id) }));
+		if (items.length) items.push({ label: '', separator: true });
+		items.push({ label: t('layouts.manage'), action: () => (layoutsOpen = true) });
+		return items;
+	}
 	// When the page menu last closed: a press on its button closes it, and the
 	// click that follows must not open it again.
 	let pageMenuClosedAt = 0;
@@ -157,7 +170,7 @@
 			{ label: t('split.down'), hint: `${mod}O`, disabled: noSplit, action: () => splitWith(id, 'down') }
 		);
 		if (split && contains(split, id)) items.push({ label: t('split.remove'), action: () => removeFromSplit(id) });
-		if (split) items.push({ label: t('split.unsplit'), hint: `${mod}U`, action: unsplit });
+		if (split) items.push({ label: t('split.unsplit'), hint: `${mod}U`, action: unsplit }, { label: t('layouts.save_menu'), action: () => (layoutsOpen = true) });
 
 		// Groups: a new one, any other there is, or out of the one it is in.
 		items.push(...(items.length && !items[items.length - 1].separator ? [{ label: '', separator: true }] : []), { label: t('tabs.group_new'), icon: GROUP_ICON, action: () => startGroupFrom(id) });
@@ -604,6 +617,18 @@
 		</div>
 
 		{#if !mobile}
+			<button
+				class="new-tab-btn"
+				onclick={(e) => {
+					const r = e.currentTarget.getBoundingClientRect();
+					layoutMenu = { x: r.left, y: r.bottom + 4 };
+				}}
+				title={t('layouts.title')}
+				aria-label={t('layouts.title')}
+				aria-haspopup="menu"
+			>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d={LAYOUT_ICON} stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" /></svg>
+			</button>
 			<button class="new-tab-btn" onclick={handleNewTab} title={newTabTip} aria-label={newTabTip}>
 				<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
 					<path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
@@ -627,6 +652,10 @@
 		}}
 	/>
 {/if}
+{#if layoutMenu}
+	<DbMenu x={layoutMenu.x} y={layoutMenu.y} items={layoutItems()} onclose={() => (layoutMenu = null)} />
+{/if}
+<LayoutsDialog open={layoutsOpen} onclose={() => (layoutsOpen = false)} />
 {#if groupMenu}
 	<DbMenu x={groupMenu.x} y={groupMenu.y} items={groupMenuItems(groupMenu.id)} onclose={() => (groupMenu = null)} />
 {/if}

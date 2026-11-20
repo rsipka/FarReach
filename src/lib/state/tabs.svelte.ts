@@ -153,6 +153,11 @@ export function dropTab(tabId: string, drop: Pick<splits.Drop, 'target' | 'zone'
 	activateTab(tabId);
 }
 
+/** Show this split (a saved layout opening; see #lib/state/layouts). */
+export function setLayout(layout: Layout): void {
+	split = layout;
+}
+
 /** Back to one tab at a time. */
 export function unsplit(): void {
 	split = null;

@@ -205,6 +205,17 @@
 			} else if (r.kind === 'quick-connect') {
 				quickPrefill = r.prefill ?? null;
 				showQuickConnect = true;
+			} else if (r.kind === 'connect-many') {
+				setActivePage('terminal');
+				void (async () => {
+					for (const id of r.sessionIds) {
+						try {
+							await handleConnect(await sessionGet(id));
+						} catch {
+							addToast(t('tabs.session_gone'), 'error');
+						}
+					}
+				})();
 			} else {
 				void sessionGet(r.sessionId)
 					.then((s) => {
