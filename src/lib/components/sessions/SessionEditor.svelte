@@ -312,7 +312,7 @@
 	});
 
 	$effect(() => {
-		if (open && (kind === 'vnc' || kind === 'spice')) {
+		if (open && (kind === 'vnc' || kind === 'spice' || kind === 'ssh')) {
 			sessionList()
 				.then((all) => (sshSessions = all.filter((s) => sessionKind(s) === 'ssh')))
 				.catch(() => (sshSessions = []));
@@ -340,7 +340,8 @@
 				const a: SessionAddress = { host: r.host.trim() };
 				if (r.label.trim()) a.label = r.label.trim();
 				if (p > 0 && p < 65536) a.port = p;
-				if (r.direct) a.direct = true;
+				if (r.via) a.via_session_id = r.via;
+				else if (r.direct) a.direct = true;
 				return a;
 			});
 		return list.length ? list : null;
@@ -516,7 +517,7 @@
 			host = editSession.host;
 			portStr = String(editSession.port);
 			hostLabel = editSession.host_label ?? '';
-			addressRows = (editSession.alt_addresses ?? []).map((a) => ({ label: a.label ?? '', host: a.host, port: a.port ? String(a.port) : '', direct: !!a.direct }));
+			addressRows = (editSession.alt_addresses ?? []).map((a) => ({ label: a.label ?? '', host: a.host, port: a.port ? String(a.port) : '', direct: !!a.direct, via: a.via_session_id ?? '' }));
 			addressMode = editSession.connect_mode ?? 'auto';
 			addressCheck = editSession.address_check == null ? '' : editSession.address_check ? 'on' : 'off';
 			username = editSession.username;
@@ -1055,7 +1056,7 @@
 				</div>
 			</div>
 			{#if kind === 'ssh'}
-				<SessionAddresses bind:mainLabel={hostLabel} bind:rows={addressRows} bind:mode={addressMode} bind:check={addressCheck} checkByDefault={getSettings().checkAddresses} routed={jumpEnabled || proxyEnabled} port={portStr} disabled={saving} />
+				<SessionAddresses bind:mainLabel={hostLabel} bind:rows={addressRows} bind:mode={addressMode} bind:check={addressCheck} checkByDefault={getSettings().checkAddresses} jumpSessions={sshSessions.filter((s) => s.id !== editSession?.id).map((s) => ({ id: s.id, name: s.name }))} routed={jumpEnabled || proxyEnabled} port={portStr} disabled={saving} />
 			{/if}
 		{/if}
 

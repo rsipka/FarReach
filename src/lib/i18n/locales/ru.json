@@ -3740,5 +3740,10 @@
   "x11desktop.custom": "Своя команда",
   "x11desktop.command": "Команда запуска рабочего стола",
   "x11desktop.hint": "Запускает на сервере полноценный рабочий стол и показывает его в отдельном окне. На сервере нужны X11Forwarding yes и xauth. На этом компьютере нужен Xephyr (Linux), X11-сервер из настроек (Windows) или XQuartz (macOS).",
-  "x11desktop.command_needed": "Введите команду, которая запускает рабочий стол."
+  "x11desktop.command_needed": "Введите команду, которая запускает рабочий стол.",
+  "session.address_route": "Маршрут",
+  "session.address_route_session": "Промежуточные хосты или прокси сессии",
+  "session.address_route_via": "Через {{name}}",
+  "session.address_via_missing": "SSH-сессии, через которую шёл путь, больше нет",
+  "session.address_via_refs": "{{name}} входит с записью из менеджера паролей, которая не используется, когда через неё идёт другая сессия. Сохраните пароль в {{name}} или используйте ключ или агент."
 }

@@ -3740,5 +3740,10 @@
   "x11desktop.custom": "Comando propio",
   "x11desktop.command": "Comando de inicio del escritorio",
   "x11desktop.hint": "Inicia un escritorio completo en el servidor y lo muestra en una ventana propia. El servidor necesita X11Forwarding yes y xauth. Este equipo necesita Xephyr (Linux), el servidor X11 de Ajustes (Windows) o XQuartz (macOS).",
-  "x11desktop.command_needed": "Escribe el comando que inicia el escritorio."
+  "x11desktop.command_needed": "Escribe el comando que inicia el escritorio.",
+  "session.address_route": "Ruta",
+  "session.address_route_session": "Hosts de salto o proxy de la sesión",
+  "session.address_route_via": "A través de {{name}}",
+  "session.address_via_missing": "La sesión SSH por la que pasaba ya no existe",
+  "session.address_via_refs": "{{name}} inicia sesión con una entrada del gestor de contraseñas, que no se usa cuando otra sesión pasa por ella. Guarda la contraseña en {{name}} o usa una clave o el agente."
 }

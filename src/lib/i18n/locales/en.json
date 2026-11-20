@@ -3740,5 +3740,10 @@
   "x11desktop.custom": "Custom command",
   "x11desktop.command": "Desktop start command",
   "x11desktop.hint": "Starts a whole desktop on the server and shows it in a window of its own. The server needs X11Forwarding yes and xauth. This computer needs Xephyr (Linux), the X11 server from Settings (Windows) or XQuartz (macOS).",
-  "x11desktop.command_needed": "Enter the command that starts the desktop."
+  "x11desktop.command_needed": "Enter the command that starts the desktop.",
+  "session.address_route": "Route",
+  "session.address_route_session": "Session's jump hosts or proxy",
+  "session.address_route_via": "Through {{name}}",
+  "session.address_via_missing": "The SSH session it went through no longer exists",
+  "session.address_via_refs": "{{name}} logs in with a password manager entry, which is not used when another session goes through it. Save the password in {{name}}, or use a key or the agent."
 }

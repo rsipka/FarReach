@@ -5,6 +5,8 @@
 		host: string;
 		port: string;
 		direct: boolean;
+		/** A saved SSH session to go through instead; '' for none. */
+		via: string;
 	}
 </script>
 
@@ -28,11 +30,13 @@
 		checkByDefault: boolean;
 		/** The session goes through jump hosts or a proxy: addresses can skip them. */
 		routed: boolean;
+		/** Saved SSH sessions an address can go through (not this one). */
+		jumpSessions: { id: string; name: string }[];
 		port: string;
 		disabled?: boolean;
 	}
 
-	let { mainLabel = $bindable(), rows = $bindable(), mode = $bindable(), check = $bindable(), checkByDefault, routed, port, disabled = false }: Props = $props();
+	let { mainLabel = $bindable(), rows = $bindable(), mode = $bindable(), check = $bindable(), checkByDefault, routed, jumpSessions, port, disabled = false }: Props = $props();
 
 	// Folded until there is something in it; open once addresses are read
 	// in (the editor fills its form after this section is made).
@@ -46,8 +50,17 @@
 	});
 
 	function add(): void {
-		rows = [...rows, { label: '', host: '', port: '', direct: false }];
+		rows = [...rows, { label: '', host: '', port: '', direct: false, via: '' }];
 		open = true;
+	}
+
+	/** The route select's value: a session id, 'direct' or '' (the session's own way). */
+	function routeOf(row: AddressRow): string {
+		return row.via ? row.via : row.direct && routed ? 'direct' : '';
+	}
+
+	function setRoute(i: number, value: string): void {
+		rows[i] = { ...rows[i], via: value && value !== 'direct' ? value : '', direct: value === 'direct' };
 	}
 
 	function remove(i: number): void {
@@ -78,18 +91,32 @@
 				<input class="label-in" type="text" bind:value={row.label} placeholder={t('session.address_label')} aria-label={t('session.address_label')} {disabled} />
 				<input class="host-in" type="text" bind:value={row.host} placeholder="server.example.com" aria-label={t('session.host')} {disabled} />
 				<input class="port-in" type="number" bind:value={row.port} placeholder={port || '22'} aria-label={t('session.port')} {disabled} />
-				{#if routed}
-					<label class="direct" title={t('session.address_direct_hint')}>
-						<input type="checkbox" bind:checked={row.direct} {disabled} />
-						{t('session.address_direct')}
-					</label>
-				{/if}
 				<span class="tools">
 					<button type="button" class="icon" onclick={() => move(i, -1)} disabled={disabled || i === 0} title={t('session.move_up')} aria-label={t('session.move_up')}>↑</button>
 					<button type="button" class="icon" onclick={() => move(i, 1)} disabled={disabled || i === rows.length - 1} title={t('session.move_down')} aria-label={t('session.move_down')}>↓</button>
 					<button type="button" class="icon" onclick={() => remove(i)} {disabled} title={t('session.address_remove')} aria-label={t('session.address_remove')}>✕</button>
 				</span>
 			</div>
+			{#if routed || jumpSessions.length || row.via}
+				<div class="row route-row">
+					<span class="prio"></span>
+					<label class="route-label" for="address-route-{i}">{t('session.address_route')}</label>
+					<select id="address-route-{i}" class="route-in" value={routeOf(row)} onchange={(e) => setRoute(i, e.currentTarget.value)} {disabled}>
+						{#if routed}
+							<option value="">{t('session.address_route_session')}</option>
+							<option value="direct">{t('session.address_direct')}</option>
+						{:else}
+							<option value="">{t('session.address_direct')}</option>
+						{/if}
+						{#each jumpSessions as js (js.id)}
+							<option value={js.id}>{t('session.address_route_via', { name: js.name })}</option>
+						{/each}
+						{#if row.via && !jumpSessions.some((js) => js.id === row.via)}
+							<option value={row.via}>{t('session.address_via_missing')}</option>
+						{/if}
+					</select>
+				</div>
+			{/if}
 		{/each}
 		<button type="button" class="link-btn" onclick={add} {disabled}>+ {t('session.address_add')}</button>
 
@@ -178,13 +205,20 @@
 		color: var(--color-text-secondary);
 	}
 
-	.direct {
-		display: flex;
-		align-items: center;
-		gap: 4px;
+	.route-row {
+		margin-top: -2px;
+		margin-bottom: 4px;
+	}
+
+	.route-label {
 		font-size: var(--text-xs);
 		color: var(--color-text-secondary);
 		white-space: nowrap;
+	}
+
+	.route-in {
+		flex: 1 1 auto;
+		max-width: 320px;
 	}
 
 	.tools {

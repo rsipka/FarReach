@@ -3740,5 +3740,10 @@
   "x11desktop.custom": "Vlastní příkaz",
   "x11desktop.command": "Příkaz pro spuštění plochy",
   "x11desktop.hint": "Spustí na serveru celou plochu a zobrazí ji ve vlastním okně. Server potřebuje X11Forwarding yes a xauth. Tento počítač potřebuje Xephyr (Linux), X11 server z Nastavení (Windows) nebo XQuartz (macOS).",
-  "x11desktop.command_needed": "Zadejte příkaz, který spustí plochu."
+  "x11desktop.command_needed": "Zadejte příkaz, který spustí plochu.",
+  "session.address_route": "Cesta",
+  "session.address_route_session": "Jump hosty nebo proxy relace",
+  "session.address_route_via": "Přes {{name}}",
+  "session.address_via_missing": "SSH relace, přes kterou vedla, už neexistuje",
+  "session.address_via_refs": "{{name}} se přihlašuje heslem ze správce hesel, které se nepoužije, když přes ni vede jiná relace. Uložte heslo přímo do {{name}}, nebo použijte klíč či agenta."
 }

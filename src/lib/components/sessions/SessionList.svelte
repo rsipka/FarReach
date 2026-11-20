@@ -51,7 +51,7 @@
 	import Button from '#lib/components/shared/Button.svelte';
 	import UntrustedRefsDialog from '#lib/components/pwmanager/UntrustedRefsDialog.svelte';
 	import { sessionUntrustedSecretRefs, sessionApproveSecretRefs, untrustedRefsFromError, type UntrustedRefs } from '#lib/ipc/sessions.js';
-	import type { SessionKind } from '#lib/ipc/sessions.js';
+	import type { SessionKind, JumpHostConfig } from '#lib/ipc/sessions.js';
 	import { webSessionOpen, webSessionUrl } from '#lib/ipc/sessions.js';
 	import { openUrl } from '@tauri-apps/plugin-opener';
 	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionRenameFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetOrder, sessionSetFolderCredential, sessionSetFolderTmux, sessionBulkUndo, type BulkResult, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
@@ -1657,8 +1657,7 @@
 		const passwordToSave = authType === 'Password' ? (passwordFallback ? fallbackPassword : connectPassword) : connectKeyPassphrase;
 
 		// Build jump chain from session config if present
-		const jumpChain: JumpHostConnectParams[] | undefined = session.jump_chain && session.jump_chain.length > 0
-			? session.jump_chain.map(j => ({
+		const hopParams = (j: JumpHostConfig): JumpHostConnectParams => ({
 				host: j.host,
 				port: j.port,
 				username: j.username,
@@ -1670,8 +1669,29 @@
 				keyId: j.auth_method.type === 'Key' ? j.auth_method.key_id : undefined,
 				keyPassphrase: j.auth_method.type === 'Key' && !j.auth_method.passphrase_ref ? j.auth_method.passphrase : undefined,
 				keyPassphraseRef: j.auth_method.type === 'Key' ? (j.auth_method.passphrase_ref ?? undefined) : undefined,
-			}))
+			});
+		const jumpChain: JumpHostConnectParams[] | undefined = session.jump_chain && session.jump_chain.length > 0
+			? session.jump_chain.map(hopParams)
 			: undefined;
+		// An address through another saved SSH session: that session's jump
+		// hosts, then its server, logged in to as that session does. Its
+		// password manager entries are its own, so they are not used here.
+		const viaChain = (viaId: string): JumpHostConnectParams[] => {
+			const via = sessions.find((s) => s.id === viaId && sessionKind(s) === 'ssh');
+			if (!via) throw t('session.address_via_missing');
+			const hops = [...(via.jump_chain ?? []), { host: via.host, port: via.port, username: via.username, auth_method: via.auth_method }].map(hopParams);
+			if (hops.some((h) => h.passwordRef || h.keyPassphraseRef)) throw t('session.address_via_refs', { name: via.name });
+			return hops;
+		};
+		const viaChains: Record<string, JumpHostConnectParams[]> = {};
+		for (const a of sessionAddresses(session)) {
+			if (!a.viaSessionId) continue;
+			try {
+				viaChains[a.viaSessionId] = viaChain(a.viaSessionId);
+			} catch {
+				// Said when that address is tried.
+			}
+		}
 
 		// The addresses to try, in order: the one picked, the main one, or
 		// all of them as Auto orders them.
@@ -1731,8 +1751,8 @@
 				sessionId: session.id,
 				// An address marked direct goes straight, without the session's
 				// jump hosts or proxy.
-				jumpChain: addr.routed ? jumpChain : undefined,
-				proxy: addr.routed && session.proxy ? {
+				jumpChain: addr.viaSessionId ? viaChain(addr.viaSessionId) : addr.routed ? jumpChain : undefined,
+				proxy: addr.routed && !addr.viaSessionId && session.proxy ? {
 					proxy_type: session.proxy.proxy_type,
 					host: session.proxy.host,
 					port: session.proxy.port,
@@ -1742,7 +1762,7 @@
 				} : undefined,
 			});
 			// A reconnect may need another address: the tab keeps them all.
-			const fallback = hasAltAddresses(session) ? { addresses: all, jumpChain, proxy: paramsFor(all[0]).proxy ?? undefined, sessionPort: session.port, check: checksAddresses(session, getSettings().checkAddresses) } : undefined;
+			const fallback = hasAltAddresses(session) ? { addresses: all, jumpChain, viaChains, proxy: paramsFor(all[0]).proxy ?? undefined, sessionPort: session.port, check: checksAddresses(session, getSettings().checkAddresses) } : undefined;
 			// Each address in turn, while the last one could not be reached.
 			// A refused login stops here: it is the same server.
 			let connectParams = paramsFor(targets[0]);

@@ -3740,5 +3740,10 @@
   "x11desktop.custom": "Commande personnalisée",
   "x11desktop.command": "Commande de démarrage du bureau",
   "x11desktop.hint": "Démarre un bureau complet sur le serveur et l’affiche dans sa propre fenêtre. Le serveur doit avoir X11Forwarding yes et xauth. Cet ordinateur a besoin de Xephyr (Linux), du serveur X11 des Paramètres (Windows) ou de XQuartz (macOS).",
-  "x11desktop.command_needed": "Saisissez la commande qui démarre le bureau."
+  "x11desktop.command_needed": "Saisissez la commande qui démarre le bureau.",
+  "session.address_route": "Chemin",
+  "session.address_route_session": "Hôtes de rebond ou proxy de la session",
+  "session.address_route_via": "Via {{name}}",
+  "session.address_via_missing": "La session SSH par laquelle elle passait n’existe plus",
+  "session.address_via_refs": "{{name}} se connecte avec une entrée du gestionnaire de mots de passe, qui n’est pas utilisée quand une autre session passe par elle. Enregistrez le mot de passe dans {{name}}, ou utilisez une clé ou l’agent."
 }

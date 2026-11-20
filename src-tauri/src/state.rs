@@ -245,6 +245,12 @@ pub struct SessionAddress {
     /// office address of a server reached from outside through a gateway).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub direct: bool,
+    /// Reached through another saved SSH session instead: its own jump
+    /// hosts, then that session's server as the last hop. Wins over
+    /// `direct` and the session's route. Each address can go its own way:
+    /// the office one straight, the internet one through a gateway.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via_session_id: Option<String>,
 }
 
 /// One named value of a session's documentation.
@@ -307,6 +313,16 @@ impl SessionConfig {
                 // An IPv6 address as typed in a URL: the brackets go.
                 a.host = a.host.trim().trim_start_matches('[').trim_end_matches(']').to_string();
                 a.label = a.label.trim().to_string();
+            }
+            let own = self.id.clone();
+            for a in list.iter_mut() {
+                // Through itself is no way in; an empty choice is none.
+                if a.via_session_id.as_deref().is_some_and(|v| v.trim().is_empty() || v == own) {
+                    a.via_session_id = None;
+                }
+                if a.via_session_id.is_some() {
+                    a.direct = false;
+                }
             }
             list.retain(|a| !a.host.is_empty());
         }

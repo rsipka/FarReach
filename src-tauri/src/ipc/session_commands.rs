@@ -2231,18 +2231,18 @@ mod approval_tests {
         }))
         .unwrap()];
         let proxy = s.proxy.clone();
-        assert!(check_matches_session(&s, "web.example", 22, "u", Some(&hops), proxy.as_ref()).is_ok());
-        assert!(check_matches_session(&s, "attacker.example", 22, "u", Some(&hops), proxy.as_ref()).is_err());
-        assert!(check_matches_session(&s, "web.example", 22, "root", Some(&hops), proxy.as_ref()).is_err());
-        assert!(check_matches_session(&s, "web.example", 22, "u", None, proxy.as_ref()).is_err());
+        assert!(check_matches_session(&s, None, "web.example", 22, "u", Some(&hops), proxy.as_ref()).is_ok());
+        assert!(check_matches_session(&s, None, "attacker.example", 22, "u", Some(&hops), proxy.as_ref()).is_err());
+        assert!(check_matches_session(&s, None, "web.example", 22, "root", Some(&hops), proxy.as_ref()).is_err());
+        assert!(check_matches_session(&s, None, "web.example", 22, "u", None, proxy.as_ref()).is_err());
         let mut elsewhere = proxy.clone();
         elsewhere.as_mut().unwrap().host = "attacker.example".into();
-        assert!(check_matches_session(&s, "web.example", 22, "u", Some(&hops), elsewhere.as_ref()).is_err());
+        assert!(check_matches_session(&s, None, "web.example", 22, "u", Some(&hops), elsewhere.as_ref()).is_err());
         // The proxy's credentials are not where it goes.
         let mut typed = proxy.clone();
         typed.as_mut().unwrap().password = Some("pw".into());
         typed.as_mut().unwrap().password_ref = None;
-        assert!(check_matches_session(&s, "web.example", 22, "u", Some(&hops), typed.as_ref()).is_ok());
+        assert!(check_matches_session(&s, None, "web.example", 22, "u", Some(&hops), typed.as_ref()).is_ok());
     }
 
     #[test]
@@ -2250,8 +2250,8 @@ mod approval_tests {
         use crate::ipc::ssh_commands::check_matches_session;
         let mut s = with_refs();
         s.alt_addresses = Some(vec![
-            crate::state::SessionAddress { label: "Office".into(), host: "10.0.0.5".into(), port: None, direct: true },
-            crate::state::SessionAddress { label: "Internet".into(), host: "server.example.com".into(), port: Some(2222), direct: false },
+            crate::state::SessionAddress { label: "Office".into(), host: "10.0.0.5".into(), port: None, direct: true, via_session_id: None },
+            crate::state::SessionAddress { label: "Internet".into(), host: "server.example.com".into(), port: Some(2222), direct: false, via_session_id: None },
         ]);
         let hops: Vec<crate::ipc::ssh_commands::JumpHostConnectParams> = vec![serde_json::from_value(serde_json::json!({
             "host": "bastion.example", "port": 22, "username": "jump", "authMethod": "key",
@@ -2259,22 +2259,55 @@ mod approval_tests {
         .unwrap()];
         let proxy = s.proxy.clone();
         // A direct address goes straight, and only straight.
-        assert!(check_matches_session(&s, "10.0.0.5", 22, "u", None, None).is_ok());
-        assert!(check_matches_session(&s, "10.0.0.5", 22, "u", Some(&hops), proxy.as_ref()).is_err());
-        assert!(check_matches_session(&s, "10.0.0.5", 2222, "u", None, None).is_err());
+        assert!(check_matches_session(&s, None, "10.0.0.5", 22, "u", None, None).is_ok());
+        assert!(check_matches_session(&s, None, "10.0.0.5", 22, "u", Some(&hops), proxy.as_ref()).is_err());
+        assert!(check_matches_session(&s, None, "10.0.0.5", 2222, "u", None, None).is_err());
         // Another address goes the session's way, on its own port.
-        assert!(check_matches_session(&s, "server.example.com", 2222, "u", Some(&hops), proxy.as_ref()).is_ok());
-        assert!(check_matches_session(&s, "server.example.com", 2222, "u", None, None).is_err());
-        assert!(check_matches_session(&s, "server.example.com", 22, "u", Some(&hops), proxy.as_ref()).is_err());
+        assert!(check_matches_session(&s, None, "server.example.com", 2222, "u", Some(&hops), proxy.as_ref()).is_ok());
+        assert!(check_matches_session(&s, None, "server.example.com", 2222, "u", None, None).is_err());
+        assert!(check_matches_session(&s, None, "server.example.com", 22, "u", Some(&hops), proxy.as_ref()).is_err());
         // The main address still never goes straight around the session's route.
-        assert!(check_matches_session(&s, "web.example", 22, "u", None, None).is_err());
+        assert!(check_matches_session(&s, None, "web.example", 22, "u", None, None).is_err());
+    }
+
+    #[test]
+    fn an_address_through_another_session_goes_its_way_only() {
+        use crate::ipc::ssh_commands::check_matches_session;
+        let mut s = with_refs();
+        s.alt_addresses = Some(vec![crate::state::SessionAddress {
+            label: "Branch".into(),
+            host: "10.0.1.5".into(),
+            port: None,
+            direct: false,
+            via_session_id: Some("gw".into()),
+        }]);
+        let mut gw = session();
+        gw.id = "gw".into();
+        gw.host = "gw2.example.com".into();
+        gw.port = 22;
+        gw.username = "jump".into();
+        gw.jump_chain = None;
+        let hop = |h: &str, u: &str| -> crate::ipc::ssh_commands::JumpHostConnectParams {
+            serde_json::from_value(serde_json::json!({ "host": h, "port": 22, "username": u, "authMethod": "key" })).unwrap()
+        };
+        let through = vec![hop("gw2.example.com", "jump")];
+        assert!(check_matches_session(&s, Some(&gw), "10.0.1.5", 22, "u", Some(&through), None).is_ok());
+        // Not the session's own route, nor straight, nor with a proxy.
+        let session_route = vec![hop("bastion.example", "jump")];
+        assert!(check_matches_session(&s, Some(&gw), "10.0.1.5", 22, "u", Some(&session_route), None).is_err());
+        assert!(check_matches_session(&s, Some(&gw), "10.0.1.5", 22, "u", None, None).is_err());
+        assert!(check_matches_session(&s, Some(&gw), "10.0.1.5", 22, "u", Some(&through), s.proxy.as_ref()).is_err());
+        // The jump session gone or another one: refused.
+        assert!(check_matches_session(&s, None, "10.0.1.5", 22, "u", Some(&through), None).is_err());
+        gw.id = "other".into();
+        assert!(check_matches_session(&s, Some(&gw), "10.0.1.5", 22, "u", Some(&through), None).is_err());
     }
 
     #[test]
     fn other_addresses_are_part_of_what_is_approved() {
         let mut s = with_refs();
         let before = approval_context(&s);
-        s.alt_addresses = Some(vec![crate::state::SessionAddress { label: String::new(), host: "10.0.0.5".into(), port: None, direct: true }]);
+        s.alt_addresses = Some(vec![crate::state::SessionAddress { label: String::new(), host: "10.0.0.5".into(), port: None, direct: true, via_session_id: None }]);
         assert_ne!(approval_context(&s), before);
         s.alt_addresses = None;
         assert_eq!(approval_context(&s), before);

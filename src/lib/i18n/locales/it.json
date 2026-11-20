@@ -3740,5 +3740,10 @@
   "x11desktop.custom": "Comando personalizzato",
   "x11desktop.command": "Comando di avvio del desktop",
   "x11desktop.hint": "Avvia un intero desktop sul server e lo mostra in una finestra propria. Il server richiede X11Forwarding yes e xauth. Questo computer richiede Xephyr (Linux), il server X11 dalle Impostazioni (Windows) o XQuartz (macOS).",
-  "x11desktop.command_needed": "Inserisci il comando che avvia il desktop."
+  "x11desktop.command_needed": "Inserisci il comando che avvia il desktop.",
+  "session.address_route": "Percorso",
+  "session.address_route_session": "Jump host o proxy della sessione",
+  "session.address_route_via": "Tramite {{name}}",
+  "session.address_via_missing": "La sessione SSH attraverso cui passava non esiste più",
+  "session.address_via_refs": "{{name}} accede con una voce del gestore di password, che non viene usata quando un’altra sessione passa da essa. Salva la password in {{name}} oppure usa una chiave o l’agente."
 }

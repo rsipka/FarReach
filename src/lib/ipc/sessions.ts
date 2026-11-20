@@ -213,6 +213,9 @@ export interface SessionAddress {
   port?: number | null;
   /** Reached straight, without the session's jump hosts or proxy. */
   direct?: boolean;
+  /** Reached through another saved SSH session instead (its jump hosts,
+   *  then its server); wins over `direct`. */
+  via_session_id?: string | null;
 }
 
 /** A server key a session trusts. */

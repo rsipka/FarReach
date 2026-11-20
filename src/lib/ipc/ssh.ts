@@ -124,7 +124,10 @@ export interface SshConnectParams {
 
 /** See `SshConnectParams.fallback`. */
 export interface AddressFallback {
-  addresses: { host: string; port: number; routed: boolean; label: string; index: number }[];
+  addresses: { host: string; port: number; routed: boolean; label: string; index: number; viaSessionId?: string }[];
+  /** The hops of addresses that go through another saved session, by
+   *  that session's id. */
+  viaChains?: Record<string, JumpHostConnectParams[]>;
   /** The session's route, for addresses that go through it. */
   jumpChain?: JumpHostConnectParams[];
   proxy?: ProxyConfig;
