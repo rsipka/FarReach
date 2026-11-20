@@ -198,6 +198,11 @@ export interface Settings {
 	unlockKeysWithBiometrics: boolean;
 }
 
+/** The file name a log gets unless Settings say otherwise: session name, host, date, time. */
+export const DEFAULT_LOG_NAME = '&S-&H-&Y&M&D-&T.log';
+/** The default before `&S` existed; a setting still holding it moves to the new one. */
+const OLD_DEFAULT_LOG_NAME = '&H-&Y&M&D-&T.log';
+
 export const defaults: Settings = {
 	theme: 'dark',
 	themeId: undefined,
@@ -225,7 +230,7 @@ export const defaults: Settings = {
 	showLoginMessage: true,
 	sessionLogMode: 'off',
 	sessionLogFolder: '',
-	sessionLogName: '&H-&Y&M&D-&T.log',
+	sessionLogName: DEFAULT_LOG_NAME,
 	sessionLogAppend: true,
 	sessionLogHeader: true,
 	historyMode: 'off',
@@ -310,7 +315,10 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.showLoginMessage = parsed.showLoginMessage ?? defaults.showLoginMessage;
 	settings.sessionLogMode = parsed.sessionLogMode ?? defaults.sessionLogMode;
 	settings.sessionLogFolder = parsed.sessionLogFolder ?? defaults.sessionLogFolder;
-	settings.sessionLogName = parsed.sessionLogName ?? defaults.sessionLogName;
+	settings.sessionLogName =
+		!parsed.sessionLogName || parsed.sessionLogName === OLD_DEFAULT_LOG_NAME
+			? defaults.sessionLogName
+			: parsed.sessionLogName;
 	settings.sessionLogAppend = parsed.sessionLogAppend ?? defaults.sessionLogAppend;
 	settings.sessionLogHeader = parsed.sessionLogHeader ?? defaults.sessionLogHeader;
 	settings.historyMode = parsed.historyMode ?? defaults.historyMode;

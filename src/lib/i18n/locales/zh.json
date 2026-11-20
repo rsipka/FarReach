@@ -2200,7 +2200,7 @@
   "settings.log_folder_desc": "日志文件的保存位置。留空则使用默认文件夹。",
   "settings.log_browse": "浏览",
   "settings.log_name": "文件名",
-  "settings.log_name_desc": "&H 主机，&P 端口，&Y 年，&M 月，&D 日，&T 时间（HHMMSS）。",
+  "settings.log_name_desc": "&S 会话名称，&H 主机，&P 端口，&Y 年，&M 月，&D 日，&T 时间（HHMMSS）。",
   "settings.log_append": "追加到已有文件",
   "settings.log_append_desc": "关闭时，同名文件会被替换。",
   "settings.log_header": "以日期行开头",

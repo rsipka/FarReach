@@ -9,7 +9,7 @@
 	import { themeFetchRegistry, themeInstall, themeUninstall, type ThemeEntry } from '#lib/ipc/theme.js';
 	import { validateTheme } from '#lib/state/theme.svelte.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
-	import { getSettings, updateSetting } from '#lib/state/settings.svelte.js';
+	import { getSettings, updateSetting, DEFAULT_LOG_NAME } from '#lib/state/settings.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { matchesQuery } from '#lib/utils/search.js';
 	import { isMobile } from '#lib/platform.js';
@@ -789,10 +789,10 @@
 					class="log-field"
 					type="text"
 					spellcheck="false"
-					placeholder="&H-&Y&M&D-&T.log"
+					placeholder={DEFAULT_LOG_NAME}
 					aria-label={t('settings.log_name')}
 					value={settings.sessionLogName}
-					onchange={(e) => updateSetting('sessionLogName', e.currentTarget.value.trim() || '&H-&Y&M&D-&T.log')}
+					onchange={(e) => updateSetting('sessionLogName', e.currentTarget.value.trim() || DEFAULT_LOG_NAME)}
 				/>
 			</div>
 		</div>

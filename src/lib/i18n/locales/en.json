@@ -2200,7 +2200,7 @@
   "settings.log_folder_desc": "Where log files are saved. Leave empty for the default.",
   "settings.log_browse": "Browse",
   "settings.log_name": "File name",
-  "settings.log_name_desc": "&H host, &P port, &Y year, &M month, &D day, &T time (HHMMSS).",
+  "settings.log_name_desc": "&S session name, &H host, &P port, &Y year, &M month, &D day, &T time (HHMMSS).",
   "settings.log_append": "Add to an existing file",
   "settings.log_append_desc": "When off, a file with the same name is replaced.",
   "settings.log_header": "Start with a date line",

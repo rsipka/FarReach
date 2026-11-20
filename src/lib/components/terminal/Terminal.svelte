@@ -116,7 +116,7 @@
 				secrets,
 				patterns: s.historyPatterns.split('\n').map((p) => p.trim()).filter(Boolean),
 				// SSH writes its own file log, asked for at connect.
-				log: ssh ? null : sessionLogConfig()
+				log: ssh ? null : sessionLogConfig(sessionName ?? '')
 			});
 			setTabHistory(ptyId, stream, status, ssh && sessionLogConfig() !== null);
 		} catch (e) {

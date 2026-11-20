@@ -1504,7 +1504,7 @@
 				shell: session.shell ?? undefined,
 				tmux: tmuxView(tmuxFor(session, folders)),
 				injectColors: getSettings().typeShellSetup,
-				sessionLog: sessionLogConfig(),
+				sessionLog: sessionLogConfig(session.name),
 				showLoginMessage: getSettings().showLoginMessage,
 				tryAgentKeys: authType === 'Key' && session.try_agent_keys === true,
 				sshOptions: session.ssh_options ?? null,

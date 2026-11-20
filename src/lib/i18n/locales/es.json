@@ -2200,7 +2200,7 @@
   "settings.log_folder_desc": "Dónde se guardan los registros. Déjalo vacío para usar la predeterminada.",
   "settings.log_browse": "Examinar",
   "settings.log_name": "Nombre de archivo",
-  "settings.log_name_desc": "&H host, &P puerto, &Y año, &M mes, &D día, &T hora (HHMMSS).",
+  "settings.log_name_desc": "&S nombre de la sesión, &H host, &P puerto, &Y año, &M mes, &D día, &T hora (HHMMSS).",
   "settings.log_append": "Añadir a un archivo existente",
   "settings.log_append_desc": "Si está desactivado, se reemplaza un archivo con el mismo nombre.",
   "settings.log_header": "Empezar con una línea de fecha",

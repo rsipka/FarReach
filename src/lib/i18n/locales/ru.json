@@ -2200,7 +2200,7 @@
   "settings.log_folder_desc": "Куда сохраняются журналы. Оставьте пустым для папки по умолчанию.",
   "settings.log_browse": "Обзор",
   "settings.log_name": "Имя файла",
-  "settings.log_name_desc": "&H хост, &P порт, &Y год, &M месяц, &D день, &T время (ЧЧММСС).",
+  "settings.log_name_desc": "&S имя сеанса, &H хост, &P порт, &Y год, &M месяц, &D день, &T время (ЧЧММСС).",
   "settings.log_append": "Дописывать в существующий файл",
   "settings.log_append_desc": "Если выключено, файл с тем же именем заменяется.",
   "settings.log_header": "Начинать со строки с датой",
