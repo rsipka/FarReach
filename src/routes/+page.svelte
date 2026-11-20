@@ -390,9 +390,13 @@
 							}}
 						>
 							{#if tab.type === 'rdp' && tab.rdpConnectParams}
-								<RdpPanel id={tab.id} params={tab.rdpConnectParams} active={focused} />
+								{#key tab.reconnect}
+									<RdpPanel id={tab.id} params={tab.rdpConnectParams} active={focused} />
+								{/key}
 							{:else if tab.type === 'vnc' && tab.vncConnectParams}
-								<RdpPanel id={tab.id} params={tab.vncConnectParams} protocol="vnc" active={focused} />
+								{#key tab.reconnect}
+									<RdpPanel id={tab.id} params={tab.vncConnectParams} protocol="vnc" active={focused} />
+								{/key}
 							{:else if tab.type !== 'rdp' && tab.type !== 'vnc'}
 								{#if appSettings.terminalBar !== 'hidden' || findOpenIn === tab.id}
 									<div class="bar-slot" class:hover-only={appSettings.terminalBar === 'hover' && findOpenIn !== tab.id}>
@@ -409,6 +413,7 @@
 									onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
 									sshConnectParams={tab.sshConnectParams}
 									tmuxSwitch={tab.tmuxSwitch}
+									reconnectRequest={tab.reconnect}
 									telnetConnectParams={tab.telnetConnectParams}
 									serialConnectParams={tab.serialConnectParams}
 									onReconnected={(newId) => (tab.type === 'telnet' ? setTelnetConnection(tab.id, newId) : tab.type === 'serial' ? setSerialConnection(tab.id, newId) : updateTabConnection(tab.id, newId))}

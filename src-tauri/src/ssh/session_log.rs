@@ -9,7 +9,7 @@
 //!   still recognised.
 //! - "All session output" keeps everything that was sent to the terminal.
 //! - The file name takes `&Y &M &D &T &H &P` (case-insensitive) and `&&`,
-//!   and whatever they insert has characters that are not allowed in a file
+//!   plus `&S` for the session's name (not in PuTTY), and whatever they insert has characters that are not allowed in a file
 //!   name replaced by `.`, as PuTTY does, so a host such as an IPv6 address
 //!   can never add a path separator or a drive colon.
 //! - An existing file is appended to unless overwrite is chosen, the header
@@ -50,6 +50,9 @@ pub struct SessionLogConfig {
     pub folder: String,
     /// The file name, with PuTTY's `&` placeholders.
     pub name: String,
+    /// The saved session's name, for `&S`; empty for a quick connect.
+    #[serde(default)]
+    pub session: String,
     /// Add to an existing file (the default) instead of replacing it.
     #[serde(default = "yes")]
     pub append: bool,
@@ -62,7 +65,7 @@ fn yes() -> bool {
     true
 }
 
-pub const DEFAULT_NAME: &str = "&H-&Y&M&D-&T.log";
+pub const DEFAULT_NAME: &str = "&S-&H-&Y&M&D-&T.log";
 
 /// Where logs go when no folder is set: `Documents/Reach Logs` on a desktop,
 /// the app's own storage on Android (which has no shared Documents folder an
@@ -87,9 +90,16 @@ fn sanitise(c: char) -> char {
 }
 
 /// PuTTY's `xlatlognam`: expands the placeholders in `name`.
-pub fn expand_name(name: &str, host: &str, port: u16, now: &chrono::DateTime<chrono::Local>) -> String {
+///
+/// `&S` is the session's name. When there is none (a quick connect), or it
+/// is just the host again, it inserts nothing and takes one `-`, `_` or
+/// space after it along, so `&S-&H.log` becomes `host.log`, not
+/// `-host.log` or `host-host.log`.
+pub fn expand_name(name: &str, session: &str, host: &str, port: u16, now: &chrono::DateTime<chrono::Local>) -> String {
+    let session = session.trim();
+    let no_session = session.is_empty() || session.eq_ignore_ascii_case(host.trim());
     let mut out = String::new();
-    let mut chars = name.chars();
+    let mut chars = name.chars().peekable();
     while let Some(c) = chars.next() {
         if c != '&' {
             out.push(c);
@@ -106,6 +116,13 @@ pub fn expand_name(name: &str, host: &str, port: u16, now: &chrono::DateTime<chr
             't' => now.format("%H%M%S").to_string(),
             'h' => host.to_string(),
             'p' => port.to_string(),
+            's' if no_session => {
+                if matches!(chars.peek(), Some('-' | '_' | ' ')) {
+                    chars.next();
+                }
+                continue;
+            }
+            's' => session.to_string(),
             '&' => "&".to_string(),
             other => format!("&{}", other),
         };
@@ -125,7 +142,7 @@ pub fn resolve_path(cfg: &SessionLogConfig, host: &str, port: u16, now: &chrono:
     }
     let name = cfg.name.trim();
     let name = if name.is_empty() { DEFAULT_NAME } else { name };
-    let rel = PathBuf::from(expand_name(name, host, port, now));
+    let rel = PathBuf::from(expand_name(name, &cfg.session, host, port, now));
     if rel.components().any(|c| !matches!(c, Component::Normal(_))) {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "the log file name may not contain '..' or a full path"));
     }

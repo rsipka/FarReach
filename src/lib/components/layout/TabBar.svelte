@@ -19,6 +19,8 @@
 	import { BROADCAST_ICON } from '#lib/terminal/broadcast.js';
 	import { openTabHistory } from '#lib/state/history.svelte.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
+	import { requestSessionAction } from '#lib/state/palette.svelte.js';
+	import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
 	import Modal from '#lib/components/shared/Modal.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
@@ -148,15 +150,16 @@
 		// On a phone or tablet: nothing to split on a phone's narrow screen, and
 		// no local terminal to pair a lone tab with.
 		const noSplit = tabs.length < 2 && (mobile || id !== activeTab?.id);
-		const items: MenuItem[] = mobile && window.innerWidth < SPLIT_MIN_WIDTH ? [] : [
+		const tab = tabs.find((x) => x.id === id);
+		const items: MenuItem[] = sessionItems(tab);
+		if (!(mobile && window.innerWidth < SPLIT_MIN_WIDTH)) items.push(
 			{ label: t('split.right'), hint: `${mod}E`, disabled: noSplit, action: () => splitWith(id, 'right') },
 			{ label: t('split.down'), hint: `${mod}O`, disabled: noSplit, action: () => splitWith(id, 'down') }
-		];
+		);
 		if (split) items.push({ label: t('split.unsplit'), hint: `${mod}U`, action: unsplit });
 
 		// Groups: a new one, any other there is, or out of the one it is in.
-		const tab = tabs.find((x) => x.id === id);
-		items.push(...(items.length ? [{ label: '', separator: true }] : []), { label: t('tabs.group_new'), icon: GROUP_ICON, action: () => startGroupFrom(id) });
+		items.push(...(items.length && !items[items.length - 1].separator ? [{ label: '', separator: true }] : []), { label: t('tabs.group_new'), icon: GROUP_ICON, action: () => startGroupFrom(id) });
 		for (const g of groups) {
 			if (g.id === tab?.groupId) continue;
 			items.push({ label: t('tabs.group_add', { name: g.name }), icon: DOT_ICON, iconColor: groupColor(g.color), action: () => addToGroup(id, g.id) });
@@ -182,6 +185,57 @@
 			{ label: t('tabs.close_left'), disabled: tabsBeside(id, 'left').length === 0, action: () => requestCloseBeside(id, 'left') },
 			{ label: t('tabs.close_right'), disabled: tabsBeside(id, 'right').length === 0, action: () => requestCloseBeside(id, 'right') }
 		);
+		return items;
+	}
+
+	/** The host a tab is connected to; none for a local shell or a serial port. */
+	function hostOf(tab: Tab): string | null {
+		return tab.sshConnectParams?.host ?? tab.telnetConnectParams?.host ?? tab.rdpConnectParams?.host ?? tab.vncConnectParams?.host ?? null;
+	}
+
+	/** A terminal connects again at any time (a hung connection, say); a
+	 *  remote desktop once it has closed, as a running one would be logged
+	 *  off by a second login. */
+	function canReconnect(tab: Tab): boolean {
+		if (tab.type === 'ssh') return !!tab.sshConnectParams;
+		if (tab.type === 'telnet') return !!tab.telnetConnectParams;
+		if (tab.type === 'serial') return !!tab.serialConnectParams;
+		if (tab.type === 'rdp' || tab.type === 'vnc') return tab.link === 'down';
+		return false;
+	}
+
+	function reconnect(tab: Tab): void {
+		tab.reconnect = (tab.reconnect ?? 0) + 1;
+		activateTab(tab.id);
+	}
+
+	async function copyHost(host: string): Promise<void> {
+		try {
+			await writeText(host);
+			addToast(t('tabs.host_copied', { host }), 'success');
+		} catch (err) {
+			addToast(String(err), 'error');
+		}
+	}
+
+	/** The tab's own session: connect again, its address, and the saved
+	 *  session it came from (shown in the list, or edited). */
+	function sessionItems(tab: Tab | undefined): MenuItem[] {
+		if (!tab) return [];
+		const items: MenuItem[] = [];
+		if (tab.type !== 'local') {
+			items.push({ label: t('terminal.reconnect'), disabled: !canReconnect(tab) || tab.link === 'reconnecting', action: () => reconnect(tab) });
+		}
+		const host = hostOf(tab);
+		if (host) items.push({ label: t('tabs.copy_host'), action: () => void copyHost(host) });
+		const sessionId = tab.sessionId;
+		if (sessionId) {
+			items.push(
+				{ label: t('tabs.locate_session'), action: () => requestSessionAction({ kind: 'locate', sessionId }) },
+				{ label: t('tabs.edit_session'), action: () => requestSessionAction({ kind: 'edit', sessionId }) }
+			);
+		}
+		if (items.length) items.push({ label: '', separator: true });
 		return items;
 	}
 

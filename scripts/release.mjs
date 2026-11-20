@@ -388,7 +388,7 @@ async function bump(opts) {
 		console.log('[dry run] no files written.');
 	} else {
 		for (const [file, text] of changes) writeFileSync(join(ROOT, file), text);
-		console.log(`Release notes drafted in ${FILES.notes} (the release description and what the updater shows; keep it short, plain text).`);
+		console.log(`Release notes drafted in ${FILES.notes} (the release description and what the updater shows; keep it short: "- " lists, plain text and links).`);
 		if (!opts.noEdit && !opts.yes && process.stdin.isTTY && (await confirm({}, 'Edit the release notes now?'))) openEditor(join(ROOT, FILES.notes));
 	}
 

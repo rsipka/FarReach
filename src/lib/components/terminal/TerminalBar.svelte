@@ -15,6 +15,7 @@
 	import { openHistoryPanel, tabHistory } from '#lib/state/history.svelte.js';
 	import { finderFor, freshFind, pendingFind } from '#lib/state/terminal-find.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
+	import { getSettings, updateSetting } from '#lib/state/settings.svelte.js';
 	import { tick } from 'svelte';
 	import { formatHops, formatProxyAddress, ROUTE_ICON } from '#lib/utils/route.js';
 
@@ -33,6 +34,7 @@
 		history: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2',
 		broadcast: 'M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM8 8a5.6 5.6 0 0 0 0 8M16 8a5.6 5.6 0 0 1 0 8M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14',
 		split: 'M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM12 4v16',
+		highlight: 'M9 11l-6 6v3h9l3-3M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4',
 		more: 'M5 12h.01M12 12h.01M19 12h.01',
 		up: 'M6 15l6-6 6 6',
 		down: 'M6 9l6 6 6-6',
@@ -65,6 +67,11 @@
 		linkState === 'down' ? t('tabs.disconnected') : linkState === 'reconnecting' ? t('terminal.reconnecting') : linkState === 'up' ? t('termbar.connected') : t('termbar.local')
 	);
 	let broadcasting = $derived(isBroadcastTarget(tab.id));
+	/** Errors and addresses in colour: the same switch as in Settings, for
+	 *  every terminal, so it is one click to turn off when it gets in the way. */
+	const settings = getSettings();
+	let highlighting = $derived(settings.terminalHighlight);
+	let highlightTip = $derived(highlighting ? t('highlight.turn_off') : t('highlight.turn_on'));
 	let split = $derived(getSplit());
 	let inSplit = $derived(!!split && (split.first === tab.id || split.second === tab.id));
 	// A phone or tablet has no local shell to open beside a lone tab, and a
@@ -193,6 +200,7 @@
 	{#if remote}
 		<button class="ib" type="button" onclick={() => openHistoryPanel({ sessionId: tab.sessionId, sessionName: tab.sessionName, tabId: tab.id })} title={`${t('termbar.history')} (Ctrl+Shift+H)`} aria-label={t('termbar.history')}>{@render icon(ICONS.history)}</button>
 	{/if}
+	<button class="ib" class:on={highlighting} type="button" onclick={() => updateSetting('terminalHighlight', !highlighting)} title={highlightTip} aria-label={t('highlight.setting')} aria-pressed={highlighting}>{@render icon(ICONS.highlight)}</button>
 	<span class="sep"></span>
 	<button class="ib" class:on={broadcasting} type="button" onclick={() => toggleBroadcastTarget(tab.id)} title={t('broadcast.tab_toggle')} aria-label={t('broadcast.tab_toggle')} aria-pressed={broadcasting}>{@render icon(ICONS.broadcast)}</button>
 	{#if splitShown}
