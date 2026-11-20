@@ -132,6 +132,7 @@ export interface Settings {
 	historyPatterns: string;
 	/** Remote desktop: paint through WebGL (the GPU) rather than the 2D canvas. */
 	rdpHardwareRendering: boolean;
+	freerdpPath: string;
 	/** Remote desktop: advertise the graphics pipeline, for hosts that encode H.264. */
 	rdpGraphicsPipeline: boolean;
 	/** Let the graphics pipeline use AVC444 and RemoteFX progressive. */
@@ -298,6 +299,7 @@ export const defaults: Settings = {
 	historyMaxMb: 2048,
 	historyPatterns: '',
 	rdpHardwareRendering: true,
+	freerdpPath: '',
 	rdpGraphicsPipeline: false,
 	rdpNewGraphicsFormats: true,
 	rdpFullscreenButton: true,
@@ -404,6 +406,7 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.historyMaxMb = parsed.historyMaxMb ?? defaults.historyMaxMb;
 	settings.historyPatterns = parsed.historyPatterns ?? defaults.historyPatterns;
 	settings.rdpHardwareRendering = parsed.rdpHardwareRendering ?? defaults.rdpHardwareRendering;
+	settings.freerdpPath = typeof parsed.freerdpPath === 'string' ? parsed.freerdpPath : defaults.freerdpPath;
 	settings.rdpGraphicsPipeline = parsed.rdpGraphicsPipeline ?? defaults.rdpGraphicsPipeline;
 	settings.rdpNewGraphicsFormats = parsed.rdpNewGraphicsFormats ?? defaults.rdpNewGraphicsFormats;
 	settings.rdpFullscreenButton = parsed.rdpFullscreenButton ?? defaults.rdpFullscreenButton;

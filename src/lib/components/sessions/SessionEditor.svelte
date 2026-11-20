@@ -93,6 +93,7 @@
 	const onIos = isIos();
 	/** What the RDP clipboard carries: '' for everything, 'text' for no files, 'off'. */
 	let rdpClipboard = $state<'' | 'text' | 'off'>('');
+	let rdpClient = $state<'ironrdp' | 'freerdp'>('ironrdp');
 	let rdpForwardLockKeys = $state(true);
 	/** VNC only: the saved SSH session to go through, or '' for direct. */
 	let viaSessionId = $state('');
@@ -523,6 +524,7 @@
 			os = editSession.detected_os === 'linux' || editSession.detected_os === 'gnome' ? editSession.detected_os : 'windows';
 			sharePath = editSession.share_path ?? '';
 			rdpClipboard = editSession.rdp_clipboard ?? '';
+			rdpClient = editSession.rdp_use_freerdp ? 'freerdp' : 'ironrdp';
 			rdpForwardLockKeys = editSession.rdp_forward_lock_keys ?? true;
 			viaSessionId = editSession.via_session_id ?? '';
 			wslDistro = editSession.wsl_distro ?? '';
@@ -607,6 +609,7 @@
 			os = 'windows';
 			sharePath = '';
 			rdpClipboard = '';
+			rdpClient = 'ironrdp';
 			rdpForwardLockKeys = true;
 			viaSessionId = '';
 			telnetOptions = { ...DEFAULT_TELNET_OPTIONS };
@@ -839,6 +842,7 @@
 					os_manual: !rdp && !!osChoice,
 					share_path: rdp ? (sharePath.trim() || null) : null,
 					rdp_clipboard: rdp && rdpClipboard ? rdpClipboard : null,
+					rdp_use_freerdp: rdp && rdpClient === 'freerdp',
 					rdp_forward_lock_keys: rdp ? rdpForwardLockKeys : null,
 					via_session_id: via,
 					try_agent_keys: !desktop && authType === 'Key' && tryAgentKeys ? true : null,
@@ -888,6 +892,7 @@
 					osManual: !rdp && !!osChoice,
 					sharePath: rdp ? sharePath : null,
 					rdpClipboard: rdp && rdpClipboard ? rdpClipboard : null,
+					rdpUseFreerdp: rdp && rdpClient === 'freerdp',
 					rdpForwardLockKeys: rdp ? rdpForwardLockKeys : null,
 					viaSessionId: via,
 					tryAgentKeys: !desktop && authType === 'Key' && tryAgentKeys,
@@ -1143,6 +1148,16 @@
 		{/if}
 
 		{#if kind === 'rdp'}
+			{#if !isMobile()}
+				<div class="shell-field">
+					<label class="via-label" for="rdp-client">{t('session.rdp_client')}</label>
+					<select id="rdp-client" class="via-select" bind:value={rdpClient} disabled={saving}>
+						<option value="ironrdp">{t('session.rdp_client_ironrdp')}</option>
+						<option value="freerdp">{t('session.rdp_client_freerdp')}</option>
+					</select>
+					{#if rdpClient === 'freerdp'}<p class="shell-hint">{t('session.rdp_client_freerdp_hint')}</p>{/if}
+				</div>
+			{/if}
 			{#if !usedCredential}
 			<div class="shell-field">
 				<SecretRefField approvable label={t('session.password_optional')} bind:value={password} bind:secretRef={passwordRef} placeholder={t('session.stored_encrypted')} disabled={saving} onpick={(e) => (username = nameFromEntry(username, e))} />
@@ -1189,13 +1204,15 @@
 				</select>
 				<p class="shell-hint">{t('session.rdp_clipboard_hint')}</p>
 			</div>
-			<div class="shell-field">
-				<label class="jump-toggle">
-					<input type="checkbox" bind:checked={rdpForwardLockKeys} disabled={saving} aria-describedby="rdp-forward-lock-keys-hint" />
-					<span class="jump-toggle-text">{t('session.rdp_forward_lock_keys')}</span>
-				</label>
-				<p id="rdp-forward-lock-keys-hint" class="shell-hint">{t('session.rdp_forward_lock_keys_hint')}</p>
-			</div>
+			{#if rdpClient === 'ironrdp' || isMobile()}
+				<div class="shell-field">
+					<label class="jump-toggle">
+						<input type="checkbox" bind:checked={rdpForwardLockKeys} disabled={saving} aria-describedby="rdp-forward-lock-keys-hint" />
+						<span class="jump-toggle-text">{t('session.rdp_forward_lock_keys')}</span>
+					</label>
+					<p id="rdp-forward-lock-keys-hint" class="shell-hint">{t('session.rdp_forward_lock_keys_hint')}</p>
+				</div>
+			{/if}
 		{:else if kind === 'vnc'}
 			<div class="shell-field">
 				<Input label={t('session.vnc_mac_username')} bind:value={username} placeholder={t('session.vnc_mac_username_placeholder')} disabled={saving} />
