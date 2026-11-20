@@ -3510,5 +3510,15 @@
   "files.view_failed": "{{name}} kann nicht angezeigt werden: {{error}}",
   "files.folders_same": "Keine Unterschiede ({{count}} Dateien gleich)",
   "files.folders_differ": "Unterschiede markiert: {{left}} auf diesem Computer, {{right}} auf dem Server",
-  "files.compare_need_files": "Zum Vergleichen auf jeder Seite den Cursor auf eine Datei setzen"
+  "files.compare_need_files": "Zum Vergleichen auf jeder Seite den Cursor auf eine Datei setzen",
+  "settings.file_editor": "Datei-Editor",
+  "settings.file_editor_desc": "Womit Bearbeiten (F4) im Dateimanager mit ganzem Bereich Dateien öffnet. Terminal-Editoren öffnen sich in einem neuen Terminal-Tab. Eine Server-Datei wird bei jedem Speichern wieder hochgeladen.",
+  "settings.file_editor_system": "Systemstandard",
+  "settings.file_editor_in_terminal": "in einem Terminal-Tab",
+  "settings.file_editor_missing": "{{name}} (nicht gefunden, Systemstandard wird verwendet)",
+  "settings.file_editor_custom": "Eigener Befehl…",
+  "settings.file_editor_command": "Editor-Befehl",
+  "settings.file_editor_command_desc": "Programm und Optionen; die Datei wird am Ende angehängt. Pfade mit Leerzeichen in Anführungszeichen setzen.",
+  "settings.file_editor_terminal": "Läuft im Terminal",
+  "settings.file_editor_terminal_desc": "In einem neuen Terminal-Tab öffnen, für Editoren wie vim oder nano."
 }

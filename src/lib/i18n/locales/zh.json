@@ -3510,5 +3510,15 @@
   "files.view_failed": "无法显示 {{name}}：{{error}}",
   "files.folders_same": "没有差异（{{count}} 个文件相同）",
   "files.folders_differ": "已标记差异：本机 {{left}} 个，服务器 {{right}} 个",
-  "files.compare_need_files": "请在两侧各将光标放在一个文件上以进行比较"
+  "files.compare_need_files": "请在两侧各将光标放在一个文件上以进行比较",
+  "settings.file_editor": "文件编辑器",
+  "settings.file_editor_desc": "全窗格文件管理器中“编辑”(F4) 用什么程序打开文件。终端编辑器会在新的终端标签页中打开。服务器上的文件每次保存后都会传回服务器。",
+  "settings.file_editor_system": "系统默认",
+  "settings.file_editor_in_terminal": "在终端标签页中",
+  "settings.file_editor_missing": "{{name}}（未找到，将使用系统默认）",
+  "settings.file_editor_custom": "自定义命令…",
+  "settings.file_editor_command": "编辑器命令",
+  "settings.file_editor_command_desc": "程序及其选项；文件会添加到末尾。含空格的路径请加引号。",
+  "settings.file_editor_terminal": "在终端中运行",
+  "settings.file_editor_terminal_desc": "在新的终端标签页中打开，适用于 vim 或 nano 等编辑器。"
 }

@@ -3510,5 +3510,15 @@
   "files.view_failed": "Cannot show {{name}}: {{error}}",
   "files.folders_same": "No differences ({{count}} files the same)",
   "files.folders_differ": "Marked the differences: {{left}} on this computer, {{right}} on the server",
-  "files.compare_need_files": "Put the cursor on a file on each side to compare them"
+  "files.compare_need_files": "Put the cursor on a file on each side to compare them",
+  "settings.file_editor": "File editor",
+  "settings.file_editor_desc": "What Edit (F4) in the full-pane file manager opens files in. Terminal editors open in a new terminal tab. A server file is uploaded back each time you save it.",
+  "settings.file_editor_system": "System default",
+  "settings.file_editor_in_terminal": "in a terminal tab",
+  "settings.file_editor_missing": "{{name}} (not found, uses the system default)",
+  "settings.file_editor_custom": "Custom command…",
+  "settings.file_editor_command": "Editor command",
+  "settings.file_editor_command_desc": "The program and its options; the file is added at the end. Use quotes around a path with spaces.",
+  "settings.file_editor_terminal": "Runs in a terminal",
+  "settings.file_editor_terminal_desc": "Open it in a new terminal tab, for editors such as vim or nano."
 }

@@ -3510,5 +3510,15 @@
   "files.view_failed": "Δεν είναι δυνατή η εμφάνιση του {{name}}: {{error}}",
   "files.folders_same": "Καμία διαφορά ({{count}} ίδια αρχεία)",
   "files.folders_differ": "Σημειώθηκαν οι διαφορές: {{left}} σε αυτόν τον υπολογιστή, {{right}} στον διακομιστή",
-  "files.compare_need_files": "Βάλτε τον κέρσορα σε ένα αρχείο σε κάθε πλευρά για σύγκριση"
+  "files.compare_need_files": "Βάλτε τον κέρσορα σε ένα αρχείο σε κάθε πλευρά για σύγκριση",
+  "settings.file_editor": "Επεξεργαστής αρχείων",
+  "settings.file_editor_desc": "Με τι ανοίγει η Επεξεργασία (F4) τα αρχεία στη διαχείριση αρχείων πλήρους πλαισίου. Οι επεξεργαστές τερματικού ανοίγουν σε νέα καρτέλα τερματικού. Ένα αρχείο του διακομιστή ανεβαίνει ξανά σε κάθε αποθήκευση.",
+  "settings.file_editor_system": "Προεπιλογή συστήματος",
+  "settings.file_editor_in_terminal": "σε καρτέλα τερματικού",
+  "settings.file_editor_missing": "{{name}} (δεν βρέθηκε, χρησιμοποιείται η προεπιλογή συστήματος)",
+  "settings.file_editor_custom": "Προσαρμοσμένη εντολή…",
+  "settings.file_editor_command": "Εντολή επεξεργαστή",
+  "settings.file_editor_command_desc": "Το πρόγραμμα και οι επιλογές του· το αρχείο προστίθεται στο τέλος. Βάλτε σε εισαγωγικά μια διαδρομή με κενά.",
+  "settings.file_editor_terminal": "Εκτελείται σε τερματικό",
+  "settings.file_editor_terminal_desc": "Άνοιγμα σε νέα καρτέλα τερματικού, για επεξεργαστές όπως vim ή nano."
 }

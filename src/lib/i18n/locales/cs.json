@@ -3510,5 +3510,15 @@
   "files.view_failed": "Nelze zobrazit {{name}}: {{error}}",
   "files.folders_same": "Žádné rozdíly (shodných souborů: {{count}})",
   "files.folders_differ": "Rozdíly označeny: na tomto počítači {{left}}, na serveru {{right}}",
-  "files.compare_need_files": "Pro porovnání dejte kurzor na soubor na obou stranách"
+  "files.compare_need_files": "Pro porovnání dejte kurzor na soubor na obou stranách",
+  "settings.file_editor": "Editor souborů",
+  "settings.file_editor_desc": "V čem Upravit (F4) ve správci souborů na celou plochu otevírá soubory. Terminálové editory se otevřou v nové kartě terminálu. Soubor ze serveru se po každém uložení nahraje zpět.",
+  "settings.file_editor_system": "Výchozí v systému",
+  "settings.file_editor_in_terminal": "v kartě terminálu",
+  "settings.file_editor_missing": "{{name}} (nenalezen, použije se výchozí v systému)",
+  "settings.file_editor_custom": "Vlastní příkaz…",
+  "settings.file_editor_command": "Příkaz editoru",
+  "settings.file_editor_command_desc": "Program a jeho volby; soubor se přidá na konec. Cestu s mezerami dejte do uvozovek.",
+  "settings.file_editor_terminal": "Běží v terminálu",
+  "settings.file_editor_terminal_desc": "Otevřít v nové kartě terminálu, pro editory jako vim nebo nano."
 }

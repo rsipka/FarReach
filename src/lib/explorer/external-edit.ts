@@ -1,10 +1,12 @@
 /**
  * Edit a server file in the program this computer uses for it (F4 in the
- * full-pane file manager), as WinSCP does: it is downloaded to a temporary
+ * full-pane file manager, in the editor chosen in Settings), as WinSCP does:
+ * it is downloaded to a temporary
  * folder, opened there, and each time it is saved it is uploaded back.
  */
 import { sftpDownload, sftpUpload } from '#lib/ipc/sftp.js';
-import { localEditCopyPath, localOpen, localStat, type LocalStat } from '#lib/ipc/localfs.js';
+import { localEditCopyPath, localStat, type LocalStat } from '#lib/ipc/localfs.js';
+import { openInEditor } from './editor-launch.js';
 import { runTransfer } from './run-transfer.js';
 
 interface Watch {
@@ -40,7 +42,7 @@ export async function editExternally(conn: string, remotePath: string, name: str
 	const key = `${conn}\u0000${remotePath}`;
 	const existing = watches.get(key);
 	if (existing) {
-		await localOpen(existing.localPath);
+		await openInEditor(existing.localPath);
 		return;
 	}
 
@@ -94,7 +96,7 @@ export async function editExternally(conn: string, remotePath: string, name: str
 		}
 	}
 
-	await localOpen(localPath);
+	await openInEditor(localPath);
 }
 
 /** Stop watching every copy of a connection's files (it closed). */

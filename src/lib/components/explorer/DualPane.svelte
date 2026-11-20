@@ -14,7 +14,8 @@
 	import { getCurrentPath, type FileEntry, type SortKey } from '#lib/state/explorer.svelte.js';
 	import { getTransfers, type Transfer } from '#lib/state/transfers.svelte.js';
 	import { sftpDelete, sftpListDir, sftpMkdir, sftpReadFile, sftpRename, sftpTerminalCwd } from '#lib/ipc/sftp.js';
-	import { localDelete, localListDir, localMkdir, localOpen, localReadText, localRename } from '#lib/ipc/localfs.js';
+	import { localDelete, localListDir, localMkdir, localReadText, localRename } from '#lib/ipc/localfs.js';
+	import { openInEditor } from '#lib/explorer/editor-launch.js';
 	import { editExternally } from '#lib/explorer/external-edit.js';
 	import { compareFolders } from '#lib/explorer/compare.js';
 	import TextPanel from './TextPanel.svelte';
@@ -215,14 +216,15 @@
 		void tick().then(() => rootEl?.focus());
 	}
 
-	/** F4: the file opens in the program this computer uses for it. A
+	/** F4: the file opens in the editor chosen in Settings (the system's
+	 *  default program unless another is picked). A
 	 *  server file is fetched to a temporary copy, and each save there is
 	 *  uploaded back. */
 	async function edit(row: Row | undefined = pane.current, p: Pane = pane): Promise<void> {
 		if (!row || row.isDirectory) return;
 		try {
 			if (p.kind === 'local') {
-				await localOpen(row.path);
+				await openInEditor(row.path);
 				return;
 			}
 			const remotePath = row.path;

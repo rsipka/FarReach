@@ -3510,5 +3510,15 @@
   "files.view_failed": "Не удаётся показать {{name}}: {{error}}",
   "files.folders_same": "Различий нет (одинаковых файлов: {{count}})",
   "files.folders_differ": "Различия отмечены: на этом компьютере {{left}}, на сервере {{right}}",
-  "files.compare_need_files": "Поставьте курсор на файл с каждой стороны, чтобы сравнить их"
+  "files.compare_need_files": "Поставьте курсор на файл с каждой стороны, чтобы сравнить их",
+  "settings.file_editor": "Редактор файлов",
+  "settings.file_editor_desc": "Чем «Изменить» (F4) в файловом менеджере на всю панель открывает файлы. Терминальные редакторы открываются в новой вкладке терминала. Файл с сервера загружается обратно при каждом сохранении.",
+  "settings.file_editor_system": "Системный по умолчанию",
+  "settings.file_editor_in_terminal": "во вкладке терминала",
+  "settings.file_editor_missing": "{{name}} (не найден, используется системный)",
+  "settings.file_editor_custom": "Своя команда…",
+  "settings.file_editor_command": "Команда редактора",
+  "settings.file_editor_command_desc": "Программа и её параметры; файл добавляется в конец. Путь с пробелами заключите в кавычки.",
+  "settings.file_editor_terminal": "Запускать в терминале",
+  "settings.file_editor_terminal_desc": "Открывать в новой вкладке терминала, для редакторов вроде vim или nano."
 }

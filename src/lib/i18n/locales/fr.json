@@ -3510,5 +3510,15 @@
   "files.view_failed": "Impossible d'afficher {{name}} : {{error}}",
   "files.folders_same": "Aucune différence ({{count}} fichiers identiques)",
   "files.folders_differ": "Différences marquées : {{left}} sur cet ordinateur, {{right}} sur le serveur",
-  "files.compare_need_files": "Placez le curseur sur un fichier de chaque côté pour les comparer"
+  "files.compare_need_files": "Placez le curseur sur un fichier de chaque côté pour les comparer",
+  "settings.file_editor": "Éditeur de fichiers",
+  "settings.file_editor_desc": "Avec quoi Modifier (F4) ouvre les fichiers dans le gestionnaire plein volet. Les éditeurs en terminal s'ouvrent dans un nouvel onglet de terminal. Un fichier du serveur y est renvoyé à chaque enregistrement.",
+  "settings.file_editor_system": "Par défaut du système",
+  "settings.file_editor_in_terminal": "dans un onglet de terminal",
+  "settings.file_editor_missing": "{{name}} (introuvable, le choix du système est utilisé)",
+  "settings.file_editor_custom": "Commande personnalisée…",
+  "settings.file_editor_command": "Commande de l'éditeur",
+  "settings.file_editor_command_desc": "Le programme et ses options ; le fichier est ajouté à la fin. Mettez entre guillemets un chemin avec des espaces.",
+  "settings.file_editor_terminal": "S'exécute dans un terminal",
+  "settings.file_editor_terminal_desc": "L'ouvrir dans un nouvel onglet de terminal, pour des éditeurs comme vim ou nano."
 }

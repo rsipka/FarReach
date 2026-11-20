@@ -3510,5 +3510,15 @@
   "files.view_failed": "Impossibile mostrare {{name}}: {{error}}",
   "files.folders_same": "Nessuna differenza ({{count}} file uguali)",
   "files.folders_differ": "Differenze contrassegnate: {{left}} su questo computer, {{right}} sul server",
-  "files.compare_need_files": "Metti il cursore su un file in ciascun lato per confrontarli"
+  "files.compare_need_files": "Metti il cursore su un file in ciascun lato per confrontarli",
+  "settings.file_editor": "Editor di file",
+  "settings.file_editor_desc": "Con cosa Modifica (F4) apre i file nel gestore a pannello intero. Gli editor da terminale si aprono in una nuova scheda terminale. Un file del server viene ricaricato a ogni salvataggio.",
+  "settings.file_editor_system": "Predefinito di sistema",
+  "settings.file_editor_in_terminal": "in una scheda terminale",
+  "settings.file_editor_missing": "{{name}} (non trovato, si usa il predefinito di sistema)",
+  "settings.file_editor_custom": "Comando personalizzato…",
+  "settings.file_editor_command": "Comando dell'editor",
+  "settings.file_editor_command_desc": "Il programma e le sue opzioni; il file viene aggiunto alla fine. Metti tra virgolette un percorso con spazi.",
+  "settings.file_editor_terminal": "Si avvia in un terminale",
+  "settings.file_editor_terminal_desc": "Aprilo in una nuova scheda terminale, per editor come vim o nano."
 }

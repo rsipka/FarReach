@@ -3510,5 +3510,15 @@
   "files.view_failed": "No se puede mostrar {{name}}: {{error}}",
   "files.folders_same": "Sin diferencias ({{count}} archivos iguales)",
   "files.folders_differ": "Diferencias marcadas: {{left}} en este equipo, {{right}} en el servidor",
-  "files.compare_need_files": "Pon el cursor sobre un archivo en cada lado para compararlos"
+  "files.compare_need_files": "Pon el cursor sobre un archivo en cada lado para compararlos",
+  "settings.file_editor": "Editor de archivos",
+  "settings.file_editor_desc": "Con qué abre Editar (F4) los archivos en el gestor a pantalla completa. Los editores de terminal se abren en una nueva pestaña de terminal. Un archivo del servidor se vuelve a subir cada vez que lo guardas.",
+  "settings.file_editor_system": "Predeterminado del sistema",
+  "settings.file_editor_in_terminal": "en una pestaña de terminal",
+  "settings.file_editor_missing": "{{name}} (no encontrado, se usa el predeterminado del sistema)",
+  "settings.file_editor_custom": "Comando personalizado…",
+  "settings.file_editor_command": "Comando del editor",
+  "settings.file_editor_command_desc": "El programa y sus opciones; el archivo se añade al final. Pon entre comillas una ruta con espacios.",
+  "settings.file_editor_terminal": "Se ejecuta en un terminal",
+  "settings.file_editor_terminal_desc": "Abrirlo en una nueva pestaña de terminal, para editores como vim o nano."
 }

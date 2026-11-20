@@ -70,6 +70,8 @@ use ipc::session_commands::*;
 use ipc::sftp_commands::*;
 #[cfg(desktop)]
 use ipc::local_fs_commands::*;
+#[cfg(desktop)]
+use ipc::editor_detect::*;
 use ipc::dragout_commands::*;
 use ipc::webview_commands::*;
 use ipc::ssh_commands::*;
@@ -572,6 +574,8 @@ pub fn run() {
             local_stat,
             local_edit_copy_path,
             local_open,
+            local_detect_editors,
+            local_open_with,
             drag_preview_icon,
             drag_cache_dir,
             dragout_start,

@@ -63,3 +63,22 @@ export async function localEditCopyPath(name: string): Promise<string> {
 export async function localOpen(path: string): Promise<void> {
 	return invoke('local_open', { path });
 }
+
+/** A text editor found on this computer: run `program`, then `args`, then
+ *  the file; a terminal editor runs in a terminal tab. */
+export interface EditorInfo {
+	id: string;
+	name: string;
+	program: string;
+	args: string[];
+	terminal: boolean;
+}
+
+export async function localDetectEditors(): Promise<EditorInfo[]> {
+	return invoke<EditorInfo[]>('local_detect_editors');
+}
+
+/** Start a graphical program on a local file. */
+export async function localOpenWith(program: string, args: string[], path: string): Promise<void> {
+	return invoke('local_open_with', { program, args, path });
+}
