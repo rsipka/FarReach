@@ -125,7 +125,7 @@ fn relative_folder_is_refused_and_empty_values_use_defaults() {
 fn header_matches_putty_format() {
     assert_eq!(
         header_line(&at(2026, 10, 2, 1, 30, 0)),
-        "=~=~=~=~=~=~=~=~=~=~=~= Reach log 2026.10.02 01:30:00 =~=~=~=~=~=~=~=~=~=~=~=\r\n"
+        "=~=~=~=~=~=~=~=~=~=~=~= Reacher CM log 2026.10.02 01:30:00 =~=~=~=~=~=~=~=~=~=~=~=\r\n"
     );
 }
 
@@ -169,7 +169,7 @@ fn append_keeps_and_overwrite_replaces() {
     log.push("new\r\n");
     drop(log);
     let text = read_when(&path, |s| s.ends_with("new\r\n"));
-    assert!(text.starts_with("earlier session\n=~=~=~=~=~=~=~=~=~=~=~= Reach log "), "{text}");
+    assert!(text.starts_with("earlier session\n=~=~=~=~=~=~=~=~=~=~=~= Reacher CM log "), "{text}");
 
     let mut log = SessionLog::open(&cfg(dir.path(), LogMode::All, "same.log", false, false), "h", 22).unwrap();
     log.push("only this");
@@ -241,8 +241,8 @@ fn pause_resume_and_stop_from_the_bar() {
     let text = read_when(&path, |s| s.contains("log stopped"));
     assert!(!text.contains("hidden") && !text.contains("after"), "{text}");
     let one = text.find("one").unwrap();
-    let paused = text.find("Reach log paused").unwrap();
-    let resumed = text.find("Reach log resumed").unwrap();
+    let paused = text.find("Reacher CM log paused").unwrap();
+    let resumed = text.find("Reacher CM log resumed").unwrap();
     let two = text.find("two").unwrap();
     assert!(one < paused && paused < resumed && resumed < two, "{text}");
     drop(log);

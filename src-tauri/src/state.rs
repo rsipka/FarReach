@@ -191,6 +191,11 @@ pub struct SessionConfig {
     /// window of its own here, instead of a shell (see `ssh::x11_desktop`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub x11_desktop: Option<crate::ssh::x11_desktop::X11Desktop>,
+    /// SSH only: terminal type, what Backspace sends and the server's
+    /// character encoding (see `ssh::terminal`); unset: xterm-256color,
+    /// DEL and UTF-8.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal: Option<crate::ssh::terminal::TerminalOptions>,
     /// Approvals of the password manager entries a saved credential brings
     /// to this session, by slot (`password`, `jump:0:passphrase`). An entry
     /// in a credential is approved per session and person like one of the
@@ -306,6 +311,7 @@ impl SessionConfig {
         if self.kind != SessionKind::Ssh || self.x11_desktop.as_ref().is_some_and(|d| d.check().is_err()) {
             self.x11_desktop = None;
         }
+        self.terminal = self.terminal.take().filter(|_| self.kind == SessionKind::Ssh).and_then(|t| t.tidy());
         if self.kind != SessionKind::Spice || self.spice.as_ref().is_some_and(|o| o.is_empty()) {
             self.spice = None;
         }

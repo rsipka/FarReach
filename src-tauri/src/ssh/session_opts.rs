@@ -166,6 +166,7 @@ pub async fn setup_channel(
     rows: u16,
     reach_shell: Option<&str>,
     x11: Option<&crate::ssh::x11::X11Auth>,
+    term: &str,
 ) -> Result<bool, String> {
     let shell = reach_shell.map(str::trim).filter(|s| !s.is_empty());
     let command = shell.map(|s| if s.split_whitespace().nth(1).is_some() { format!("exec {s}") } else { format!("exec {s} -l") }).or(p.remote_command.clone());
@@ -175,7 +176,7 @@ pub async fn setup_channel(
     let tty = p.wants_tty(shell.is_none() && command.is_some());
     if tty {
         channel
-            .request_pty(false, "xterm-256color", cols as u32, rows as u32, 0, 0, &[])
+            .request_pty(false, term, cols as u32, rows as u32, 0, 0, &[])
             .await
             .map_err(|e| format!("PTY request failed: {e}"))?;
     }

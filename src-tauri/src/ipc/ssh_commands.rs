@@ -218,6 +218,7 @@ pub async fn ssh_connect(
     session_id: Option<String>,
     tmux: Option<crate::ssh::tmux::TmuxStart>,
     x11_desktop: Option<crate::ssh::x11_desktop::X11Desktop>,
+    terminal: Option<crate::ssh::terminal::TerminalOptions>,
 ) -> Result<String, String> {
     // Boxed: Tauri builds a command's future on the main thread and passes it
     // by value before spawning it, and the main thread's stack is small
@@ -258,6 +259,7 @@ pub async fn ssh_connect(
             show_login_message: show_login_message.unwrap_or(true),
             log: session_log,
             tmux_ask,
+            terminal: terminal.and_then(|t| t.tidy()).unwrap_or_default(),
         };
         tracing::info!(
             "ssh_connect IPC: id={}, host={}, port={}, user={}, auth_method='{}', has_key_path={}, has_password={}, has_passphrase={}, has_password_ref={}, has_passphrase_ref={}, has_proxy={}, has_jump={}",

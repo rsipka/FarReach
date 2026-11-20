@@ -6,7 +6,7 @@
 	import OsIconSelect from './OsIconSelect.svelte';
 	import { osChoices } from '#lib/data/distro-icons.js';
 	import Input from '#lib/components/shared/Input.svelte';
-	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField, type TmuxSetting, type X11DesktopKind, X11_DESKTOPS, type ConnectMode, type SessionAddress, type WebOptions, type WebLogin, type WebCert, webSessionCertAdd, webSessionCertRemove, webSessionClearData } from '#lib/ipc/sessions.js';
+	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField, type TmuxSetting, type X11DesktopKind, X11_DESKTOPS, type TerminalOptions, TERMINAL_TYPES, TERMINAL_ENCODINGS, type ConnectMode, type SessionAddress, type WebOptions, type WebLogin, type WebCert, webSessionCertAdd, webSessionCertRemove, webSessionClearData } from '#lib/ipc/sessions.js';
 	import { defaultTmuxName, folderTmux, validTmuxName } from '#lib/terminal/tmux.js';
 	import { isIos, isMobile, isWindows } from '#lib/platform.js';
 	import { APP_FILES_SHARE } from '#lib/ipc/rdp.js';
@@ -398,6 +398,10 @@
 	/** SSH: start a desktop over X11 instead of a shell; '' for a terminal. */
 	let x11Desktop = $state<'' | X11DesktopKind>('');
 	let x11Command = $state('');
+	/** SSH: terminal type, Backspace and encoding; empty is the default. */
+	let termType = $state('');
+	let backspaceChoice = $state<'' | 'ctrlh'>('');
+	let encodingChoice = $state('');
 	/** tmux on the server: '' as the folder says. See #lib/terminal/tmux. */
 	let tmuxChoice = $state<'' | 'attach' | 'ask' | 'off'>('');
 	let tmuxMouse = $state(false);
@@ -546,6 +550,9 @@
 			tmuxMouse = !!editSession.tmux?.mouse;
 			x11Desktop = editSession.x11_desktop?.desktop ?? '';
 			x11Command = editSession.x11_desktop?.command ?? '';
+			termType = editSession.terminal?.term ?? '';
+			backspaceChoice = editSession.terminal?.backspace === 'ctrlh' ? 'ctrlh' : '';
+			encodingChoice = editSession.terminal?.encoding ?? '';
 			tmuxName = editSession.tmux?.name ?? '';
 			colorsOpen = false;
 			if (editSession.jump_chain && editSession.jump_chain.length > 0) {
@@ -624,6 +631,9 @@
 			tmuxMouse = false;
 			x11Desktop = '';
 			x11Command = '';
+			termType = '';
+			backspaceChoice = '';
+			encodingChoice = '';
 			tmuxName = '';
 			colorsOpen = false;
 			jumpEnabled = false;
@@ -714,6 +724,13 @@
 		// tmux runs on an SSH server only. A name is kept only beside a choice
 		// or a folder that turns it on.
 		const x11ToSave = kind === 'ssh' && x11Desktop ? { desktop: x11Desktop, command: x11Desktop === 'custom' ? x11Command.trim() : null } : null;
+		const terminalToSave: TerminalOptions | null = kind === 'ssh' && (termType.trim() || backspaceChoice || encodingChoice)
+			? { term: termType.trim() || null, backspace: backspaceChoice || null, encoding: encodingChoice || null }
+			: null;
+		if (terminalToSave?.term && !/^[\x21-\x7e]{1,64}$/.test(terminalToSave.term)) {
+			error = t('session.term_type_invalid');
+			return;
+		}
 		if (x11ToSave?.desktop === 'custom' && !x11ToSave.command) {
 			error = t('x11desktop.command_needed');
 			return;
@@ -825,6 +842,7 @@
 					history: historyToSave,
 					tmux: tmuxToSave,
 					x11_desktop: x11ToSave,
+					terminal: terminalToSave,
 					host_label: altToSave ? (hostLabel.trim() || null) : null,
 					alt_addresses: altToSave,
 					connect_mode: altToSave ? addressMode : null,
@@ -871,6 +889,7 @@
 					history: historyToSave,
 					tmux: tmuxToSave,
 					x11Desktop: x11ToSave,
+					terminal: terminalToSave,
 					hostLabel: altToSave ? hostLabel : null,
 					altAddresses: altToSave,
 					connectMode: altToSave ? addressMode : null,
@@ -1696,6 +1715,37 @@
 					<option value="commands">{t('history.mode_commands')}</option>
 					<option value="output">{t('history.mode_output')}</option>
 				</select>
+			</div>
+		{/if}
+
+		{#if kind === 'ssh'}
+			<div class="folder-section">
+				<label class="folder-label" for="session-term-type">{t('session.term_type')}</label>
+				<input id="session-term-type" class="field-input" list="session-term-types" bind:value={termType} placeholder="xterm-256color" spellcheck="false" autocapitalize="off" autocomplete="off" disabled={saving} />
+				<datalist id="session-term-types">
+					{#each TERMINAL_TYPES as tt (tt)}<option value={tt}></option>{/each}
+				</datalist>
+				<p class="shell-hint">{t('session.term_type_hint')}</p>
+			</div>
+			<div class="folder-section">
+				<span class="folder-label">{t('session.telnet_backspace')}</span>
+				<select class="folder-select" bind:value={backspaceChoice} disabled={saving}>
+					<option value="">DEL (^?, ASCII 127)</option>
+					<option value="ctrlh">Ctrl+H (^H, ASCII 8)</option>
+				</select>
+			</div>
+			<div class="folder-section">
+				<span class="folder-label">{t('session.encoding')}</span>
+				<select class="folder-select" bind:value={encodingChoice} disabled={saving}>
+					<option value="">UTF-8</option>
+					{#each TERMINAL_ENCODINGS.filter((e) => e !== 'UTF-8') as enc (enc)}
+						<option value={enc}>{enc}</option>
+					{/each}
+					{#if encodingChoice && !TERMINAL_ENCODINGS.includes(encodingChoice)}
+						<option value={encodingChoice}>{encodingChoice}</option>
+					{/if}
+				</select>
+				<p class="shell-hint">{t('session.encoding_hint')}</p>
 			</div>
 		{/if}
 

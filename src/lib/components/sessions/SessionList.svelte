@@ -1779,6 +1779,7 @@
 				// An X11 desktop starts the desktop, never tmux.
 				tmux: session.x11_desktop ? null : tmuxView(tmuxFor(session, folders)),
 				x11Desktop: session.x11_desktop ?? null,
+				terminal: session.terminal ?? null,
 				injectColors: getSettings().typeShellSetup,
 				sessionLog: sessionLogConfig(session.name),
 				showLoginMessage: getSettings().showLoginMessage,

@@ -22,6 +22,7 @@ pub mod proxycmd;
 pub mod session_hostkeys;
 pub mod session_log;
 pub mod session_opts;
+pub mod terminal;
 pub mod tun;
 pub mod unlocked;
 pub mod biometric_keys;
