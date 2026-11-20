@@ -218,6 +218,20 @@ pub struct SessionConfig {
     /// them in order without checking first.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub address_check: Option<bool>,
+    /// Passwords this session logged in with before, newest first (see
+    /// `ipc::password_history`). Part of the record, so encrypted and
+    /// synced with it. Kept only by saving a changed password; never sent
+    /// to the window with the session, and what the window sends is ignored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password_history: Option<Vec<PastPassword>>,
+}
+
+/// A password a session or saved credential used before it was changed.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PastPassword {
+    pub password: String,
+    /// When it was replaced, in Unix seconds.
+    pub replaced_at: i64,
 }
 
 /// One more address of a session's server.
@@ -339,6 +353,9 @@ pub struct SavedCredential {
     /// private sessions vault). Only sessions in the same vault can use it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vault_id: Option<String>,
+    /// Passwords it held before, newest first; as for sessions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password_history: Option<Vec<PastPassword>>,
 }
 
 /// Which saved credential a session's login came from, as read.

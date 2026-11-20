@@ -3,6 +3,7 @@
 //! All sessions are stored encrypted in SQLite using XChaCha20-Poly1305.
 //! Lookups are O(1) using session_id as the primary key.
 
+use crate::ipc::password_history as pwh;
 use crate::ipc::saved_credential_commands as creds;
 use crate::state::{AppState, AuthMethod, Folder, JumpHostConfig, SessionConfig};
 use crate::vault::types::SecretCategory;
@@ -90,6 +91,8 @@ pub async fn session_list(state: State<'_, AppState>) -> Result<Vec<SessionConfi
     for s in &mut sessions {
         let via = via_id(s).and_then(|id| stored.get(id));
         open_approvals_with(&manager, s, via);
+        // Old passwords are read one session at a time, when asked for.
+        s.password_history = None;
     }
     Ok(sessions)
 }
@@ -726,6 +729,7 @@ pub async fn session_get(
     // O(1) lookup by primary key
     let (mut session, _) = read_session_filled(&manager, &loc).await?;
     open_approvals(&manager, &mut session).await;
+    session.password_history = None;
     Ok(session)
 }
 
@@ -862,6 +866,7 @@ pub async fn session_create(
         alt_addresses,
         connect_mode,
         address_check,
+        password_history: None,
     };
     session.tidy_documentation();
 
@@ -956,8 +961,12 @@ async fn prepare_update(
     // The record being replaced, as this user reads it: which password
     // manager references they had approved (see `seal_for`), and its own
     // login and the one a credential filled in, if one did.
+    // Its own typed password and password history as stored, before a
+    // credential fills anything in.
+    let mut past: (Option<String>, Option<Vec<crate::state::PastPassword>>) = (None, None);
     let (stored, before) = match read_session(manager, &loc.vault_id, &loc.secret_id).await {
         Ok(mut s) => {
+            past = (pwh::typed_password(&s.auth_method).map(str::to_string), s.password_history.take());
             let own = creds::SessionLogins::all(&s);
             let replaced = creds::fill(&mut s, vault.as_deref(), &logins.folders, &logins.creds);
             let filled = creds::SessionLogins::all(&s).only(&replaced);
@@ -997,7 +1006,17 @@ async fn prepare_update(
         before.as_ref().map(|(own, filled)| (own, filled)),
     );
     seal_approvals(manager, &mut session, stored.as_ref()).await;
-    let record = to_store(&session, own);
+    let mut record = to_store(&session, own);
+    // The history is the stored one, with the stored password in front
+    // when this save replaces it. Never what the window sent.
+    record.password_history = pwh::carry(
+        past.1.as_deref(),
+        past.0.as_deref(),
+        pwh::typed_password(&record.auth_method),
+        pwh::limit(manager).await,
+        pwh::now(),
+    );
+    session.password_history = None;
     Ok((loc, Prepared { record, session }))
 }
 
@@ -1008,6 +1027,10 @@ pub use bulk::*;
 #[path = "session_hostkeys_cmds.rs"]
 mod hostkeys;
 pub use hostkeys::*;
+
+#[path = "session_password_history_cmds.rs"]
+mod password_history_cmds;
+pub use password_history_cmds::*;
 
 /// Move many sessions into a folder (`None`: out of any folder) in one
 /// go. Only `folder_id` changes: each stored session is read and written
@@ -2432,6 +2455,7 @@ mod approval_tests {
             domain: None,
             auth_method: AuthMethod::Password { password: None, password_ref: Some(entry(id)) },
             vault_id: None,
+            password_history: None,
         }
     }
 

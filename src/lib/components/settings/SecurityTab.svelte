@@ -20,6 +20,13 @@
 		type UnlockMethods
 	} from '#lib/ipc/vault.js';
 	import { forgetBiometricKeys } from '#lib/ipc/savedCredentials.js';
+	import { get as getSetting, set as setSetting } from '#lib/ipc/settings.js';
+	import {
+		PASSWORD_HISTORY_DEFAULT_LIMIT,
+		PASSWORD_HISTORY_LIMITS,
+		PASSWORD_HISTORY_LIMIT_SETTING,
+		passwordHistoryClearAll
+	} from '#lib/ipc/passwordHistory.js';
 
 	const settings = getSettings();
 	const autoLockOptions = $derived([
@@ -88,6 +95,53 @@
 		}
 	}
 
+	// Password history: how many old passwords each session and credential
+	// keeps (in the vault, so it follows the user), and forgetting them all.
+	let historyLimit = $state(String(PASSWORD_HISTORY_DEFAULT_LIMIT));
+	let historyAsk = $state(false);
+	let historyBusy = $state(false);
+	let historyDone = $state('');
+	let historyError = $state('');
+	const historyOptions = $derived(
+		PASSWORD_HISTORY_LIMITS.map((n) => ({
+			label: n === 0 ? t('password_history.limit_off') : t('password_history.limit_count', { count: n }),
+			value: String(n)
+		}))
+	);
+
+	async function loadHistoryLimit() {
+		try {
+			const v = await getSetting(PASSWORD_HISTORY_LIMIT_SETTING);
+			if (v !== null && PASSWORD_HISTORY_LIMITS.includes(Number(v))) historyLimit = v;
+		} catch {
+			// Locked or no IPC: the default is shown
+		}
+	}
+
+	async function changeHistoryLimit(value: string) {
+		historyError = '';
+		try {
+			await setSetting(PASSWORD_HISTORY_LIMIT_SETTING, value);
+			historyLimit = value;
+		} catch (e) {
+			historyError = String(e);
+		}
+	}
+
+	async function clearAllHistory() {
+		historyBusy = true;
+		historyError = '';
+		try {
+			const n = await passwordHistoryClearAll();
+			historyDone = t('password_history.cleared_all', { count: n });
+		} catch (e) {
+			historyError = String(e);
+		} finally {
+			historyBusy = false;
+			historyAsk = false;
+		}
+	}
+
 	async function changeMethods(change: () => Promise<void>) {
 		methodBusy = true;
 		methodError = '';
@@ -124,6 +178,7 @@
 
 	$effect(() => {
 		loadStatus();
+		void loadHistoryLimit();
 	});
 
 	async function loadStatus() {
@@ -346,6 +401,48 @@
 			{:else}
 				<Button variant="secondary" size="sm" disabled={locked} onclick={() => { hostKeysAsk = true; hostKeysDone = ''; hostKeysError = ''; }}>
 					{t('security.host_keys_remove_all_button')}
+				</Button>
+			{/if}
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('password_history.limit')}</span>
+			<span class="setting-description">{t('password_history.limit_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Dropdown options={historyOptions} selected={historyLimit} onchange={(v) => void changeHistoryLimit(v)} />
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('password_history.clear_all')}</span>
+			<span class="setting-description">
+				{#if historyAsk}
+					{t('password_history.clear_all_confirm')}
+				{:else if historyDone}
+					{historyDone}
+				{:else}
+					{t('password_history.clear_all_desc')}
+				{/if}
+			</span>
+			{#if historyError}
+				<span class="form-error">{historyError}</span>
+			{/if}
+		</div>
+		<div class="setting-control" style="gap: 8px">
+			{#if historyAsk}
+				<Button variant="ghost" size="sm" disabled={historyBusy} onclick={() => (historyAsk = false)}>
+					{t('common.cancel')}
+				</Button>
+				<Button variant="danger" size="sm" disabled={historyBusy} onclick={clearAllHistory}>
+					{t('password_history.clear_all_yes')}
+				</Button>
+			{:else}
+				<Button variant="secondary" size="sm" disabled={locked} onclick={() => { historyAsk = true; historyDone = ''; historyError = ''; }}>
+					{t('password_history.clear_all_button')}
 				</Button>
 			{/if}
 		</div>

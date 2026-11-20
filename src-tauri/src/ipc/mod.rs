@@ -18,6 +18,7 @@ pub mod telnet_commands;
 pub mod vnc_commands;
 pub mod spice_commands;
 pub mod saved_credential_commands;
+pub(crate) mod password_history;
 pub mod session_commands;
 pub mod sftp_commands;
 #[cfg(desktop)]
