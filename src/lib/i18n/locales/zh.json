@@ -459,6 +459,8 @@
   "session.select_key_file": "选择 SSH 私钥",
   "session.ssh_private_key_filter": "SSH 私钥",
   "session.connected_toast": "已连接到 {{name}}",
+  "session.connected_mark": "已连接",
+  "session.open_mark": "已在标签页中打开",
   "session.identity_created_toast": "身份已创建。你的加密密钥已安全存储在操作系统钥匙串中。",
   "session.identity_restored_toast": "身份恢复成功。",
   "session.data_cleared_toast": "数据已清除。你现在可以进行初始化。",

@@ -458,6 +458,8 @@
   "session.select_key_file": "Vyberte soukromý klíč SSH",
   "session.ssh_private_key_filter": "Soukromý klíč SSH",
   "session.connected_toast": "Připojeno k {{name}}",
+  "session.connected_mark": "Připojeno",
+  "session.open_mark": "Otevřeno v kartě",
   "session.identity_created_toast": "Identita byla vytvořena. Váš šifrovací klíč je bezpečně uložen v klíčence systému.",
   "session.identity_restored_toast": "Identita byla obnovena.",
   "session.data_cleared_toast": "Data byla vymazána. Nyní můžete provést inicializaci.",

@@ -459,6 +459,8 @@
   "session.select_key_file": "Выбрать закрытый ключ SSH",
   "session.ssh_private_key_filter": "Закрытый ключ SSH",
   "session.connected_toast": "Connected to {{name}}",
+  "session.connected_mark": "Подключено",
+  "session.open_mark": "Открыто во вкладке",
   "session.identity_created_toast": "Идентификатор создан. Ваш ключ шифрования надёжно хранится в связке ключей системы.",
   "session.identity_restored_toast": "Идентификатор восстановлен.",
   "session.data_cleared_toast": "Данные очищены. Теперь можно начать заново.",

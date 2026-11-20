@@ -459,6 +459,8 @@
   "session.select_key_file": "Επιλογή ιδιωτικού κλειδιού SSH",
   "session.ssh_private_key_filter": "Ιδιωτικό κλειδί SSH",
   "session.connected_toast": "Συνδεδεμένο σε {{name}}",
+  "session.connected_mark": "Συνδεδεμένο",
+  "session.open_mark": "Ανοιχτό σε καρτέλα",
   "session.identity_created_toast": "Η ταυτότητα δημιουργήθηκε. Το κλειδί κρυπτογράφησης αποθηκεύτηκε με ασφάλεια στο κλειδοθήκη του ΛΣ.",
   "session.identity_restored_toast": "Η ταυτότητα αποκαταστάθηκε επιτυχώς.",
   "session.data_cleared_toast": "Τα δεδομένα διαγράφηκαν. Μπορείτε τώρα να αρχικοποιήσετε.",

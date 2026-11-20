@@ -459,6 +459,8 @@
   "session.select_key_file": "Seleccionar clave privada SSH",
   "session.ssh_private_key_filter": "Clave privada SSH",
   "session.connected_toast": "Conectado a {{name}}",
+  "session.connected_mark": "Conectado",
+  "session.open_mark": "Abierto en una pestaña",
   "session.identity_created_toast": "Identidad creada. Tu clave de cifrado se almacena de forma segura en el llavero del sistema.",
   "session.identity_restored_toast": "Identidad restaurada correctamente.",
   "session.data_cleared_toast": "Datos borrados. Ahora puedes inicializar.",
