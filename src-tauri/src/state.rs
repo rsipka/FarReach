@@ -231,6 +231,9 @@ pub struct SessionConfig {
     /// to the window with the session, and what the window sends is ignored.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub password_history: Option<Vec<PastPassword>>,
+    /// Web only: address, storage, sign-in and trusted certificates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub web: Option<crate::web::WebOptions>,
 }
 
 /// A password a session or saved credential used before it was changed.
@@ -239,9 +242,6 @@ pub struct PastPassword {
     pub password: String,
     /// When it was replaced, in Unix seconds.
     pub replaced_at: i64,
-    /// Web only: address, storage, sign-in and trusted certificates.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub web: Option<crate::web::WebOptions>,
 }
 
 /// One more address of a session's server.
