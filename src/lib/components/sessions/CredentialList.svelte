@@ -8,7 +8,6 @@
 	import Button from '#lib/components/shared/Button.svelte';
 	import Input from '#lib/components/shared/Input.svelte';
 	import KeyPicker from './KeyPicker.svelte';
-	import PasswordHistory from './PasswordHistory.svelte';
 	import SecretRefField from '#lib/components/pwmanager/SecretRefField.svelte';
 	import type { SecretRef } from '#lib/ipc/pwmanager.js';
 	import { providerName } from '#lib/state/pwmanager.svelte.js';
@@ -224,9 +223,6 @@
 		{#if authType === 'Password'}
 			<SecretRefField label={t('session.password_optional')} bind:value={password} bind:secretRef={passwordRef} placeholder={t('session.stored_encrypted')} disabled={saving} onpick={(e) => { if (!username.trim() && e.username) username = e.username; }} />
 			{#if passwordRef}<p class="cred-hint">{t('credential.entry_hint')}</p>{/if}
-			{#if editing && !passwordRef}
-				<PasswordHistory owner={{ credential: editing.id }} disabled={saving} onrestore={(p) => (password = p)} />
-			{/if}
 		{:else if authType === 'Key'}
 			<KeyPicker bind:path={keyPath} bind:keyId disabled={saving} />
 			{#if !keyId}

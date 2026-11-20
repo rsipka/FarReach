@@ -119,8 +119,6 @@ export const SETTINGS_INDEX: IndexedRow[] = [
 	{ page: 'security', label: 'security.lock_on_system_lock', desc: 'security.lock_on_system_lock_desc' },
 	{ page: 'security', label: 'security.unlock_keys_at_start', desc: 'security.unlock_keys_at_start_desc' },
 	{ page: 'security', label: 'security.host_keys_remove_all', desc: 'security.host_keys_remove_all_desc', words: 'known hosts fingerprint server key' },
-	{ page: 'security', label: 'password_history.limit', desc: 'password_history.limit_desc', words: 'old previous passwords history keep' },
-	{ page: 'security', label: 'password_history.clear_all', desc: 'password_history.clear_all_desc', words: 'old previous passwords history forget delete' },
 	{ page: 'security', label: 'security.biometric', words: 'face id touch id fingerprint windows hello' },
 	{ page: 'security', label: 'security.keys', words: 'yubikey fido security key' },
 	{ page: 'sharing', label: 'sharing.enable', desc: 'sharing.enable_desc', words: 'share session collaborate' },

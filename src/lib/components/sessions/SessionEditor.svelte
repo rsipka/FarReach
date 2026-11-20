@@ -12,7 +12,6 @@
 	import { APP_FILES_SHARE } from '#lib/ipc/rdp.js';
 	import SshOptionsSection from './SshOptionsSection.svelte';
 	import SessionHostKeys from './SessionHostKeys.svelte';
-	import PasswordHistory from './PasswordHistory.svelte';
 	import SessionAddresses, { type AddressRow } from './SessionAddresses.svelte';
 	import Disclosure from '#lib/components/shared/Disclosure.svelte';
 	import TerminalThemeList from '#lib/components/terminal/TerminalThemeList.svelte';
@@ -1061,14 +1060,6 @@
 			{/if}
 		{/if}
 
-		<!-- The passwords this session used before (editing only: a new or
-		     cloned session has none). Use puts one back as the typed password. -->
-		{#snippet pastPasswords()}
-			{#if editSession && !passwordRef}
-				<PasswordHistory owner={{ session: editSession.id }} disabled={saving} onrestore={(p) => { password = p; passwordRef = null; if (authType === 'Manager') authType = 'Password'; }} />
-			{/if}
-		{/snippet}
-
 		{#if kind === 'ssh' || kind === 'rdp' || kind === 'telnet' || kind === 'winbox' || kind === 'web'}
 			<div class="shell-field">
 				<label class="via-label" for="session-login">{t('credential.login')}</label>
@@ -1102,7 +1093,6 @@
 			{#if !usedCredential}
 			<div class="shell-field">
 				<SecretRefField approvable label={t('session.password_optional')} bind:value={password} bind:secretRef={passwordRef} placeholder={t('session.stored_encrypted')} disabled={saving} onpick={(e) => (username = nameFromEntry(username, e))} />
-				{@render pastPasswords()}
 				<p class="shell-hint">{t('session.rdp_password_hint')}</p>
 			</div>
 			<Input label={t('session.rdp_domain')} bind:value={domain} placeholder="CORP" disabled={saving} />
@@ -1152,7 +1142,6 @@
 			</div>
 			<div class="shell-field">
 				<SecretRefField approvable label={t('session.password_optional')} bind:value={password} bind:secretRef={passwordRef} placeholder={t('session.stored_encrypted')} disabled={saving} />
-				{@render pastPasswords()}
 				<p class="shell-hint">{username.trim() ? t('session.vnc_mac_password_hint') : t('session.vnc_password_hint')}</p>
 			</div>
 			<div class="shell-field">
@@ -1168,7 +1157,6 @@
 		{:else if kind === 'spice'}
 			<div class="shell-field">
 				<SecretRefField approvable label={t('session.password_optional')} bind:value={password} bind:secretRef={passwordRef} placeholder={t('session.stored_encrypted')} disabled={saving} />
-				{@render pastPasswords()}
 				<p class="shell-hint">{t('spice.password_hint')}</p>
 			</div>
 			<div class="shell-field">
@@ -1202,7 +1190,6 @@
 			{#if !usedCredential}
 				<div class="shell-field">
 					<SecretRefField approvable label={t('session.password_optional')} bind:value={password} bind:secretRef={passwordRef} placeholder={t('session.stored_encrypted')} disabled={saving} onpick={(e) => (username = nameFromEntry(username, e))} />
-					{@render pastPasswords()}
 					<p class="shell-hint">{t('session.telnet_login_hint')}</p>
 				</div>
 			{/if}
@@ -1406,7 +1393,6 @@
 			{#if !usedCredential}
 				<div class="shell-field">
 					<SecretRefField approvable label={t('session.password_optional')} bind:value={password} bind:secretRef={passwordRef} placeholder={t('session.stored_encrypted')} disabled={saving} onpick={(e) => (username = nameFromEntry(username, e))} />
-					{@render pastPasswords()}
 				</div>
 			{/if}
 			<p class="shell-hint">{t('winbox.editor_hint')}</p>
@@ -1463,7 +1449,6 @@
 
 		{#if authType === 'Password'}
 			<Input label={t('session.password_optional')} type="password" bind:value={password} placeholder={t('session.stored_encrypted')} disabled={saving} />
-			{@render pastPasswords()}
 		{:else if authType === 'Manager'}
 			<SecretRefField approvable refOnly label={t('session.password_from_manager')} bind:value={password} bind:secretRef={passwordRef} disabled={saving} onpick={(e) => (username = nameFromEntry(username, e))} />
 		{:else if authType === 'Key'}
