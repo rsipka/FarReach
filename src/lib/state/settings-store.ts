@@ -30,6 +30,10 @@ export interface Settings {
 	theme: 'dark' | 'light' | 'system';
 	/** Id of an installed theme. Overrides `theme` when set. */
 	themeId?: string;
+	/** With `theme: 'system'` and no `themeId`: the theme used while the OS is
+	 *  light, and the one while it is dark. Unset: Reacher CM Light / Dark. */
+	themeLight?: string;
+	themeDark?: string;
 	/** The terminal colours, by terminal theme id (#lib/state/terminal-themes);
 	 *  empty: the app theme's own. A session can name its own instead. */
 	terminalThemeId: string;
@@ -250,6 +254,8 @@ const OLD_DEFAULT_LOG_NAME = '&H-&Y&M&D-&T.log';
 export const defaults: Settings = {
 	theme: 'dark',
 	themeId: undefined,
+	themeLight: undefined,
+	themeDark: undefined,
 	terminalThemeId: '',
 	terminalCursorStyle: DEFAULT_CURSOR_STYLE,
 	terminalCursorBlink: DEFAULT_CURSOR_BLINK,
@@ -349,6 +355,8 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	// saved but never read back, so the app fell back to dark or light
 	// on every start.
 	settings.themeId = typeof parsed.themeId === 'string' && parsed.themeId ? parsed.themeId : undefined;
+	settings.themeLight = typeof parsed.themeLight === 'string' && parsed.themeLight ? parsed.themeLight : undefined;
+	settings.themeDark = typeof parsed.themeDark === 'string' && parsed.themeDark ? parsed.themeDark : undefined;
 	settings.terminalThemeId = parsed.terminalThemeId ?? defaults.terminalThemeId;
 	settings.terminalCursorStyle = cursorStyle(parsed.terminalCursorStyle);
 	settings.terminalCursorBlink = parsed.terminalCursorBlink ?? defaults.terminalCursorBlink;

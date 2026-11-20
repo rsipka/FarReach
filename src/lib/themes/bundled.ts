@@ -1,4 +1,5 @@
 import type { TerminalPalette, Theme, ThemeColors } from '#lib/state/theme.svelte.js';
+import { COLORFUL } from '#lib/themes/colorful.js';
 
 /**
  * App themes that ship with Reacher CM, beside Reach Dark and Reach Light.
@@ -928,5 +929,7 @@ export const BUNDLED: Theme[] = [
 	GITHUB_DARK,
 	GITHUB_LIGHT,
 	HIGH_CONTRAST_DARK,
-	HIGH_CONTRAST_LIGHT
+	HIGH_CONTRAST_LIGHT,
+	// Our own colourful ones (./colorful.ts).
+	...COLORFUL
 ];

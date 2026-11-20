@@ -5,7 +5,8 @@
 	import { SCROLLBACK_CHOICES, UNLIMITED_SCROLLBACK, scrollbackSetting } from '#lib/terminal/scrollback.js';
 	import TerminalThemeSettings from './TerminalThemeSettings.svelte';
 	import { HIGHLIGHT_KINDS, highlightKinds, parseCustomRules, type HighlightKind } from '#lib/terminal/highlight.js';
-	import { themeState, applyTheme, loadInstalledThemes, DARK, LIGHT, BUILT_IN_IDS, BUNDLED_IDS } from '#lib/state/theme.svelte.js';
+	import { themeState, applyTheme, themeFor, loadInstalledThemes, DARK, LIGHT, BUILT_IN_IDS, BUNDLED_IDS, systemAppearance } from '#lib/state/theme.svelte.js';
+	import { pairTheme } from '#lib/themes/resolve.js';
 	import { onMount } from 'svelte';
 	import { themeFetchRegistry, themeInstall, themeUninstall, type ThemeEntry } from '#lib/ipc/theme.js';
 	import { validateTheme } from '#lib/state/theme.svelte.js';
@@ -206,12 +207,31 @@
 		settings.themeId ?? (settings.theme === 'system' ? SYSTEM : settings.theme === 'light' ? LIGHT.id : DARK.id)
 	);
 
+	/** The two halves of System, as they would resolve now. */
+	let pairLight = $derived(pairTheme(settings, false, themeState.all, { light: LIGHT, dark: DARK }));
+	let pairDark = $derived(pairTheme(settings, true, themeState.all, { light: LIGHT, dark: DARK }));
+
+	/** Each half offers the themes of its own appearance. */
+	const pairOptions = (appearance: 'light' | 'dark') =>
+		themeState.all
+			.filter((th) => th.appearance === appearance)
+			.map((th) => ({ label: th.name, value: th.id }));
+	let lightOptions = $derived(pairOptions('light'));
+	let darkOptions = $derived(pairOptions('dark'));
+
 	function selectTheme(id: string) {
 		if (id === SYSTEM) {
+			// Coming from a theme picked by hand: it becomes that half of the
+			// pair, unless the pair already says otherwise. Picking Dracula and
+			// then System keeps Dracula for the night.
+			const previous = settings.themeId ? themeState.all.find((th) => th.id === settings.themeId) : undefined;
+			if (previous && previous.id !== DARK.id && previous.id !== LIGHT.id) {
+				const key = previous.appearance === 'dark' ? 'themeDark' : 'themeLight';
+				if (!settings[key]) updateSetting(key, previous.id);
+			}
 			updateSetting('themeId', undefined);
 			updateSetting('theme', 'system');
-			const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-			applyTheme(prefersDark ? DARK : LIGHT);
+			applyTheme(themeFor(settings));
 			return;
 		}
 		const theme = themeState.all.find((t2) => t2.id === id);
@@ -221,6 +241,11 @@
 		// path when a themeId no longer resolves, stay sensible.
 		updateSetting('theme', theme.appearance);
 		applyTheme(theme);
+	}
+
+	function selectPair(half: 'themeLight' | 'themeDark', id: string) {
+		updateSetting(half, id);
+		applyTheme(themeFor(settings));
 	}
 
 
@@ -345,17 +370,43 @@
 							<span class="swatch-dot" style="background: {choice.swatch.colors.accent};"></span>
 						</div>
 					{:else}
-						<div class="theme-preview preview-system">
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-								<rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-								<line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
-							</svg>
+						<!-- System: the light half of the pair over the dark one. -->
+						<div
+							class="theme-preview preview-system"
+							style="background: linear-gradient(135deg, {pairLight.colors['bg-primary']} 50%, {pairDark.colors['bg-primary']} 50%); border-color: {pairLight.colors.border};"
+						>
+							<span class="swatch-dot pair-light" style="background: {pairLight.colors.accent};"></span>
+							<span class="swatch-dot pair-dark" style="background: {pairDark.colors.accent};"></span>
 						</div>
 					{/if}
 					<span class="theme-label">{choice.name}</span>
 				</button>
 			{/each}
 		</div>
+		{#if selectedId === SYSTEM}
+			<div class="theme-pair">
+				<p class="pair-hint">{t('themes.pair_hint')}</p>
+				<div class="pair-row">
+					<span class="pair-label">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+							<circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+						</svg>
+						{t('themes.pair_light')}
+					</span>
+					<Dropdown options={lightOptions} selected={pairLight.id} onchange={(v) => selectPair('themeLight', v)} />
+				</div>
+				<div class="pair-row">
+					<span class="pair-label">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+							<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+						</svg>
+						{t('themes.pair_dark')}
+					</span>
+					<Dropdown options={darkOptions} selected={pairDark.id} onchange={(v) => selectPair('themeDark', v)} />
+				</div>
+				<p class="pair-now">{t(systemAppearance.dark ? 'themes.pair_now_dark' : 'themes.pair_now_light')}</p>
+			</div>
+		{/if}
 		{#if foldedCount > 0}
 			<button
 				type="button"
@@ -1286,7 +1337,27 @@
 		display: flex; align-items: center; justify-content: center;
 	}
 
-	.preview-system { background: linear-gradient(135deg, var(--color-bg-elevated) 50%, var(--color-text-primary) 50%); color: var(--color-text-primary); }
+	.preview-system { border: 1px solid; }
+	.preview-system .pair-light { top: 9px; left: 9px; right: auto; bottom: auto; }
+	.preview-system .pair-dark { bottom: 9px; right: 9px; }
+
+	.theme-pair {
+		margin-top: 12px;
+		padding: 12px 14px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-card);
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+	.pair-hint, .pair-now { margin: 0; font-size: var(--text-sm); color: var(--color-text-secondary); }
+	.pair-now { color: var(--color-text-tertiary); }
+	.pair-row { display: flex; align-items: center; gap: 12px; }
+	.pair-label {
+		display: inline-flex; align-items: center; gap: 6px;
+		min-width: 110px; font-size: var(--text-sm); color: var(--color-text-primary);
+	}
+	.pair-row :global(.dropdown) { flex: 1; min-width: 0; max-width: 320px; }
 
 	.theme-label { font-size: 0.75rem; font-weight: 500; color: var(--color-text-primary); }
 

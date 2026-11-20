@@ -24,6 +24,8 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const CHANGED = {
 	theme: 'light',
 	themeId: 'tokyo-night',
+	themeLight: 'catppuccin-latte',
+	themeDark: 'dracula',
 	terminalThemeId: 'homebrew',
 	terminalCursorStyle: 'block',
 	terminalCursorBlink: false,
