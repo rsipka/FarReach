@@ -48,6 +48,7 @@
 	import Modal from '#lib/components/shared/Modal.svelte';
 	import { openSettings, matchesAction } from '#lib/state/shortcuts.svelte.js';
 	import MobileKeyBar, { type BarKey } from '#lib/components/shared/MobileKeyBar.svelte';
+	import ZmodemBar from './ZmodemBar.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
 	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
 	import { cssFontFamily } from '#lib/utils/font.js';
@@ -1794,6 +1795,9 @@
 	</div>
 	{#if onPhone && !disconnected}
 		<MobileKeyBar bind:ctrl={barCtrl} bind:alt={barAlt} zoom onkey={onBarKey} />
+	{/if}
+	{#if remote}
+		<ZmodemBar connectionId={currentConnectionId} />
 	{/if}
 	{#if disconnected && remote}
 		<div class="reconnect-overlay">
