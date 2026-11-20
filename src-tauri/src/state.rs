@@ -49,6 +49,9 @@ pub enum SessionKind {
     Telnet,
     /// A local serial port (`host` is the port name). Desktop only.
     Serial,
+    /// A web management page (iDRAC, iLO, Proxmox VE...), shown in a window
+    /// of its own that cannot reach the app; see `crate::web`.
+    Web,
 }
 
 impl SessionKind {
@@ -210,6 +213,9 @@ pub struct SessionConfig {
     /// them in order without checking first.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub address_check: Option<bool>,
+    /// Web only: address, storage, sign-in and trusted certificates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub web: Option<crate::web::WebOptions>,
 }
 
 /// One more address of a session's server.
@@ -266,6 +272,13 @@ impl SessionConfig {
             self.history = None;
         }
         self.tidy_addresses();
+        if self.kind == SessionKind::Web {
+            if let Some(w) = self.web.as_mut() {
+                w.tidy();
+            }
+        } else {
+            self.web = None;
+        }
     }
 
     /// Other addresses without a host are dropped, as is a mode nobody

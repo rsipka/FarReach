@@ -37,7 +37,7 @@ export function parseAddress(raw: string): TypedAddress | null {
 
 /** The port a session of this kind uses unless told otherwise. */
 export function defaultPort(kind: string | undefined): number {
-	return kind === 'rdp' ? 3389 : kind === 'vnc' ? 5900 : kind === 'telnet' ? 23 : 22;
+	return kind === 'rdp' ? 3389 : kind === 'vnc' ? 5900 : kind === 'telnet' ? 23 : kind === 'web' ? 443 : 22;
 }
 
 /** `user@host`, with `:port` only when it is not the protocol's own, as the
@@ -49,7 +49,16 @@ export function sessionAddress(s: {
 	port?: number | null;
 	kind?: string;
 	serial?: { baud_rate?: number; data_bits?: number; parity?: string; stop_bits?: number } | null;
+	web?: { scheme?: string | null; path?: string | null } | null;
 }): string {
+	if (s.kind === 'web') {
+		// As the window opens it: the address, not a login.
+		const http = s.web?.scheme === 'http';
+		const host = s.host.includes(':') ? `[${s.host}]` : s.host;
+		const port = s.port && s.port !== (http ? 80 : 443) ? `:${s.port}` : '';
+		const path = s.web?.path && s.web.path !== '/' ? s.web.path : '';
+		return `${http ? 'http' : 'https'}://${host}${port}${path}`;
+	}
 	if (s.kind === 'serial') {
 		const o = s.serial ?? {};
 		return `${s.host} · ${o.baud_rate ?? 9600} ${o.data_bits ?? 8}${(o.parity ?? 'none')[0].toUpperCase()}${o.stop_bits ?? 1}`;

@@ -348,7 +348,7 @@ objc2 = "0.6"
 # Following the screen lock and sleep (src/system_lock.rs); the versions Tauri
 # already builds.
 block2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSDistributedNotificationCenter", "NSNotification", "NSString", "NSOperation", "block2"] }
+objc2-foundation = { version = "0.3", features = ["NSDistributedNotificationCenter", "NSNotification", "NSString", "NSOperation", "NSProcessInfo", "block2"] }
 objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "block2"] }
 # Touch ID for vault unlock (Settings > Security).
 objc2-local-authentication = { version = "0.3", features = ["LAContext", "LAError", "block2"] }
