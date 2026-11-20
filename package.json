@@ -27,6 +27,7 @@
     "paste:test": "node scripts/paste-test.mjs",
     "mouse:test": "node scripts/mouse-test.mjs",
     "cursor:test": "node scripts/cursor-test.mjs",
+    "highlight:test": "node scripts/highlight-test.mjs",
     "tmux:test": "node scripts/tmux-test.mjs",
     "snippet:test": "node scripts/snippet-test.mjs",
     "links:test": "node scripts/links-test.mjs",
