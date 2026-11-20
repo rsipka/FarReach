@@ -767,6 +767,7 @@ pub async fn session_create(
     os_manual: Option<bool>,
     share_path: Option<String>,
     rdp_clipboard: Option<String>,
+    rdp_use_freerdp: Option<bool>,
     rdp_forward_lock_keys: Option<bool>,
     via_session_id: Option<String>,
     try_agent_keys: Option<bool>,
@@ -829,6 +830,7 @@ pub async fn session_create(
         domain: domain.filter(|d| !d.trim().is_empty()),
         share_path: share_path.filter(|d| !d.trim().is_empty()),
         rdp_clipboard: rdp_clipboard_setting(rdp_clipboard, kind),
+        rdp_use_freerdp: kind == crate::state::SessionKind::Rdp && rdp_use_freerdp.unwrap_or(false),
         rdp_forward_lock_keys: rdp_forward_lock_keys.filter(|_| kind == crate::state::SessionKind::Rdp),
         via_session_id: via_session_id.filter(|s| !s.is_empty()),
         try_agent_keys: try_agent_keys.filter(|t| *t),
@@ -962,6 +964,7 @@ async fn prepare_update(
     session.tidy_documentation();
     session.rdp_clipboard = rdp_clipboard_setting(session.rdp_clipboard.take(), session.kind);
     if session.kind != crate::state::SessionKind::Rdp {
+        session.rdp_use_freerdp = false;
         session.rdp_forward_lock_keys = None;
     }
 

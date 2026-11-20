@@ -88,6 +88,9 @@ pub struct SessionConfig {
     /// files, `text` for no files, `off` for nothing. RDP only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rdp_clipboard: Option<String>,
+    /// Open this RDP session in the installed FreeRDP client on desktop.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub rdp_use_freerdp: bool,
     /// Forward lock key presses to the remote desktop. Enabled when unset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rdp_forward_lock_keys: Option<bool>,

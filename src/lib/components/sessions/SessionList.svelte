@@ -64,6 +64,7 @@
 	import { DEFAULT_SERIAL_OPTIONS } from '#lib/ipc/serial.js';
 	import { spiceParamsFromOptions, spiceReadVv } from '#lib/ipc/spice.js';
 	import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
+	import { freerdpLaunch } from '#lib/ipc/freerdp.js';
 	import { winboxLaunch } from '#lib/ipc/winbox.js';
 	import { osNeedsDetection } from '#lib/data/distro-icons.js';
 	import { sshConnect, sshDisconnect, sshDetectOs, sshProbeAddresses, sshTmuxChosen, tmuxStartScript, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
@@ -1204,32 +1205,51 @@
 	}
 
 	/**
-	 * Open a saved RDP session in a desktop tab. The panel connects once it
-	 * knows its size; nothing to await here. Saving the password is the same
-	 * promise the SSH prompt makes, kept the same way.
+	 * Open a saved RDP session with its selected desktop client. The embedded
+	 * panel connects once it knows its size.
 	 */
 	async function openRdp(session: SessionConfig, password: string, remember: boolean, passwordRef?: SecretRef | null): Promise<void> {
-		const tab = createTab('rdp', `${session.username}@${session.host}`, undefined, session.name, session.detected_os ?? 'windows');
-		tab.rdpConnectParams = {
-			id: tab.id,
-			host: session.host,
-			port: session.port,
-			username: session.username,
-			// The backend fetches the password from the manager; none goes beside it.
-			password: passwordRef ? '' : password,
-			passwordRef: passwordRef ?? null,
-			sessionId: session.id,
-			domain: session.domain ?? undefined,
-			sharePath: session.share_path ?? undefined,
-			clipboard: session.rdp_clipboard ?? null,
-			forwardLockKeys: session.rdp_forward_lock_keys ?? true,
-			// GNOME Remote Desktop serves no client without the graphics
-			// pipeline, so a GNOME session asks for it whatever the setting says.
-			graphicsPipeline: session.detected_os === 'gnome' ? true : undefined,
-			width: 0,
-			height: 0,
-		};
-		addToast(t('session.connected_toast', { name: session.name }), 'success');
+		if (session.rdp_use_freerdp && !isMobile()) {
+			await freerdpLaunch(
+				{
+					host: session.host,
+					port: session.port,
+					username: session.username,
+					domain: session.domain ?? null,
+					password: passwordRef ? null : password,
+					usePasswordRef: !!passwordRef,
+					clipboard: session.rdp_clipboard ?? null,
+					graphicsPipeline: session.detected_os === 'gnome',
+					sharePath: session.share_path ?? null,
+					program: getSettings().freerdpPath || null,
+				},
+				session.id,
+				(error) => addToast(error, 'error')
+			);
+			addToast(t('freerdp.started', { name: session.name }), 'success');
+		} else {
+			const tab = createTab('rdp', `${session.username}@${session.host}`, undefined, session.name, session.detected_os ?? 'windows');
+			tab.rdpConnectParams = {
+				id: tab.id,
+				host: session.host,
+				port: session.port,
+				username: session.username,
+				// The backend fetches the password from the manager; none goes beside it.
+				password: passwordRef ? '' : password,
+				passwordRef: passwordRef ?? null,
+				sessionId: session.id,
+				domain: session.domain ?? undefined,
+				sharePath: session.share_path ?? undefined,
+				clipboard: session.rdp_clipboard ?? null,
+				forwardLockKeys: session.rdp_forward_lock_keys ?? true,
+				// GNOME Remote Desktop serves no client without the graphics
+				// pipeline, so a GNOME session asks for it whatever the setting says.
+				graphicsPipeline: session.detected_os === 'gnome' ? true : undefined,
+				width: 0,
+				height: 0,
+			};
+			addToast(t('session.connected_toast', { name: session.name }), 'success');
+		}
 
 		const stored = session.auth_method.type === 'Password' ? session.auth_method.password : undefined;
 		if (remember && !passwordRef && password && password !== stored && !oneOffCredential(session)) {
@@ -1610,7 +1630,11 @@
 		const passwordRef = session.auth_method.type === 'Password' ? (session.auth_method.password_ref ?? null) : null;
 
 		if (sessionKind(session) === 'rdp' && (storedPassword || passwordRef)) {
-			await openRdp(session, storedPassword ?? '', false, passwordRef);
+			try {
+				await openRdp(session, storedPassword ?? '', false, passwordRef);
+			} catch (err) {
+				addToast(String(err), 'error');
+			}
 			return;
 		}
 		const storedPassphrase = session.auth_method.type === 'Key' ? session.auth_method.passphrase : undefined;
@@ -1680,9 +1704,14 @@
 				connecting = false;
 				return;
 			}
-			await openRdp(session, connectPassword, rememberPassword, rdpRef);
-			connectSession = undefined;
-			connecting = false;
+			try {
+				await openRdp(session, connectPassword, rememberPassword, rdpRef);
+				connectSession = undefined;
+			} catch (err) {
+				connectError = String(err);
+			} finally {
+				connecting = false;
+			}
 			return;
 		}
 

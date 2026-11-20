@@ -88,6 +88,7 @@ const CHANGED = {
 	fileEditor: 'custom',
 	fileEditorCommand: 'subl -w',
 	fileEditorTerminal: true,
+	freerdpPath: '/opt/freerdp/bin/sdl-freerdp',
 	winboxPath: '/opt/winbox/WinBox',
 	winboxPassword: 'clipboard',
 	setupComplete: true,

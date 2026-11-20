@@ -59,6 +59,7 @@ export interface SessionConfig {
   share_path?: string | null;
   /** RDP only: what the clipboard carries; absent for text, pictures and files. */
   rdp_clipboard?: 'text' | 'off' | null;
+  rdp_use_freerdp?: boolean;
   rdp_forward_lock_keys?: boolean | null;
   /** VNC and SPICE only: a saved SSH session to reach the server through. */
   via_session_id?: string | null;
@@ -379,6 +380,7 @@ export async function sessionCreate(params: {
   osManual?: boolean;
   sharePath?: string | null;
   rdpClipboard?: 'text' | 'off' | null;
+  rdpUseFreerdp?: boolean;
   rdpForwardLockKeys?: boolean | null;
   viaSessionId?: string | null;
   tryAgentKeys?: boolean | null;
@@ -422,6 +424,7 @@ export async function sessionCreate(params: {
     osManual: params.osManual || null,
     sharePath: params.sharePath?.trim() ? params.sharePath.trim() : null,
     rdpClipboard: params.kind === 'rdp' ? (params.rdpClipboard ?? null) : null,
+    rdpUseFreerdp: params.kind === 'rdp' && params.rdpUseFreerdp === true,
     rdpForwardLockKeys: params.kind === 'rdp' ? (params.rdpForwardLockKeys ?? null) : null,
     viaSessionId: params.viaSessionId || null,
     tryAgentKeys: params.tryAgentKeys || null,
