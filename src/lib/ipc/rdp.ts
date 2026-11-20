@@ -24,6 +24,8 @@ export interface RdpConnectParams {
 	sharePath?: string;
 	/** Advertise the graphics pipeline; see the setting. */
 	graphicsPipeline?: boolean;
+	/** Keep the graphics pipeline to the older picture formats; see the setting. */
+	olderGraphicsFormats?: boolean;
 	/** What the clipboard carries: unset for everything, `text` for no files, `off` for nothing. */
 	clipboard?: RdpClipboardMode | null;
 	/** The size the panel can show. The server renders at this size. */

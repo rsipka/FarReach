@@ -66,7 +66,7 @@ async fn sftp_failed(fs: &RemoteFs, path: &str, e: SftpError) -> SftpBrowserErro
 
 /// `ls -l` style permissions (`drwxr-sr-x`) from a mode, so a listing looks
 /// the same whichever way it was made.
-fn format_permissions(mode: u32) -> String {
+pub(crate) fn format_permissions(mode: u32) -> String {
     let kind = match mode & 0o170000 {
         0o040000 => 'd',
         0o120000 => 'l',

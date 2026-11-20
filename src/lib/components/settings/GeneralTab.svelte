@@ -22,6 +22,8 @@
 	import { DEFAULT_WORD_SEPARATORS, rightClickMode } from '#lib/terminal/mouse.js';
 	import { t, changeLocale } from '#lib/state/i18n.svelte.js';
 	import { __APP_VERSION__ } from '#lib/version.js';
+	import { detectEditors } from '#lib/explorer/editor-launch.js';
+	import type { EditorInfo } from '#lib/ipc/localfs.js';
 
 	/** Which slice of these rows to show: Settings arranges them by topic,
 	 *  so one tab file feeds several pages (see settings-pages.ts). */
@@ -45,6 +47,25 @@
 		{ label: 'PowerShell', value: 'powershell' },
 		{ label: 'CMD', value: 'cmd' }
 	];
+
+	// The full-pane file manager's Edit (F4): which program opens files.
+	let editors = $state<EditorInfo[]>([]);
+	let editorsLooked = $state(false);
+	$effect(() => {
+		if (part !== 'shell' || isMobile() || editorsLooked) return;
+		editorsLooked = true;
+		void detectEditors().then((found) => (editors = found));
+	});
+	let editorOptions = $derived([
+		{ label: t('settings.file_editor_system'), value: '' },
+		...editors.map((e) => ({ label: e.terminal ? `${e.name} (${t('settings.file_editor_in_terminal')})` : e.name, value: e.id })),
+		// Picked before and not found now: still shown, so the choice is not
+		// silently swapped (opening falls back to the system's program).
+		...(settings.fileEditor && settings.fileEditor !== 'custom' && editorsLooked && !editors.some((e) => e.id === settings.fileEditor)
+			? [{ label: t('settings.file_editor_missing', { name: settings.fileEditor }), value: settings.fileEditor }]
+			: []),
+		{ label: t('settings.file_editor_custom'), value: 'custom' }
+	]);
 
 	function onShellChange(value: string) {
 		updateSetting('defaultShell', value);
@@ -232,6 +253,48 @@
 			/>
 		</div>
 	</div>
+
+	{#if !isMobile()}
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('settings.file_editor')}</span>
+				<span class="setting-description">{t('settings.file_editor_desc')}</span>
+			</div>
+			<div class="setting-control">
+				<Dropdown options={editorOptions} selected={settings.fileEditor} onchange={(v) => updateSetting('fileEditor', v)} />
+			</div>
+		</div>
+		{#if settings.fileEditor === 'custom'}
+			<div class="setting-row">
+				<div class="setting-info">
+					<span class="setting-label">{t('settings.file_editor_command')}</span>
+					<span class="setting-description">{t('settings.file_editor_command_desc')}</span>
+				</div>
+				<div class="setting-control separators">
+					<input
+						class="threshold-input command-input"
+						type="text"
+						spellcheck="false"
+						autocomplete="off"
+						autocapitalize="off"
+						placeholder="subl -w"
+						aria-label={t('settings.file_editor_command')}
+						value={settings.fileEditorCommand}
+						onchange={(e) => updateSetting('fileEditorCommand', e.currentTarget.value.trim())}
+					/>
+				</div>
+			</div>
+			<div class="setting-row">
+				<div class="setting-info">
+					<span class="setting-label">{t('settings.file_editor_terminal')}</span>
+					<span class="setting-description">{t('settings.file_editor_terminal_desc')}</span>
+				</div>
+				<div class="setting-control">
+					<Toggle hideLabel checked={settings.fileEditorTerminal} label={t('settings.file_editor_terminal')} onchange={(v) => updateSetting('fileEditorTerminal', v)} />
+				</div>
+			</div>
+		{/if}
+	{/if}
 
 	{/if}
 
@@ -731,6 +794,11 @@
 		flex-direction: column;
 		align-items: flex-end;
 		gap: 4px;
+	}
+
+	.command-input {
+		width: 100%;
+		font-family: var(--font-mono, monospace);
 	}
 
 	.separators-input {

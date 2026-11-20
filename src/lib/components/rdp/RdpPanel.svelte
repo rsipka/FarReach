@@ -943,7 +943,7 @@
 		if (isVnc() || graphicsPipeline || phase !== 'connecting') return false;
 		if (!/disconnect provider ultimatum/i.test(error)) return false;
 		graphicsPipeline = true;
-		rdpConnect({ ...(params as RdpConnectParams), ...connectSize, graphicsPipeline: true }, paint).catch((err) => {
+		rdpConnect({ ...(params as RdpConnectParams), ...connectSize, graphicsPipeline: true, olderGraphicsFormats: !getSettings().rdpNewGraphicsFormats }, paint).catch((err) => {
 			phase = 'error';
 			message = String(err);
 		});
@@ -994,7 +994,7 @@
 			} else {
 				graphicsPipeline = (params as RdpConnectParams).graphicsPipeline || getSettings().rdpGraphicsPipeline;
 				connectSize = size;
-				await rdpConnect({ ...(params as RdpConnectParams), ...size, graphicsPipeline }, paint);
+				await rdpConnect({ ...(params as RdpConnectParams), ...size, graphicsPipeline, olderGraphicsFormats: !getSettings().rdpNewGraphicsFormats }, paint);
 			}
 		} catch (err) {
 			phase = 'error';
