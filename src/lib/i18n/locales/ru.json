@@ -3638,5 +3638,18 @@
   "session.address_check_on": "Вкл.",
   "session.address_check_off": "Выкл. (тихий)",
   "session.address_check_hint": "Тихий режим: на адрес ничего не отправляется, пока его не пробуют. Автоматический выбор пробует их по порядку и переходит к следующему, если адрес недоступен.",
-  "session.address_not_checked": "Не проверен"
+  "session.address_not_checked": "Не проверен",
+  "session.protocol_spice": "SPICE",
+  "spice.password_hint": "Пароль SPICE дисплея, если он есть. Для Proxmox VE лучше используйте «Открыть файл SPICE» с файлом из кнопки консоли SPICE.",
+  "spice.tls_port": "Порт TLS",
+  "spice.tls_port_placeholder": "Нет",
+  "spice.tls_port_hint": "С портом TLS всё идёт на него в зашифрованном виде, а порт выше не используется.",
+  "spice.ca": "Сертификат ЦС",
+  "spice.ca_hint": "Сертификат (PEM) центра сертификации, подписавшего сертификат сервера. Доверие будет только ему, а имя сервера может не совпадать. Пусто: обычные публичные ЦС, и имя должно совпадать.",
+  "spice.host_subject": "Субъект сертификата",
+  "spice.host_subject_hint": "Необязательно: субъект, который должен быть у сертификата сервера, как host-subject в virt-viewer.",
+  "spice.via_hint": "SPICE без TLS не шифруется. Через сохранённую SSH-сессию — шифруется, и порт может оставаться закрытым для сети; хост выше тогда указывается так, как его видит этот SSH-сервер, например localhost.",
+  "spice.open_vv": "Открыть файл SPICE (.vv)…",
+  "spice.vv_files": "Файлы virt-viewer",
+  "spice.vv_failed": "Не удалось открыть файл: {{error}}"
 }

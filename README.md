@@ -57,7 +57,7 @@ See the [changelog](CHANGELOG.md) for details.
 
 - **SSH** with tabs, split panes and tab groups, rendered with WebGL.
 - **Your `~/.ssh/config`, all of it.** ProxyJump, ProxyCommand, ControlMaster, Kerberos (GSSAPI), X11 forwarding, PKCS#11 and FIDO2 keys, and the rest of the 104 keywords.
-- **Remote Desktop (RDP) and VNC** in a tab. RDP shares the clipboard, files and a local folder as a drive.
+- **Remote Desktop (RDP), VNC and SPICE** in a tab. RDP shares the clipboard, files and a local folder as a drive. SPICE opens KVM/QEMU virtual machines, including Proxmox VE's and virt-manager's .vv files.
 - **WSL distros and local shells** next to your servers, plus a **serial console** for routers and switches.
 - **Host keys checked properly.** Trust on first use, a loud stop when a key changes, and never a silent accept.
 

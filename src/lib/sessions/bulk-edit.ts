@@ -99,7 +99,7 @@ export function appliesTo(
 		case 'tmux':
 			return k === 'ssh' || k === 'wsl';
 		case 'via_session':
-			return k === 'vnc';
+			return k === 'vnc' || k === 'spice';
 	}
 }
 

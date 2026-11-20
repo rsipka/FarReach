@@ -1076,6 +1076,11 @@ impl Screen {
         self.touch();
     }
 
+    /// Whether the framebuffer is `width × height`.
+    pub(crate) fn size_is(&self, width: u16, height: u16) -> bool {
+        self.width == width && self.height == height && !self.fb.is_empty()
+    }
+
     #[cfg(test)]
     pub(crate) fn size(&self) -> (u16, u16) {
         (self.width, self.height)

@@ -3,7 +3,7 @@
 		getTabs, getActiveTab, createTab, closeTab, activateTab, getSplit, splitWith, unsplit, removeFromSplit, getDraggedTab, setDraggedTab, type Tab,
 		getGroups, createGroup, addToGroup, removeFromGroup, renameGroup, setGroupColor, toggleGroup, groupHidden, ungroup, closeGroup,
 		GROUP_COLORS, type GroupColor, type TabGroup,
-		tabsBeside, requestCloseBeside, getPendingClose, confirmPendingClose, cancelPendingClose
+		tabsBeside, requestCloseBeside, getPendingClose, confirmPendingClose, cancelPendingClose, isDesktopTab
 	} from '#lib/state/tabs.svelte.js';
 	import { canDuplicate, duplicateTab } from '#lib/terminal/duplicate-tab.js';
 	import { sshTmuxKill, sshTmuxList, sshTmuxWindows, sshTmuxWindow, type TmuxListed, type TmuxWindow, type TmuxWindowOp } from '#lib/ipc/ssh.js';
@@ -212,7 +212,7 @@
 
 		items.push(...broadcastItems(tab));
 		items.push(...windowItems(id));
-		if (tab && tab.type !== 'rdp' && tab.type !== 'vnc') {
+		if (tab && !isDesktopTab(tab)) {
 			items.push({ label: '', separator: true }, { label: t('history.search_menu'), hint: `${mod}H`, action: () => openTabHistory(tab) });
 		}
 
@@ -235,7 +235,7 @@
 
 	/** The host a tab is connected to; none for a local shell or a serial port. */
 	function hostOf(tab: Tab): string | null {
-		return tab.sshConnectParams?.host ?? tab.telnetConnectParams?.host ?? tab.rdpConnectParams?.host ?? tab.vncConnectParams?.host ?? null;
+		return tab.sshConnectParams?.host ?? tab.telnetConnectParams?.host ?? tab.rdpConnectParams?.host ?? tab.vncConnectParams?.host ?? tab.spiceConnectParams?.host ?? null;
 	}
 
 	/** A terminal connects again at any time (a hung connection, say); a
@@ -245,7 +245,7 @@
 		if (tab.type === 'ssh') return !!tab.sshConnectParams;
 		if (tab.type === 'telnet') return !!tab.telnetConnectParams;
 		if (tab.type === 'serial') return !!tab.serialConnectParams;
-		if (tab.type === 'rdp' || tab.type === 'vnc') return tab.link === 'down';
+		if (isDesktopTab(tab)) return tab.link === 'down';
 		return false;
 	}
 
@@ -586,7 +586,7 @@
 						<svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none">
 							{#if tab.type === 'local'}
 								<path d={terminalIcon} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-							{:else if tab.type === 'rdp' || tab.type === 'vnc'}
+							{:else if isDesktopTab(tab)}
 								<path d={rdpIcon} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
 							{:else}
 								<path d={sshIcon} fill="currentColor" />
