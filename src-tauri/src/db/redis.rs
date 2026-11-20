@@ -443,32 +443,52 @@ pub fn split_args(line: &str) -> Result<Vec<String>, String> {
     Ok(args)
 }
 
-/// Commands that only read. Anything not listed counts as a write.
+/// Standalone reads. Command families are checked by subcommand below.
+/// PFCOUNT can update cached HyperLogLog cardinality and propagate that change.
 const READS: &[&str] = &[
-    "get", "mget", "strlen", "getrange", "exists", "type", "ttl", "pttl", "expiretime", "keys", "scan", "hget", "hmget",
+    "get", "mget", "strlen", "getrange", "exists", "type", "ttl", "pttl", "expiretime", "scan", "hget", "hmget",
     "hgetall", "hkeys", "hvals", "hlen", "hexists", "hscan", "hstrlen", "lrange", "llen", "lindex", "lpos", "smembers",
     "scard", "sismember", "smismember", "sscan", "srandmember", "sinter", "sunion", "sdiff", "zrange", "zrangebyscore",
     "zrevrange", "zrevrangebyscore", "zscore", "zmscore", "zcard", "zcount", "zrank", "zrevrank", "zscan", "xrange",
-    "xrevrange", "xlen", "xinfo", "xread", "info", "dbsize", "ping", "echo", "time", "memory", "object", "randomkey",
-    "client", "slowlog", "latency", "lastsave", "role", "command", "dump", "bitcount", "bitpos", "getbit", "pfcount",
+    "xrevrange", "xlen", "xread", "info", "dbsize", "ping", "echo", "time", "randomkey",
+    "lastsave", "role", "dump", "bitcount", "bitpos", "getbit",
     "geopos", "geodist", "georadius_ro", "geosearch", "json.get", "ft.search", "ft.info",
 ];
 
 /// Risk of a Redis command. KEYS is a read but blocks the server while it
 /// walks every key, so it asks first like a destructive command would.
 pub fn classify(args: &[String]) -> Risk {
-    let Some(name) = args.first().map(|a| a.to_lowercase()) else { return Risk::Read };
+    let Some(name) = args.first().map(|a| a.to_ascii_lowercase()) else { return Risk::Write };
     match name.as_str() {
         "flushall" | "flushdb" => Risk::Danger(format!("{} deletes every key", name.to_uppercase())),
+        "replicaof" | "slaveof" | "failover" => Risk::Danger("This command changes server replication".into()),
+        "swapdb" => Risk::Danger("SWAPDB exchanges two databases".into()),
+        "save" => Risk::Danger("SAVE blocks the server during a snapshot".into()),
         "shutdown" => Risk::Danger("SHUTDOWN stops the server".into()),
         "debug" => Risk::Danger("DEBUG can crash or stall the server".into()),
         "keys" => Risk::Danger("KEYS blocks the server while it scans every key; the key list uses SCAN instead".into()),
-        "config" if args.get(1).is_some_and(|a| !a.eq_ignore_ascii_case("get")) => {
-            Risk::Danger("CONFIG changes the running server".into())
+        "client" | "slowlog" | "latency" | "memory" | "object" | "xinfo" | "config" | "command" | "script" => {
+            let sub = args.get(1).map(|s| s.to_ascii_lowercase());
+            match (name.as_str(), sub.as_deref()) {
+                ("command", None) => Risk::Read,
+                (_, Some("help")) => Risk::Read,
+                ("client", Some("id" | "info" | "list" | "getname" | "getredir" | "trackinginfo"))
+                | ("slowlog", Some("get" | "len"))
+                | ("latency", Some("doctor" | "graph" | "histogram" | "history" | "latest"))
+                | ("memory", Some("doctor" | "malloc-stats" | "stats" | "usage"))
+                | ("object", Some("encoding" | "freq" | "idletime" | "refcount"))
+                | ("xinfo", Some("consumers" | "groups" | "stream"))
+                | ("config", Some("get"))
+                | ("command", Some("count" | "docs" | "getkeys" | "getkeysandflags" | "info" | "list"))
+                | ("script", Some("exists")) => Risk::Read,
+                ("client", Some("kill" | "pause" | "unpause" | "unblock")) => Risk::Danger("This CLIENT command affects other connections".into()),
+                ("slowlog" | "latency", Some("reset")) | ("config", Some("resetstat")) => Risk::Danger("This command clears server diagnostics".into()),
+                ("memory", Some("purge")) => Risk::Danger("MEMORY PURGE reclaims memory across the server".into()),
+                ("config", _) => Risk::Danger("This CONFIG command may change the running server".into()),
+                ("script", Some("flush" | "kill")) => Risk::Danger("This SCRIPT command affects scripts on the server".into()),
+                _ => Risk::Write,
+            }
         }
-        "config" => Risk::Read,
-        "client" if args.get(1).is_some_and(|a| a.eq_ignore_ascii_case("kill")) => Risk::Write,
-        "script" if args.get(1).is_some_and(|a| a.eq_ignore_ascii_case("flush")) => Risk::Danger("SCRIPT FLUSH removes every cached script".into()),
         "del" | "unlink" if args.len() > 11 => Risk::Danger(format!("{} deletes {} keys at once", name.to_uppercase(), args.len() - 1)),
         "multi" | "exec" | "discard" | "watch" | "unwatch" => Risk::Session,
         n if READS.contains(&n) => Risk::Read,
@@ -506,6 +526,27 @@ mod tests {
         assert_eq!(classify(&a("config get maxmemory")), Risk::Read);
         assert_eq!(classify(&a("HGETALL h")), Risk::Read);
         assert_eq!(classify(&a("HSET h f v")), Risk::Write);
+    }
+
+    #[test]
+    fn redis_family_reads_are_explicit() {
+        for line in [
+            "cLiEnT TrAcKiNgInFo", "SLOWLOG LEN", "LATENCY HISTORY command", "MEMORY USAGE key",
+            "OBJECT ENCODING key", "XINFO GROUPS stream", "CONFIG GET timeout", "SCRIPT EXISTS sha",
+            "COMMAND", "COMMAND INFO get",
+        ] {
+            assert_eq!(classify(&split_args(line).unwrap()), Risk::Read, "{line}");
+        }
+        for family in ["CLIENT", "SLOWLOG", "LATENCY", "MEMORY", "OBJECT", "XINFO", "CONFIG", "SCRIPT"] {
+            assert_ne!(classify(&split_args(family).unwrap()), Risk::Read, "{family}");
+            let unknown = format!("{family} unknown");
+            assert_ne!(classify(&split_args(&unknown).unwrap()), Risk::Read, "{unknown}");
+        }
+        assert_eq!(classify(&split_args("COMMAND unknown").unwrap()), Risk::Write);
+        assert_eq!(classify(&split_args("PFCOUNT key").unwrap()), Risk::Write);
+        for line in ["CLIENT KILL", "CLIENT UNBLOCK", "CLIENT UNPAUSE", "LATENCY RESET", "CONFIG RESETSTAT", "FAILOVER", "SWAPDB 0 1"] {
+            assert!(matches!(classify(&split_args(line).unwrap()), Risk::Danger(_)), "{line}");
+        }
     }
 
     #[test]

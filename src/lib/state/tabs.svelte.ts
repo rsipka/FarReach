@@ -65,6 +65,9 @@ export interface Tab {
 	/** Bumped to make an SSH tab connect again into the tmux session its
 	 *  connect settings now name (Switch tmux session). */
 	tmuxSwitch?: number;
+	/** Bumped by the tab menu's Reconnect: a terminal connects again, a
+	 *  remote desktop's panel is made again (see canReconnect). */
+	reconnect?: number;
 	/** The tmux window a tmux tab shows (its id and name), from the title
 	 *  its view sets (see #lib/terminal/tmux-tabs). */
 	tmuxWindow?: { id: string; name: string };
