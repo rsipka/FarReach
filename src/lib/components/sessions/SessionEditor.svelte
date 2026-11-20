@@ -9,6 +9,10 @@
 	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField, type TmuxSetting, type X11DesktopKind, X11_DESKTOPS, type TerminalOptions, TERMINAL_TYPES, TERMINAL_ENCODINGS, type ConnectMode, type SessionAddress, type WebOptions, type WebLogin, type WebCert, webSessionCertAdd, webSessionCertRemove, webSessionClearData } from '#lib/ipc/sessions.js';
 	import { defaultTmuxName, folderTmux, validTmuxName } from '#lib/terminal/tmux.js';
 	import { isIos, isMobile, isWindows } from '#lib/platform.js';
+
+	/** From this window width the editor is wide, with two columns. */
+	const WIDE_MIN_WINDOW = 1000;
+	const WIDE_DIALOG = '940px';
 	import { APP_FILES_SHARE } from '#lib/ipc/rdp.js';
 	import SshOptionsSection from './SshOptionsSection.svelte';
 	import SessionHostKeys from './SessionHostKeys.svelte';
@@ -430,6 +434,15 @@
 	let error = $state<string | undefined>();
 
 	let isEditing = $derived(!!editSession);
+
+	/** The window's width, for the two-column layout. */
+	let windowWidth = $state(typeof window === 'undefined' ? 0 : window.innerWidth);
+	/** Wide enough for two columns: the connection on the left, how the
+	 *  session looks and is filed on the right. Never on a phone. */
+	let wide = $derived(!isMobile() && windowWidth >= WIDE_MIN_WINDOW);
+	/** Whether this kind opens in a terminal, so its right column holds
+	 *  terminal settings too. */
+	let opensTerminal = $derived(kind !== 'rdp' && kind !== 'vnc' && kind !== 'spice' && kind !== 'winbox' && kind !== 'web');
 	let canSave = $derived(
 		name.trim().length > 0 &&
 		(kind === 'wsl' ? wslDistro.trim().length > 0 : host.trim().length > 0) &&
@@ -970,18 +983,20 @@
 	}
 </script>
 
-<Modal {open} onclose={handleClose} title={isEditing ? t('session.edit_session') : cloneSession ? t('session.clone_session') : t('session.new')}>
+<svelte:window bind:innerWidth={windowWidth} />
+
+<Modal {open} onclose={handleClose} title={isEditing ? t('session.edit_session') : cloneSession ? t('session.clone_session') : t('session.new')} maxWidth={wide ? WIDE_DIALOG : undefined} fullOnPhone>
 	<form class="form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
-		<!-- Same control as the auth method below: one segmented row, and
-		     everything under it follows the choice. -->
+		<!-- Same control as the auth method below, but a grid that wraps into
+		     rows where the window is narrow, so no protocol is cut to "S…". -->
 		<div class="auth-section">
 			<span class="auth-label">{t('session.protocol')}</span>
-			<div class="auth-toggle">
+			<div class="auth-toggle protocol-toggle">
 				<button type="button" class="auth-btn" class:active={kind === 'ssh'} disabled={saving} onclick={() => setKind('ssh')}>
 					{t('session.protocol_ssh')}
 				</button>
-				<button type="button" class="auth-btn" class:active={kind === 'rdp'} disabled={saving} onclick={() => setKind('rdp')}>
-					{t('session.protocol_rdp')}
+				<button type="button" class="auth-btn" class:active={kind === 'rdp'} disabled={saving} onclick={() => setKind('rdp')} title={t('session.protocol_rdp')}>
+					{t('session.protocol_rdp_short')}
 				</button>
 				<button type="button" class="auth-btn" class:active={kind === 'vnc'} disabled={saving} onclick={() => setKind('vnc')}>
 					{t('session.protocol_vnc')}
@@ -1016,6 +1031,11 @@
 			</div>
 		</div>
 
+		<!-- On a wide window two columns; otherwise the columns vanish
+		     (display: contents) and it is one list as before. -->
+		<div class="columns" class:wide>
+		<div class="column">
+		{#if wide}<span class="column-title">{t('session.column_connection')}</span>{/if}
 		<Input label={t('session.name')} bind:value={name} placeholder={kind === 'rdp' ? 'Office PC' : kind === 'telnet' ? 'Core switch' : kind === 'serial' ? 'Switch console' : kind === 'winbox' ? 'Router' : kind === 'web' ? 'iDRAC rack 3' : 'My Server'} disabled={saving} />
 
 		{#if kind === 'wsl'}
@@ -1649,6 +1669,9 @@
 		{/if}
 		{/if}
 
+		</div>
+		<div class="column">
+		{#if wide}<span class="column-title">{opensTerminal ? t('session.column_terminal') : t('session.column_organising')}</span>{/if}
 		<Input label={t('session.tags')} bind:value={tagsStr} placeholder={kind === 'rdp' ? 'office, windows' : 'production, web, linux'} disabled={saving} />
 
 		{#if kind === 'ssh' || kind === 'telnet' || kind === 'vnc' || kind === 'spice' || kind === 'winbox'}
@@ -1849,6 +1872,8 @@
 				</div>
 			</div>
 		</Disclosure>
+		</div>
+		</div>
 
 		{#if error}
 			<div class="error-message">{error}</div>
@@ -2089,6 +2114,48 @@
 		background: var(--color-bg-primary);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-btn);
+	}
+
+	/* The protocols: as many to a row as fit, then the next row. A grid,
+	   so the rows line up and every button is as wide as its neighbours. */
+	.protocol-toggle {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+	}
+
+	.columns,
+	.column {
+		display: contents;
+	}
+
+	.columns.wide {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		gap: 28px;
+		align-items: start;
+		margin-top: 4px;
+	}
+
+	.columns.wide .column {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		min-width: 0;
+	}
+
+	.columns.wide .column + .column {
+		border-left: 1px solid var(--color-border);
+		padding-left: 28px;
+	}
+
+	.column-title {
+		font-size: 0.6875rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-secondary);
+		padding-bottom: 6px;
+		border-bottom: 1px solid var(--color-border);
 	}
 
 	/* Sized to its label first, so a long one ("Remote desktop (RDP)") is
