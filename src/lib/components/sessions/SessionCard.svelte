@@ -9,6 +9,7 @@
 	import { isMobile, isWindows } from '#lib/platform.js';
 	import { getSettings } from '#lib/state/settings.svelte.js';
 	import { tooltip } from '#lib/utils/tooltip.js';
+	import { longPress } from '#lib/utils/longPress.js';
 	import { formatHops, formatProxyAddress, ROUTE_ICON } from '#lib/utils/route.js';
 
 	const settings = getSettings();
@@ -140,7 +141,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="session-card" class:selected class:unavailable class:dbl={needsDouble} class:names-only={compact} oncontextmenu={oncontextmenu} role="group">
+<div class="session-card" class:selected class:unavailable class:dbl={needsDouble} class:names-only={compact} oncontextmenu={oncontextmenu} use:longPress={!!oncontextmenu} role="group">
 	{#if selecting}
 		<input
 			class="select-box"
@@ -363,6 +364,8 @@
 		padding: 4px 6px;
 		border-radius: 6px;
 		transition: background-color var(--duration-default) var(--ease-default);
+		/* A long press opens the session menu: no iOS link callout over it. */
+		-webkit-touch-callout: none;
 	}
 
 	.session-card:hover {
