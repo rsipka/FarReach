@@ -4,7 +4,9 @@
  * setting survives a save and a restart (scripts/settings-persist-test.mjs).
  */
 
+import { isMobile } from '#lib/platform.js';
 import { DEFAULT_PASTE_THRESHOLD } from '#lib/terminal/paste.js';
+import { DEFAULT_SCROLLBACK, scrollbackSetting } from '#lib/terminal/scrollback.js';
 import { DEFAULT_RIGHT_CLICK, DEFAULT_WORD_SEPARATORS, rightClickMode, type RightClickMode } from '#lib/terminal/mouse.js';
 import {
 	cursorStyle,
@@ -38,6 +40,12 @@ export interface Settings {
 	terminalCursorInactive: InactiveCursorStyle;
 	/** A bar cursor's thickness, in CSS pixels. */
 	terminalCursorWidth: number;
+	/** Lines kept above the screen; 0 is Unlimited (#lib/terminal/scrollback). */
+	terminalScrollback: number;
+	/** Line numbers in a gutter left of the terminal (#lib/terminal/gutter). */
+	terminalLineNumbers: boolean;
+	/** When each line was written, in the same gutter. */
+	terminalTimestamps: boolean;
 	fontSize: number;
 	/** The whole interface's size on a desktop, as a browser's zoom: 1 is 100%.
 	 *  See #lib/state/ui-zoom. */
@@ -61,6 +69,17 @@ export interface Settings {
 	/** Look for a new release at launch and every 45 minutes. Off: only
 	 *  Settings > General > Check now asks, so nothing goes out on its own. */
 	checkForUpdates: boolean;
+	/** The chime when a notification (toast) appears. Off by default on phones
+	 *  and tablets, where the system's own sounds already say enough. */
+	playSounds: boolean;
+	/** The terminal bell (^G) plays a short sound (and Play sounds is on).
+	 *  On by default on desktop. See #lib/terminal/bell. */
+	terminalBellSound: boolean;
+	/** The bell flashes the terminal. On by default on phones and tablets. */
+	terminalBellFlash: boolean;
+	/** The bell sends a system notification when its tab is not in view or
+	 *  the app is in the background. Off by default: it asks permission. */
+	terminalBellNotify: boolean;
 	fontFamily: string;
 	defaultShell: string;
 	openLastSession: boolean;
@@ -198,6 +217,11 @@ export interface Settings {
 	unlockKeysWithBiometrics: boolean;
 }
 
+/** The file name a log gets unless Settings say otherwise: session name, host, date, time. */
+export const DEFAULT_LOG_NAME = '&S-&H-&Y&M&D-&T.log';
+/** The default before `&S` existed; a setting still holding it moves to the new one. */
+const OLD_DEFAULT_LOG_NAME = '&H-&Y&M&D-&T.log';
+
 export const defaults: Settings = {
 	theme: 'dark',
 	themeId: undefined,
@@ -206,6 +230,9 @@ export const defaults: Settings = {
 	terminalCursorBlink: DEFAULT_CURSOR_BLINK,
 	terminalCursorInactive: DEFAULT_INACTIVE_CURSOR,
 	terminalCursorWidth: DEFAULT_CURSOR_WIDTH,
+	terminalScrollback: DEFAULT_SCROLLBACK,
+	terminalLineNumbers: false,
+	terminalTimestamps: false,
 	fontSize: 14,
 	uiZoom: 1,
 	compactLayout: false,
@@ -215,6 +242,10 @@ export const defaults: Settings = {
 	closeTabOnExit: false,
 	serverMonitoring: true,
 	checkForUpdates: true,
+	playSounds: !isMobile(),
+	terminalBellSound: !isMobile(),
+	terminalBellFlash: isMobile(),
+	terminalBellNotify: false,
 	fontFamily: 'monospace',
 	defaultShell: '/bin/bash',
 	openLastSession: false,
@@ -225,7 +256,7 @@ export const defaults: Settings = {
 	showLoginMessage: true,
 	sessionLogMode: 'off',
 	sessionLogFolder: '',
-	sessionLogName: '&H-&Y&M&D-&T.log',
+	sessionLogName: DEFAULT_LOG_NAME,
 	sessionLogAppend: true,
 	sessionLogHeader: true,
 	historyMode: 'off',
@@ -289,6 +320,9 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.terminalCursorBlink = parsed.terminalCursorBlink ?? defaults.terminalCursorBlink;
 	settings.terminalCursorInactive = inactiveCursorStyle(parsed.terminalCursorInactive);
 	settings.terminalCursorWidth = cursorWidth(parsed.terminalCursorWidth);
+	settings.terminalScrollback = scrollbackSetting(parsed.terminalScrollback);
+	settings.terminalLineNumbers = parsed.terminalLineNumbers === true;
+	settings.terminalTimestamps = parsed.terminalTimestamps === true;
 	settings.fontSize = parsed.fontSize ?? defaults.fontSize;
 	settings.uiZoom = parsed.uiZoom ?? defaults.uiZoom;
 	settings.compactLayout = parsed.compactLayout ?? defaults.compactLayout;
@@ -300,6 +334,10 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.closeTabOnExit = parsed.closeTabOnExit ?? defaults.closeTabOnExit;
 	settings.serverMonitoring = parsed.serverMonitoring ?? defaults.serverMonitoring;
 	settings.checkForUpdates = parsed.checkForUpdates ?? defaults.checkForUpdates;
+	settings.playSounds = parsed.playSounds ?? defaults.playSounds;
+	settings.terminalBellSound = parsed.terminalBellSound ?? defaults.terminalBellSound;
+	settings.terminalBellFlash = parsed.terminalBellFlash ?? defaults.terminalBellFlash;
+	settings.terminalBellNotify = parsed.terminalBellNotify ?? defaults.terminalBellNotify;
 	settings.fontFamily = parsed.fontFamily ?? defaults.fontFamily;
 	settings.defaultShell = parsed.defaultShell ?? defaults.defaultShell;
 	settings.openLastSession = parsed.openLastSession ?? defaults.openLastSession;
@@ -310,7 +348,10 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.showLoginMessage = parsed.showLoginMessage ?? defaults.showLoginMessage;
 	settings.sessionLogMode = parsed.sessionLogMode ?? defaults.sessionLogMode;
 	settings.sessionLogFolder = parsed.sessionLogFolder ?? defaults.sessionLogFolder;
-	settings.sessionLogName = parsed.sessionLogName ?? defaults.sessionLogName;
+	settings.sessionLogName =
+		!parsed.sessionLogName || parsed.sessionLogName === OLD_DEFAULT_LOG_NAME
+			? defaults.sessionLogName
+			: parsed.sessionLogName;
 	settings.sessionLogAppend = parsed.sessionLogAppend ?? defaults.sessionLogAppend;
 	settings.sessionLogHeader = parsed.sessionLogHeader ?? defaults.sessionLogHeader;
 	settings.historyMode = parsed.historyMode ?? defaults.historyMode;

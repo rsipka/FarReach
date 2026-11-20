@@ -7,13 +7,13 @@
 	 * that same tab menu, so nothing here is a second copy of it.
 	 */
 	import type { Tab } from '#lib/state/tabs.svelte.js';
-	import { splitWith, unsplit, getSplit, getTabs, canShowFilesView, toggleFilesView } from '#lib/state/tabs.svelte.js';
-	import { SPLIT_MIN_WIDTH } from '#lib/terminal/split.js';
+	import { splitWith, unsplit, getSplit, getTabs, getDraggedTab, setDraggedTab, canShowFilesView, toggleFilesView } from '#lib/state/tabs.svelte.js';
+	import { SPLIT_MIN_WIDTH, contains } from '#lib/terminal/split.js';
 	import { isMobile } from '#lib/platform.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { isBroadcastTarget, toggleBroadcastTarget } from '#lib/state/broadcast.svelte.js';
 	import { openHistoryPanel, tabHistory } from '#lib/state/history.svelte.js';
-	import { finderFor, pendingFind } from '#lib/state/terminal-find.svelte.js';
+	import { finderFor, freshFind, pendingFind } from '#lib/state/terminal-find.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { getSettings, updateSetting } from '#lib/state/settings.svelte.js';
 	import { tick } from 'svelte';
@@ -75,7 +75,7 @@
 	let highlighting = $derived(settings.terminalHighlight);
 	let highlightTip = $derived(highlighting ? t('highlight.turn_off') : t('highlight.turn_on'));
 	let split = $derived(getSplit());
-	let inSplit = $derived(!!split && (split.first === tab.id || split.second === tab.id));
+	let inSplit = $derived(contains(split, tab.id));
 	// A phone or tablet has no local shell to open beside a lone tab, and a
 	// phone's screen is too narrow to show a split at all.
 	const mobile = isMobile();
@@ -91,12 +91,14 @@
 	let notFound = $state(false);
 	let findEl = $state<HTMLInputElement>();
 
-	async function openFind(): Promise<void> {
+	async function openFind(text?: string): Promise<void> {
 		findOpen = true;
+		if (text) query = text;
 		onfindopen?.(true);
 		await tick();
 		findEl?.focus();
 		findEl?.select();
+		if (text) find();
 	}
 
 	function closeFind(): void {
@@ -120,7 +122,7 @@
 		const r = pendingFind();
 		if (r && r.tabId === tab.id && r.at !== lastRequest) {
 			lastRequest = r.at;
-			void openFind();
+			if (freshFind(r)) void openFind(r.text);
 		}
 	});
 
@@ -137,6 +139,22 @@
 	// ---- Other actions -------------------------------------------------------
 	function showSection(section: 'explorer' | 'snippets'): void {
 		window.dispatchEvent(new CustomEvent('reach:sidebar-section', { detail: section }));
+	}
+
+	/** Drag the pane by its name to another place in the split (desktop). */
+	function beginDrag(e: PointerEvent): void {
+		if (e.button !== 0 || mobile) return;
+		const x0 = e.clientX;
+		const y0 = e.clientY;
+		const move = (ev: PointerEvent) => {
+			if (!getDraggedTab() && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 6) setDraggedTab(tab.id);
+		};
+		const up = () => {
+			window.removeEventListener('pointermove', move);
+			window.removeEventListener('pointerup', up);
+		};
+		window.addEventListener('pointermove', move);
+		window.addEventListener('pointerup', up);
 	}
 
 	function toggleSplit(): void {
@@ -164,7 +182,8 @@
 
 <div class="term-bar" role="toolbar" aria-label={t('termbar.label')}>
 	<span class="state {linkState}" role="img" aria-label={stateLabel} title={stateLabel}></span>
-	<span class="name">{tab.sessionName || tab.title}</span>
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<span class="name" class:grab={!mobile} title={mobile ? undefined : t('split.drag_hint')} onpointerdown={beginDrag}>{tab.sessionName || tab.title}</span>
 	{#if address}<span class="address">{address}</span>{/if}
 	{#if remote || tab.wslDistro}<span class="badge">{protocol}</span>{/if}
 	{#if jumpTip}<span class="route" role="img" aria-label={jumpTip} title={jumpTip}>{@render icon(ROUTE_ICON.jump, 13)}</span>{/if}
@@ -248,6 +267,10 @@
 
 	.state.down {
 		background: var(--color-danger);
+	}
+
+	.name.grab {
+		cursor: grab;
 	}
 
 	.name {

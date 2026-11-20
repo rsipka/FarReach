@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import * as settingsIpc from '#lib/ipc/settings.js';
 import type { SessionLogConfig } from '#lib/ipc/ssh.js';
 import { defaults, readStoredSettings, storeSettings, STORAGE_KEY, type Settings } from '#lib/state/settings-store.js';
+export { DEFAULT_LOG_NAME } from '#lib/state/settings-store.js';
 import { NEW_FEATURE_IDS } from '#lib/data/whats-new.js';
 
 export type { Settings };
@@ -30,13 +31,17 @@ export function getSettings(): Settings {
 	return settings;
 }
 
-/** The session log to ask `ssh_connect` for, or null when logging is off. */
-export function sessionLogConfig(): SessionLogConfig | null {
+/**
+ * The session log to ask `ssh_connect` for, or null when logging is off.
+ * `session` is the saved session's name, for `&S` in the file name.
+ */
+export function sessionLogConfig(session = ''): SessionLogConfig | null {
 	if (settings.sessionLogMode === 'off') return null;
 	return {
 		mode: settings.sessionLogMode,
 		folder: settings.sessionLogFolder.trim(),
 		name: settings.sessionLogName.trim(),
+		session: session.trim(),
 		append: settings.sessionLogAppend,
 		header: settings.sessionLogHeader
 	};

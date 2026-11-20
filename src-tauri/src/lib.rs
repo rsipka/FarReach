@@ -374,6 +374,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_reach_unlock::init());
     #[cfg(mobile)]
@@ -574,6 +575,7 @@ pub fn run() {
             report::report_prepare,
             report::report_reveal,
             sound::play_notification_sound,
+            sound::play_bell_sound,
             // Session commands
             session_list,
             session_get,
@@ -1046,6 +1048,7 @@ pub fn run() {
             report::report_prepare,
             report::report_reveal,
             sound::play_notification_sound,
+            sound::play_bell_sound,
             // Session commands
             session_list,
             session_get,

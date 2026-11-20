@@ -14,6 +14,8 @@ import type { TypedAddress } from '#lib/utils/address.js';
 export type SessionRequest =
 	/** `shell` opens the session with another login shell (a container's). */
 	| { kind: 'connect'; sessionId: string; shell?: string }
+	/** Several, one after the other (a saved split layout opening). */
+	| { kind: 'connect-many'; sessionIds: string[] }
 	| { kind: 'new-session' }
 	/** Show the session in the list (folders opened, scrolled to, marked). */
 	| { kind: 'locate'; sessionId: string }

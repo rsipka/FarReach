@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { allowNotifications } from '#lib/terminal/bell.js';
 	import { invoke } from '@tauri-apps/api/core';
 	import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart';
 	import { isMobile } from '#lib/platform.js';
@@ -24,7 +25,7 @@
 
 	/** Which slice of these rows to show: Settings arranges them by topic,
 	 *  so one tab file feeds several pages (see settings-pages.ts). */
-	type Part = 'general' | 'shell' | 'paste' | 'paste-adv' | 'sessions' | 'tmux' | 'updates' | 'about';
+	type Part = 'general' | 'shell' | 'paste' | 'bell' | 'paste-adv' | 'sessions' | 'tmux' | 'updates' | 'about';
 	let { part }: { part: Part } = $props();
 
 	const settings = getSettings();
@@ -84,6 +85,17 @@
 	async function onMinimizeToTrayChange(checked: boolean) {
 		await invoke('set_close_to_tray', { enabled: checked });
 		updateSetting('minimizeToTray', checked);
+	}
+
+	/** Turning bell notifications on asks the system for permission first;
+	 *  refused, the switch stays off and says why. */
+	async function onBellNotifyChange(checked: boolean) {
+		if (checked && !(await allowNotifications())) {
+			updateSetting('terminalBellNotify', false);
+			addToast(t('settings.bell_notify_denied'), 'warning', 6000);
+			return;
+		}
+		updateSetting('terminalBellNotify', checked);
 	}
 
 	function onCheckForUpdatesChange(checked: boolean) {
@@ -175,6 +187,21 @@
 		</div>
 	{/if}
 
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.play_sounds')}</span>
+			<span class="setting-description">{t('settings.play_sounds_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.playSounds}
+				label={t('settings.play_sounds')}
+				onchange={(v) => updateSetting('playSounds', v)}
+			/>
+		</div>
+	</div>
+
 	<!-- The first-run questions again, over whatever is open. -->
 	<div class="setting-row">
 		<div class="setting-info">
@@ -202,6 +229,55 @@
 				options={shellOptions}
 				selected={settings.defaultShell}
 				onchange={onShellChange}
+			/>
+		</div>
+	</div>
+
+	{/if}
+
+	{#if part === 'bell'}
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.bell_sound')}</span>
+			<span class="setting-description">{t('settings.bell_sound_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.terminalBellSound}
+				label={t('settings.bell_sound')}
+				onchange={(v) => updateSetting('terminalBellSound', v)}
+			/>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.bell_flash')}</span>
+			<span class="setting-description">{t('settings.bell_flash_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.terminalBellFlash}
+				label={t('settings.bell_flash')}
+				onchange={(v) => updateSetting('terminalBellFlash', v)}
+			/>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.bell_notify')}</span>
+			<span class="setting-description">{t('settings.bell_notify_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.terminalBellNotify}
+				label={t('settings.bell_notify')}
+				onchange={onBellNotifyChange}
 			/>
 		</div>
 	</div>
