@@ -122,6 +122,11 @@
 		return `${t('vault.private')} · ${t('vault.n_secrets', { count: current.secretCount })}`;
 	});
 
+	/** Switch from outside (the list showing a session from another vault). */
+	export function select(filter: VaultFilter): void {
+		if (filter !== selected) choose(filter);
+	}
+
 	function choose(filter: VaultFilter) {
 		selected = filter;
 		saveVaultFilter(filter);
