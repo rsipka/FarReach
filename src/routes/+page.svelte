@@ -435,7 +435,11 @@
 								{#key tab.reconnect}
 									<RdpPanel id={tab.id} params={tab.vncConnectParams} protocol="vnc" active={focused} />
 								{/key}
-							{:else if tab.type !== 'rdp' && tab.type !== 'vnc'}
+							{:else if tab.type === 'spice' && tab.spiceConnectParams}
+								{#key tab.reconnect}
+									<RdpPanel id={tab.id} params={tab.spiceConnectParams} protocol="spice" active={focused} />
+								{/key}
+							{:else if tab.type !== 'rdp' && tab.type !== 'vnc' && tab.type !== 'spice'}
 								{#if appSettings.terminalBar !== 'hidden' || findOpenIn === tab.id}
 									<div class="bar-slot" class:hover-only={appSettings.terminalBar === 'hover' && findOpenIn !== tab.id}>
 										<TerminalBar {tab} onfindopen={(open) => (findOpenIn = open ? tab.id : findOpenIn === tab.id ? null : findOpenIn)} />

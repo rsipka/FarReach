@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { rdpDisconnectAll } from '#lib/ipc/rdp.js';
 	import { vncDisconnectAll } from '#lib/ipc/vnc.js';
+	import { spiceDisconnectAll } from '#lib/ipc/spice.js';
 	import type { Snippet } from 'svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -94,7 +95,7 @@
 		// Desktops first, so each server gets a disconnect rather than a
 		// dropped socket, and no session thread outlives the window.
 		try {
-			await Promise.all([rdpDisconnectAll(), vncDisconnectAll()]);
+			await Promise.all([rdpDisconnectAll(), vncDisconnectAll(), spiceDisconnectAll()]);
 		} catch {
 			// Nothing open, or the backend is already gone: leave anyway.
 		}

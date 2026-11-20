@@ -26,8 +26,10 @@
 	import { savedCredentialList, credentialsFor, type SavedCredential } from '#lib/ipc/savedCredentials.js';
 	import { DEFAULT_TELNET_OPTIONS, type TelnetOptions } from '#lib/ipc/telnet.js';
 	import { DEFAULT_SERIAL_OPTIONS, SERIAL_BAUD_RATES, serialListPorts, type SerialOptions, type SerialPortInfo } from '#lib/ipc/serial.js';
+	import type { SpiceOptions } from '#lib/ipc/spice.js';
 	import type { HistoryMode } from '#lib/ipc/history.js';
 	import type { CursorStyle } from '#lib/terminal/cursor.js';
+	import { jumpChainToSave } from '#lib/utils/route.js';
 
 	interface Props {
 		open: boolean;
@@ -91,6 +93,10 @@
 	let wslDistro = $state('');
 	/** Telnet only: how it talks to the device. */
 	let telnetOptions = $state<TelnetOptions>({ ...DEFAULT_TELNET_OPTIONS });
+	/** SPICE only: the TLS port ('' for none), the CA and the certificate subject. */
+	let spiceTlsPort = $state('');
+	let spiceCa = $state('');
+	let spiceSubject = $state('');
 	/** Web only: see WebOptions. Certificates are changed by their own commands. */
 	let webScheme = $state<'https' | 'http'>('https');
 	let webPath = $state('');
@@ -306,7 +312,7 @@
 	});
 
 	$effect(() => {
-		if (open && kind === 'vnc') {
+		if (open && (kind === 'vnc' || kind === 'spice')) {
 			sessionList()
 				.then((all) => (sshSessions = all.filter((s) => sessionKind(s) === 'ssh')))
 				.catch(() => (sshSessions = []));
@@ -340,7 +346,7 @@
 		return list.length ? list : null;
 	}
 
-	const DEFAULT_PORT: Record<SessionKind, string> = { ssh: '22', rdp: '3389', vnc: '5900', wsl: '0', telnet: '23', serial: '0', winbox: '8291', web: '443' };
+	const DEFAULT_PORT: Record<SessionKind, string> = { ssh: '22', rdp: '3389', vnc: '5900', spice: '5900', wsl: '0', telnet: '23', serial: '0', winbox: '8291', web: '443' };
 
 	function setKind(next: SessionKind): void {
 		if (next === kind) return;
@@ -349,7 +355,7 @@
 		if (next === 'ssh' && username === '') username = 'root';
 		if (next === 'winbox' && username === '') username = 'admin';
 		// A VNC user name means a Mac's own login: not one carried over.
-		if (next === 'vnc' || next === 'serial') username = '';
+		if (next === 'vnc' || next === 'spice' || next === 'serial') username = '';
 		// A port name is not a host name, nor the other way round.
 		if (next === 'serial' || kind === 'serial') host = '';
 		kind = next;
@@ -418,7 +424,7 @@
 	let canSave = $derived(
 		name.trim().length > 0 &&
 		(kind === 'wsl' ? wslDistro.trim().length > 0 : host.trim().length > 0) &&
-		(kind === 'vnc' || kind === 'wsl' || kind === 'telnet' || kind === 'serial' || kind === 'web' || !!usedCredential || username.trim().length > 0) &&
+		(kind === 'vnc' || kind === 'spice' || kind === 'wsl' || kind === 'telnet' || kind === 'serial' || kind === 'web' || !!usedCredential || username.trim().length > 0) &&
 		!saving
 	);
 
@@ -498,6 +504,9 @@
 			wslDistro = editSession.wsl_distro ?? '';
 			telnetOptions = { ...DEFAULT_TELNET_OPTIONS, ...(editSession.telnet ?? {}) };
 			serialOptions = { ...DEFAULT_SERIAL_OPTIONS, ...(editSession.serial ?? {}) };
+			spiceTlsPort = editSession.spice?.tls_port ? String(editSession.spice.tls_port) : '';
+			spiceCa = editSession.spice?.ca ?? '';
+			spiceSubject = editSession.spice?.host_subject ?? '';
 			fillWeb(editSession.web ?? null);
 			credentialId = editSession.credential_id ?? '';
 			name = editSession.name;
@@ -572,6 +581,9 @@
 			viaSessionId = '';
 			telnetOptions = { ...DEFAULT_TELNET_OPTIONS };
 			serialOptions = { ...DEFAULT_SERIAL_OPTIONS };
+			spiceTlsPort = '';
+			spiceCa = '';
+			spiceSubject = '';
 			credentialId = '';
 			name = '';
 			host = '';
@@ -636,14 +648,23 @@
 		const port = kind === 'wsl' || kind === 'serial' ? 0 : (parseInt(portStr, 10) || parseInt(DEFAULT_PORT[kind], 10) || 22);
 		const rdp = kind === 'rdp';
 		const vnc = kind === 'vnc';
+		const spice = kind === 'spice';
 		const wsl = kind === 'wsl';
 		const telnet = kind === 'telnet';
 		const serial = kind === 'serial';
 		const winbox = kind === 'winbox';
 		const web = kind === 'web';
 		/** Jump hosts, proxies, login shells and ssh_config are SSH's alone. */
-		const desktop = rdp || vnc || wsl || telnet || serial || winbox || web;
-		const via = vnc ? viaSessionId || null : null;
+		const desktop = rdp || vnc || spice || wsl || telnet || serial || winbox || web;
+		const via = vnc || spice ? viaSessionId || null : null;
+		const tlsPort = parseInt(spiceTlsPort, 10);
+		const spiceToSave: SpiceOptions | null = spice
+			? {
+					tls_port: tlsPort > 0 && tlsPort < 65536 ? tlsPort : null,
+					ca: spiceCa.trim() ? spiceCa.trim() + '\n' : null,
+					host_subject: spiceSubject.trim() || null,
+				}
+			: null;
 		/** WSL and VNC have no username to share; their login stays their own. */
 		const credential = rdp || telnet || winbox || web || kind === 'ssh' ? credentialId || null : null;
 		// RDP and VNC are password logons; the toggle below is SSH-only and
@@ -674,7 +695,7 @@
 		const notesToSave = notes.trim() ? notes : null;
 		// Remote desktops paint their own screen, and WinBox is its own
 		// program: no terminal colours.
-		const noTerminal = kind === 'rdp' || kind === 'vnc' || winbox;
+		const noTerminal = kind === 'rdp' || kind === 'vnc' || kind === 'spice' || winbox;
 		const themeToSave = noTerminal ? null : terminalTheme || null;
 		const cursorToSave = noTerminal ? null : cursorChoice || null;
 		const blinkToSave = noTerminal || !blinkChoice ? null : blinkChoice === 'on';
@@ -702,8 +723,7 @@
 			.filter((f) => f.name.trim() || f.value.trim())
 			.map((f) => (f.hidden ? { name: f.name.trim(), value: f.value, hidden: true } : { name: f.name.trim(), value: f.value }));
 
-		const jumpChain: JumpHostConfig[] | undefined = !desktop && jumpEnabled && jumpHops.length > 0
-			? jumpHops.map(h => {
+		const jumpChain: JumpHostConfig[] | null = jumpChainToSave(desktop, jumpEnabled, jumpHops.map(h => {
 				const hopAuth: AuthMethod = h.authType === 'Password'
 					? passwordAuth(h.password, null)
 					: h.authType === 'Manager'
@@ -726,8 +746,7 @@
 					auth_method: filled && h.read ? h.read.auth_method : hopAuth,
 					credential_id: h.credentialId || null,
 				};
-			})
-			: undefined;
+			}));
 
 		// The weakenings in force are stored with the session, those written
 		// here included, so the session list can flag a weaker session.
@@ -760,7 +779,7 @@
 					auth_method: filled ? editSession.auth_method : authMethod,
 					folder_id: folderIdStr || null,
 					tags,
-					jump_chain: desktop ? null : (jumpChain ?? editSession.jump_chain ?? null),
+					jump_chain: jumpChain,
 					proxy: proxyConfig,
 					shell: desktop ? null : (shell.trim() || null),
 					kind,
@@ -779,6 +798,7 @@
 					telnet: telnet ? { ...telnetOptions } : null,
 					serial: serial ? { ...serialOptions } : null,
 					web: web ? { ...webToSave(), certs: webCerts } : null,
+					spice: spiceToSave,
 					ssh_options: sshOptionsToSave,
 					credential_id: credential,
 					credential: null,
@@ -809,7 +829,7 @@
 					folderId: folderIdStr || null,
 					tags,
 					vaultId: sessionVault,
-					jumpChain: jumpChain ?? null,
+					jumpChain,
 					proxy: proxyConfig,
 					shell: desktop ? null : (shell.trim() || null),
 					kind,
@@ -825,6 +845,7 @@
 					telnet: telnet ? { ...telnetOptions } : null,
 					serial: serial ? { ...serialOptions } : null,
 					web: web ? webToSave() : null,
+					spice: spiceToSave,
 					credentialId: credential,
 					notes: notesToSave,
 					customFields: fieldsToSave,
@@ -929,6 +950,9 @@
 				</button>
 				<button type="button" class="auth-btn" class:active={kind === 'vnc'} disabled={saving} onclick={() => setKind('vnc')}>
 					{t('session.protocol_vnc')}
+				</button>
+				<button type="button" class="auth-btn" class:active={kind === 'spice'} disabled={saving} onclick={() => setKind('spice')}>
+					{t('session.protocol_spice')}
 				</button>
 				<button type="button" class="auth-btn" class:active={kind === 'telnet'} disabled={saving} onclick={() => setKind('telnet')}>
 					{t('session.protocol_telnet')}
@@ -1046,7 +1070,7 @@
 			</div>
 		{/if}
 
-		{#if kind !== 'vnc' && kind !== 'wsl' && kind !== 'serial' && !usedCredential}
+		{#if kind !== 'vnc' && kind !== 'spice' && kind !== 'wsl' && kind !== 'serial' && !usedCredential}
 			<Input label={kind === 'telnet' ? t('session.telnet_username') : t('session.username')} bind:value={username} placeholder={kind === 'rdp' ? 'Administrator' : kind === 'telnet' || kind === 'winbox' || kind === 'web' ? 'admin' : 'root'} disabled={saving} />
 		{/if}
 
@@ -1114,6 +1138,36 @@
 					{/each}
 				</select>
 				<p class="shell-hint">{t('session.vnc_via_hint')}</p>
+			</div>
+		{:else if kind === 'spice'}
+			<div class="shell-field">
+				<SecretRefField approvable label={t('session.password_optional')} bind:value={password} bind:secretRef={passwordRef} placeholder={t('session.stored_encrypted')} disabled={saving} />
+				<p class="shell-hint">{t('spice.password_hint')}</p>
+			</div>
+			<div class="shell-field">
+				<Input label={t('spice.tls_port')} bind:value={spiceTlsPort} type="number" placeholder={t('spice.tls_port_placeholder')} disabled={saving} />
+				<p class="shell-hint">{t('spice.tls_port_hint')}</p>
+			</div>
+			{#if spiceTlsPort.trim()}
+				<div class="shell-field">
+					<label class="via-label" for="spice-ca">{t('spice.ca')}</label>
+					<textarea id="spice-ca" class="spice-ca" rows="4" bind:value={spiceCa} placeholder="-----BEGIN CERTIFICATE-----" spellcheck="false" disabled={saving}></textarea>
+					<p class="shell-hint">{t('spice.ca_hint')}</p>
+				</div>
+				<div class="shell-field">
+					<Input label={t('spice.host_subject')} bind:value={spiceSubject} placeholder="O=Example,CN=host.example.com" disabled={saving} />
+					<p class="shell-hint">{t('spice.host_subject_hint')}</p>
+				</div>
+			{/if}
+			<div class="shell-field">
+				<label class="via-label" for="spice-via">{t('session.vnc_via')}</label>
+				<select id="spice-via" class="via-select" bind:value={viaSessionId} disabled={saving}>
+					<option value="">{t('session.vnc_via_none')}</option>
+					{#each sshSessions as s (s.id)}
+						<option value={s.id}>{s.name} ({s.username}@{s.host})</option>
+					{/each}
+				</select>
+				<p class="shell-hint">{t('spice.via_hint')}</p>
 			</div>
 		{:else if kind === 'telnet'}
 			<!-- Telnet has no login of its own: what is saved here is typed in
@@ -1548,7 +1602,7 @@
 
 		<Input label={t('session.tags')} bind:value={tagsStr} placeholder={kind === 'rdp' ? 'office, windows' : 'production, web, linux'} disabled={saving} />
 
-		{#if kind === 'ssh' || kind === 'telnet' || kind === 'vnc' || kind === 'winbox'}
+		{#if kind === 'ssh' || kind === 'telnet' || kind === 'vnc' || kind === 'spice' || kind === 'winbox'}
 			<div class="folder-section">
 				<span class="folder-label">{t('session.os_icon')}</span>
 				<div class="os-row">
@@ -1577,7 +1631,7 @@
 			</div>
 		{/if}
 
-		{#if kind !== 'rdp' && kind !== 'vnc' && kind !== 'winbox'}
+		{#if kind !== 'rdp' && kind !== 'vnc' && kind !== 'spice' && kind !== 'winbox'}
 			<Disclosure title={t('termtheme.session_title')} summary={colorsSummary} bind:open={colorsOpen}>
 				<TerminalThemeList
 					selected={terminalTheme}
@@ -2081,6 +2135,20 @@
 	}
 
 	/* Dressed as the text fields around it. */
+	.spice-ca {
+		width: 100%;
+		padding: 10px 12px;
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		color: var(--color-text-primary);
+		background-color: var(--color-bg-elevated);
+		border: 1px solid var(--color-border-strong);
+		border-radius: var(--radius-btn);
+		outline: none;
+		box-sizing: border-box;
+		resize: vertical;
+	}
+
 	.via-select {
 		width: 100%;
 		padding: 12px;

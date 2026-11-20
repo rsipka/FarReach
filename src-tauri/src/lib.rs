@@ -8,6 +8,7 @@ pub mod monitoring;
 pub mod pty;
 pub mod rdp;
 pub mod vnc;
+pub mod spice;
 pub mod container;
 pub mod db;
 pub mod devops;
@@ -38,6 +39,7 @@ pub mod tunnel;
 pub mod vault;
 pub mod web;
 pub mod wsl;
+pub mod zmodem;
 
 use std::sync::atomic::Ordering;
 
@@ -60,6 +62,7 @@ use ipc::font_commands::*;
 use ipc::mcp_commands::*;
 use ipc::rdp_commands::*;
 use ipc::vnc_commands::*;
+use ipc::spice_commands::*;
 use ipc::monitoring_commands::*;
 #[cfg(desktop)]
 use ipc::pty_commands::*;
@@ -68,6 +71,7 @@ use ipc::serial_commands::*;
 #[cfg(desktop)]
 use ipc::winbox_commands::*;
 use ipc::telnet_commands::*;
+use ipc::zmodem_commands::*;
 use ipc::saved_credential_commands::*;
 use ipc::session_commands::*;
 use ipc::sftp_commands::*;
@@ -441,6 +445,10 @@ pub fn run() {
             telnet_send,
             telnet_resize,
             telnet_disconnect,
+            // ZMODEM in SSH, Telnet and serial sessions
+            zmodem_upload,
+            zmodem_download,
+            zmodem_cancel,
             rdp_connect,
             rdp_disconnect,
             rdp_mouse,
@@ -464,6 +472,16 @@ pub fn run() {
             vnc_key,
             vnc_resize,
             vnc_clipboard_sync,
+            spice_connect,
+            spice_disconnect,
+            spice_disconnect_all,
+            spice_ack,
+            spice_mouse,
+            spice_key,
+            spice_type,
+            spice_resize,
+            spice_clipboard_sync,
+            spice_read_vv,
             mcp_stop,
             mcp_status,
             mcp_restore,
@@ -942,6 +960,10 @@ pub fn run() {
             telnet_send,
             telnet_resize,
             telnet_disconnect,
+            // ZMODEM in SSH, Telnet and serial sessions
+            zmodem_upload,
+            zmodem_download,
+            zmodem_cancel,
             rdp_connect,
             rdp_disconnect,
             rdp_mouse,
@@ -965,6 +987,16 @@ pub fn run() {
             vnc_key,
             vnc_resize,
             vnc_clipboard_sync,
+            spice_connect,
+            spice_disconnect,
+            spice_disconnect_all,
+            spice_ack,
+            spice_mouse,
+            spice_key,
+            spice_type,
+            spice_resize,
+            spice_clipboard_sync,
+            spice_read_vv,
             mcp_stop,
             mcp_status,
             mcp_restore,
