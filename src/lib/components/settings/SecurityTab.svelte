@@ -7,6 +7,7 @@
 		isLocked as checkIsLocked
 	} from '#lib/ipc/credentials.js';
 	import { t } from '#lib/state/i18n.svelte.js';
+	import { hostKeysRemoveAll } from '#lib/ipc/sessions.js';
 	import Dropdown from '#lib/components/shared/Dropdown.svelte';
 	import Toggle from '#lib/components/shared/Toggle.svelte';
 	import { getSettings, updateSetting } from '#lib/state/settings.svelte.js';
@@ -18,6 +19,7 @@
 		unlockMethods,
 		type UnlockMethods
 	} from '#lib/ipc/vault.js';
+	import { forgetBiometricKeys } from '#lib/ipc/savedCredentials.js';
 
 	const settings = getSettings();
 	const autoLockOptions = $derived([
@@ -44,13 +46,47 @@
 	let keyLabel = $state('');
 	let keyPin = $state('');
 	const biometric = $derived(methods?.methods.find((m) => m.kind !== 'fido2'));
-	const method = $derived(biometricName(methods?.platform));
+	const method = $derived(biometricName(methods?.platform, methods?.platform_label));
+
+	// Off forgets the passphrases remembered behind the biometric; so does
+	// turning off unlocking at start, which is what fills them.
+	function setKeysBiometric(on: boolean) {
+		updateSetting('unlockKeysWithBiometrics', on);
+		if (!on) void forgetBiometricKeys().catch(() => {});
+	}
+
+	function setUnlockKeysAtStart(on: boolean) {
+		updateSetting('unlockKeysAtStart', on);
+		if (!on && settings.unlockKeysWithBiometrics) setKeysBiometric(false);
+	}
 	const keys = $derived(methods?.methods.filter((m) => m.kind === 'fido2') ?? []);
 	const biometricNote = $derived.by(() => {
 		if (!methods?.platform_available) return t('security.biometric_unavailable', { method });
 		if (!hasPassword) return t('security.biometric_needs_password', { method });
 		return t('security.biometric_desc', { method });
 	});
+
+	// Remove all saved host keys: asked once more in place, then done.
+	let hostKeysAsk = $state(false);
+	let hostKeysBusy = $state(false);
+	let hostKeysDone = $state('');
+	let hostKeysError = $state('');
+
+	async function removeAllHostKeys() {
+		hostKeysBusy = true;
+		hostKeysError = '';
+		try {
+			const r = await hostKeysRemoveAll();
+			hostKeysDone = t('security.host_keys_removed', { sessions: r.sessions, device: r.device });
+			if (r.failed > 0) hostKeysError = t('security.host_keys_remove_failed', { count: r.failed });
+			window.dispatchEvent(new CustomEvent('reach:sessions-changed'));
+		} catch (e) {
+			hostKeysError = String(e);
+		} finally {
+			hostKeysBusy = false;
+			hostKeysAsk = false;
+		}
+	}
 
 	async function changeMethods(change: () => Promise<void>) {
 		methodBusy = true;
@@ -256,8 +292,62 @@
 				hideLabel
 				checked={settings.unlockKeysAtStart}
 				label={t('security.unlock_keys_at_start')}
-				onchange={(checked) => updateSetting('unlockKeysAtStart', checked)}
+				onchange={setUnlockKeysAtStart}
 			/>
+		</div>
+	</div>
+
+	{#if methods?.keys_biometric}
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('security.keys_biometric', { method })}</span>
+				<span class="setting-description">
+					{settings.unlockKeysAtStart
+						? t('security.keys_biometric_desc', { method })
+						: t('security.keys_biometric_needs_start')}
+				</span>
+			</div>
+			<div class="setting-control">
+				<Toggle
+					hideLabel
+					checked={settings.unlockKeysAtStart && settings.unlockKeysWithBiometrics}
+					label={t('security.keys_biometric', { method })}
+					disabled={!settings.unlockKeysAtStart}
+					onchange={setKeysBiometric}
+				/>
+			</div>
+		</div>
+	{/if}
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('security.host_keys_remove_all')}</span>
+			<span class="setting-description">
+				{#if hostKeysAsk}
+					{t('security.host_keys_remove_all_confirm')}
+				{:else if hostKeysDone}
+					{hostKeysDone}
+				{:else}
+					{t('security.host_keys_remove_all_desc')}
+				{/if}
+			</span>
+			{#if hostKeysError}
+				<span class="form-error">{hostKeysError}</span>
+			{/if}
+		</div>
+		<div class="setting-control" style="gap: 8px">
+			{#if hostKeysAsk}
+				<Button variant="ghost" size="sm" disabled={hostKeysBusy} onclick={() => (hostKeysAsk = false)}>
+					{t('common.cancel')}
+				</Button>
+				<Button variant="danger" size="sm" disabled={hostKeysBusy} onclick={removeAllHostKeys}>
+					{t('security.host_keys_remove_all_yes')}
+				</Button>
+			{:else}
+				<Button variant="secondary" size="sm" disabled={locked} onclick={() => { hostKeysAsk = true; hostKeysDone = ''; hostKeysError = ''; }}>
+					{t('security.host_keys_remove_all_button')}
+				</Button>
+			{/if}
 		</div>
 	</div>
 

@@ -42,3 +42,9 @@ pub async fn ssh_options_report(
     .await
     .map_err(|e| e.to_string())
 }
+
+/// The algorithms a session can pick, for the editor's SSH algorithms choice.
+#[tauri::command]
+pub fn ssh_algorithm_catalog() -> Vec<crate::ssh::sshconf::apply::CatalogGroup> {
+    crate::ssh::sshconf::apply::catalog()
+}

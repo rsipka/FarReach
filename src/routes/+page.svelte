@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { takeTmuxTitle } from '#lib/terminal/tmux-tabs.js';
 	import { getTabs, getActiveTab, updateTabTitle, updateTabConnection, setTelnetConnection, setSerialConnection, createTab, activateTab, getSplit, setSplitRatio, getDraggedTab, setDraggedTab, splitWith, unsplit } from '#lib/state/tabs.svelte.js';
-	import { paneOf, paneStyle, dividerStyle, dropZone, neighbour, type Direction } from '#lib/terminal/split.js';
+	import { paneOf, paneStyle, dividerStyle, dropZone, neighbour, SPLIT_MIN_WIDTH, type Direction } from '#lib/terminal/split.js';
 	import { getActivePage } from '#lib/state/navigation.svelte.js';
 	import { isDevopsEnabled } from '#lib/state/devops.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -21,6 +22,7 @@
 	import RemoteTerminal from '#lib/components/share/RemoteTerminal.svelte';
 	import * as share from '#lib/state/share.svelte.js';
 	import { monitorBarShown, monitoringWanted } from '#lib/state/monitor-bar.svelte.js';
+	import { vaultState } from '#lib/state/vault.svelte.js';
 	import AnsiblePage from '#lib/components/ansible/AnsiblePage.svelte';
 	import TofuPage from '#lib/components/tofu/TofuPage.svelte';
 	import DbPage from '#lib/components/db/DbPage.svelte';
@@ -39,6 +41,7 @@
 	function handleTerminalTitleChange(tabId: string, terminalTitle: string): void {
 		const tab = getTabs().find((t) => t.id === tabId);
 		if (!tab || tab.type !== 'ssh') return;
+		if (takeTmuxTitle(tab, terminalTitle)) return;
 
 		// Terminal titles from bash are typically: "user@hostname: dir"
 		// Extract the username from before the first @
@@ -70,8 +73,6 @@
 	// Two tabs side by side (#106); the rules are in #lib/terminal/split.
 	let areaEl = $state<HTMLDivElement>();
 	let innerWidth = $state(1200);
-	/** Below this width only the focused pane is shown; the split comes back with the room. */
-	const SPLIT_MIN_WIDTH = 900;
 	let split = $derived(getSplit());
 	let shownSplit = $derived(
 		split && innerWidth >= SPLIT_MIN_WIDTH && tabs.some((x) => x.id === split.first) && tabs.some((x) => x.id === split.second) ? split : null
@@ -379,9 +380,13 @@
 							}}
 						>
 							{#if tab.type === 'rdp' && tab.rdpConnectParams}
-								<RdpPanel id={tab.id} params={tab.rdpConnectParams} active={focused} />
+								{#key tab.reconnect}
+									<RdpPanel id={tab.id} params={tab.rdpConnectParams} active={focused} />
+								{/key}
 							{:else if tab.type === 'vnc' && tab.vncConnectParams}
-								<RdpPanel id={tab.id} params={tab.vncConnectParams} protocol="vnc" active={focused} />
+								{#key tab.reconnect}
+									<RdpPanel id={tab.id} params={tab.vncConnectParams} protocol="vnc" active={focused} />
+								{/key}
 							{:else if tab.type !== 'rdp' && tab.type !== 'vnc'}
 								{#if appSettings.terminalBar !== 'hidden'}
 									<div class="bar-slot" class:hover-only={appSettings.terminalBar === 'hover' && findOpenIn !== tab.id}>
@@ -398,6 +403,7 @@
 									onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
 									sshConnectParams={tab.sshConnectParams}
 									tmuxSwitch={tab.tmuxSwitch}
+									reconnectRequest={tab.reconnect}
 									telnetConnectParams={tab.telnetConnectParams}
 									serialConnectParams={tab.serialConnectParams}
 									onReconnected={(newId) => (tab.type === 'telnet' ? setTelnetConnection(tab.id, newId) : tab.type === 'serial' ? setSerialConnection(tab.id, newId) : updateTabConnection(tab.id, newId))}
@@ -478,10 +484,10 @@
 			</div>
 		{/if}
 
-		{#if activePage === 'ansible' && isDevopsEnabled('ansible')}
-			<AnsiblePage />
-		{:else if activePage === 'tofu' && isDevopsEnabled('tofu')}
-			<TofuPage />
+		{#if activePage === 'ansible' && isDevopsEnabled('ansible') && !vaultState.locked}
+			{#key vaultState.userUuid}<AnsiblePage />{/key}
+		{:else if activePage === 'tofu' && isDevopsEnabled('tofu') && !vaultState.locked}
+			{#key vaultState.userUuid}<TofuPage />{/key}
 		{/if}
 	</div>
 {/if}

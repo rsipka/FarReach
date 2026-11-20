@@ -508,5 +508,5 @@ pub struct SchemaAttribute {
 /// In-memory cache for provider schemas per project.
 #[derive(Debug, Default)]
 pub struct SchemaCache {
-    pub cache: HashMap<String, Vec<ProviderSchema>>,
+    pub cache: HashMap<(String, String), Vec<ProviderSchema>>,
 }

@@ -44,7 +44,7 @@ const REPLACING_RIGHTS: u32 = 0x0002 // FILE_WRITE_DATA / FILE_ADD_FILE
 /// Owned by the user or the system, and nobody else can replace it.
 /// `name` is the manager's, at the start of every message.
 pub fn check_not_replaceable(name: &str, path: &Path, what: &str) -> Result<(), String> {
-    let me = current_user_sid().map_err(|e| format!("{name}: cannot read who runs Reach: {e}"))?;
+    let me = current_user_sid().map_err(|e| format!("{name}: cannot read who runs Reacher CM: {e}"))?;
     let (owner, writers) = read_access(path)
         .map_err(|e| format!("{name}: the permissions of {what} at {} cannot be read: {e}", path.display()))?;
     let trusted = |sid: &str| sid == me || [LOCAL_SYSTEM, ADMINISTRATORS, TRUSTED_INSTALLER].contains(&sid);

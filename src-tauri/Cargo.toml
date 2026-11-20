@@ -1,6 +1,6 @@
 [package]
 name = "reacher-cm"
-version = "0.9.2-dev.4"
+version = "26.11.1-dev.4"
 description = "Cross-platform SSH & Remote Management Tool"
 authors = ["Reach Contributors", "Reacher CM contributors"]
 repository = "https://github.com/rsipka/ReacherCM"
@@ -15,6 +15,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+tempfile = "3"
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-dialog = "2"
 # Opening links in the browser. The shell plugin's open is denied on Android
@@ -187,6 +188,10 @@ subtle = "2"
 # agree. Move back to versions when the next release carries this.
 ironrdp-client = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59", default-features = false, features = ["rustls", "clipboard", "rdpdr"] }
 ironrdp-cliprdr = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
+# Pictures on the RDP clipboard: DIB to and from PNG (IronRDP's converters),
+# and PNG to and from the RGBA the local clipboard speaks.
+ironrdp-cliprdr-format = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
+image = { version = "0.25", default-features = false, features = ["png"] }
 ironrdp-rdpdr = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
 ironrdp-svc = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
 ironrdp-tls = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59", default-features = false, features = ["rustls"] }
@@ -194,6 +199,8 @@ ironrdp-tls = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5
 ironrdp-egfx = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59", features = ["openh264-bundled"] }
 ironrdp-pdu = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
 ironrdp-graphics = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
+# Named for how a session ended (logged off or an error), to close its tab on a clean end.
+ironrdp-session = { git = "https://github.com/Devolutions/IronRDP", rev = "bfd16a2e5573d4cd6617dd71b2802b4e7b944a59" }
 smallvec = "1"
 # Docker and Podman: the Engine API client. Remote engines go over an SSH
 # channel of Reach's own (src/container/transport.rs); `pipe` is the local
@@ -220,8 +227,9 @@ serde-saphyr = { version = "0.0.29", features = ["serialize"] }
 # Session history: its file is encrypted page by page (SQLite3 Multiple
 # Ciphers), built with CMake; desktop only until the mobile builds are tried.
 libsql = { version = "0.9", default-features = false, features = ["core", "encryption"] }
-# The local clipboard for RDP: text and file lists. Android has no file clipboard and uses the plugin.
-arboard = { version = "3.6", default-features = false }
+# The local clipboard for RDP: text, pictures and file lists. The phones have
+# no file clipboard and use the plugin.
+arboard = { version = "3.6", default-features = false, features = ["image-data"] }
 # Sound for RDP. The same crate again with one more feature: Cargo unions the
 # features, so playback (cpal + a bundled Opus) is built for the desktops only.
 # Android would need the NDK C++ toolchain for cpal and has no listener yet.
@@ -308,6 +316,7 @@ windows-core = "0.62"
 webview2-com = "0.39"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+xattr = "1"
 # The kernel keyring is emptied by every reboot (issue #87): the vault key goes
 # to the desktop's keychain (GNOME Keyring, KWallet) through the Secret
 # Service, with the kernel keyring as the fallback where there is none.
@@ -394,6 +403,11 @@ kube = { version = "5.1", default-features = false, features = ["webpki-roots"] 
 # finds them.
 [target.'cfg(target_os = "ios")'.dependencies]
 apple-native-keyring-store = { version = "1", features = ["protected"] }
+# Face ID / Touch ID: keychain items readable only after the biometric check
+# (vault/apple_biometric.rs). Both are already in the tree through the
+# keyring store and the macOS build.
+security-framework = "3"
+objc2-local-authentication = { version = "0.3", features = ["LAContext", "LABiometryType"] }
 webpki-root-certs = "1"
 # zlib compiled in. Rust builds a static library on iOS that Xcode links, and
 # the system libz the crate otherwise asks for is not passed on to Xcode, so

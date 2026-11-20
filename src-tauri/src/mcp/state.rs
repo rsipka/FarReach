@@ -357,7 +357,7 @@ impl McpState {
                         protocol::INVALID_PARAMS,
                         format!(
                             "`{name}` is not the active agent. The user selects the agent in \
-                             Reach; the active one is `{}`.",
+                             Reacher CM; the active one is `{}`.",
                             agent.id
                         ),
                     ));
@@ -495,7 +495,7 @@ impl McpState {
                         // and approving on the user's behalf is exactly the
                         // thing this whole design exists to prevent.
                         return Ok(protocol::tool_refusal(
-                            "Reach cannot ask the user to approve this right now, so it was \
+                            "Reacher CM cannot ask the user to approve this right now, so it was \
                              not run. This is a safety default, not a bug — nothing executes \
                              without a human approving it."
                                 .into(),
@@ -520,7 +520,7 @@ impl McpState {
                 let sender = self.sender.lock().await.clone();
                 let Some(sender) = sender else {
                     return Ok(protocol::tool_refusal(
-                        "Reach approved the command but has no way to type it into the \
+                        "Reacher CM approved the command but has no way to type it into the \
                          session right now. Nothing ran."
                             .into(),
                     ));

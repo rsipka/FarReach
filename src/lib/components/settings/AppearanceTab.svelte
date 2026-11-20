@@ -3,7 +3,8 @@
 	import Dropdown from '#lib/components/shared/Dropdown.svelte';
 	import { CURSOR_STYLES, CURSOR_WIDTHS, INACTIVE_CURSOR_STYLES, cursorStyle, cursorWidth, inactiveCursorStyle } from '#lib/terminal/cursor.js';
 	import TerminalThemeSettings from './TerminalThemeSettings.svelte';
-	import { themeState, applyTheme, loadInstalledThemes, DARK, LIGHT } from '#lib/state/theme.svelte.js';
+	import { HIGHLIGHT_KINDS, highlightKinds, parseCustomRules, type HighlightKind } from '#lib/terminal/highlight.js';
+	import { themeState, applyTheme, loadInstalledThemes, DARK, LIGHT, BUILT_IN_IDS, BUNDLED_IDS } from '#lib/state/theme.svelte.js';
 	import { onMount } from 'svelte';
 	import { themeFetchRegistry, themeInstall, themeUninstall, type ThemeEntry } from '#lib/ipc/theme.js';
 	import { validateTheme } from '#lib/state/theme.svelte.js';
@@ -21,6 +22,11 @@
 	import { fontsListInstalled, type InstalledFont } from '#lib/ipc/fonts.js';
 	import { cssFontFamily } from '#lib/utils/font.js';
 
+	/** Which slice of these rows to show: Settings arranges them by topic,
+	 *  so one tab file feeds several pages (see settings-pages.ts). */
+	type Part = 'appearance' | 'text' | 'term-adv' | 'logging' | 'history' | 'rdp' | 'rdp-adv';
+	let { part }: { part: Part } = $props();
+
 	const settings = getSettings();
 	let cursorStyleOptions = $derived(CURSOR_STYLES.map((s) => ({ label: t(`cursor.style_${s}`), value: s })));
 	let cursorInactiveOptions = $derived(
@@ -30,6 +36,17 @@
 		}))
 	);
 	let cursorWidthOptions = $derived(CURSOR_WIDTHS.map((w) => ({ label: t('cursor.width_px', { count: w }), value: String(w) })));
+	let shownKinds = $derived(highlightKinds(settings.terminalHighlightKinds));
+	/** Lines of the custom patterns field that are not valid, shown under it;
+	 *  the valid ones work meanwhile. */
+	let customErrors = $derived(parseCustomRules(settings.terminalHighlightCustom).errors);
+
+	function toggleKind(kind: HighlightKind, on: boolean): void {
+		const next = new Set(shownKinds);
+		if (on) next.add(kind);
+		else next.delete(kind);
+		updateSetting('terminalHighlightKinds', HIGHLIGHT_KINDS.filter((k) => next.has(k)));
+	}
 	let currentFont = $derived(settings.fontFamily || 'monospace');
 	let currentSize = $derived(settings.fontSize || 14);
 	let uiZoom = $derived(settings.uiZoom || 1);
@@ -75,7 +92,8 @@
 		loadingRegistry = true;
 		registryError = null;
 		try {
-			registry = await themeFetchRegistry();
+			// A theme the app already ships is not offered again.
+			registry = (await themeFetchRegistry()).filter((e) => !BUILT_IN_IDS.has(e.id));
 		} catch (err) {
 			registryError = String(err);
 		} finally {
@@ -146,11 +164,14 @@
 	}
 
 	onMount(() => {
-		sessionLogDefaultDir().then((d) => (logDefaultDir = d)).catch(() => {});
-		historyStats().then((s) => (historyInfo = s)).catch(() => {});
-		// Re-read from disk in case a theme was installed or edited since startup.
-		loadInstalledThemes();
-		loadRegistry();
+		// Each page loads only what its rows show.
+		if (part === 'logging') sessionLogDefaultDir().then((d) => (logDefaultDir = d)).catch(() => {});
+		if (part === 'history') historyStats().then((s) => (historyInfo = s)).catch(() => {});
+		if (part === 'appearance') {
+			// Re-read from disk in case a theme was installed or edited since startup.
+			loadInstalledThemes();
+			loadRegistry();
+		}
 	});
 
 	/** "System" follows the OS; every other entry is a real theme. */
@@ -160,6 +181,15 @@
 		{ id: SYSTEM, name: t('settings.theme_system'), swatch: null },
 		...themeState.all.map((th) => ({ id: th.id, name: th.name, swatch: th }))
 	]);
+
+	/** The bundled themes stay folded until asked for; the one in use always shows. */
+	let showAllThemes = $state(false);
+	let shownChoices = $derived(
+		showAllThemes ? choices : choices.filter((c) => !BUNDLED_IDS.has(c.id) || c.id === selectedId)
+	);
+	let foldedCount = $derived(
+		choices.filter((c) => BUNDLED_IDS.has(c.id) && c.id !== selectedId).length
+	);
 
 	// Settings from before themes had ids say only dark or light: that is
 	// Reach's own, and its card is the one marked.
@@ -283,10 +313,12 @@
 </script>
 
 <div class="tab-content">
+
+	{#if part === 'appearance'}
 	<div class="setting-section">
 		<span class="section-label">{t('settings.theme')}</span>
 		<div class="theme-cards">
-			{#each choices as choice (choice.id)}
+			{#each shownChoices as choice (choice.id)}
 				<button
 					class="theme-card"
 					class:active={selectedId === choice.id}
@@ -315,6 +347,16 @@
 				</button>
 			{/each}
 		</div>
+		{#if foldedCount > 0}
+			<button
+				type="button"
+				class="link-btn more-themes"
+				aria-expanded={showAllThemes}
+				onclick={() => (showAllThemes = !showAllThemes)}
+			>
+				{showAllThemes ? t('themes.fewer_builtin') : t('themes.more_builtin', { count: foldedCount })}
+			</button>
+		{/if}
 	</div>
 
 	<div class="setting-section">
@@ -383,20 +425,6 @@
 		{/if}
 	</div>
 
-	<TerminalThemeSettings />
-
-	<div class="setting-row">
-		<div class="setting-info">
-			<span class="setting-label">{t('settings.font_size')}</span>
-			<span class="setting-description">{t('settings.font_size_hint')}</span>
-		</div>
-		<div class="setting-control size-stepper">
-			<button class="size-btn" aria-label={t('keys.smaller')} disabled={currentSize <= 8} onclick={() => stepFontSize(-1)}>A−</button>
-			<span class="font-size-badge">{currentSize}px</span>
-			<button class="size-btn" aria-label={t('keys.larger')} disabled={currentSize >= 32} onclick={() => stepFontSize(1)}>A+</button>
-		</div>
-	</div>
-
 	<!-- The whole interface, not only the terminal: a laptop screen or a 4K
 	     one at the wrong scale. A phone follows its own text size instead. -->
 	{#if !isMobile()}
@@ -441,7 +469,9 @@
 			</select>
 		</div>
 	</div>
+	{/if}
 
+	{#if part === 'text'}
 	<div class="setting-row font-row">
 		<div class="setting-info">
 			<span class="setting-label">{t('settings.terminal_font')}</span>
@@ -532,10 +562,24 @@
 		</div>
 	</div>
 
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.font_size')}</span>
+			<span class="setting-description">{t('settings.font_size_hint')}</span>
+		</div>
+		<div class="setting-control size-stepper">
+			<button class="size-btn" aria-label={t('keys.smaller')} disabled={currentSize <= 8} onclick={() => stepFontSize(-1)}>A−</button>
+			<span class="font-size-badge">{currentSize}px</span>
+			<button class="size-btn" aria-label={t('keys.larger')} disabled={currentSize >= 32} onclick={() => stepFontSize(1)}>A+</button>
+		</div>
+	</div>
+
 	<div class="font-preview-box">
 		<span class="preview-label">{t('settings.preview')} — {currentFont} @ {currentSize}px</span>
 		<pre class="preview-pre" style:font-family={cssFontFamily(currentFont)} style:font-size="{currentSize}px">{PREVIEW_TEXT}</pre>
 	</div>
+
+	<TerminalThemeSettings />
 
 	<div class="setting-row">
 		<div class="setting-info">
@@ -598,6 +642,64 @@
 
 	<div class="setting-row">
 		<div class="setting-info">
+			<span class="setting-label">{t('highlight.setting')}</span>
+			<span class="setting-description">{t('highlight.setting_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.terminalHighlight}
+				label={t('highlight.setting')}
+				onchange={(v) => updateSetting('terminalHighlight', v)}
+			/>
+		</div>
+	</div>
+
+	{#if settings.terminalHighlight}
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('highlight.kinds')}</span>
+				<span class="setting-description">{t('highlight.kinds_desc')}</span>
+			</div>
+			<div class="highlight-kinds" role="group" aria-label={t('highlight.kinds')}>
+				{#each HIGHLIGHT_KINDS as kind (kind)}
+					<label class="highlight-kind {kind}">
+						<input type="checkbox" checked={shownKinds.includes(kind)} onchange={(e) => toggleKind(kind, e.currentTarget.checked)} />
+						{t(`highlight.kind_${kind}`)}
+					</label>
+				{/each}
+			</div>
+		</div>
+
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('highlight.custom')}</span>
+				<span class="setting-description">{t('highlight.custom_desc')}</span>
+			</div>
+			<div class="highlight-custom">
+				<textarea
+					class="highlight-custom-input"
+					rows="4"
+					spellcheck="false"
+					autocomplete="off"
+					autocapitalize="off"
+					aria-label={t('highlight.custom')}
+					aria-invalid={customErrors.length > 0}
+					placeholder={'/vlan\\s*\\d+/i\n#ff8800 \\bCRC errors?\\b'}
+					value={settings.terminalHighlightCustom}
+					oninput={(e) => updateSetting('terminalHighlightCustom', e.currentTarget.value)}
+				></textarea>
+				{#each customErrors as err (err.line)}
+					<span class="highlight-custom-error">{t('highlight.custom_error', { line: err.line, message: err.message })}</span>
+				{/each}
+			</div>
+		</div>
+	{/if}
+	{/if}
+
+	{#if part === 'term-adv'}
+	<div class="setting-row">
+		<div class="setting-info">
 			<span class="setting-label">{t('settings.shell_colors')}</span>
 			<span class="setting-description">{t('settings.shell_colors_desc')}</span>
 		</div>
@@ -625,9 +727,9 @@
 			/>
 		</div>
 	</div>
+	{/if}
 
-	<h3 class="section-title">{t('settings.log_section')}</h3>
-
+	{#if part === 'logging'}
 	<div class="setting-row">
 		<div class="setting-info">
 			<span class="setting-label">{t('settings.log_mode')}</span>
@@ -725,9 +827,9 @@
 			</div>
 		</div>
 	{/if}
+	{/if}
 
-	<h3 class="section-title">{t('history.settings_section')}</h3>
-
+	{#if part === 'history'}
 	<div class="setting-row">
 		<div class="setting-info">
 			<span class="setting-label">{t('history.settings_mode')}</span>
@@ -806,9 +908,9 @@
 			</button>
 		</div>
 	</div>
+	{/if}
 
-	<h3 class="section-title">{t('settings.rdp_section')}</h3>
-
+	{#if part === 'rdp'}
 	<div class="setting-row">
 		<div class="setting-info">
 			<span class="setting-label">{t('settings.rdp_hw_render')}</span>
@@ -821,16 +923,6 @@
 
 	<div class="setting-row">
 		<div class="setting-info">
-			<span class="setting-label">{t('settings.rdp_gfx')}</span>
-			<span class="setting-description">{t('settings.rdp_gfx_desc')}</span>
-		</div>
-		<div class="setting-control">
-			<Toggle hideLabel checked={settings.rdpGraphicsPipeline} label={t('settings.rdp_gfx')} onchange={(v) => updateSetting('rdpGraphicsPipeline', v)} />
-		</div>
-	</div>
-
-	<div class="setting-row">
-		<div class="setting-info">
 			<span class="setting-label">{t('settings.rdp_fs_button')}</span>
 			<span class="setting-description">{t('settings.rdp_fs_button_desc')}</span>
 		</div>
@@ -838,6 +930,20 @@
 			<Toggle hideLabel checked={settings.rdpFullscreenButton} label={t('settings.rdp_fs_button')} onchange={(v) => updateSetting('rdpFullscreenButton', v)} />
 		</div>
 	</div>
+	{/if}
+
+	{#if part === 'rdp-adv'}
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.rdp_gfx')}</span>
+			<span class="setting-description">{t('settings.rdp_gfx_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle hideLabel checked={settings.rdpGraphicsPipeline} label={t('settings.rdp_gfx')} onchange={(v) => updateSetting('rdpGraphicsPipeline', v)} />
+		</div>
+	</div>
+	{/if}
+
 </div>
 
 <style>
@@ -1082,9 +1188,13 @@
 		cursor: default;
 	}
 
+	.more-themes { display: inline-block; margin-top: 10px; font-size: var(--text-sm); }
+
 	.theme-cards {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		/* 20-odd themes ship now: as many across as fit, rather than a tall
+		   column of threes. */
+		grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
 		gap: 10px;
 	}
 
@@ -1267,4 +1377,62 @@
 		font-family: var(--font-sans);
 	}
 
+
+	/* The kinds take the row's full width under its label, not the narrow
+	   control column. */
+	.highlight-kinds {
+		grid-column: 1 / -1;
+		/* Over the settings rows' own end alignment for a bare control. */
+		justify-self: stretch !important;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+		gap: 8px 16px;
+		margin-top: 10px;
+	}
+
+	.highlight-custom {
+		grid-column: 1 / -1;
+		justify-self: stretch !important;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		margin-top: 10px;
+	}
+
+	.highlight-custom-input {
+		width: 100%;
+		box-sizing: border-box;
+		resize: vertical;
+		min-height: 84px;
+		padding: 8px 10px;
+		font-family: var(--font-mono, monospace);
+		font-size: 0.8125rem;
+		color: var(--color-text-primary);
+		background: var(--color-bg-tertiary, var(--color-bg-secondary));
+		border: 1px solid var(--color-border);
+		border-radius: 6px;
+	}
+
+	.highlight-custom-input:focus {
+		outline: none;
+		border-color: var(--color-accent);
+	}
+
+	.highlight-custom-input[aria-invalid='true'] {
+		border-color: var(--color-danger);
+	}
+
+	.highlight-custom-error {
+		font-size: 0.75rem;
+		color: var(--color-danger);
+	}
+
+	.highlight-kind {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: var(--text-sm, 0.8125rem);
+		color: var(--color-text-primary);
+		cursor: pointer;
+	}
 </style>

@@ -41,19 +41,20 @@ jobs:
             echo "::error::The tag must be v plus the app version (src-tauri/tauri.conf.json): vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-dev.N."
             exit 1
           fi
-          # Dev builds need their own Windows and Android version numbers too,
-          # or Windows and Android refuse to install them over the last one.
-          if [[ "$version" == *-dev.* ]]; then
-            IFS=. read -r major minor patch <<< "${version%-dev.*}"
-            n="${version##*.}"
-            want_wix="${version%-dev.*}.$n"
-            want_code=$(( major * 10000000 + minor * 100000 + patch * 1000 + n ))
-            wix=$(jq -r .bundle.windows.wix.version src-tauri/tauri.conf.json)
-            code=$(jq -r .bundle.android.versionCode src-tauri/tauri.conf.json)
-            if [[ "$wix" != "$want_wix" || "$code" != "$want_code" ]]; then
-              echo "::error::For $version set bundle.windows.wix.version to $want_wix (is $wix) and bundle.android.versionCode to $want_code (is $code) in src-tauri/tauri.conf.json."
-              exit 1
-            fi
+          # Every build needs its own Windows and Android version number,
+          # or Windows and Android refuse to install it over the last one.
+          # A stable release takes build number 999, so it installs over the
+          # same version's dev builds (scripts/release.mjs sets these).
+          IFS=. read -r major minor patch <<< "${version%-dev.*}"
+          n=999
+          [[ "$version" != *-dev.* ]] || n="${version##*.}"
+          want_wix="${version%-dev.*}.$n"
+          want_code=$(( major * 10000000 + minor * 100000 + patch * 1000 + n ))
+          wix=$(jq -r .bundle.windows.wix.version src-tauri/tauri.conf.json)
+          code=$(jq -r .bundle.android.versionCode src-tauri/tauri.conf.json)
+          if [[ "$wix" != "$want_wix" || "$code" != "$want_code" ]]; then
+            echo "::error::For $version set bundle.windows.wix.version to $want_wix (is $wix) and bundle.android.versionCode to $want_code (is $code) in src-tauri/tauri.conf.json, or run npm run release."
+            exit 1
           fi
           name="Reacher CM $GITHUB_REF_NAME"
           [[ "$version" != *-dev.* ]] || name="Reacher CM Dev $GITHUB_REF_NAME"
@@ -79,14 +80,19 @@ jobs:
         include:
           - platform: windows-latest
             args: ''
-          - platform: macos-latest
+          - platform: macos
             args: '--target aarch64-apple-darwin'
-          - platform: macos-latest
+          - platform: macos
             args: '--target x86_64-apple-darwin'
           - platform: ubuntu-22.04
             args: '--bundles deb,appimage'
 
-    runs-on: ${{ matrix.platform }}
+    # "macos" is not a runner name: see MACOS_RUNNER_LABEL in .github/ci-runners.md.
+    runs-on: ${{ matrix.platform == 'macos' && (github.event_name != 'pull_request' && vars.MACOS_RUNNER_LABEL || 'macos-15') || matrix.platform }}
+    # GitHub's runners set CI=true; the self-hosted Mac may not. With it,
+    # and TAURI_BUNDLER_DMG_IGNORE_CI=false below, Tauri skips the Finder step.
+    env:
+      CI: 'true'
     steps:
       - uses: actions/checkout@v7
 
@@ -103,9 +109,59 @@ jobs:
         # forward on purpose, here and in release.yml together.
         uses: dtolnay/rust-toolchain@1.99.1
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      # Keep the Mac's own tools out of the build. MacPorts (/opt/local) has
+      # its own Rust, without the cross targets installed above, and its own
+      # pkg-config, through which the app was linked to MacPorts' libz: the
+      # released app then would not start on any other Mac (0.9.2-dev.7).
+      - name: Build with rustup's Rust and macOS's own libraries
+        if: runner.environment == 'self-hosted'
+        run: |
+          echo "PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '^/opt/local' | paste -sd: -)" >> "$GITHUB_ENV"
+          echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
+          for v in PKG_CONFIG_PATH LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH \
+                   DYLD_LIBRARY_PATH DYLD_FALLBACK_LIBRARY_PATH; do
+            echo "$v=" >> "$GITHUB_ENV"
+          done
+          # Two build tools that GitHub's Macs have preinstalled: cmake
+          # (libopus_sys builds Opus from source) and pod (tauri ios build
+          # runs pod install). Where they only come from MacPorts, link just
+          # those two programs into PATH, not MacPorts' libraries or
+          # pkg-config. Homebrew is the fallback (slow on Intel Macs, which it
+          # builds from source). The release's otool check still fails on any
+          # library from outside macOS.
+          tools="$RUNNER_TEMP/build-tools"
+          mkdir -p "$tools"
+          clean_path=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '^/opt/local' | paste -sd: -)
+          for tool in cmake:cmake pod:cocoapods; do
+            bin=${tool%%:*} formula=${tool#*:}
+            PATH="$clean_path" command -v "$bin" >/dev/null && continue
+            if [ -x "/opt/local/bin/$bin" ]; then
+              ln -sf "/opt/local/bin/$bin" "$tools/$bin"
+            else
+              HOMEBREW_NO_AUTO_UPDATE=1 brew install "$formula"
+            fi
+          done
+          echo "$tools" >> "$GITHUB_PATH"
+
+      # On a self-hosted Mac the build stays on its own disk instead of going
+      # through GitHub's cache: saving and restoring that cache moved about
+      # 1.5 GB over the Mac's connection on every run. checkout wipes
+      # src-tauri/target, so it is a link to a folder kept between jobs.
+      - name: Keep Rust builds on the self-hosted Mac
+        if: runner.environment == 'self-hosted'
+        run: |
+          # -2: build scripts in the first folder remembered MacPorts' libz.
+          keep="$RUNNER_TOOL_CACHE/reachercm-target-2"
+          mkdir -p "$keep"
+          rm -rf src-tauri/target
+          ln -s "$keep" src-tauri/target
+          # Bundles of an earlier version must not end up in this release.
+          rm -rf "$keep"/release/bundle "$keep"/*/release/bundle
 
       - name: Rust cache
+        if: runner.environment != 'self-hosted'
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
@@ -143,7 +199,7 @@ jobs:
       # because an empty APPLE_SIGNING_IDENTITY would be taken as an identity
       # and make codesign fail with "no identity found".
       - name: Enable macOS signing when credentials are present
-        if: matrix.platform == 'macos-latest'
+        if: matrix.platform == 'macos'
         env:
           IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -168,8 +224,9 @@ jobs:
           echo "macOS signing enabled."
 
       # The release description, and the notes the in-app updater shows (they
-      # reach latest.json from releaseBody). The dialog prints them as plain
-      # text, so the file is kept short and free of markup.
+      # reach latest.json from releaseBody). The app shows them in its What's
+      # new dialog: "- " lines as a list, "#" lines as headings and http(s)
+      # links clickable, everything else as plain text, so keep it short.
       - name: Read the release notes
         id: notes
         shell: bash
@@ -207,13 +264,19 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The DMG window layout is set by driving Finder over AppleScript.
+          # tauri-action turns that on even on CI; on the self-hosted Mac,
+          # where the runner is a background service, Finder never answers
+          # and the build fails after two minutes (AppleEvent timed out).
+          # There the DMG gets Finder's default layout instead.
+          TAURI_BUNDLER_DMG_IGNORE_CI: ${{ runner.environment == 'self-hosted' && 'false' || 'true' }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           NO_STRIP: true
           APPIMAGE_EXTRACT_AND_RUN: 1
           # AppImage update information (AppImageSpec, gh-releases-zsync):
           # linuxdeploy's AppImage plugin embeds it and writes the .zsync file,
-          # so AppImageUpdate, AppImageLauncher and Gear Lever can update Reach
+          # so AppImageUpdate, AppImageLauncher and Gear Lever can update Reacher CM
           # as well as its own updater. Read only by the Linux build.
           LDAI_UPDATE_INFORMATION: gh-releases-zsync|${{ github.repository_owner }}|ReacherCM|latest|ReacherCM_*_amd64.AppImage.zsync
         with:
@@ -254,7 +317,7 @@ jobs:
       # issue #47, and it is invisible until someone runs codesign on an
       # installed copy. Fail the build here instead.
       - name: Verify the macOS bundle signature
-        if: matrix.platform == 'macos-latest'
+        if: matrix.platform == 'macos'
         run: |
           set -euo pipefail
           found=0
@@ -276,6 +339,33 @@ jobs:
           fi
           echo "Bundle signature verified."
 
+      # An app linked to a library outside macOS and its own bundle starts
+      # only on the Mac that built it (dyld "Library not loaded" on every
+      # other one). Fail the release before it is published instead.
+      - name: Check the app uses only macOS's libraries and its own
+        if: matrix.platform == 'macos'
+        run: |
+          set -euo pipefail
+          bad=0 found=0
+          for app in src-tauri/target/*/release/bundle/macos/*.app; do
+            [ -d "$app" ] || continue
+            while IFS= read -r -d '' bin; do
+              file "$bin" | grep -q 'Mach-O' || continue
+              found=1
+              echo "::group::$bin"
+              otool -L "$bin"
+              echo "::endgroup::"
+              outside=$(otool -L "$bin" | tail -n +2 | awk '{print $1}' \
+                | grep -vE '^(/System/Library/|/usr/lib/|@rpath/|@executable_path/|@loader_path/)' || true)
+              if [ -n "$outside" ]; then
+                echo "::error::$bin links libraries outside macOS and the app: $(echo $outside)"
+                bad=1
+              fi
+            done < <(find "$app/Contents" -type f \( -perm -u+x -o -name '*.dylib' \) -print0)
+          done
+          [ "$found" -eq 1 ] || { echo "::error::No app binary found to check."; exit 1; }
+          [ "$bad" -eq 0 ]
+
       # The pinned Tauri CLI passes the app version through to RPM as-is.
       # RPM reserves hyphens, so put the dev suffix in its Release field.
       - name: Bundle and upload the RPM
@@ -293,7 +383,7 @@ jobs:
 
   publish-release:
     needs: [create-release, build-desktop, build-android, build-ios]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # First: checking out later would clean away the files below.
       - uses: actions/checkout@v7
@@ -413,7 +503,7 @@ jobs:
 
   build-android:
     needs: create-release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -456,11 +546,13 @@ jobs:
       - name: Initialize Android project
         run: |
           npx tauri android init
-          # init generates the project with Tauri's placeholder icon; Reach's
+          # init generates the project with Tauri's placeholder icon; Reacher CM's
           # launcher icons (adaptive included) replace it.
           cp -r src-tauri/icons/android/. src-tauri/gen/android/app/src/main/res/
           # Its activity also makes room for the phone keyboard (#127).
           cp src-tauri/android/MainActivity.kt src-tauri/gen/android/app/src/main/java/com/reachercm/client/MainActivity.kt
+          # R8 keep rules for the QR code scanner's ML Kit.
+          cat src-tauri/android/proguard-rules.pro >> src-tauri/gen/android/app/proguard-rules.pro
 
       # One permanent key, kept as a repository secret. Android installs an
       # update only over an app signed with the same key, so a key made fresh
@@ -531,7 +623,7 @@ jobs:
 
   build-ios:
     needs: create-release
-    runs-on: macos-latest
+    runs-on: ${{ github.event_name != 'pull_request' && vars.MACOS_RUNNER_LABEL || 'macos-15' }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
@@ -541,6 +633,50 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
+      # Keep the Mac's own tools out of the build. MacPorts (/opt/local) has
+      # its own Rust, without the cross targets installed above, and its own
+      # pkg-config, through which the app was linked to MacPorts' libz: the
+      # released app then would not start on any other Mac (0.9.2-dev.7).
+      - name: Build with rustup's Rust and macOS's own libraries
+        if: runner.environment == 'self-hosted'
+        run: |
+          echo "PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '^/opt/local' | paste -sd: -)" >> "$GITHUB_ENV"
+          echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
+          for v in PKG_CONFIG_PATH LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH \
+                   DYLD_LIBRARY_PATH DYLD_FALLBACK_LIBRARY_PATH; do
+            echo "$v=" >> "$GITHUB_ENV"
+          done
+          # Two build tools that GitHub's Macs have preinstalled: cmake
+          # (libopus_sys builds Opus from source) and pod (tauri ios build
+          # runs pod install). Where they only come from MacPorts, link just
+          # those two programs into PATH, not MacPorts' libraries or
+          # pkg-config. Homebrew is the fallback (slow on Intel Macs, which it
+          # builds from source). The release's otool check still fails on any
+          # library from outside macOS.
+          tools="$RUNNER_TEMP/build-tools"
+          mkdir -p "$tools"
+          clean_path=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '^/opt/local' | paste -sd: -)
+          for tool in cmake:cmake pod:cocoapods; do
+            bin=${tool%%:*} formula=${tool#*:}
+            PATH="$clean_path" command -v "$bin" >/dev/null && continue
+            if [ -x "/opt/local/bin/$bin" ]; then
+              ln -sf "/opt/local/bin/$bin" "$tools/$bin"
+            else
+              HOMEBREW_NO_AUTO_UPDATE=1 brew install "$formula"
+            fi
+          done
+          echo "$tools" >> "$GITHUB_PATH"
+
+      # As in build-desktop: the Rust build stays on the self-hosted Mac.
+      - name: Keep Rust builds on the self-hosted Mac
+        if: runner.environment == 'self-hosted'
+        run: |
+          # -2: build scripts in the first folder remembered MacPorts' libz.
+          keep="$RUNNER_TOOL_CACHE/reachercm-target-2"
+          mkdir -p "$keep"
+          rm -rf src-tauri/target
+          ln -s "$keep" src-tauri/target
+
       - run: |
           npm ci
           brew list xcodegen >/dev/null 2>&1 || brew install xcodegen

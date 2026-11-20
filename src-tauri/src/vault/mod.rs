@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod compat_tests;
 pub mod biometric;
+pub mod apple_biometric;
 pub mod crypto;
 #[cfg(any(target_os = "linux", test))]
 pub mod deadline;

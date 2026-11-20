@@ -16,7 +16,8 @@
 //! runs.
 
 use super::*;
-use crate::state::SessionKind;
+use crate::state::{CustomField, JumpHostConfig, ProxyConfig, SessionKind};
+use crate::telnet::protocol::{TelnetBackspace, TelnetMode, TelnetNewline};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 
@@ -65,6 +66,48 @@ pub struct SessionPatch {
     pub cursor_style: Option<Change<String>>,
     /// The cursor blinks or not; `Clear`: the default from Settings.
     pub cursor_blink: Option<Change<bool>>,
+    /// How SSH sessions log in: a key, the agent, or a password (the
+    /// password itself is `password`). Sessions whose login comes from a
+    /// saved credential keep it.
+    pub auth: Option<AuthMethod>,
+    /// Key sessions: also offer the SSH agent's keys.
+    pub try_agent_keys: Option<bool>,
+    /// SSH: the whole jump host chain, or none.
+    pub jump_chain: Option<Change<Vec<JumpHostConfig>>>,
+    /// SSH: the proxy, or none.
+    pub proxy: Option<Change<ProxyConfig>>,
+    /// SSH: the login shell; `Clear`: the server's default.
+    pub shell: Option<Change<String>>,
+    /// Custom fields set by name: added where missing, overwritten where
+    /// a field of that name is.
+    pub fields_set: Vec<CustomField>,
+    /// Custom fields removed by name.
+    pub fields_remove: Vec<String>,
+    /// Telnet: the parts of its options to change.
+    pub telnet: Option<TelnetPatch>,
+    /// SSH and WSL: server monitoring on or off; `Clear`: the default.
+    pub monitoring: Option<Change<bool>>,
+    /// SSH and WSL: tmux on the server.
+    pub tmux: Option<TmuxPatch>,
+    /// VNC: the saved SSH session to reach the server through, or none.
+    pub via_session: Option<Change<String>>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct TelnetPatch {
+    pub mode: Option<TelnetMode>,
+    pub newline: Option<TelnetNewline>,
+    pub backspace: Option<TelnetBackspace>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct TmuxPatch {
+    /// `off`, `attach` or `ask`; `inherit`: as the folder says. A name of
+    /// its own stays with each session.
+    pub mode: Option<String>,
+    pub mouse: Option<bool>,
 }
 
 impl SessionPatch {
@@ -78,6 +121,24 @@ impl SessionPatch {
             if !matches!(c.as_str(), "block" | "underline" | "bar") {
                 return Err(format!("Unknown cursor shape: {c}"));
             }
+        }
+        if let Some(m) = self.tmux.as_ref().and_then(|t| t.mode.as_deref()) {
+            if !matches!(m, "off" | "attach" | "ask" | "inherit") {
+                return Err(format!("Unknown tmux mode: {m}"));
+            }
+        }
+        if let Some(Change::Set(chain)) = &self.jump_chain {
+            if chain.is_empty() || chain.iter().any(|j| j.host.trim().is_empty() || j.port == 0) {
+                return Err("Every jump host needs a host and a port".into());
+            }
+        }
+        if let Some(Change::Set(p)) = &self.proxy {
+            if p.host.trim().is_empty() || p.port == 0 || !matches!(p.proxy_type.as_str(), "socks5" | "socks4" | "http") {
+                return Err("The proxy needs a type, a host and a port".into());
+            }
+        }
+        if matches!(self.auth, Some(AuthMethod::Key { ref path, ref key_id, .. }) if path.as_deref().unwrap_or("").trim().is_empty() && key_id.as_deref().unwrap_or("").is_empty()) {
+            return Err("Pick a key".into());
         }
         if self.port == Some(0) {
             return Err("Port 0 is not a port".into());
@@ -121,6 +182,19 @@ fn apply_patch(s: &mut SessionConfig, patch: &SessionPatch, uses_credential: imp
         }
     }
     let from_credential = takes_credential(s.kind) && uses_credential(s);
+
+    if let Some(a) = &patch.auth {
+        if s.kind == SessionKind::Ssh && !from_credential {
+            match a {
+                // Switching to a password keeps one already there.
+                AuthMethod::Password { .. } if matches!(s.auth_method, AuthMethod::Password { .. }) => {}
+                AuthMethod::Password { .. } => s.auth_method = AuthMethod::Password { password: None, password_ref: None },
+                other => s.auth_method = other.clone(),
+            }
+        } else {
+            skipped.push("auth");
+        }
+    }
 
     if let Some(u) = &patch.username {
         if login && !from_credential {
@@ -220,6 +294,115 @@ fn apply_patch(s: &mut SessionConfig, patch: &SessionPatch, uses_credential: imp
             skipped.push("cursor_blink");
         }
     }
+    let ssh = s.kind == SessionKind::Ssh;
+    if let Some(on) = patch.try_agent_keys {
+        if ssh && !from_credential && matches!(s.auth_method, AuthMethod::Key { .. }) {
+            s.try_agent_keys = on.then_some(true);
+        } else {
+            skipped.push("try_agent_keys");
+        }
+    }
+    if let Some(c) = &patch.jump_chain {
+        if ssh {
+            s.jump_chain = match c {
+                Change::Set(chain) => Some(chain.iter().map(|j| JumpHostConfig { credential: None, ..j.clone() }).collect()),
+                Change::Clear => None,
+            };
+        } else {
+            skipped.push("jump_chain");
+        }
+    }
+    if let Some(c) = &patch.proxy {
+        if ssh {
+            s.proxy = match c {
+                Change::Set(p) => Some(p.clone()),
+                Change::Clear => None,
+            };
+        } else {
+            skipped.push("proxy");
+        }
+    }
+    if let Some(c) = &patch.shell {
+        if ssh {
+            s.shell = match c {
+                Change::Set(sh) if !sh.trim().is_empty() => Some(sh.trim().to_string()),
+                _ => None,
+            };
+        } else {
+            skipped.push("shell");
+        }
+    }
+
+    if !patch.fields_set.is_empty() || !patch.fields_remove.is_empty() {
+        let fields = s.custom_fields.get_or_insert_with(Vec::new);
+        fields.retain(|f| !patch.fields_remove.iter().any(|r| r.trim() == f.name.trim()));
+        for new in patch.fields_set.iter().filter(|f| !f.name.trim().is_empty()) {
+            let name = new.name.trim();
+            match fields.iter_mut().find(|f| f.name.trim() == name) {
+                Some(f) => {
+                    f.value = new.value.clone();
+                    f.hidden = new.hidden;
+                }
+                None => fields.push(CustomField { name: name.to_string(), value: new.value.clone(), hidden: new.hidden }),
+            }
+        }
+    }
+
+    if let Some(t) = &patch.telnet {
+        if s.kind == SessionKind::Telnet {
+            let o = s.telnet.get_or_insert_with(Default::default);
+            if let Some(m) = t.mode {
+                o.mode = m;
+            }
+            if let Some(n) = t.newline {
+                o.newline = n;
+            }
+            if let Some(b) = t.backspace {
+                o.backspace = b;
+            }
+        } else {
+            skipped.push("telnet");
+        }
+    }
+
+    let tmux_kind = matches!(s.kind, SessionKind::Ssh | SessionKind::Wsl);
+    if let Some(m) = &patch.monitoring {
+        if tmux_kind {
+            s.monitoring = match m {
+                Change::Set(on) => Some(*on),
+                Change::Clear => None,
+            };
+        } else {
+            skipped.push("monitoring");
+        }
+    }
+    if let Some(t) = &patch.tmux {
+        if tmux_kind {
+            let mut setting = s.tmux.clone().unwrap_or(crate::ssh::tmux::TmuxSetting { mode: "inherit".into(), name: None, mouse: false });
+            if let Some(mode) = &t.mode {
+                // WSL has no picker: asking there means attach, as in the editor.
+                setting.mode = if mode == "ask" && s.kind != SessionKind::Ssh { "attach".into() } else { mode.clone() };
+            }
+            if let Some(mouse) = t.mouse {
+                setting.mouse = mouse;
+            }
+            let plain = setting.mode == "inherit" && setting.name.is_none() && !setting.mouse;
+            s.tmux = (!plain).then_some(setting);
+        } else {
+            skipped.push("tmux");
+        }
+    }
+    if let Some(v) = &patch.via_session {
+        if s.kind == SessionKind::Vnc {
+            s.via_session_id = match v {
+                Change::Set(id) if !id.is_empty() && *id != s.id => Some(id.clone()),
+                _ => None,
+            };
+        } else {
+            skipped.push("via_session");
+        }
+    }
+
     s.tidy_documentation();
     skipped
 }
@@ -531,6 +714,104 @@ mod tests {
         let mut rdp = session(serde_json::json!({ "kind": "rdp" }));
         assert_eq!(apply_patch(&mut rdp, &p, NO_CREDENTIAL), vec!["cursor_style", "cursor_blink"]);
         assert!(patch(serde_json::json!({ "cursor_style": { "set": "beam" } })).check().is_err());
+    }
+
+    #[test]
+    fn the_login_method_changes_on_ssh_only() {
+        let key = patch(serde_json::json!({ "auth": { "type": "Key", "key_id": "k1" }, "try_agent_keys": true }));
+        assert!(key.check().is_ok());
+        let mut s = session(serde_json::json!({}));
+        assert!(apply_patch(&mut s, &key, NO_CREDENTIAL).is_empty());
+        assert!(matches!(&s.auth_method, AuthMethod::Key { key_id: Some(k), .. } if k == "k1"));
+        assert_eq!(s.try_agent_keys, Some(true));
+        let mut telnet = session(serde_json::json!({ "kind": "telnet" }));
+        assert_eq!(apply_patch(&mut telnet, &key, NO_CREDENTIAL), vec!["auth", "try_agent_keys"]);
+        // From a key to a password: the password field fills the new one in.
+        let to_pw = patch(serde_json::json!({ "auth": { "type": "Password" }, "password": { "set": "pw" } }));
+        apply_patch(&mut s, &to_pw, NO_CREDENTIAL);
+        assert!(matches!(&s.auth_method, AuthMethod::Password { password: Some(p), .. } if p == "pw"));
+        // A credential's login is not switched.
+        let mut linked = session(serde_json::json!({ "credential_id": "c1" }));
+        assert_eq!(apply_patch(&mut linked, &key, |_| true), vec!["auth", "try_agent_keys"]);
+        assert!(patch(serde_json::json!({ "auth": { "type": "Key" } })).check().is_err());
+    }
+
+    #[test]
+    fn jump_hosts_proxy_and_shell_go_to_ssh_sessions() {
+        let p = patch(serde_json::json!({
+            "jump_chain": { "set": [{ "host": "bastion", "port": 22, "username": "jump", "auth_method": { "type": "Agent" }, "credential_id": "c1" }] },
+            "proxy": { "set": { "proxy_type": "socks5", "host": "127.0.0.1", "port": 9050 } },
+            "shell": { "set": " fish -l " },
+        }));
+        assert!(p.check().is_ok());
+        let mut s = session(serde_json::json!({}));
+        assert!(apply_patch(&mut s, &p, NO_CREDENTIAL).is_empty());
+        let chain = s.jump_chain.as_ref().unwrap();
+        assert_eq!((chain[0].host.as_str(), chain[0].credential_id.as_deref()), ("bastion", Some("c1")));
+        assert_eq!(s.proxy.as_ref().unwrap().port, 9050);
+        assert_eq!(s.shell.as_deref(), Some("fish -l"));
+        let mut rdp = session(serde_json::json!({ "kind": "rdp" }));
+        assert_eq!(apply_patch(&mut rdp, &p, NO_CREDENTIAL), vec!["jump_chain", "proxy", "shell"]);
+        let clear = patch(serde_json::json!({ "jump_chain": "clear", "proxy": "clear", "shell": "clear" }));
+        apply_patch(&mut s, &clear, NO_CREDENTIAL);
+        assert!(s.jump_chain.is_none() && s.proxy.is_none() && s.shell.is_none());
+        assert!(patch(serde_json::json!({ "jump_chain": { "set": [] } })).check().is_err());
+        assert!(patch(serde_json::json!({ "proxy": { "set": { "proxy_type": "ftp", "host": "x", "port": 1 } } })).check().is_err());
+    }
+
+    #[test]
+    fn custom_fields_are_set_and_removed_by_name() {
+        let mut s = session(serde_json::json!({ "custom_fields": [{ "name": "Owner", "value": "ops" }, { "name": "Rack", "value": "4" }] }));
+        let p = patch(serde_json::json!({
+            "fields_set": [{ "name": " Owner ", "value": "infra" }, { "name": "PIN", "value": "1234", "hidden": true }],
+            "fields_remove": ["Rack"],
+        }));
+        apply_patch(&mut s, &p, NO_CREDENTIAL);
+        assert_eq!(
+            s.custom_fields.unwrap(),
+            vec![
+                CustomField { name: "Owner".into(), value: "infra".into(), hidden: false },
+                CustomField { name: "PIN".into(), value: "1234".into(), hidden: true },
+            ]
+        );
+    }
+
+    #[test]
+    fn telnet_options_change_part_by_part() {
+        let mut s = session(serde_json::json!({ "kind": "telnet", "telnet": { "mode": "raw", "newline": "lf" } }));
+        apply_patch(&mut s, &patch(serde_json::json!({ "telnet": { "backspace": "ctrlh" } })), NO_CREDENTIAL);
+        let o = s.telnet.unwrap();
+        assert_eq!((o.mode, o.newline, o.backspace), (TelnetMode::Raw, TelnetNewline::Lf, TelnetBackspace::CtrlH));
+    }
+
+    #[test]
+    fn monitoring_and_tmux_on_ssh_and_wsl() {
+        let p = patch(serde_json::json!({ "monitoring": { "set": false }, "tmux": { "mode": "ask", "mouse": true } }));
+        assert!(p.check().is_ok());
+        let mut s = session(serde_json::json!({ "tmux": { "mode": "off", "name": "keep-me" } }));
+        apply_patch(&mut s, &p, NO_CREDENTIAL);
+        assert_eq!(s.monitoring, Some(false));
+        let t = s.tmux.clone().unwrap();
+        assert_eq!((t.mode.as_str(), t.name.as_deref(), t.mouse), ("ask", Some("keep-me"), true));
+        let mut wsl = session(serde_json::json!({ "kind": "wsl" }));
+        apply_patch(&mut wsl, &p, NO_CREDENTIAL);
+        assert_eq!(wsl.tmux.unwrap().mode, "attach", "WSL has no picker");
+        let mut plain = session(serde_json::json!({ "tmux": { "mode": "attach" } }));
+        apply_patch(&mut plain, &patch(serde_json::json!({ "tmux": { "mode": "inherit" }, "monitoring": "clear" })), NO_CREDENTIAL);
+        assert!(plain.tmux.is_none() && plain.monitoring.is_none());
+        let mut rdp = session(serde_json::json!({ "kind": "rdp" }));
+        assert_eq!(apply_patch(&mut rdp, &p, NO_CREDENTIAL), vec!["monitoring", "tmux"]);
+        assert!(patch(serde_json::json!({ "tmux": { "mode": "always" } })).check().is_err());
+    }
+
+    #[test]
+    fn a_vnc_session_goes_through_a_saved_ssh_session() {
+        let p = patch(serde_json::json!({ "via_session": { "set": "gw" } }));
+        let mut vnc = session(serde_json::json!({ "kind": "vnc" }));
+        assert!(apply_patch(&mut vnc, &p, NO_CREDENTIAL).is_empty());
+        assert_eq!(vnc.via_session_id.as_deref(), Some("gw"));
+        let mut ssh = session(serde_json::json!({}));
+        assert_eq!(apply_patch(&mut ssh, &p, NO_CREDENTIAL), vec!["via_session"]);
     }
 
     #[test]

@@ -11,6 +11,7 @@ pub mod vnc;
 pub mod container;
 pub mod db;
 pub mod devops;
+mod devops_projects;
 pub mod devops_store;
 pub mod k8s;
 pub mod logfiles;
@@ -422,6 +423,11 @@ pub fn run() {
             rdp_ack,
             rdp_disconnect_all,
             rdp_clipboard_sync,
+            rdp_clipboard_send_files,
+            rdp_clipboard_fetch,
+            rdp_clipboard_cancel,
+            rdp_clipboard_pick_files,
+            rdp_clipboard_save_received,
             rdp_window_fullscreen,
             vnc_connect,
             vnc_disconnect,
@@ -451,6 +457,9 @@ pub fn run() {
             ssh_hostkey_response,
             ssh_auth_prompt_response,
             session_log_default_dir,
+            session_log_status,
+            session_log_pause,
+            session_log_stop,
             history_start,
             history_stop,
             history_pause,
@@ -514,6 +523,8 @@ pub fn run() {
             ssh_tmux_chosen,
             tmux_start_script,
             ssh_tmux_list,
+            ssh_tmux_windows,
+            ssh_tmux_window,
             inspect_key_file,
             // SSH Config commands
             sshconfig_scan,
@@ -525,6 +536,7 @@ pub fn run() {
             import_read_local,
             import_yaml_to_json,
             ssh_options_report,
+            ssh_algorithm_catalog,
             ssh_key_import,
             ssh_key_list,
             ssh_key_update,
@@ -564,15 +576,21 @@ pub fn run() {
             session_delete,
             session_move_to_folder,
             session_set_favorite,
+            session_host_key_remove,
+            session_host_key_replace,
+            host_keys_remove_all,
+            session_set_order,
             session_bulk_update,
             session_bulk_undo,
             session_list_folders,
             session_create_folder,
             session_set_folder_credential,
             session_set_folder_tmux,
+            session_rename_folder,
             saved_credential_list,
             credential_keys_unlock,
             credential_keys_unlock_enabled,
+            credential_keys_biometric_forget,
             saved_credential_create,
             saved_credential_update,
             saved_credential_delete,
@@ -877,6 +895,11 @@ pub fn run() {
             rdp_ack,
             rdp_disconnect_all,
             rdp_clipboard_sync,
+            rdp_clipboard_send_files,
+            rdp_clipboard_fetch,
+            rdp_clipboard_cancel,
+            rdp_clipboard_pick_files,
+            rdp_clipboard_save_received,
             rdp_window_fullscreen,
             vnc_connect,
             vnc_disconnect,
@@ -906,6 +929,9 @@ pub fn run() {
             ssh_hostkey_response,
             ssh_auth_prompt_response,
             session_log_default_dir,
+            session_log_status,
+            session_log_pause,
+            session_log_stop,
             history_start,
             history_stop,
             history_pause,
@@ -969,6 +995,8 @@ pub fn run() {
             ssh_tmux_chosen,
             tmux_start_script,
             ssh_tmux_list,
+            ssh_tmux_windows,
+            ssh_tmux_window,
             inspect_key_file,
             // SSH Config commands
             sshconfig_scan,
@@ -980,6 +1008,7 @@ pub fn run() {
             import_read_local,
             import_yaml_to_json,
             ssh_options_report,
+            ssh_algorithm_catalog,
             ssh_key_import,
             ssh_key_list,
             ssh_key_update,
@@ -1019,15 +1048,21 @@ pub fn run() {
             session_delete,
             session_move_to_folder,
             session_set_favorite,
+            session_host_key_remove,
+            session_host_key_replace,
+            host_keys_remove_all,
+            session_set_order,
             session_bulk_update,
             session_bulk_undo,
             session_list_folders,
             session_create_folder,
             session_set_folder_credential,
             session_set_folder_tmux,
+            session_rename_folder,
             saved_credential_list,
             credential_keys_unlock,
             credential_keys_unlock_enabled,
+            credential_keys_biometric_forget,
             saved_credential_create,
             saved_credential_update,
             saved_credential_delete,
@@ -1678,6 +1713,11 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            // What was dropped on the window, as the OS gave it: the RDP
+            // clipboard sends only files that really were dropped.
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                rdp::note_drop(paths);
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 // Editor windows: ALWAYS hide instead of close (prevents WebView2 crash on Windows)
                 if window.label().starts_with("editor") {

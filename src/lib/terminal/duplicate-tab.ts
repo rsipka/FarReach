@@ -11,6 +11,7 @@
 
 import { sshConnect } from '#lib/ipc/ssh.js';
 import { createTab, getTabs, placeAfter, type Tab } from '#lib/state/tabs.svelte.js';
+import { newViewTag } from '#lib/terminal/tmux.js';
 
 export function canDuplicate(tab: Tab | undefined): boolean {
 	if (!tab) return false;
@@ -49,7 +50,9 @@ export async function duplicateTab(id: string): Promise<void> {
 		return;
 	}
 
+	// A tab in a tmux view gets a view of its own, on the same window.
 	const params = { ...from.sshConnectParams!, id: crypto.randomUUID() };
+	if (params.tmux?.view) params.tmux = { ...params.tmux, view: newViewTag(), window: from.tmuxWindow?.id };
 	await sshConnect(params);
 	const tab = createTab('ssh', from.title, params.id, from.sessionName, from.detectedOs);
 	tab.sshConnectParams = params;
@@ -58,7 +61,7 @@ export async function duplicateTab(id: string): Promise<void> {
 }
 
 /** A copy of a session's tab is that session's too, colours included. */
-function keepSession(tab: Tab, from: Tab): void {
+export function keepSession(tab: Tab, from: Tab): void {
 	tab.sessionId = from.sessionId;
 	tab.terminalTheme = from.terminalTheme;
 	tab.cursorStyle = from.cursorStyle;

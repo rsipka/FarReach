@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { isMobile } from '#lib/platform.js';
 import { getSettings } from '#lib/state/settings.svelte.js';
+import { REPO_URL } from '#lib/brand.js';
 
 /** A phone: Tauri's updater does not run there. Reach checks the same feed
  *  (app_update_check) and links to the release's APK; Android's installer
@@ -31,6 +32,8 @@ let dismissed = $state(false);
 let readyToRelaunch = $state(false);
 // User chose to postpone the relaunch; the staged update applies on next start.
 let relaunchPostponed = $state(false);
+// The What's new dialog (the banner's Info button, Settings > About).
+let whatsNewOpen = $state(false);
 
 let periodicInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -49,8 +52,28 @@ export function getUpdaterState() {
 		get readyToRelaunch() { return readyToRelaunch; },
 		get relaunchPostponed() { return relaunchPostponed; },
 		/** The update is a download link (a phone), not an in-place install. */
-		get isDownloadLink() { return mobileUrl !== null; }
+		get isDownloadLink() { return mobileUrl !== null; },
+		get whatsNewOpen() { return whatsNewOpen; },
+		/** The new version's GitHub release, where its full notes and files are. */
+		get releasePageUrl() { return releasePageUrl(updateVersion); }
 	};
+}
+
+/** The release page of a version from the feed. Built from a version that
+ *  looks like one, so the feed cannot point the link anywhere else. */
+export function releasePageUrl(version: string | null): string {
+	const v = (version ?? '').trim().replace(/^v/, '');
+	return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(v)
+		? `${REPO_URL}/releases/tag/v${v}`
+		: `${REPO_URL}/releases`;
+}
+
+export function openWhatsNew(): void {
+	whatsNewOpen = true;
+}
+
+export function closeWhatsNew(): void {
+	whatsNewOpen = false;
 }
 
 let cachedUpdate: Awaited<ReturnType<typeof check>> | null = null;
@@ -83,7 +106,7 @@ export async function checkForUpdate(): Promise<boolean> {
 	}
 }
 
-/** Settings > General > Check for updates. Off: nothing is fetched unless
+/** Settings > About > Check for updates. Off: nothing is fetched unless
  *  the user presses Check now. */
 function automaticChecksOn(): boolean {
 	return getSettings().checkForUpdates;

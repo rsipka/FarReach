@@ -300,7 +300,7 @@ fn describe_key_load_error(
         return if had_passphrase {
             format!("Could not open {} — wrong passphrase? ({})", label, err)
         } else if encrypted == Some(false) || encrypted.is_none() {
-            format!("Could not read {}: it is damaged or not a private key Reach understands. Import it again from the original key file. ({})", label, err)
+            format!("Could not read {}: it is damaged or not a private key Reacher CM understands. Import it again from the original key file. ({})", label, err)
         } else {
             format!("{} {} ({})", NEEDS_PASSPHRASE, label, err)
         };
@@ -447,10 +447,16 @@ pub(crate) async fn cascade_authenticate<H: russh::client::Handler>(
                 material.clone()
             }
         };
-        // No passphrase with the key: one it was unlocked with earlier in
-        // this run (Settings → Security), if any.
-        let unlocked = if key_auth.passphrase.is_none() { crate::ssh::unlocked::get(&material) } else { None };
-        let key = decode_key(&material, key_auth.passphrase.as_deref().or(unlocked.as_deref())).map_err(|e| {
+        // No passphrase with the key, or one that no longer opens it: the
+        // one it was unlocked with earlier in this run (Settings → Security),
+        // if any.
+        let given = decode_key(&material, key_auth.passphrase.as_deref()).and_then(|k| {
+            if k.is_encrypted() { Err(russh::keys::Error::KeyIsEncrypted) } else { Ok(k) }
+        });
+        let opened_by_given = given.is_ok();
+        let key = given
+            .or_else(|e| crate::ssh::unlocked::get(&material).map_or(Err(e), |p| decode_key(&material, Some(&p))))
+            .map_err(|e| {
             tracing::error!("SSH key load failed for {}: {}", key_auth.label(), e);
             SshError::ConnectionFailed(describe_key_load_error(
                 match &key_auth.source {
@@ -465,7 +471,7 @@ pub(crate) async fn cascade_authenticate<H: russh::client::Handler>(
         })?;
         // A passphrase typed for this connect opened the key: kept for the
         // run when that setting is on.
-        if let Some(p) = key_auth.passphrase.as_deref().filter(|_| key_is_encrypted(&material) == Some(true)) {
+        if let Some(p) = key_auth.passphrase.as_deref().filter(|_| opened_by_given && key_is_encrypted(&material) == Some(true)) {
             crate::ssh::unlocked::remember(&material, p);
         }
         let fingerprint = key.public_key().fingerprint(russh::keys::HashAlg::Sha256).to_string();
@@ -523,22 +529,84 @@ pub(crate) async fn cascade_authenticate<H: russh::client::Handler>(
             username,
             password.len()
         );
-        let accepted = handle
+        let result = handle
             .authenticate_password(username, password)
             .await
             .map_err(|e| {
                 tracing::error!("SSH password auth error: {}", e);
                 SshError::ConnectionFailed(format!("Auth error: {}", e))
-            })?
-            .success();
+            })?;
+        let accepted = result.success();
         tracing::info!("SSH password auth result: {}", accepted);
         if accepted {
+            outcome.by = Some(AuthBy::Password);
+            return Ok(outcome);
+        }
+        // 4. The same password through keyboard-interactive. Many servers
+        //    (PAM with PasswordAuthentication off, FreeBSD's default, most
+        //    appliances) take a password only this way; ssh, PuTTY and
+        //    uniTerm all try it. Only when the server offers it.
+        let offers_kbd = matches!(
+            &result,
+            russh::client::AuthResult::Failure { remaining_methods, .. }
+                if remaining_methods.contains(&russh::MethodKind::KeyboardInteractive)
+        );
+        if offers_kbd && kbd_interactive_with_password(handle, username, password).await? {
             outcome.by = Some(AuthBy::Password);
             return Ok(outcome);
         }
     }
 
     Ok(outcome)
+}
+
+/// Answers to one keyboard-interactive question round from the session's
+/// password: none needed (an empty round), or the password for a lone
+/// hidden question, given once. `None` for anything else (a one-time code,
+/// a second password question): there is no one to ask here.
+fn kbd_answers(prompts: &[russh::client::Prompt], password: &mut Option<&str>) -> Option<Vec<String>> {
+    match prompts {
+        [] => Some(Vec::new()),
+        [p] if !p.echo => password.take().map(|pw| vec![pw.to_string()]),
+        _ => None,
+    }
+}
+
+/// Log in with keyboard-interactive, answering the server's password
+/// question with the session's password. True when the server let us in.
+async fn kbd_interactive_with_password<H: russh::client::Handler>(
+    handle: &mut russh::client::Handle<H>,
+    username: &str,
+    password: &str,
+) -> Result<bool, SshError> {
+    use russh::client::KeyboardInteractiveAuthResponse as K;
+    let err = |e: russh::Error| {
+        tracing::error!("SSH keyboard-interactive auth error: {}", e);
+        SshError::ConnectionFailed(format!("Auth error: {}", e))
+    };
+    tracing::info!("SSH keyboard-interactive auth: attempting as '{}' with the session password", username);
+    let mut password = Some(password);
+    let mut r = handle.authenticate_keyboard_interactive_start(username, None::<String>).await.map_err(err)?;
+    // A server may send a few rounds (an empty one, a banner); bounded so a
+    // server that keeps asking cannot hold the login.
+    for _ in 0..5 {
+        match r {
+            K::Success => {
+                tracing::info!("SSH keyboard-interactive auth result: true");
+                return Ok(true);
+            }
+            K::Failure { .. } => break,
+            K::InfoRequest { prompts, .. } => {
+                let Some(answers) = kbd_answers(&prompts, &mut password) else {
+                    tracing::info!("SSH keyboard-interactive: the server asks something other than the password; skipped");
+                    break;
+                };
+                r = handle.authenticate_keyboard_interactive_respond(answers).await.map_err(err)?;
+            }
+        }
+    }
+    tracing::info!("SSH keyboard-interactive auth result: false");
+    Ok(false)
 }
 
 /// Try every identity from the local SSH agent. Returns Ok(true) on the first
@@ -945,17 +1013,20 @@ pub struct HopOptions {
     pub connlog: Option<Arc<crate::ssh::connlog::ConnLog>>,
     /// ControlMaster/ControlPath/ControlPersist (target only).
     pub control: Option<crate::ssh::control::ControlPlan>,
+    /// The saved session being connected and the host keys it trusts;
+    /// shared by every hop. `None`: this device's own list only.
+    pub trust: Option<Arc<crate::ssh::session_hostkeys::SessionTrust>>,
 }
 
 impl Default for HopOptions {
     fn default() -> Self {
-        Self { config: Arc::new(russh::client::Config::default()), socket: Default::default(), auth: None, hostkeys: None, session: None, refused: None, proxy_command: None, forwards: None, log: None, connlog: None, control: None }
+        Self { config: Arc::new(russh::client::Config::default()), socket: Default::default(), auth: None, hostkeys: None, session: None, refused: None, proxy_command: None, forwards: None, log: None, connlog: None, control: None, trust: None }
     }
 }
 
 impl From<crate::ssh::sshconf::apply::Plan> for HopOptions {
     fn from(p: crate::ssh::sshconf::apply::Plan) -> Self {
-        Self { config: Arc::new(p.config), socket: p.socket, auth: p.auth, hostkeys: p.hostkeys.map(Arc::new), session: p.session.map(Arc::new), refused: p.refused, proxy_command: p.proxy_command, forwards: p.forwards.map(crate::ssh::forwarding::ForwardTable::new), log: p.log, connlog: None, control: p.control }
+        Self { config: Arc::new(p.config), socket: p.socket, auth: p.auth, hostkeys: p.hostkeys.map(Arc::new), session: p.session.map(Arc::new), refused: p.refused, proxy_command: p.proxy_command, forwards: p.forwards.map(crate::ssh::forwarding::ForwardTable::new), log: p.log, connlog: None, control: p.control, trust: None }
     }
 }
 
@@ -1108,6 +1179,7 @@ impl SshManager {
         let config = opts.engine_config(host).await;
         let handler = SshClientHandler::new(host, port, Some(app_handle.clone()))
             .with_hostkeys(opts.hostkeys.clone())
+            .with_trust(opts.trust.clone())
             .with_forwards(opts.forwards.clone())
             .with_stage(stage.cloned());
         let begin = |s: &str| {
@@ -1337,7 +1409,7 @@ impl SshManager {
         // Step 1: Connect to the first jump host directly
         let first_jump = &jump_chain[0];
         let config = first_jump.opts.engine_config(&first_jump.host).await;
-        let handler = SshClientHandler::new(first_jump.host.as_str(), first_jump.port, Some(app_handle.clone())).with_hostkeys(first_jump.opts.hostkeys.clone());
+        let handler = SshClientHandler::new(first_jump.host.as_str(), first_jump.port, Some(app_handle.clone())).with_hostkeys(first_jump.opts.hostkeys.clone()).with_trust(first_jump.opts.trust.clone());
 
         let failed = |e: String| SshError::ConnectionFailed(format!("Jump host {} connection failed: {}", first_jump.host, e));
         let stream = crate::ssh::sshconf::net::connect(&first_jump.host, first_jump.port, &first_jump.opts.socket, false)
@@ -1383,7 +1455,7 @@ impl SshManager {
 
                 let stream = channel.into_stream();
                 let config = next_jump.opts.engine_config(&next_jump.host).await;
-                let handler = SshClientHandler::new(next_jump.host.as_str(), next_jump.port, Some(app_handle.clone())).with_hostkeys(next_jump.opts.hostkeys.clone());
+                let handler = SshClientHandler::new(next_jump.host.as_str(), next_jump.port, Some(app_handle.clone())).with_hostkeys(next_jump.opts.hostkeys.clone()).with_trust(next_jump.opts.trust.clone());
 
                 let mut next_handle =
                     russh::client::connect_stream(config, stream, handler)
@@ -1434,7 +1506,7 @@ impl SshManager {
 
             let stream = channel.into_stream();
             let config = target_opts.engine_config(target_host).await;
-            let handler = SshClientHandler::new(target_host, target_port, Some(app_handle.clone())).with_hostkeys(target_opts.hostkeys.clone()).with_forwards(target_opts.forwards.clone());
+            let handler = SshClientHandler::new(target_host, target_port, Some(app_handle.clone())).with_hostkeys(target_opts.hostkeys.clone()).with_trust(target_opts.trust.clone()).with_forwards(target_opts.forwards.clone());
 
             let mut target_handle =
                 russh::client::connect_stream(config, stream, handler)
@@ -1483,7 +1555,7 @@ impl SshManager {
 
             let stream = channel.into_stream();
             let config = target_opts.engine_config(target_host).await;
-            let handler = SshClientHandler::new(target_host, target_port, Some(app_handle.clone())).with_hostkeys(target_opts.hostkeys.clone()).with_forwards(target_opts.forwards.clone());
+            let handler = SshClientHandler::new(target_host, target_port, Some(app_handle.clone())).with_hostkeys(target_opts.hostkeys.clone()).with_trust(target_opts.trust.clone()).with_forwards(target_opts.forwards.clone());
 
             let mut target_handle =
                 russh::client::connect_stream(config, stream, handler)
@@ -1896,12 +1968,11 @@ async fn exec_streaming_inner(
 /// verification dialog; `resolve_hostkey_prompt` (via the `ssh_hostkey_response`
 /// IPC command) wakes it. Safe to add now that connect runs lock-free, so a
 /// parked handshake no longer blocks other SSH operations.
-static HOSTKEY_PROMPTS: std::sync::OnceLock<
-    std::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<bool>>>,
-> = std::sync::OnceLock::new();
+type HostKeyReply = tokio::sync::oneshot::Sender<crate::ssh::session_hostkeys::Answer>;
 
-fn hostkey_prompts(
-) -> &'static std::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<bool>>> {
+static HOSTKEY_PROMPTS: std::sync::OnceLock<std::sync::Mutex<HashMap<String, HostKeyReply>>> = std::sync::OnceLock::new();
+
+fn hostkey_prompts() -> &'static std::sync::Mutex<HashMap<String, HostKeyReply>> {
     HOSTKEY_PROMPTS.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
 }
 
@@ -1947,11 +2018,11 @@ impl Drop for OpenPrompt {
     }
 }
 
-/// Resolve a pending host-key prompt with the user's accept/reject decision.
-pub(crate) fn resolve_hostkey_prompt(prompt_id: &str, accept: bool) {
+/// Resolve a pending host-key prompt with the user's answer.
+pub(crate) fn resolve_hostkey_prompt(prompt_id: &str, answer: crate::ssh::session_hostkeys::Answer) {
     let sender = hostkey_prompts().lock().unwrap().remove(prompt_id);
     if let Some(tx) = sender {
-        let _ = tx.send(accept);
+        let _ = tx.send(answer);
     }
 }
 
@@ -1974,6 +2045,9 @@ struct HostKeyPrompt {
     /// VerifyHostKeyDNS: whether a matching SSHFP record was found.
     #[serde(skip_serializing_if = "Option::is_none")]
     dns_match: Option<bool>,
+    /// Where Accept and save keeps the key: `session` (with the saved
+    /// session, synced) or `device` (this device's own list).
+    save_to: &'static str,
 }
 
 /// Where a connection the user is waiting on has got to, for the connect
@@ -2009,11 +2083,13 @@ pub struct SshClientHandler {
     hostkey_update: crate::ssh::hostkey_update::UpdateState,
     /// Reports the host-key step of a connection someone is watching.
     stage: Option<ConnectStage>,
+    /// The saved session being connected (see `session_hostkeys`).
+    trust: Option<Arc<crate::ssh::session_hostkeys::SessionTrust>>,
 }
 
 impl SshClientHandler {
     pub fn new(host: impl Into<String>, port: u16, app_handle: Option<tauri::AppHandle>) -> Self {
-        Self { host: host.into(), port, app_handle, hostkeys: None, forwards: None, dns_match: None, hostkey_update: Default::default(), stage: None }
+        Self { host: host.into(), port, app_handle, hostkeys: None, forwards: None, dns_match: None, hostkey_update: Default::default(), stage: None, trust: None }
     }
 
     /// Report the host-key step to the connect dialog (see `ConnectStage`).
@@ -2025,6 +2101,12 @@ impl SshClientHandler {
     /// Answer channels the server opens for forwards (see `forwarding`).
     pub fn with_forwards(mut self, table: Option<Arc<crate::ssh::forwarding::ForwardTable>>) -> Self {
         self.forwards = table;
+        self
+    }
+
+    /// Keep accepted host keys on this saved session (see `session_hostkeys`).
+    pub(crate) fn with_trust(mut self, trust: Option<Arc<crate::ssh::session_hostkeys::SessionTrust>>) -> Self {
+        self.trust = trust;
         self
     }
 
@@ -2059,14 +2141,15 @@ impl SshClientHandler {
         changed: bool,
         old_fingerprint: Option<String>,
         randomart: Option<String>,
-    ) -> bool {
+    ) -> crate::ssh::session_hostkeys::Answer {
+        use crate::ssh::session_hostkeys::Answer;
         let Some(app) = self.app_handle.clone() else {
             tracing::warn!(
                 "No UI handle to verify host key for {}:{}; rejecting",
                 self.host,
                 self.port
             );
-            return false;
+            return Answer::Reject;
         };
 
         let prompt_id = uuid::Uuid::new_v4().to_string();
@@ -2086,13 +2169,17 @@ impl SshClientHandler {
             old_fingerprint,
             randomart,
             dns_match: self.dns_match,
+            save_to: if self.trust.is_some() && self.hostkeys.as_ref().is_none_or(|p| !p.use_files) { "session" } else { "device" },
         };
         if app.emit("ssh-hostkey-prompt", &payload).is_err() {
-            return false;
+            return Answer::Reject;
         }
 
         // No answer is a no.
-        matches!(tokio::time::timeout(std::time::Duration::from_secs(120), rx).await, Ok(Ok(true)))
+        match tokio::time::timeout(std::time::Duration::from_secs(120), rx).await {
+            Ok(Ok(answer)) => answer,
+            _ => Answer::Reject,
+        }
     }
 }
 
@@ -2138,6 +2225,25 @@ fn remember_host(path: &std::path::Path, host_id: &str, fingerprint: &str) -> st
     known.entries.insert(host_id.to_string(), fingerprint.to_string());
     let raw = serde_json::to_string_pretty(&known).map_err(std::io::Error::other)?;
     crate::vault::private_fs::write(path, raw.as_bytes())
+}
+
+/// Drop hosts from this device's list, so a key removed from a session is
+/// not copied back onto it from here. `None` empties the list.
+pub(crate) fn forget_hosts(host_ids: Option<&[String]>) -> std::io::Result<usize> {
+    let path = SshClientHandler::known_hosts_path();
+    let _guard = KNOWN_HOSTS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut known = load_known_hosts(&path);
+    let before = known.entries.len();
+    match host_ids {
+        Some(ids) => known.entries.retain(|k, _| !ids.contains(k)),
+        None => known.entries.clear(),
+    }
+    let gone = before - known.entries.len();
+    if gone > 0 {
+        let raw = serde_json::to_string_pretty(&known).map_err(std::io::Error::other)?;
+        crate::vault::private_fs::write(&path, raw.as_bytes())?;
+    }
+    Ok(gone)
 }
 
 impl russh::client::Handler for SshClientHandler {
@@ -2233,7 +2339,7 @@ impl russh::client::Handler for SshClientHandler {
         let key_type = key.algorithm().to_string();
 
         let Some(policy) = self.hostkeys.clone() else {
-            return Ok(verify_host_identity(self.app_handle.clone(), &self.host, self.port, &host_id, &fingerprint, &key_type).await);
+            return Ok(verify_host_identity_with(self.app_handle.clone(), &self.host, self.port, &host_id, &fingerprint, &key_type, crate::ssh::hostkeys::Strict::Ask, self.trust.as_ref()).await);
         };
         use crate::ssh::hostkeys::{Strict, Verdict};
         // VerifyHostKeyDNS, after the revocation checks and before
@@ -2263,7 +2369,7 @@ impl russh::client::Handler for SshClientHandler {
                     _ => true,
                 });
             }
-            return Ok(verify_host_identity_with(self.app_handle.clone(), &self.host, self.port, &host_id, &fingerprint, &key_type, policy.strict).await);
+            return Ok(verify_host_identity_with(self.app_handle.clone(), &self.host, self.port, &host_id, &fingerprint, &key_type, policy.strict, self.trust.as_ref()).await);
         }
         // A few small files, and KnownHostsCommand when the user allowed it.
         let verdict = policy.verify(&self.host, self.port, server_public_key);
@@ -2277,11 +2383,13 @@ impl russh::client::Handler for SshClientHandler {
             }
             Verdict::Ask { fingerprint, randomart } => {
                 let _ = Strict::Ask;
-                let yes = self.prompt_hostkey(&fingerprint, &key_type, false, None, randomart).await;
-                if yes {
+                // These keys live in the OpenSSH files ssh_config names, not
+                // on the session; Accept once writes nothing to them.
+                let answer = self.prompt_hostkey(&fingerprint, &key_type, false, None, randomart).await;
+                if answer == crate::ssh::session_hostkeys::Answer::Save {
                     policy.record(&self.host, self.port, server_public_key);
                 }
-                yes
+                answer.accepted()
             }
             Verdict::Refuse(r) => {
                 self.refused(&r);
@@ -2327,10 +2435,14 @@ pub(crate) async fn verify_host_identity(
     fingerprint: &str,
     key_type: &str,
 ) -> bool {
-    verify_host_identity_with(app_handle, host, port, host_id, fingerprint, key_type, crate::ssh::hostkeys::Strict::Ask).await
+    verify_host_identity_with(app_handle, host, port, host_id, fingerprint, key_type, crate::ssh::hostkeys::Strict::Ask, None).await
 }
 
-/// The same, under a StrictHostKeyChecking setting.
+/// The same, under a StrictHostKeyChecking setting, for a saved session
+/// when `trust` is given: then a key saved on the session decides, and an
+/// accepted key is saved there (see `session_hostkeys`). A key this device
+/// accepted before, not yet on the session, is copied onto it.
+#[expect(clippy::too_many_arguments, reason = "one host-key check's facts, passed through as they are")]
 pub(crate) async fn verify_host_identity_with(
     app_handle: Option<tauri::AppHandle>,
     host: &str,
@@ -2339,26 +2451,33 @@ pub(crate) async fn verify_host_identity_with(
     fingerprint: &str,
     key_type: &str,
     strict: crate::ssh::hostkeys::Strict,
+    trust: Option<&Arc<crate::ssh::session_hostkeys::SessionTrust>>,
 ) -> bool {
     use crate::ssh::hostkeys::Strict;
+    use crate::ssh::session_hostkeys::Answer;
     let path = SshClientHandler::known_hosts_path();
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
 
-    let known = load_known_hosts(&path);
+    let on_device = load_known_hosts(&path).entries.get(host_id).cloned();
+    let on_session = trust.and_then(|t| t.lookup(host_id));
+    let known = on_session.clone().or(on_device);
 
-    if known.entries.get(host_id).map(String::as_str) == Some(fingerprint) {
+    if known.as_deref() == Some(fingerprint) {
+        if let (Some(t), None) = (trust, &on_session) {
+            t.save(app_handle.as_ref(), host_id, key_type, fingerprint);
+        }
         return true;
     }
 
-    let (changed, old_fingerprint) = match known.entries.get(host_id) {
+    let (changed, old_fingerprint) = match known {
         Some(existing) => {
             tracing::warn!(
                 "Host identity CHANGED for {} (possible MITM). Old: {}, New: {}",
                 host_id, existing, fingerprint
             );
-            (true, Some(existing.clone()))
+            (true, Some(existing))
         }
         None => {
             tracing::info!("Host identity unknown for {} — prompting (TOFU)", host_id);
@@ -2366,30 +2485,36 @@ pub(crate) async fn verify_host_identity_with(
         }
     };
 
-    let handler = SshClientHandler::new(host, port, app_handle);
-    let accepted = match strict {
+    let handler = SshClientHandler::new(host, port, app_handle.clone()).with_trust(trust.cloned());
+    let answer = match strict {
         Strict::Ask => handler.prompt_hostkey(fingerprint, key_type, changed, old_fingerprint, None).await,
         // A changed key: only StrictHostKeyChecking no lets it through.
         _ if changed && strict != Strict::No => {
             handler.refused(&format!("The host key for {host_id} has CHANGED and StrictHostKeyChecking does not allow asking"));
-            false
+            Answer::Reject
         }
         Strict::Yes => {
             handler.refused(&format!("No host key is known for {host_id} and StrictHostKeyChecking is on"));
-            false
+            Answer::Reject
         }
-        Strict::AcceptNew | Strict::No => true,
+        Strict::AcceptNew | Strict::No => Answer::Save,
     };
 
-    if accepted {
-        if let Err(e) = remember_host(&path, host_id, fingerprint) {
-            tracing::warn!("Could not save the host identity for {}: {}", host_id, e);
+    match (answer, trust) {
+        (Answer::Save, Some(t)) => {
+            t.save(app_handle.as_ref(), host_id, key_type, fingerprint);
+            tracing::info!("Host identity accepted by user for {} and saved on the session", host_id);
         }
-        tracing::info!("Host identity accepted by user for {}", host_id);
-    } else {
-        tracing::warn!("Host identity rejected for {} — aborting connect", host_id);
+        (Answer::Save, None) => {
+            if let Err(e) = remember_host(&path, host_id, fingerprint) {
+                tracing::warn!("Could not save the host identity for {}: {}", host_id, e);
+            }
+            tracing::info!("Host identity accepted by user for {}", host_id);
+        }
+        (Answer::Once, _) => tracing::info!("Host identity accepted once by user for {}; not saved", host_id),
+        (Answer::Reject, _) => tracing::warn!("Host identity rejected for {} — aborting connect", host_id),
     }
-    accepted
+    answer.accepted()
 }
 
 /// Finish a connection once the channel is open: inject shell color/prompt init
@@ -2513,8 +2638,9 @@ async fn into_active_connection(
     // that there is none.
     let log = login.log.as_ref().and_then(|cfg| {
         match crate::ssh::session_log::SessionLog::open(cfg, &info.host, info.port) {
-            Ok(log) => {
+            Ok(mut log) => {
                 tracing::info!("SSH '{}' logging to {}", info.id, log.path().display());
+                log.register(&info.id);
                 Some(log)
             }
             Err(e) => {
@@ -2906,6 +3032,25 @@ async fn ssh_session_task(
 #[cfg(test)]
 mod shell_tests {
     use super::*;
+
+    fn prompt(text: &str, echo: bool) -> russh::client::Prompt {
+        russh::client::Prompt { prompt: text.into(), echo }
+    }
+
+    /// keyboard-interactive: the session password answers one hidden
+    /// question, once; an empty round needs nothing; anything else is not
+    /// answered for the user.
+    #[test]
+    fn keyboard_interactive_answers_only_the_password_question() {
+        let mut pw = Some("secret");
+        assert_eq!(kbd_answers(&[], &mut pw), Some(vec![]));
+        assert_eq!(kbd_answers(&[prompt("Password: ", false)], &mut pw), Some(vec!["secret".to_string()]));
+        assert_eq!(kbd_answers(&[prompt("Password: ", false)], &mut pw), None, "given once");
+        let mut pw = Some("secret");
+        assert_eq!(kbd_answers(&[prompt("Username: ", true)], &mut pw), None);
+        assert_eq!(kbd_answers(&[prompt("Password: ", false), prompt("OTP: ", false)], &mut pw), None);
+        assert_eq!(pw, Some("secret"));
+    }
 
     fn known_hosts_scratch(name: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!("reach-known-hosts-{name}-{}", uuid::Uuid::new_v4()));

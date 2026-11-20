@@ -1,3 +1,4 @@
+import { projectGeneration, projectSummary, type ProjectSummary } from '#lib/ipc/devops-projects.js';
 import type {
 	TofuCommand,
 	TofuProject,
@@ -70,8 +71,9 @@ import { toolchainCheck, type ToolStatus } from '#lib/ipc/toolchain.js';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 // --- State ---
-let projects = $state<TofuProject[]>([]);
-let activeProjectId = $state<string | null>(null);
+let activeProject = $state<TofuProject | undefined>();
+let projects = $state<ProjectSummary[]>([]);
+let activeProjectId = $derived(activeProject?.id ?? null);
 let toolStatus = $state<ToolStatus | null>(null);
 let toolChecking = $state(false);
 let commandRunning = $state(false);
@@ -118,7 +120,7 @@ let schemaLoading = $state(false);
 let schemaError = $state<string | null>(null);
 
 // --- Getters ---
-export function getProjects(): TofuProject[] {
+export function getProjects(): ProjectSummary[] {
 	return projects;
 }
 
@@ -127,7 +129,7 @@ export function getActiveProjectId(): string | null {
 }
 
 export function getActiveProject(): TofuProject | undefined {
-	return projects.find((p) => p.id === activeProjectId);
+	return activeProject;
 }
 
 export function getToolStatus(): ToolStatus | null {
@@ -424,7 +426,7 @@ export async function createProject(
 	description: string
 ): Promise<TofuProject> {
 	const project = await tofuCreateProject(name, path, description);
-	projects = [...projects, project];
+	projects = [...projects, projectSummary(project)];
 	return project;
 }
 
@@ -432,20 +434,30 @@ export async function deleteProject(projectId: string): Promise<void> {
 	await tofuDeleteProject(projectId);
 	projects = projects.filter((p) => p.id !== projectId);
 	if (activeProjectId === projectId) {
-		activeProjectId = null;
+		activeProject = undefined;
+
 		projectFiles = [];
 	}
 }
 
 export async function openProject(projectId: string): Promise<void> {
 	const project = await tofuOpenProject(projectId);
-	activeProjectId = project.id;
-	projects = projects.map((p) => (p.id === project.id ? project : p));
+	activeProject = project;
+
+	projects = projects.map((p) => (p.id === project.id ? projectSummary(project) : p));
 	await refreshFiles();
 }
 
+export function forgetProjects(): void {
+	projects = [];
+	closeProject();
+}
+
 export function closeProject(): void {
-	activeProjectId = null;
+	activeProject = undefined;
+
+	stateResources = [];
+	binaryStatus = null;
 	projectFiles = [];
 	commandOutput = [];
 	runView = emptyRunView();
@@ -480,7 +492,8 @@ export async function refreshFiles(): Promise<void> {
 }
 
 function updateLocalProject(updated: TofuProject): void {
-	projects = projects.map((p) => (p.id === updated.id ? updated : p));
+	if (activeProjectId === updated.id) activeProject = updated;
+	projects = projects.map((p) => (p.id === updated.id ? projectSummary(updated) : p));
 }
 
 export async function addProvider(provider: TofuProviderConfig): Promise<void> {
@@ -570,6 +583,7 @@ export async function runCommand(request: TofuCommandRequest): Promise<string> {
 	runExitCode = null;
 	runCommandName = request.command;
 
+	const generation = projectGeneration();
 	const runId = await tofuRunCommand(request);
 	currentRunId = runId;
 
@@ -587,6 +601,10 @@ export async function runCommand(request: TofuCommandRequest): Promise<string> {
 	};
 
 	unlisten = await listen<TofuCommandEvent & { data?: string }>(eventName, (event) => {
+		if (generation !== projectGeneration()) {
+			unlisten?.();
+			return;
+		}
 		const data = event.payload;
 		if (typeof data.line === 'string') {
 			take(data.stream, data.line);

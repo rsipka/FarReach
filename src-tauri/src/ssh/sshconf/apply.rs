@@ -165,6 +165,19 @@ pub mod supported {
         ]
     }
 
+    pub fn host_keys() -> Vec<(&'static str, russh::keys::Algorithm)> {
+        use russh::keys::{Algorithm, EcdsaCurve, HashAlg};
+        vec![
+            ("ssh-ed25519", Algorithm::Ed25519),
+            ("ecdsa-sha2-nistp256", Algorithm::Ecdsa { curve: EcdsaCurve::NistP256 }),
+            ("ecdsa-sha2-nistp384", Algorithm::Ecdsa { curve: EcdsaCurve::NistP384 }),
+            ("ecdsa-sha2-nistp521", Algorithm::Ecdsa { curve: EcdsaCurve::NistP521 }),
+            ("rsa-sha2-512", Algorithm::Rsa { hash: Some(HashAlg::Sha512) }),
+            ("rsa-sha2-256", Algorithm::Rsa { hash: Some(HashAlg::Sha256) }),
+            ("ssh-rsa", Algorithm::Rsa { hash: None }),
+        ]
+    }
+
     pub fn macs() -> Vec<(&'static str, mac::Name)> {
         use mac::*;
         vec![
@@ -189,6 +202,45 @@ pub mod supported {
             ("hmac-ripemd160", HMAC_RIPEMD160),
         ]
     }
+}
+
+/// One algorithm the session editor can offer.
+#[derive(Debug, Clone, Serialize)]
+pub struct CatalogEntry {
+    pub name: String,
+    /// Offered when the session sets nothing.
+    pub default: bool,
+    /// Why it weakens the connection, if it does.
+    pub weak: Option<String>,
+}
+
+/// One algorithm keyword with everything Reach's engine speaks for it, in
+/// the engine's order of preference.
+#[derive(Debug, Clone, Serialize)]
+pub struct CatalogGroup {
+    pub keyword: String,
+    pub algorithms: Vec<CatalogEntry>,
+}
+
+/// The algorithms the session editor offers: key exchange, host keys,
+/// ciphers and MACs, each against Reach's defaults.
+pub fn catalog() -> Vec<CatalogGroup> {
+    let p = russh::Preferred::default();
+    fn group<T: PartialEq>(kw: Kw, table: Vec<(&str, T)>, cur: &[T]) -> CatalogGroup {
+        CatalogGroup {
+            keyword: kw.name().into(),
+            algorithms: table
+                .into_iter()
+                .map(|(n, v)| CatalogEntry { name: n.into(), default: cur.contains(&v), weak: weak_algorithm(n).map(str::to_string) })
+                .collect(),
+        }
+    }
+    vec![
+        group(Kw::KexAlgorithms, supported::kex(), &p.kex),
+        group(Kw::HostKeyAlgorithms, supported::host_keys(), &p.key),
+        group(Kw::Ciphers, supported::ciphers(), &p.cipher),
+        group(Kw::MACs, supported::macs(), &p.mac),
+    ]
 }
 
 /// Algorithms that weaken a connection when a config adds them.
@@ -334,16 +386,7 @@ impl Plan {
             self.config.preferred.mac = Cow::Owned(v);
         }
         {
-            use russh::keys::{Algorithm, EcdsaCurve, HashAlg};
-            let table: Vec<(&str, Algorithm)> = vec![
-                ("ssh-ed25519", Algorithm::Ed25519),
-                ("ecdsa-sha2-nistp256", Algorithm::Ecdsa { curve: EcdsaCurve::NistP256 }),
-                ("ecdsa-sha2-nistp384", Algorithm::Ecdsa { curve: EcdsaCurve::NistP384 }),
-                ("ecdsa-sha2-nistp521", Algorithm::Ecdsa { curve: EcdsaCurve::NistP521 }),
-                ("rsa-sha2-512", Algorithm::Rsa { hash: Some(HashAlg::Sha512) }),
-                ("rsa-sha2-256", Algorithm::Rsa { hash: Some(HashAlg::Sha256) }),
-                ("ssh-rsa", Algorithm::Rsa { hash: None }),
-            ];
+            let table = supported::host_keys();
             let cur = self.config.preferred.key.to_vec();
             let default: Vec<&str> = table.iter().filter(|(_, a)| cur.contains(a)).map(|(n, _)| *n).collect();
             if let Some(v) = self.pick(o, Kw::HostKeyAlgorithms, &table, &default) {
@@ -390,7 +433,7 @@ impl Plan {
             let mut limits = self.config.limits.clone();
             if let Some(b) = bytes.filter(|b| *b > 0) {
                 if b > MAX {
-                    note = Some(format!("{} is held to 1G, the most Reach's engine allows", s.args[0]));
+                    note = Some(format!("{} is held to 1G, the most Reacher CM's engine allows", s.args[0]));
                 }
                 let b = b.min(MAX) as usize;
                 limits.rekey_write_limit = b;
@@ -543,5 +586,22 @@ mod tests {
         let p = Plan::new(&r, russh::client::Config::default(), &[], true);
         assert_eq!(p.config.limits.rekey_write_limit, 1 << 30);
         assert_eq!(p.config.limits.rekey_time_limit, Duration::from_secs(3600));
+    }
+
+    #[test]
+    fn the_catalog_marks_defaults_and_legacy_algorithms() {
+        let c = catalog();
+        let names: Vec<&str> = c.iter().map(|g| g.keyword.as_str()).collect();
+        assert_eq!(names, ["KexAlgorithms", "HostKeyAlgorithms", "Ciphers", "MACs"]);
+        let find = |kw: &str, n: &str| c.iter().find(|g| g.keyword == kw).unwrap().algorithms.iter().find(|a| a.name == n).unwrap().clone();
+        let curve = find("KexAlgorithms", "curve25519-sha256");
+        assert!(curve.default && curve.weak.is_none());
+        let g1 = find("KexAlgorithms", "diffie-hellman-group1-sha1");
+        assert!(!g1.default && g1.weak.is_some());
+        let cbc = find("Ciphers", "aes128-cbc");
+        assert!(!cbc.default && cbc.weak.is_some());
+        assert!(!find("MACs", "hmac-md5").default);
+        // Every legacy algorithm is off by default, so offering one is a choice.
+        assert!(c.iter().flat_map(|g| &g.algorithms).all(|a| !(a.default && a.weak.is_some()) || a.name == "ssh-rsa"));
     }
 }

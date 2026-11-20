@@ -24,9 +24,11 @@
 		y: number;
 		items: MenuItem[];
 		onclose: () => void;
+		/** Open upwards: `y` is where the menu's bottom edge goes (a menu from the bottom bar). */
+		above?: boolean;
 	}
 
-	let { x, y, items, onclose }: Props = $props();
+	let { x, y, items, onclose, above = false }: Props = $props();
 	let menu = $state<HTMLDivElement>();
 
 	// Keep the menu on screen, clear of a phone's status bar, camera cutout
@@ -37,7 +39,7 @@
 		const safe = safeInsets();
 		return {
 			left: Math.max(safe.left + 4, Math.min(x, window.innerWidth - safe.right - w - 4)),
-			top: Math.max(safe.top + 4, Math.min(y, window.innerHeight - safe.bottom - h - 4))
+			top: Math.max(safe.top + 4, Math.min(above ? y - h : y, window.innerHeight - safe.bottom - h - 4))
 		};
 	});
 

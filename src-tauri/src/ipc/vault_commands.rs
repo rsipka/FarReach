@@ -32,7 +32,7 @@ fn is_internal_vault_id(vault_id: &str, id_of: impl Fn(&str) -> Option<String>) 
 
 fn refuse_internal_vault(manager: &crate::vault::VaultManager, vault_id: &str) -> Result<(), String> {
     if is_internal_vault_id(vault_id, |name| manager.get_vault_id_by_name(name)) {
-        Err("This vault is kept by Reach for its own data and cannot be opened here".into())
+        Err("This vault is kept by Reacher CM for its own data and cannot be opened here".into())
     } else {
         Ok(())
     }
@@ -99,6 +99,11 @@ pub async fn vault_resume(state: State<'_, AppState>) -> Result<bool, String> {
 pub struct UnlockMethods {
     /// The platform biometric this build offers, if any.
     platform: Option<&'static str>,
+    /// What this device calls it, where that varies (iOS: Face ID, Touch ID).
+    platform_label: Option<&'static str>,
+    /// Key passphrases can be kept behind the platform biometric (Android,
+    /// iOS; `ssh::biometric_keys`).
+    keys_biometric: bool,
     platform_available: bool,
     keys_supported: bool,
     /// Reach asks for the key's PIN itself (macOS, Linux, Android); Windows asks.
@@ -110,10 +115,10 @@ pub struct UnlockMethods {
 /// desktop prompts are the system's own and ignore it.
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct PromptText {
-    title: String,
+    pub(crate) title: String,
     #[serde(default)]
-    subtitle: Option<String>,
-    cancel: String,
+    pub(crate) subtitle: Option<String>,
+    pub(crate) cancel: String,
 }
 
 impl Default for PromptText {
@@ -358,6 +363,8 @@ pub async fn vault_unlock_methods(app: tauri::AppHandle, state: State<'_, AppSta
     let platform_available = platform.is_some() && device::platform_available(&app).await;
     Ok(UnlockMethods {
         platform,
+        platform_label: (platform == Some(biometric::IOS_BIOMETRIC)).then(crate::vault::apple_biometric::name),
+        keys_biometric: crate::ssh::biometric_keys::supported() && platform_available,
         platform_available,
         keys_supported: fido2::supported(),
         keys_ask_pin: fido2::asks_pin_itself(),
@@ -1111,6 +1118,56 @@ pub(crate) mod picked_file {
             return BASE64.decode(read.data).map_err(|e| e.to_string());
         }
         tokio::fs::read(path).await.map_err(|e| format!("Cannot read {path}: {e}"))
+    }
+
+    /// The file and the name it goes by: the last part of a path, or what
+    /// Android's picker calls a `content://` link.
+    pub async fn read_named(_app: &AppHandle, path: &str) -> Result<(String, Vec<u8>), String> {
+        #[cfg(target_os = "android")]
+        if is_link(path) {
+            use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+            use tauri::Manager;
+            #[derive(serde::Deserialize)]
+            struct Read {
+                data: String,
+                name: Option<String>,
+            }
+            let read: Read = _app
+                .state::<tauri_plugin_reach_unlock::Unlock<tauri::Wry>>()
+                .call("readUri", serde_json::json!({ "uri": path }))
+                .await?;
+            let name = read.name.unwrap_or_else(|| name_of(path));
+            return Ok((name, BASE64.decode(read.data).map_err(|e| e.to_string())?));
+        }
+        let bytes = tokio::fs::read(path).await.map_err(|e| format!("Cannot read {path}: {e}"))?;
+        Ok((name_of(path), bytes))
+    }
+
+    fn percent_decode(s: &str) -> String {
+        let bytes = s.as_bytes();
+        let mut out = Vec::with_capacity(bytes.len());
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'%' {
+                if let Some(b) = s.get(i + 1..i + 3).and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                    out.push(b);
+                    i += 3;
+                    continue;
+                }
+            }
+            out.push(bytes[i]);
+            i += 1;
+        }
+        String::from_utf8_lossy(&out).into_owned()
+    }
+
+    /// The last part of a path or link, decoded, never empty.
+    pub fn name_of(path: &str) -> String {
+        let last = path.trim_end_matches(['/', '\\']).rsplit(['/', '\\']).next().unwrap_or("");
+        let decoded = percent_decode(last);
+        // A content link's last part may itself be `primary:Download/x.pdf`.
+        let decoded = decoded.rsplit(['/', ':']).next().unwrap_or("").to_string();
+        if decoded.is_empty() { "file".to_string() } else { decoded }
     }
 
     pub async fn write(_app: &AppHandle, path: &str, bytes: &[u8]) -> Result<(), String> {

@@ -16,6 +16,9 @@
 		/** Stacking order of the backdrop. Default 100; raise for dialogs that
 		 *  must sit above other modals (e.g. host-key verification over Connect). */
 		zIndex?: number;
+		/** Fill the whole screen on a phone, as a page of its own rather
+		 *  than a box over the app. */
+		fullOnPhone?: boolean;
 		children: Snippet;
 		actions?: Snippet;
 	}
@@ -28,6 +31,7 @@
 		height,
 		padded = true,
 		zIndex = 100,
+		fullOnPhone = false,
 		children,
 		actions
 	}: Props = $props();
@@ -64,7 +68,7 @@
 
 {#if open}
 	<div class="backdrop glass" style:z-index={zIndex}>
-		<div class="modal" role="dialog" aria-modal="true" aria-label={title || t('common.close_dialog')} style:max-width={maxWidth} style:height={height}>
+		<div class="modal" class:full-on-phone={fullOnPhone} role="dialog" aria-modal="true" aria-label={title || t('common.close_dialog')} style:max-width={maxWidth} style:height={height}>
 			{#if title}
 				<header class="modal-header">
 					<h2 class="modal-title">{title}</h2>
@@ -193,6 +197,25 @@
 		to {
 			opacity: 1;
 			transform: scale(1);
+		}
+	}
+
+	@media (max-width: 640px), (max-height: 480px) {
+		.backdrop:has(.full-on-phone) {
+			padding: 0;
+		}
+
+		/* !important: the caller's max-width and height arrive as inline styles. */
+		.modal.full-on-phone {
+			width: 100%;
+			max-width: none !important;
+			height: 100% !important;
+			max-height: none;
+			min-width: 0;
+			border: none;
+			border-radius: 0;
+			padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+			animation: none;
 		}
 	}
 

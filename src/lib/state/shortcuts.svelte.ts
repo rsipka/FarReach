@@ -1,3 +1,4 @@
+import { newTab } from '#lib/terminal/tmux-tabs.js';
 import { createTab, closeTab, getActiveTab, getTabs, activateTab } from './tabs.svelte';
 import { toggleAIPanel } from './ai-chat.svelte';
 import { togglePalette, requestSessionAction } from './palette.svelte';
@@ -14,9 +15,9 @@ export interface Shortcut {
 	handler: () => void;
 }
 
-let settingsOpener: (() => void) | null = null;
+let settingsOpener: ((target?: string) => void) | null = null;
 
-export function registerSettingsOpener(fn: () => void): void {
+export function registerSettingsOpener(fn: (target?: string) => void): void {
 	settingsOpener = fn;
 }
 
@@ -70,8 +71,13 @@ function closeActiveTab(): void {
 	}
 }
 
-export function openSettings(): void {
-	settingsOpener?.();
+/**
+ * Open Settings. `target` is a page id ('terminal') or a row's label key
+ * ('settings.term_osc52'): the page opens with that row highlighted, so a
+ * toast can say "Allow it in Settings" and take you there.
+ */
+export function openSettings(target?: string): void {
+	settingsOpener?.(target);
 }
 
 function openCommandPalette(): void {
@@ -93,13 +99,13 @@ function normalizeKey(key: string): string {
 }
 
 const shortcuts: Shortcut[] = [
-	{ key: 't', ctrl: true, action: 'New tab', handler: () => createTab('local') },
+	{ key: 't', ctrl: true, action: 'New tab', handler: newTab },
 	{ key: 'n', ctrl: true, action: 'New session', handler: () => requestSessionAction({ kind: 'new-session' }) },
 	{ key: 'n', ctrl: true, shift: true, action: 'Quick connect', handler: () => requestSessionAction({ kind: 'quick-connect' }) },
 	{ key: 'w', ctrl: true, shift: true, action: 'Close tab', handler: closeActiveTab },
 	{ key: 'Tab', ctrl: true, action: 'Next tab', handler: nextTab },
 	{ key: 'Tab', ctrl: true, shift: true, action: 'Previous tab', handler: previousTab },
-	{ key: ',', ctrl: true, action: 'Open settings', handler: openSettings },
+	{ key: ',', ctrl: true, action: 'Open settings', handler: () => openSettings() },
 	{ key: 'p', ctrl: true, shift: true, action: 'Command palette', handler: openCommandPalette },
 	{ key: 'a', ctrl: true, shift: true, action: 'Toggle AI panel', handler: toggleAIPanel },
 	// The interface's size, as in a browser. Plus is Shift+= on most layouts

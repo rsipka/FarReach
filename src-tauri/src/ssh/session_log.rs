@@ -24,10 +24,12 @@
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
+use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::{mpsc, Arc, Mutex, OnceLock};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -204,14 +206,90 @@ impl vte::Perform for Printable {
     }
 }
 
+/// What goes to a log's writer thread.
+enum ToWriter {
+    Data(Vec<u8>),
+    /// Stop logging: close the file now.
+    Close,
+}
+
+const ON: u8 = 0;
+const PAUSED: u8 = 1;
+const STOPPED: u8 = 2;
+
+/// The part of a log the bottom bar can reach while the terminal owns it.
+struct Control {
+    state: AtomicU8,
+    tx: mpsc::Sender<ToWriter>,
+    path: PathBuf,
+    header: bool,
+}
+
+/// A log's state, for the bottom-bar indicator.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LogStatus {
+    pub path: String,
+    pub paused: bool,
+}
+
+/// The open logs, by terminal stream (an SSH connection id, or the stream a
+/// history tap records).
+fn registry() -> &'static Mutex<HashMap<String, Arc<Control>>> {
+    static REG: OnceLock<Mutex<HashMap<String, Arc<Control>>>> = OnceLock::new();
+    REG.get_or_init(Default::default)
+}
+
+fn status_of(c: &Control) -> LogStatus {
+    LogStatus { path: c.path.display().to_string(), paused: c.state.load(Ordering::Relaxed) == PAUSED }
+}
+
+/// A marker line, so a gap in the log is visible when it is read later.
+fn marker(what: &str) -> Vec<u8> {
+    format!("\r\n=~=~=~=~=~=~=~=~=~=~=~= Reach log {} {} =~=~=~=~=~=~=~=~=~=~=~=\r\n", what, chrono::Local::now().format("%Y.%m.%d %H:%M:%S")).into_bytes()
+}
+
+/// The log of `stream`, if it is writing or paused.
+pub fn log_status(stream: &str) -> Option<LogStatus> {
+    registry().lock().unwrap_or_else(|e| e.into_inner()).get(stream).map(|c| status_of(c))
+}
+
+/// Pauses or resumes the log of `stream`. Output while paused is not
+/// written; with the header on, the file marks where it paused and resumed.
+pub fn set_log_paused(stream: &str, paused: bool) -> Option<LogStatus> {
+    let reg = registry().lock().unwrap_or_else(|e| e.into_inner());
+    let c = reg.get(stream)?;
+    let (from, to, what) = if paused { (ON, PAUSED, "paused") } else { (PAUSED, ON, "resumed") };
+    if c.state.compare_exchange(from, to, Ordering::Relaxed, Ordering::Relaxed).is_ok() && c.header {
+        let _ = c.tx.send(ToWriter::Data(marker(what)));
+    }
+    Some(status_of(c))
+}
+
+/// Stops the log of `stream` for good: the file is closed and nothing more
+/// is written to it while the tab lives. Returns whether there was one.
+pub fn stop_log(stream: &str) -> bool {
+    let Some(c) = registry().lock().unwrap_or_else(|e| e.into_inner()).remove(stream) else {
+        return false;
+    };
+    if c.state.swap(STOPPED, Ordering::Relaxed) != STOPPED {
+        if c.header {
+            let _ = c.tx.send(ToWriter::Data(marker("stopped")));
+        }
+        let _ = c.tx.send(ToWriter::Close);
+    }
+    true
+}
+
 /// One session's log. Writing happens on its own thread, so a slow disk can
 /// never hold up the terminal; dropping this closes the file once everything
 /// sent has been written.
 pub struct SessionLog {
     mode: LogMode,
     parser: vte::Parser,
-    tx: mpsc::Sender<Vec<u8>>,
-    path: PathBuf,
+    control: Arc<Control>,
+    /// The stream it is registered under, for pause and stop.
+    stream: Option<String>,
 }
 
 impl SessionLog {
@@ -226,30 +304,55 @@ impl SessionLog {
             file.write_all(header_line(&now).as_bytes())?;
             file.flush()?;
         }
-        let (tx, rx) = mpsc::channel::<Vec<u8>>();
+        let (tx, rx) = mpsc::channel::<ToWriter>();
         let shown = path.display().to_string();
         std::thread::Builder::new().name("ssh-log".into()).spawn(move || {
             while let Ok(first) = rx.recv() {
-                let mut ok = file.write_all(&first).is_ok();
-                while let Ok(more) = rx.try_recv() {
-                    ok = ok && file.write_all(&more).is_ok();
+                let mut ok = true;
+                let mut close = false;
+                for msg in std::iter::once(first).chain(std::iter::from_fn(|| rx.try_recv().ok())) {
+                    match msg {
+                        ToWriter::Data(b) => ok = ok && file.write_all(&b).is_ok(),
+                        ToWriter::Close => {
+                            close = true;
+                            break;
+                        }
+                    }
                 }
                 // PuTTY's "flush log file frequently", which is its default.
                 if !ok || file.flush().is_err() {
                     tracing::error!("session log: writing {} failed, logging stopped", shown);
                     return;
                 }
+                if close {
+                    return;
+                }
             }
         })?;
-        Ok(SessionLog { mode: cfg.mode, parser: vte::Parser::new(), tx, path })
+        let control = Arc::new(Control { state: AtomicU8::new(ON), tx, path, header: cfg.header });
+        Ok(SessionLog { mode: cfg.mode, parser: vte::Parser::new(), control, stream: None })
+    }
+
+    /// Lets the bottom bar pause and stop this log by `stream`.
+    pub fn register(&mut self, stream: &str) {
+        registry().lock().unwrap_or_else(|e| e.into_inner()).insert(stream.to_string(), self.control.clone());
+        self.stream = Some(stream.to_string());
     }
 
     pub fn path(&self) -> &Path {
-        &self.path
+        &self.control.path
+    }
+
+    /// Whether it still writes (not stopped from the bottom bar).
+    pub fn is_open(&self) -> bool {
+        self.control.state.load(Ordering::Relaxed) != STOPPED
     }
 
     /// Logs output exactly as it is about to be shown.
     pub fn push(&mut self, text: &str) {
+        if self.control.state.load(Ordering::Relaxed) != ON {
+            return;
+        }
         let bytes = match self.mode {
             LogMode::All => text.as_bytes().to_vec(),
             LogMode::Printable => {
@@ -259,7 +362,20 @@ impl SessionLog {
             }
         };
         if !bytes.is_empty() {
-            let _ = self.tx.send(bytes);
+            let _ = self.control.tx.send(ToWriter::Data(bytes));
+        }
+    }
+}
+
+impl Drop for SessionLog {
+    fn drop(&mut self) {
+        // Only its own entry: a reconnect may have registered a new log
+        // under the same stream.
+        if let Some(stream) = &self.stream {
+            let mut reg = registry().lock().unwrap_or_else(|e| e.into_inner());
+            if reg.get(stream).is_some_and(|c| Arc::ptr_eq(c, &self.control)) {
+                reg.remove(stream);
+            }
         }
     }
 }

@@ -6,9 +6,13 @@
 //! vault opens (`saved_credential_commands::credential_keys_unlock`), and a
 //! passphrase typed at a connect is kept too. Nothing is written anywhere:
 //! the passphrases go when the vault locks, when the setting is turned off
-//! and when the app quits. A passphrase is kept by the hash of the key it
-//! opens, so the same key reached another way (a credential, a session's own
-//! key, an IdentityFile) is open as well.
+//! and when the app quits. A passphrase is kept by the key it opens: its
+//! public key when the key text shows it without the passphrase (OpenSSH,
+//! .ppk), and the text itself. So the same key reached another way (a
+//! credential, a session's own key or key file, an IdentityFile, another
+//! copy or format of it in the key store) is open as well. Only the keys of
+//! saved credentials are asked for at start; a key that sessions use
+//! directly is kept once it has been typed at a connect.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -26,9 +30,38 @@ fn kept() -> &'static Mutex<HashMap<KeyHash, Zeroizing<String>>> {
     K.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// Which key this is, whatever line ends or byte order mark its text has.
-pub(crate) fn hash(material: &str) -> KeyHash {
+/// The key text, whatever line ends or byte order mark it has.
+fn text_hash(material: &str) -> KeyHash {
     Sha256::digest(super::client::normalize_key_text(material).as_bytes()).into()
+}
+
+/// The SHA-256 fingerprint of the public key, read without the passphrase:
+/// an OpenSSH key carries it in the clear, a .ppk in its `Public-Lines`. An
+/// encrypted PEM key does not show it.
+fn public_hash(material: &str) -> Option<KeyHash> {
+    let text = super::client::normalize_key_text(material);
+    if let Ok(key) = russh::keys::ssh_key::PrivateKey::from_openssh(&text) {
+        let fp = key.public_key().fingerprint(russh::keys::HashAlg::Sha256);
+        return fp.as_bytes().try_into().ok();
+    }
+    if text.starts_with("PuTTY-User-Key-File-") {
+        let mut lines = text.lines();
+        let count: usize = lines.by_ref().find_map(|l| l.strip_prefix("Public-Lines:"))?.trim().parse().ok()?;
+        let b64: String = lines.take(count).collect();
+        let blob = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b64).ok()?;
+        return Some(Sha256::digest(&blob).into());
+    }
+    None
+}
+
+/// Every name the key is kept under: its public key first, if it shows.
+fn ids(material: &str) -> Vec<KeyHash> {
+    public_hash(material).into_iter().chain(std::iter::once(text_hash(material))).collect()
+}
+
+/// Which key this is: two texts with the same id are the same key.
+pub(crate) fn hash(material: &str) -> KeyHash {
+    ids(material)[0]
 }
 
 pub(crate) fn enabled() -> bool {
@@ -43,16 +76,43 @@ pub(crate) fn set_enabled(on: bool) {
     }
 }
 
-/// The passphrase kept for this key, if any.
+/// The passphrase kept for this key, if any. Kept for another copy of the
+/// same key, it may not open this one (its passphrase was changed): the
+/// caller tries it and asks when it does not.
 pub(crate) fn get(material: &str) -> Option<String> {
-    kept().lock().unwrap().get(&hash(material)).map(|p| p.as_str().to_string())
+    let kept = kept().lock().unwrap();
+    ids(material).iter().find_map(|id| kept.get(id)).map(|p| p.as_str().to_string())
 }
 
 /// Keep a passphrase that has just opened this key. Does nothing while the
 /// setting is off.
 pub(crate) fn remember(material: &str, passphrase: &str) {
     if enabled() && !passphrase.is_empty() {
-        kept().lock().unwrap().insert(hash(material), Zeroizing::new(passphrase.to_string()));
+        let mut kept = kept().lock().unwrap();
+        for id in ids(material) {
+            kept.insert(id, Zeroizing::new(passphrase.to_string()));
+        }
+    }
+}
+
+/// Every name this key is kept under, as text, for the passphrases kept
+/// behind the device biometric ([`super::biometric_keys`]).
+pub(crate) fn key_ids(material: &str) -> Vec<String> {
+    ids(material).iter().map(|id| base64::Engine::encode(&base64::engine::general_purpose::STANDARD, id)).collect()
+}
+
+/// Keep a passphrase under names from [`key_ids`]: one the device biometric
+/// gave back. Does nothing while the setting is off.
+pub(crate) fn remember_ids(names: &[String], passphrase: &str) {
+    if !enabled() || passphrase.is_empty() {
+        return;
+    }
+    let mut kept = kept().lock().unwrap();
+    for name in names {
+        let id = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, name).ok();
+        if let Some(id) = id.and_then(|b| KeyHash::try_from(b.as_slice()).ok()) {
+            kept.insert(id, Zeroizing::new(passphrase.to_string()));
+        }
     }
 }
 
@@ -108,5 +168,52 @@ mod tests {
         remember(ENCRYPTED, PASSPHRASE);
         set_enabled(false);
         assert_eq!(get(ENCRYPTED), None, "turning the setting off forgets");
+    }
+
+    /// The same key encrypted again: another salt, so other text.
+    fn another_copy(passphrase: &str) -> String {
+        let key = ssh_key::PrivateKey::from_openssh(ENCRYPTED).unwrap().decrypt(PASSPHRASE).unwrap();
+        let copy = key.encrypt(&mut rsa::rand_core::OsRng, passphrase).unwrap();
+        copy.to_openssh(ssh_key::LineEnding::LF).unwrap().to_string()
+    }
+
+    #[test]
+    fn the_same_key_in_another_copy_is_open_too() {
+        let _alone = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        set_enabled(true);
+        forget();
+        let copy = another_copy(PASSPHRASE);
+        assert_ne!(text_hash(&copy), text_hash(ENCRYPTED), "the copy's text differs");
+        assert_eq!(hash(&copy), hash(ENCRYPTED), "but it is the same key");
+
+        // Unlocked as the credential's key, open as a session's own key file.
+        remember(ENCRYPTED, PASSPHRASE);
+        assert!(opens(&copy, None));
+
+        // A copy with another passphrase gets the kept one, which does not
+        // open it: the connect asks, as before.
+        let changed = another_copy("other");
+        assert_eq!(get(&changed).as_deref(), Some(PASSPHRASE));
+        assert!(!opens(&changed, None));
+
+        // A key of another identity is not open.
+        assert_eq!(get(PLAIN), None);
+        forget();
+        set_enabled(false);
+    }
+
+    #[test]
+    fn a_ppk_is_known_by_its_public_key() {
+        let key = ssh_key::PrivateKey::from_openssh(ENCRYPTED).unwrap();
+        let blob = key.public_key().to_bytes().unwrap();
+        let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, blob);
+        let (a, b) = b64.split_at(40);
+        let ppk = format!("PuTTY-User-Key-File-3: ssh-ed25519\nEncryption: aes256-cbc\nComment: test\nPublic-Lines: 2\n{a}\n{b}\nPrivate-Lines: 1\nAAAA\n");
+        assert_eq!(public_hash(&ppk), public_hash(ENCRYPTED));
+        assert!(public_hash(&ppk).is_some());
+        // An encrypted PEM key does not show its public key: known by its text.
+        let pem = "-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: AES-128-CBC,00\n\nAAAA\n-----END RSA PRIVATE KEY-----\n";
+        assert_eq!(public_hash(pem), None);
+        assert_eq!(hash(pem), text_hash(pem));
     }
 }

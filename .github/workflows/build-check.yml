@@ -138,7 +138,7 @@ jobs:
           done
           echo "full=$full" | tee -a "$GITHUB_OUTPUT"
           if [ "$full" = true ]; then
-            echo 'platforms=["macos-latest", "ubuntu-22.04", "windows-latest"]'
+            echo 'platforms=["macos", "ubuntu-22.04", "windows-latest"]'
           else
             echo 'platforms=["ubuntu-22.04"]'
           fi | tee -a "$GITHUB_OUTPUT"
@@ -176,7 +176,8 @@ jobs:
         # Linux only in the fast tier.
         platform: ${{ fromJSON(needs.changes.outputs.platforms) }}
 
-    runs-on: ${{ matrix.platform }}
+    # "macos" is not a runner name: see MACOS_RUNNER_LABEL in .github/ci-runners.md.
+    runs-on: ${{ matrix.platform == 'macos' && (github.event_name != 'pull_request' && vars.MACOS_RUNNER_LABEL || 'macos-15') || matrix.platform }}
     steps:
       - uses: actions/checkout@v7
 
@@ -193,10 +194,60 @@ jobs:
         # forward on purpose, here and in release.yml together.
         uses: dtolnay/rust-toolchain@1.99.1
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos' && 'x86_64-apple-darwin' || '' }}
           components: clippy
 
+      # Keep the Mac's own tools out of the build. MacPorts (/opt/local) has
+      # its own Rust, without the cross targets installed above, and its own
+      # pkg-config, through which the app was linked to MacPorts' libz: the
+      # released app then would not start on any other Mac (0.9.2-dev.7).
+      - name: Build with rustup's Rust and macOS's own libraries
+        if: runner.environment == 'self-hosted'
+        run: |
+          echo "PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '^/opt/local' | paste -sd: -)" >> "$GITHUB_ENV"
+          echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
+          for v in PKG_CONFIG_PATH LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH \
+                   DYLD_LIBRARY_PATH DYLD_FALLBACK_LIBRARY_PATH; do
+            echo "$v=" >> "$GITHUB_ENV"
+          done
+          # Two build tools that GitHub's Macs have preinstalled: cmake
+          # (libopus_sys builds Opus from source) and pod (tauri ios build
+          # runs pod install). Where they only come from MacPorts, link just
+          # those two programs into PATH, not MacPorts' libraries or
+          # pkg-config. Homebrew is the fallback (slow on Intel Macs, which it
+          # builds from source). The release's otool check still fails on any
+          # library from outside macOS.
+          tools="$RUNNER_TEMP/build-tools"
+          mkdir -p "$tools"
+          clean_path=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '^/opt/local' | paste -sd: -)
+          for tool in cmake:cmake pod:cocoapods; do
+            bin=${tool%%:*} formula=${tool#*:}
+            PATH="$clean_path" command -v "$bin" >/dev/null && continue
+            if [ -x "/opt/local/bin/$bin" ]; then
+              ln -sf "/opt/local/bin/$bin" "$tools/$bin"
+            else
+              HOMEBREW_NO_AUTO_UPDATE=1 brew install "$formula"
+            fi
+          done
+          echo "$tools" >> "$GITHUB_PATH"
+
+      # On a self-hosted Mac the build stays on its own disk instead of going
+      # through GitHub's cache: saving and restoring that cache moved about
+      # 1.5 GB over the Mac's connection on every run. checkout wipes
+      # src-tauri/target, so it is a link to a folder kept between jobs.
+      - name: Keep Rust builds on the self-hosted Mac
+        if: runner.environment == 'self-hosted'
+        run: |
+          # -2: build scripts in the first folder remembered MacPorts' libz.
+          keep="$RUNNER_TOOL_CACHE/reachercm-target-2"
+          mkdir -p "$keep"
+          rm -rf src-tauri/target
+          ln -s "$keep" src-tauri/target
+          # Bundles of an earlier version must not end up in this release.
+          rm -rf "$keep"/release/bundle "$keep"/*/release/bundle
+
       - name: Rust cache
+        if: runner.environment != 'self-hosted'
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
@@ -227,9 +278,9 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy --lib --tests -- -D warnings
 
-      # The runner is Apple silicon; Intel Macs get their own release build.
+      # GitHub's runner is Apple silicon; Intel Macs get their own release build.
       - name: Build for Intel Macs
-        if: matrix.platform == 'macos-latest'
+        if: matrix.platform == 'macos'
         working-directory: src-tauri
         run: cargo build --lib --target x86_64-apple-darwin
 
@@ -239,7 +290,7 @@ jobs:
   android:
     needs: changes
     if: needs.changes.outputs.rust == 'true' && needs.changes.outputs.full == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -312,7 +363,7 @@ jobs:
   android-apk:
     needs: changes
     if: needs.changes.outputs.mobile == 'true' && needs.changes.outputs.full == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -354,11 +405,13 @@ jobs:
       - name: Initialize Android project
         run: |
           npx tauri android init
-          # init generates the project with Tauri's placeholder icon; Reach's
+          # init generates the project with Tauri's placeholder icon; Reacher CM's
           # launcher icons (adaptive included) replace it.
           cp -r src-tauri/icons/android/. src-tauri/gen/android/app/src/main/res/
           # Its activity also makes room for the phone keyboard (#127).
           cp src-tauri/android/MainActivity.kt src-tauri/gen/android/app/src/main/java/com/reachercm/client/MainActivity.kt
+          # R8 keep rules for the QR code scanner's ML Kit.
+          cat src-tauri/android/proguard-rules.pro >> src-tauri/gen/android/app/proguard-rules.pro
 
       - name: Make a throwaway signing key
         run: keytool -genkeypair -keystore "$RUNNER_TEMP/check.keystore" -alias reach -keyalg RSA -keysize 2048 -validity 1 -storepass checkcheck -keypass checkcheck -dname "CN=Build check"
@@ -408,6 +461,12 @@ jobs:
           [ "$(wc -l < /tmp/apks)" -eq 2 ]
           BUILD_TOOLS=$(ls -d $ANDROID_SDK_ROOT/build-tools/*/ | sort -V | tail -1)
           while read apk; do ${BUILD_TOOLS}apksigner verify "$apk"; done < /tmp/apks
+
+      - name: The QR scanner's keep rules reached R8
+        run: |
+          conf=$(find src-tauri/gen/android/app/build/outputs/mapping -name configuration.txt | head -1)
+          if [ -z "$conf" ]; then echo "::warning::No R8 configuration.txt to check."; exit 0; fi
+          grep -q 'implements com.google.firebase.components.ComponentRegistrar' "$conf"
 
   # The one check to require in branch protection: it always runs, passes
   # when every job above passed or was skipped, and fails otherwise.

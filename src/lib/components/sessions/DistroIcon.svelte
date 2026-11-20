@@ -4,7 +4,16 @@
 	let { osId, size = 16 }: { osId: string | undefined | null; size?: number } = $props();
 
 	let icon = $derived(getDistroIcon(osId));
-	let fill = $derived(icon && icon.hex.toLowerCase() === '000000' ? '#f5f5f7' : icon ? `#${icon.hex}` : '');
+	// A black logo (Apple, MikroTik) takes the text colour, so it shows on a
+	// dark theme and a light one alike. Every logo with a colour of its own
+	// (Debian's red, Red Hat's, SUSE's green) keeps it.
+	let fill = $derived(icon ? (isBlack(icon.hex) ? 'var(--color-text-primary)' : `#${icon.hex}`) : '');
+
+	function isBlack(hex: string): boolean {
+		const n = parseInt(hex, 16);
+		const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+		return Math.max(...c) < 64 && Math.max(...c) - Math.min(...c) < 24;
+	}
 </script>
 
 {#if icon}

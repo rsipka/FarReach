@@ -11,6 +11,14 @@
 //!   when it is left;
 //! - otherwise `new-session -A`: attach, or create it.
 //!
+//! An SSH tab instead joins as a view of its own (`TmuxStart::view`): the
+//! session is created detached if it is not there, and the tab gets a
+//! session grouped with it, named `NAME-VIEW`. Grouped sessions share their
+//! windows but each shows its own, so every tab can be one tmux window; the
+//! view goes away with its tab (destroy-unattached), the windows stay. The
+//! view sets the terminal's title to `@ID NAME` of its window, which is how
+//! the tab learns which window it shows.
+//!
 //! Only names made of letters, digits, `-` and `_` are accepted, and a
 //! login shell is passed on only when it is made of plain words, so
 //! nothing from a session can break out of the script.
@@ -21,7 +29,7 @@ use serde::{Deserialize, Serialize};
 const MAX_NAME: usize = 64;
 
 /// What a connect asks of tmux.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TmuxStart {
     /// The tmux session to attach to or create.
@@ -34,6 +42,36 @@ pub struct TmuxStart {
     /// tmux's history (the session's own option; .tmux.conf stays as it is).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub mouse: bool,
+    /// The tab's own view of the session: a session grouped with it, named
+    /// `{name}-{view}` (see `view_name`). Unset: the tab attaches to the
+    /// session itself, or a view tmux names, as a WSL tab does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<String>,
+    /// The window a view opens on: `new` for a new one, or a window id
+    /// (`@3`). Unset: the window with the latest activity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window: Option<String>,
+    /// Turn tmux's status line off in the view.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hide_status: bool,
+}
+
+/// A view's tag: lowercase letters and digits, at most 16.
+fn valid_view(tag: &str) -> bool {
+    !tag.is_empty() && tag.len() <= 16 && tag.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+}
+
+/// A window id as tmux writes it: `@` and digits.
+fn valid_window_id(id: &str) -> bool {
+    id.len() > 1 && id.len() <= 12 && id.starts_with('@') && id[1..].bytes().all(|b| b.is_ascii_digit())
+}
+
+/// The session a view tab is attached to: `{name}-{view}`.
+pub fn view_name(name: &str, view: &str) -> Result<String, String> {
+    if !valid_name(name) || !valid_view(view) {
+        return Err(format!("'{name}-{view}' is not a tmux view this app uses"));
+    }
+    Ok(format!("{name}-{view}"))
 }
 
 /// A session's own tmux choice, as saved with it. `mode` is `off`,
@@ -89,7 +127,7 @@ pub struct Listed {
 /// Lists the server's tmux sessions, one per line, fields split by `:`,
 /// which tmux never allows in a session name (a tab would come out as `_`).
 pub const LIST_COMMAND: &str =
-    "tmux list-sessions -F '#{session_name}:#{session_windows}:#{session_attached}:#{session_activity}:#{session_group}' 2>/dev/null";
+    "tmux list-sessions -F '#{session_name}:#{session_windows}:#{session_attached}:#{session_activity}:#{session_group}:#{session_group_attached}' 2>/dev/null";
 
 /// The sessions in `tmux list-sessions` output (see `LIST_COMMAND`), most
 /// recently used first. Sessions another session was grouped with (a
@@ -109,7 +147,9 @@ pub fn parse_list(out: &str) -> Vec<Listed> {
             Some(Listed {
                 name: f[0].to_string(),
                 windows: f[1].parse().unwrap_or(0),
-                attached: f[2].parse().unwrap_or(0),
+                // Tabs attach to views grouped with it (see `view_name`):
+                // the group's count is what is attached to it.
+                attached: f[2].parse::<u32>().unwrap_or(0).max(f.get(5).and_then(|g| g.parse().ok()).unwrap_or(0)),
                 activity: f[3].parse().unwrap_or(0),
             })
         })
@@ -203,7 +243,7 @@ impl Ask {
         let (record, command) = match choice {
             Choice::NoTmux => (None, None),
             Choice::Session(name) => {
-                let start = TmuxStart { name: name.clone(), ask: false, mouse: self.start.mouse };
+                let start = TmuxStart { name: name.clone(), ask: false, ..self.start.clone() };
                 let cmd = start_command(&start, self.shell.as_deref()).map_err(SshError::ConnectionFailed)?;
                 (Some(name), Some(cmd))
             }
@@ -255,6 +295,58 @@ pub fn start_script(start: &TmuxStart, shell: Option<&str>) -> Result<String, St
     let window = plain_shell(shell);
     let window_arg = window.as_deref().map(|w| format!(" {w}")).unwrap_or_default();
     let fallback = window.as_deref().map(|w| format!("exec {w}")).unwrap_or_else(|| "exec \"${SHELL:-/bin/sh}\" -l".to_string());
+    let mouse = if start.mouse { " \\; set-option mouse on" } else { "" };
+    if let Some(tag) = start.view.as_deref() {
+        let view = view_name(n, tag)?;
+        // What the view shows first: a new window (running the login
+        // shell, as the first one does), the one asked for, or the one
+        // with the latest activity (the base session's own current window
+        // never moves, since nobody is attached to it).
+        let select = match start.window.as_deref() {
+            Some("new") => format!(" \\; new-window{window_arg}"),
+            Some(id) if valid_window_id(id) => format!(" \\; select-window -t :{id}"),
+            Some(other) => return Err(format!("'{other}' is not a tmux window")),
+            None => " \\; select-window -t \"${W:-:}\"".to_string(),
+        };
+        let latest = if start.window.is_none() {
+            "W=$(tmux list-windows -t ={n} -F \"#{window_activity} #{window_id}\" 2>/dev/null | sort -n | tail -n 1 | cut -d\" \" -f2); "
+                .replace("{n}", n)
+        } else {
+            String::new()
+        };
+        let status = if start.hide_status { " \\; set-option status off" } else { "" };
+        let script = format!(
+            concat!(
+                "if command -v tmux >/dev/null 2>&1; then ",
+                "F=; tmux -TRGB -V >/dev/null 2>&1 && F=-TRGB; ",
+                // Still there: the connection dropped before the server
+                // noticed. Take it over.
+                "if tmux has-session -t ={view} 2>/dev/null; then exec tmux $F attach-session -t ={view}{select_again}; fi; ",
+                "tmux has-session -t ={n} 2>/dev/null || tmux new-session -d -s {n}{window} || exit 1; ",
+                "{latest}",
+                "exec tmux $F new-session -t ={n} -s {view} \\; set-option destroy-unattached on",
+                " \\; set-option set-titles on \\; set-option set-titles-string \"#{{window_id}} #W\"",
+                "{mouse}{status}{select}; ",
+                "fi; ",
+                "printf \"\\033[33m%s\\033[0m\\r\\n\" \"{msg}\"; ",
+                "{fallback}"
+            ),
+            n = n,
+            view = view,
+            window = window_arg,
+            latest = latest,
+            select = select,
+            select_again = match start.window.as_deref() {
+                Some(id) if valid_window_id(id) => format!(" \\; select-window -t :{id}"),
+                _ => String::new(),
+            },
+            mouse = mouse,
+            status = status,
+            msg = NO_TMUX,
+            fallback = fallback,
+        );
+        return Ok(script);
+    }
     let script = format!(
         concat!(
             "if command -v tmux >/dev/null 2>&1; then ",
@@ -272,9 +364,97 @@ pub fn start_script(start: &TmuxStart, shell: Option<&str>) -> Result<String, St
         window = window_arg,
         msg = NO_TMUX,
         fallback = fallback,
-        mouse = if start.mouse { " \\; set-option mouse on" } else { "" },
+        mouse = mouse,
     );
     Ok(script)
+}
+
+/// One window of a tab's tmux session.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Window {
+    /// tmux's id for it (`@3`), which stays while it lives.
+    pub id: String,
+    pub index: u32,
+    pub name: String,
+    /// The program in its active pane.
+    pub command: String,
+    pub panes: u32,
+    /// The window the tab's view shows.
+    pub active: bool,
+}
+
+/// Lists the windows of view `view`, one per line, the name last (it is the
+/// only field that can hold a `:`).
+pub fn windows_command(view: &str) -> String {
+    format!("tmux list-windows -t ={view} -F '#{{window_id}}:#{{window_index}}:#{{window_active}}:#{{window_panes}}:#{{pane_current_command}}:#{{window_name}}' 2>/dev/null")
+}
+
+pub fn parse_windows(out: &str) -> Vec<Window> {
+    let mut list: Vec<Window> = out
+        .lines()
+        .filter_map(|line| {
+            let f: Vec<&str> = line.splitn(6, ':').collect();
+            if f.len() < 6 || !valid_window_id(f[0]) {
+                return None;
+            }
+            Some(Window {
+                id: f[0].to_string(),
+                index: f[1].parse().unwrap_or(0),
+                active: f[2] == "1",
+                panes: f[3].parse().unwrap_or(1),
+                command: f[4].to_string(),
+                name: f[5].to_string(),
+            })
+        })
+        .collect();
+    list.sort_by_key(|w| w.index);
+    list
+}
+
+/// What a tab's Windows menu asks of its view.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum WindowOp {
+    /// Show this window in the tab.
+    Select { window: String },
+    Rename { window: String, name: String },
+    Close { window: String },
+    /// A new window, shown in the tab.
+    New,
+}
+
+/// Quoted for the account's shell (sh, bash, zsh, fish and csh alike).
+fn quoted(text: &str) -> String {
+    format!("'{}'", text.replace('\'', "'\\''"))
+}
+
+/// The command for `op` on view `view`; `shell` is the session's login
+/// shell, which a new window runs as the first one does.
+pub fn window_command(view: &str, op: &WindowOp, shell: Option<&str>) -> Result<String, String> {
+    let target = |id: &str| -> Result<String, String> {
+        if valid_window_id(id) {
+            Ok(format!("={view}:{id}"))
+        } else {
+            Err(format!("'{id}' is not a tmux window"))
+        }
+    };
+    Ok(match op {
+        WindowOp::Select { window } => format!("tmux select-window -t {}", target(window)?),
+        WindowOp::Close { window } => format!("tmux kill-window -t {}", target(window)?),
+        WindowOp::Rename { window, name } => {
+            let name: String = name.chars().filter(|c| !c.is_control()).take(100).collect();
+            let name = name.trim();
+            if name.is_empty() {
+                return Err("A tmux window needs a name".into());
+            }
+            format!("tmux rename-window -t {} {}", target(window)?, quoted(name))
+        }
+        WindowOp::New => {
+            let shell = plain_shell(shell).map(|w| format!(" {w}")).unwrap_or_default();
+            format!("tmux new-window -t ={view}:{shell}")
+        }
+    })
 }
 
 /// Ends the tmux session `name` and every session grouped with it (the
@@ -293,12 +473,57 @@ mod tests {
     use super::*;
 
     fn start(name: &str) -> TmuxStart {
-        TmuxStart { name: name.to_string(), ask: false, mouse: false }
+        TmuxStart { name: name.to_string(), ..Default::default() }
+    }
+
+    fn view(window: Option<&str>) -> TmuxStart {
+        TmuxStart { name: "w".into(), view: Some("ab12".into()), window: window.map(String::from), ..Default::default() }
+    }
+
+    #[test]
+    fn a_view_joins_the_session_as_its_own() {
+        let c = start_script(&view(None), None).unwrap();
+        assert!(c.contains("tmux has-session -t =w 2>/dev/null || tmux new-session -d -s w || exit 1;"), "{c}");
+        assert!(c.contains("new-session -t =w -s w-ab12 \\; set-option destroy-unattached on"), "{c}");
+        assert!(c.contains("set-titles-string \"#{window_id} #W\""), "{c}");
+        assert!(c.contains("select-window -t \"${W:-:}\""), "{c}");
+        assert!(!c.contains("status off"), "{c}");
+        let c = start_script(&TmuxStart { hide_status: true, ..view(Some("new")) }, Some("fish")).unwrap();
+        assert!(c.contains("set-option status off \\; new-window fish -l;"), "{c}");
+        assert!(!c.contains("W=$("), "{c}");
+        let c = start_script(&view(Some("@7")), None).unwrap();
+        assert!(c.contains("attach-session -t =w-ab12 \\; select-window -t :@7;"), "{c}");
+        assert!(c.contains("\\; select-window -t :@7; fi;"), "{c}");
+    }
+
+    #[test]
+    fn views_and_windows_are_checked() {
+        assert!(start_script(&view(Some("@7; rm")), None).is_err());
+        assert!(start_script(&TmuxStart { view: Some("AB".into()), ..view(None) }, None).is_err());
+        assert!(view_name("w", "x y").is_err());
+        assert_eq!(view_name("w", "ab12").unwrap(), "w-ab12");
+        assert!(window_command("w-1", &WindowOp::Select { window: "3".into() }, None).is_err());
+        assert_eq!(window_command("w-1", &WindowOp::Close { window: "@3".into() }, None).unwrap(), "tmux kill-window -t =w-1:@3");
+        assert_eq!(
+            window_command("w-1", &WindowOp::Rename { window: "@3".into(), name: "it's\nlogs".into() }, None).unwrap(),
+            "tmux rename-window -t =w-1:@3 'it'\\''slogs'"
+        );
+        assert!(window_command("w-1", &WindowOp::Rename { window: "@3".into(), name: " ".into() }, None).is_err());
+        assert_eq!(window_command("w-1", &WindowOp::New, Some("zsh")).unwrap(), "tmux new-window -t =w-1: zsh -l");
+    }
+
+    #[test]
+    fn windows_are_listed_in_order_names_may_hold_colons() {
+        let out = "@4:2:0:1:vim:notes: todo\n@1:0:1:2:bash:main\nbroken\n";
+        let w = parse_windows(out);
+        assert_eq!(w.len(), 2);
+        assert_eq!(w[0], Window { id: "@1".into(), index: 0, name: "main".into(), command: "bash".into(), panes: 2, active: true });
+        assert_eq!(w[1].name, "notes: todo");
     }
 
     #[test]
     fn mouse_mode_is_set_on_the_session_only() {
-        let c = start_command(&TmuxStart { name: "w".into(), ask: false, mouse: true }, None).unwrap();
+        let c = start_command(&TmuxStart { name: "w".into(), mouse: true, ..Default::default() }, None).unwrap();
         assert!(c.contains("new-session -A -s w \\; set-option mouse on;"), "{c}");
         assert!(c.contains("destroy-unattached on \\; set-option mouse on;"), "{c}");
         assert!(!c.contains("-g"), "{c}");
@@ -310,6 +535,15 @@ mod tests {
         let names: Vec<String> = parse_list(out).into_iter().map(|l| l.name).collect();
         assert_eq!(names, ["w", "new", "old"]);
         assert_eq!(parse_list(out)[0], Listed { name: "w".into(), windows: 3, attached: 1, activity: 300 });
+    }
+
+    #[test]
+    fn a_session_counts_the_tabs_attached_to_its_views() {
+        let out = "w:3:0:300:w:2\nw-ab12:3:1:300:w:2\nw-cd34:3:1:300:w:2\nsolo:1:1:100::\n";
+        let l = parse_list(out);
+        assert_eq!(l.len(), 2);
+        assert_eq!((l[0].name.as_str(), l[0].attached), ("w", 2));
+        assert_eq!((l[1].name.as_str(), l[1].attached), ("solo", 1));
     }
 
     #[test]

@@ -53,7 +53,7 @@ pub fn generate_providers_tf(
         // The passphrase is a variable, so the HCL can be committed and the
         // secret never can. Reach sets it from the vault at run time.
         out.push_str(&format!(
-            "\nvariable \"{}\" {{\n  type        = string\n  sensitive   = true\n  description = \"Passphrase for state and plan encryption. Set by Reach; never write it here.\"\n}}\n",
+            "\nvariable \"{}\" {{\n  type        = string\n  sensitive   = true\n  description = \"Passphrase for state and plan encryption. Set by Reacher CM; never write it here.\"\n}}\n",
             TofuEncryptionConfig::VAR
         ));
     }

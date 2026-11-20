@@ -15,6 +15,7 @@
 	import Toast from '#lib/components/shared/Toast.svelte';
 	import UpdateBanner from '#lib/components/shared/UpdateBanner.svelte';
 	import UpdateDialog from '#lib/components/shared/UpdateDialog.svelte';
+	import WhatsNewDialog from '#lib/components/shared/WhatsNewDialog.svelte';
 	import ActiveSessionsDialog from '#lib/components/shared/ActiveSessionsDialog.svelte';
 	import HostKeyDialog from '#lib/components/shared/HostKeyDialog.svelte';
 	import AuthPromptDialog from '#lib/components/shared/AuthPromptDialog.svelte';
@@ -250,6 +251,7 @@
 	<Toast />
 	<UpdateBanner />
 	<UpdateDialog open={updater.startupBlocking} />
+	<WhatsNewDialog />
 	<DuplicateVaultsDialog />
 
 	<ActiveSessionsDialog
@@ -299,6 +301,21 @@
 		box-sizing: border-box;
 		overflow: hidden;
 		background-color: var(--color-bg-primary);
+	}
+
+	/* iOS lays its keyboard over the page and scrolls the page up instead of
+	   making room (lib/keyboard-viewport.ts). The shell is pinned to the part
+	   still visible, so the bars stay put and the terminal gets shorter. */
+	:global(html.ios) .app-shell {
+		position: fixed;
+		left: 0;
+		top: var(--vv-top, 0px);
+		height: var(--vv-height, 100dvh);
+	}
+
+	/* The home indicator is under the keyboard then: no strip kept for it. */
+	:global(html.keyboard-open) .app-shell {
+		padding-bottom: 0;
 	}
 
 	.app-body {

@@ -3,13 +3,15 @@
 	import Modal from '#lib/components/shared/Modal.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
 	import KeyPicker from './KeyPicker.svelte';
-	import DistroIcon from './DistroIcon.svelte';
+	import OsIconSelect from './OsIconSelect.svelte';
 	import { osChoices } from '#lib/data/distro-icons.js';
 	import Input from '#lib/components/shared/Input.svelte';
 	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField, type TmuxSetting } from '#lib/ipc/sessions.js';
 	import { defaultTmuxName, folderTmux, validTmuxName } from '#lib/terminal/tmux.js';
-	import { isMobile, isWindows } from '#lib/platform.js';
+	import { isIos, isMobile, isWindows } from '#lib/platform.js';
+	import { APP_FILES_SHARE } from '#lib/ipc/rdp.js';
 	import SshOptionsSection from './SshOptionsSection.svelte';
+	import SessionHostKeys from './SessionHostKeys.svelte';
 	import Disclosure from '#lib/components/shared/Disclosure.svelte';
 	import TerminalThemeList from '#lib/components/terminal/TerminalThemeList.svelte';
 	import { findTerminalTheme, terminalPalette } from '#lib/state/terminal-themes.svelte.js';
@@ -31,10 +33,16 @@
 		editSession?: SessionConfig;
 		vaultId?: string | null; // Which vault to save to (null = private)
 		folders?: Folder[];
+		/** The folder a new session starts in (a folder's "New session here"). */
+		folderId?: string | null;
+		/** A session to copy: the form starts as it, and Save makes a new one. */
+		cloneSession?: SessionConfig;
 		onsave?: () => void;
 	}
 
-	let { open = $bindable(), editSession, vaultId = null, folders = [], onsave }: Props = $props();
+	let { open = $bindable(), editSession, vaultId = null, folders = [], folderId = null, cloneSession, onsave }: Props = $props();
+	/** The session the form was filled from: the one edited, or the one copied. */
+	let source = $derived(editSession ?? cloneSession);
 
 	/**
 	 * SSH or RDP. The two share a name, a host, a port and a username; RDP has
@@ -50,7 +58,7 @@
 	let kind = $state<SessionKind>('ssh');
 	let domain = $state('');
 	/** RDP only: the protocol cannot say what the machine is (xrdp claims to be Windows), so the user does. */
-	let os = $state<'windows' | 'linux'>('windows');
+	let os = $state<'windows' | 'linux' | 'gnome'>('windows');
 	// The OS found on the last connect is kept for good; Clear forgets it, so
 	// the next connect looks again. (From the ReachQ fork by CPTProgrammer.)
 	let osCleared = $state(false);
@@ -58,9 +66,25 @@
 	// A picked one is kept: connecting never replaces it.
 	let osChoice = $state('');
 	const osOptions = osChoices();
-	let autoOs = $derived(editSession && !editSession.os_manual && kind === sessionKind(editSession) && !osCleared ? (editSession.detected_os ?? '') : '');
+	let autoOs = $derived(source && !source.os_manual && kind === sessionKind(source) && !osCleared ? (source.detected_os ?? '') : '');
 	let osTitle = (id: string) => (id === 'unknown' ? t('session.os_none') : (osOptions.find((o) => o.id === id)?.title ?? id));
+	// The OS icon list: Automatic (SSH only, showing what was detected), No
+	// icon, a value no logo covers (kept as typed), then every logo.
+	let osIconOptions = $derived([
+		...(kind === 'ssh'
+			? [
+					{ value: '', label: autoOs ? t('session.os_auto_detected', { os: osTitle(autoOs) }) : t('session.os_auto'), osId: autoOs || null },
+					{ value: 'unknown', label: t('session.os_none'), osId: null }
+				]
+			: [{ value: '', label: t('session.os_none'), osId: null }]),
+		...(osChoice && osChoice !== 'unknown' && !osOptions.some((o) => o.id === osChoice) ? [{ value: osChoice, label: osChoice, osId: osChoice }] : []),
+		...osOptions.map((o) => ({ value: o.id, label: o.title, osId: o.id }))
+	]);
 	let sharePath = $state('');
+	/** iPhone and iPad: no folder can be named, the app's own folder in Files can be shared. */
+	const onIos = isIos();
+	/** What the RDP clipboard carries: '' for everything, 'text' for no files, 'off'. */
+	let rdpClipboard = $state<'' | 'text' | 'off'>('');
 	/** VNC only: the saved SSH session to go through, or '' for direct. */
 	let viaSessionId = $state('');
 	let wslDistro = $state('');
@@ -87,7 +111,13 @@
 	const OWN_LOGIN = 'own';
 	let credentialId = $state('');
 	let allCredentials = $state<SavedCredential[]>([]);
-	let sessionVault = $derived(editSession ? (editSession.vault_id ?? null) : vaultId);
+	let sessionVault = $derived(source ? (source.vault_id ?? null) : vaultId);
+	/** The folders this session can go in: its own vault's. One it is
+	 *  already in from another vault (older versions allowed that) stays
+	 *  listed so saving does not move it out unasked. */
+	let vaultFolders = $derived(
+		folders.filter((f) => (f.vault_id ?? null) === sessionVault || (!!source?.folder_id && f.id === source.folder_id))
+	);
 	let credentials = $derived(credentialsFor(allCredentials, sessionVault));
 
 	$effect(() => {
@@ -295,9 +325,42 @@
 	// each run put the fields back: every click in the editor was undone.
 	$effect(() => {
 		const session = editSession;
+		const copy = cloneSession;
 		if (!open) return;
-		untrack(() => fillForm(session));
+		untrack(() => {
+			fillForm(session ?? copy);
+			if (!session && copy) startClone(copy);
+		});
 	});
+
+	/**
+	 * A copy starts as its original, under a new name. A login a saved
+	 * credential filled in stays linked to that credential, but its secrets
+	 * are not copied into the new session as its own.
+	 */
+	function startClone(copy: SessionConfig): void {
+		name = t('session.clone_name', { name: copy.name });
+		if (copy.credential && !copy.credential.missing) {
+			authType = 'Password';
+			password = '';
+			passwordRef = null;
+			keyPath = '';
+			keyId = '';
+			keyPassphrase = '';
+			keyPassphraseRef = null;
+		}
+		for (const h of jumpHops) {
+			if (h.read?.credential && !h.read.credential.missing) {
+				h.authType = 'Password';
+				h.password = '';
+				h.passwordRef = null;
+				h.keyPath = '';
+				h.keyPassphrase = '';
+				h.keyPassphraseRef = null;
+			}
+			h.read = null;
+		}
+	}
 
 	function fillForm(editSession: SessionConfig | undefined): void {
 		osCleared = false;
@@ -305,8 +368,9 @@
 		if (editSession) {
 			kind = sessionKind(editSession);
 			domain = editSession.domain ?? '';
-			os = editSession.detected_os === 'linux' ? 'linux' : 'windows';
+			os = editSession.detected_os === 'linux' || editSession.detected_os === 'gnome' ? editSession.detected_os : 'windows';
 			sharePath = editSession.share_path ?? '';
+			rdpClipboard = editSession.rdp_clipboard ?? '';
 			viaSessionId = editSession.via_session_id ?? '';
 			wslDistro = editSession.wsl_distro ?? '';
 			telnetOptions = { ...DEFAULT_TELNET_OPTIONS, ...(editSession.telnet ?? {}) };
@@ -376,6 +440,7 @@
 			domain = '';
 			os = 'windows';
 			sharePath = '';
+			rdpClipboard = '';
 			viaSessionId = '';
 			telnetOptions = { ...DEFAULT_TELNET_OPTIONS };
 			serialOptions = { ...DEFAULT_SERIAL_OPTIONS };
@@ -395,7 +460,7 @@
 			shell = '';
 			sshOptions = {};
 			tagsStr = '';
-			folderIdStr = '';
+			folderIdStr = folderId ?? '';
 			notes = '';
 			customFields = [];
 			docsOpen = false;
@@ -568,6 +633,7 @@
 					detected_os: rdp ? os : osChoice ? osChoice : autoOs || null,
 					os_manual: !rdp && !!osChoice,
 					share_path: rdp ? (sharePath.trim() || null) : null,
+					rdp_clipboard: rdp && rdpClipboard ? rdpClipboard : null,
 					via_session_id: via,
 					try_agent_keys: !desktop && authType === 'Key' && tryAgentKeys ? true : null,
 					wsl_distro: kind === 'wsl' ? wslDistro.trim() : null,
@@ -598,15 +664,16 @@
 					authMethod: authMethod,
 					folderId: folderIdStr || null,
 					tags,
-					vaultId,
+					vaultId: sessionVault,
 					jumpChain: jumpChain ?? null,
 					proxy: proxyConfig,
 					shell: desktop ? null : (shell.trim() || null),
 					kind,
 					domain: rdp ? domain : null,
-					detectedOs: rdp ? os : (osChoice || null),
+					detectedOs: rdp ? os : (osChoice || autoOs || null),
 					osManual: !rdp && !!osChoice,
 					sharePath: rdp ? sharePath : null,
+					rdpClipboard: rdp && rdpClipboard ? rdpClipboard : null,
 					viaSessionId: via,
 					tryAgentKeys: !desktop && authType === 'Key' && tryAgentKeys,
 					sshOptions: sshOptionsToSave,
@@ -698,7 +765,7 @@
 	}
 </script>
 
-<Modal {open} onclose={handleClose} title={isEditing ? t('session.edit_session') : t('session.new')}>
+<Modal {open} onclose={handleClose} title={isEditing ? t('session.edit_session') : cloneSession ? t('session.clone_session') : t('session.new')}>
 	<form class="form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
 		<!-- Same control as the auth method below: one segmented row, and
 		     everything under it follows the choice. -->
@@ -835,8 +902,18 @@
 				<div class="auth-toggle">
 					<button type="button" class="auth-btn" class:active={os === 'windows'} disabled={saving} onclick={() => (os = 'windows')}>{t('session.os_windows')}</button>
 					<button type="button" class="auth-btn" class:active={os === 'linux'} disabled={saving} onclick={() => (os = 'linux')}>{t('session.os_linux')}</button>
+					<button type="button" class="auth-btn" class:active={os === 'gnome'} disabled={saving} onclick={() => (os = 'gnome')}>{t('session.os_gnome')}</button>
 				</div>
 			</div>
+			{#if onIos}
+			<div class="shell-field">
+				<label class="jump-toggle">
+					<input type="checkbox" checked={sharePath === APP_FILES_SHARE} disabled={saving} onchange={(e) => (sharePath = e.currentTarget.checked ? APP_FILES_SHARE : '')} />
+					<span class="jump-toggle-text">{t('session.rdp_share_app_files')}</span>
+				</label>
+				<p class="shell-hint">{t('session.rdp_share_app_files_hint')}</p>
+			</div>
+			{:else}
 			<div class="shell-field">
 				<div class="key-path-row">
 					<div class="key-path-input">
@@ -847,6 +924,16 @@
 					</Button>
 				</div>
 				<p class="shell-hint">{t('session.rdp_share_hint')}</p>
+			</div>
+			{/if}
+			<div class="shell-field">
+				<label class="via-label" for="rdp-clipboard">{t('session.rdp_clipboard')}</label>
+				<select id="rdp-clipboard" class="via-select" bind:value={rdpClipboard} disabled={saving}>
+					<option value="">{t('session.rdp_clipboard_all')}</option>
+					<option value="text">{t('session.rdp_clipboard_text')}</option>
+					<option value="off">{t('session.rdp_clipboard_off')}</option>
+				</select>
+				<p class="shell-hint">{t('session.rdp_clipboard_hint')}</p>
 			</div>
 		{:else if kind === 'vnc'}
 			<div class="shell-field">
@@ -1043,11 +1130,6 @@
 		{/if}
 		{/if}
 
-		<div class="shell-field">
-			<Input label={t('session.login_shell_optional')} bind:value={shell} placeholder="fish -l" disabled={saving} />
-			<p class="shell-hint">{t('session.login_shell_hint')}</p>
-		</div>
-
 		<div class="jump-section">
 			<label class="jump-toggle">
 				<input type="checkbox" bind:checked={jumpEnabled} disabled={saving} />
@@ -1180,7 +1262,7 @@
 			{/if}
 		</div>
 
-		{#key editSession?.id ?? 'new'}
+		{#key source?.id ?? 'new'}
 			<SshOptionsSection
 				bind:this={sshSection}
 				bind:options={sshOptions}
@@ -1190,6 +1272,11 @@
 				disabled={saving}
 			/>
 		{/key}
+		{#if kind === 'ssh' && editSession}
+			{#key editSession.id}
+				<SessionHostKeys sessionId={editSession.id} initial={editSession.host_keys} disabled={saving} />
+			{/key}
+		{/if}
 		{/if}
 
 		<Input label={t('session.tags')} bind:value={tagsStr} placeholder={kind === 'rdp' ? 'office, windows' : 'production, web, linux'} disabled={saving} />
@@ -1198,21 +1285,7 @@
 			<div class="folder-section">
 				<span class="folder-label">{t('session.os_icon')}</span>
 				<div class="os-row">
-					<span class="os-preview"><DistroIcon osId={osChoice || autoOs} size={16} /></span>
-					<select class="folder-select os-select" bind:value={osChoice} disabled={saving}>
-						{#if kind === 'ssh'}
-							<option value="">{autoOs ? t('session.os_auto_detected', { os: osTitle(autoOs) }) : t('session.os_auto')}</option>
-							<option value="unknown">{t('session.os_none')}</option>
-						{:else}
-							<option value="">{t('session.os_none')}</option>
-						{/if}
-						{#if osChoice && osChoice !== 'unknown' && !osOptions.some((o) => o.id === osChoice)}
-							<option value={osChoice}>{osChoice}</option>
-						{/if}
-						{#each osOptions as o (o.id)}
-							<option value={o.id}>{o.title}</option>
-						{/each}
-					</select>
+					<OsIconSelect options={osIconOptions} bind:value={osChoice} disabled={saving} />
 					{#if kind === 'ssh' && !osChoice && autoOs}
 						<Button variant="secondary" size="sm" onclick={() => (osCleared = true)} disabled={saving}>
 							{t('session.os_clear')}
@@ -1225,12 +1298,12 @@
 			</div>
 		{/if}
 
-		{#if folders.length > 0}
+		{#if vaultFolders.length > 0}
 			<div class="folder-section">
 				<span class="folder-label">{t('session.folder')}</span>
 				<select class="folder-select" bind:value={folderIdStr} disabled={saving}>
 					<option value="">{t('session.no_folder')}</option>
-					{#each folders as folder (folder.id)}
+					{#each vaultFolders as folder (folder.id)}
 						<option value={folder.id}>{folderPath(folder.id, folders)}</option>
 					{/each}
 				</select>
@@ -1283,6 +1356,13 @@
 					<option value="on">{t('session.monitoring_on')}</option>
 					<option value="off">{t('session.monitoring_off')}</option>
 				</select>
+			</div>
+		{/if}
+
+		{#if kind === 'ssh'}
+			<div class="shell-field">
+				<Input label={t('session.login_shell_optional')} bind:value={shell} placeholder="fish -l" disabled={saving} />
+				<p class="shell-hint">{t('session.login_shell_hint')}</p>
 			</div>
 		{/if}
 
@@ -1431,18 +1511,6 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-	}
-
-	.os-preview {
-		display: inline-flex;
-		width: 16px;
-		justify-content: center;
-		flex-shrink: 0;
-	}
-
-	.os-select {
-		flex: 1;
-		min-width: 0;
 	}
 
 	.os-cleared {

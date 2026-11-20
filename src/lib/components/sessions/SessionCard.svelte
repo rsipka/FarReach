@@ -7,6 +7,8 @@
 	import { sessionAddress } from '#lib/utils/address.js';
 	import { isMobile, isWindows } from '#lib/platform.js';
 	import { getSettings } from '#lib/state/settings.svelte.js';
+	import { tooltip } from '#lib/utils/tooltip.js';
+	import { formatHops, formatProxyAddress, ROUTE_ICON } from '#lib/utils/route.js';
 
 	const settings = getSettings();
 
@@ -26,9 +28,11 @@
 		selected?: boolean;
 		/** Ctrl/Cmd or Shift click, or any click while selecting. */
 		onselect?: (e: MouseEvent) => void;
+		/** VNC: the name of the saved SSH session it is reached through. */
+		viaName?: string | null;
 	}
 
-	let { session, vault = null, onconnect, onedit, ondelete, oncontextmenu, ondragstart, ondragend, selecting = false, selected = false, onselect }: Props = $props();
+	let { session, vault = null, onconnect, onedit, ondelete, oncontextmenu, ondragstart, ondragend, selecting = false, selected = false, onselect, viaName = null }: Props = $props();
 	let unavailable = $derived((session.kind === 'wsl' && !isWindows()) || (session.kind === 'serial' && isMobile()));
 	/** Double-click to open (Settings > General): a mouse click only focuses
 	 *  the row. Enter or Space (a click with no detail) and a tap still
@@ -70,12 +74,52 @@
 				: 'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7'
 	);
 
+	/** How the session gets to its server when not directly: through jump
+	 *  hosts or a saved SSH session (VNC), or through a proxy. Remote
+	 *  desktops keep no jump chain or proxy, so stale ones are not shown. */
+	let desktopKind = $derived(session.kind === 'rdp' || session.kind === 'vnc');
+	let jumpTip = $derived.by(() => {
+		if (session.kind === 'vnc') return session.via_session_id ? t('session.via_session', { name: viaName || '?' }) : '';
+		if (desktopKind || !session.jump_chain?.length) return '';
+		return t('session.via_jump', { hops: formatHops(session.jump_chain) });
+	});
+	let proxyTip = $derived(
+		!desktopKind && session.proxy?.host
+			? t('session.via_proxy', { type: session.proxy.proxy_type.toUpperCase(), address: formatProxyAddress(session.proxy) })
+			: ''
+	);
+
 	/** The session's notes and fields, for a tooltip: hidden values stay masked. */
 	let docsTooltip = $derived.by(() => {
 		const notes = session.notes?.trim() ?? '';
 		const fields = (session.custom_fields ?? []).map((f) => `${f.name || '—'}: ${f.hidden ? '••••••' : f.value}`);
 		const text = [notes.length > 600 ? `${notes.slice(0, 600)}…` : notes, fields.join('\n')].filter(Boolean).join('\n\n');
 		return text;
+	});
+
+	/** Compact layout shows the name alone; on desktop everything else the
+	 *  full row shows is in the row's tooltip instead. */
+	let compact = $derived(settings.compactLayout);
+	let showDetails = $derived(compact && !isMobile());
+	let detailsTooltip = $derived.by(() => {
+		const kind = session.kind ?? 'ssh';
+		const lines: string[] = [session.favorite ? `${session.name} ★` : session.name];
+		lines.push(kind === 'wsl'
+			? `${session.username ? `${session.username} · ` : ''}${session.wsl_distro || 'WSL'}`
+			: sessionAddress(session));
+		const type = t(`session.protocol_${kind}`);
+		lines.push(kind === 'wsl' || kind === 'serial' ? type : `${type} · ${t('session.auth_type', { type: session.auth_method.type })}`);
+		if (kind !== 'wsl' && session.tags.length > 0) lines.push(t('session.tooltip_tags', { tags: session.tags.join(', ') }));
+		if (jumpTip) lines.push(jumpTip);
+		if (proxyTip) lines.push(proxyTip);
+		if (vault) lines.push(t('session.tooltip_vault', { name: vault.name }));
+		if (session.credential) {
+			lines.push(session.credential.missing ? t('credential.missing') : t('credential.chip', { name: session.credential.name }));
+		}
+		const parts = [lines.join('\n')];
+		if (docsTooltip) parts.push(docsTooltip);
+		parts.push(mainTitle);
+		return parts.join('\n\n');
 	});
 
 	let authLabel = $derived(
@@ -86,7 +130,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="session-card" class:selected class:unavailable class:dbl={needsDouble} oncontextmenu={oncontextmenu} role="group">
+<div class="session-card" class:selected class:unavailable class:dbl={needsDouble} class:names-only={compact} oncontextmenu={oncontextmenu} role="group">
 	{#if selecting}
 		<input
 			class="select-box"
@@ -108,7 +152,7 @@
 			<circle cx="2" cy="10" r="1.2"/><circle cx="6" cy="10" r="1.2"/>
 		</svg>
 	</span>
-	<button class="card-main" onclick={onMain} ondblclick={onMainDouble} disabled={unavailable && !selecting} aria-pressed={selecting ? selected : undefined} title={mainTitle} >
+	<button class="card-main" onclick={onMain} ondblclick={onMainDouble} disabled={unavailable && !selecting} aria-pressed={selecting ? selected : undefined} title={showDetails ? undefined : mainTitle} use:tooltip={showDetails ? detailsTooltip : ''} >
 		<!-- Every row has the icon's place, so names line up whether or not the
 		     OS is known yet: its logo once detected, until then a quiet mark for
 		     the kind of session. -->
@@ -137,10 +181,22 @@
 			<span class="session-name-row">
 				<span class="session-name">{session.name}</span>
 				{#if session.favorite}
-					<svg class="fav-mark" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label={t('session.favorite')}>
-						<title>{t('session.favorite')}</title>
+					<span class="mark-tip" title={t('session.favorite')}><svg class="fav-mark" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label={t('session.favorite')}>
 						<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
-					</svg>
+					</svg></span>
+				{/if}
+				<!-- Not a direct connection: a route for jump hosts, a globe for a
+				     proxy. Small marks by the name, so they stay in Compact layout
+				     and on phones, where the other chips are hidden. -->
+				{#if jumpTip}
+					<span class="mark-tip route-mark" title={jumpTip}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label={jumpTip}>
+						<path d={ROUTE_ICON.jump} />
+					</svg></span>
+				{/if}
+				{#if proxyTip}
+					<span class="mark-tip route-mark" title={proxyTip}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label={proxyTip}>
+						<path d={ROUTE_ICON.proxy} />
+					</svg></span>
 				{/if}
 				<!-- Beside the name, which is short, so the address below has the
 				     row's width to itself. -->
@@ -603,30 +659,38 @@
 		background-color: var(--color-surface-hover);
 	}
 
-	/* Compact layout: the name and the address on one line, as a list of
-	   many servers wants. Text and the row's hit area stay the size they were. */
+	/* Compact layout: the icon and the name only, as a list of many servers
+	   wants; the rest is in the row's tooltip. Text and the row's hit area
+	   stay the size they were. */
 	:global(html.compact) .session-card {
 		padding-top: 2px;
 		padding-bottom: 2px;
 	}
 
-	:global(html.compact) .session-info {
-		flex-direction: row;
-		align-items: baseline;
-		gap: 8px;
-	}
-
 	:global(html.compact) .session-name-row {
-		flex: 0 1 auto;
 		flex-wrap: nowrap;
 	}
 
-	:global(html.compact) .session-meta {
-		flex: 1 1 0;
+	.names-only .tags,
+	.names-only .vault-chip,
+	.names-only .session-detail,
+	.names-only .session-meta,
+	.names-only .auth-mark,
+	.names-only .auth-badge {
+		display: none;
 	}
 
 	.fav-mark {
 		flex-shrink: 0;
 		color: var(--color-accent);
+	}
+
+	.mark-tip {
+		display: inline-flex;
+		flex-shrink: 0;
+	}
+
+	.route-mark {
+		color: var(--color-text-tertiary);
 	}
 </style>

@@ -217,6 +217,54 @@ fn config_from_frontend() {
     assert!(serde_json::from_str::<SessionLogConfig>(r#"{"mode":"packets","name":"n"}"#).is_err());
 }
 
+/// Pausing from the bottom bar leaves out what came meanwhile and marks the
+/// gap; stopping closes the file and nothing more is written.
+#[test]
+fn pause_resume_and_stop_from_the_bar() {
+    let dir = temp();
+    let stream = format!("test-stream-{}", std::process::id());
+    let mut log = SessionLog::open(&cfg(dir.path(), LogMode::All, "p.log", true, true), "h", 22).unwrap();
+    log.register(&stream);
+    let path = log.path().to_path_buf();
+    assert_eq!(log_status(&stream), Some(LogStatus { path: path.display().to_string(), paused: false }));
+
+    log.push("one\r\n");
+    assert!(set_log_paused(&stream, true).unwrap().paused);
+    log.push("hidden\r\n");
+    assert!(!set_log_paused(&stream, false).unwrap().paused);
+    log.push("two\r\n");
+    assert!(stop_log(&stream));
+    assert!(!log.is_open());
+    assert_eq!(log_status(&stream), None);
+    log.push("after\r\n");
+
+    let text = read_when(&path, |s| s.contains("log stopped"));
+    assert!(!text.contains("hidden") && !text.contains("after"), "{text}");
+    let one = text.find("one").unwrap();
+    let paused = text.find("Reach log paused").unwrap();
+    let resumed = text.find("Reach log resumed").unwrap();
+    let two = text.find("two").unwrap();
+    assert!(one < paused && paused < resumed && resumed < two, "{text}");
+    drop(log);
+    assert!(!stop_log(&stream));
+}
+
+/// A log dropped (tab closed) leaves the registry; one dropped after a
+/// newer log took its stream leaves the newer one alone.
+#[test]
+fn dropping_unregisters_only_itself() {
+    let dir = temp();
+    let stream = format!("test-drop-{}", std::process::id());
+    let mut old = SessionLog::open(&cfg(dir.path(), LogMode::All, "a.log", true, false), "h", 22).unwrap();
+    old.register(&stream);
+    let mut new = SessionLog::open(&cfg(dir.path(), LogMode::All, "b.log", true, false), "h", 22).unwrap();
+    new.register(&stream);
+    drop(old);
+    assert_eq!(log_status(&stream).unwrap().path, new.path().display().to_string());
+    drop(new);
+    assert_eq!(log_status(&stream), None);
+}
+
 #[test]
 fn session_name_placeholder() {
     let now = at(2026, 3, 4, 5, 6, 7);

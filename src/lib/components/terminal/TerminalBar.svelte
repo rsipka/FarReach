@@ -7,12 +7,17 @@
 	 * that same tab menu, so nothing here is a second copy of it.
 	 */
 	import type { Tab } from '#lib/state/tabs.svelte.js';
-	import { splitWith, unsplit, getSplit } from '#lib/state/tabs.svelte.js';
+	import { splitWith, unsplit, getSplit, getTabs } from '#lib/state/tabs.svelte.js';
+	import { SPLIT_MIN_WIDTH } from '#lib/terminal/split.js';
+	import { isMobile } from '#lib/platform.js';
+	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { isBroadcastTarget, toggleBroadcastTarget } from '#lib/state/broadcast.svelte.js';
 	import { openHistoryPanel, tabHistory } from '#lib/state/history.svelte.js';
 	import { finderFor, pendingFind } from '#lib/state/terminal-find.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
+	import { getSettings, updateSetting } from '#lib/state/settings.svelte.js';
 	import { tick } from 'svelte';
+	import { formatHops, formatProxyAddress, ROUTE_ICON } from '#lib/utils/route.js';
 
 	interface Props {
 		tab: Tab;
@@ -29,6 +34,7 @@
 		history: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2',
 		broadcast: 'M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM8 8a5.6 5.6 0 0 0 0 8M16 8a5.6 5.6 0 0 1 0 8M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14',
 		split: 'M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM12 4v16',
+		highlight: 'M9 11l-6 6v3h9l3-3M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4',
 		more: 'M5 12h.01M12 12h.01M19 12h.01',
 		up: 'M6 15l6-6 6 6',
 		down: 'M6 9l6 6 6-6',
@@ -43,16 +49,38 @@
 	let protocol = $derived(
 		tab.type === 'ssh' ? 'SSH' : tab.type === 'telnet' ? 'Telnet' : tab.type === 'serial' ? t('session.protocol_serial') : tab.wslDistro ? 'WSL' : t('termbar.local')
 	);
+	/** Not a direct connection: the same marks as the session list, with the
+	 *  hops or the proxy in their tooltip. */
+	let jumpTip = $derived(
+		tab.type === 'ssh' && tab.sshConnectParams?.jumpChain?.length ? t('session.via_jump', { hops: formatHops(tab.sshConnectParams.jumpChain) }) : ''
+	);
+	let proxyTip = $derived(
+		tab.type === 'ssh' && tab.sshConnectParams?.proxy?.host
+			? t('session.via_proxy', { type: tab.sshConnectParams.proxy.proxy_type.toUpperCase(), address: formatProxyAddress(tab.sshConnectParams.proxy) })
+			: ''
+	);
 	let tmuxName = $derived(tab.type === 'ssh' ? (tab.sshConnectParams?.tmux?.name ?? null) : null);
 	let tap = $derived(tabHistory(tab.id));
-	let logging = $derived(!!tap?.status.logFile || !!tap?.sshLog);
+	let log = $derived(tap?.log ?? null);
 	let linkState = $derived(tab.link === 'down' ? 'down' : tab.link === 'reconnecting' ? 'reconnecting' : remote ? 'up' : 'local');
 	let stateLabel = $derived(
 		linkState === 'down' ? t('tabs.disconnected') : linkState === 'reconnecting' ? t('terminal.reconnecting') : linkState === 'up' ? t('termbar.connected') : t('termbar.local')
 	);
 	let broadcasting = $derived(isBroadcastTarget(tab.id));
+	/** Errors and addresses in colour: the same switch as in Settings, for
+	 *  every terminal, so it is one click to turn off when it gets in the way. */
+	const settings = getSettings();
+	let highlighting = $derived(settings.terminalHighlight);
+	let highlightTip = $derived(highlighting ? t('highlight.turn_off') : t('highlight.turn_on'));
 	let split = $derived(getSplit());
 	let inSplit = $derived(!!split && (split.first === tab.id || split.second === tab.id));
+	// A phone or tablet has no local shell to open beside a lone tab, and a
+	// phone's screen is too narrow to show a split at all.
+	const mobile = isMobile();
+	let innerWidth = $state(typeof window === 'undefined' ? 1200 : window.innerWidth);
+	let splitShown = $derived(!mobile || innerWidth >= SPLIT_MIN_WIDTH);
+	let splitBlocked = $derived(mobile && !inSplit && getTabs().length < 2);
+	let splitTip = $derived(inSplit ? t('split.unsplit') : splitBlocked ? t('split.need_second') : t('split.right'));
 
 	// ---- Find ----------------------------------------------------------------
 	let findOpen = $state(false);
@@ -110,7 +138,8 @@
 	}
 
 	function toggleSplit(): void {
-		if (inSplit) unsplit();
+		if (splitBlocked) addToast(t('split.need_second'), 'info');
+		else if (inSplit) unsplit();
 		else splitWith(tab.id, 'right');
 	}
 
@@ -129,13 +158,17 @@
 	</svg>
 {/snippet}
 
+<svelte:window bind:innerWidth />
+
 <div class="term-bar" role="toolbar" aria-label={t('termbar.label')}>
 	<span class="state {linkState}" role="img" aria-label={stateLabel} title={stateLabel}></span>
 	<span class="name">{tab.sessionName || tab.title}</span>
 	{#if address}<span class="address">{address}</span>{/if}
 	{#if remote || tab.wslDistro}<span class="badge">{protocol}</span>{/if}
+	{#if jumpTip}<span class="route" role="img" aria-label={jumpTip} title={jumpTip}>{@render icon(ROUTE_ICON.jump, 13)}</span>{/if}
+	{#if proxyTip}<span class="route" role="img" aria-label={proxyTip} title={proxyTip}>{@render icon(ROUTE_ICON.proxy, 13)}</span>{/if}
 	{#if tmuxName}<span class="badge" title={tmuxName}>tmux</span>{/if}
-	{#if logging}<span class="rec" title={t('termbar.logging')}>{t('termbar.log')}</span>{/if}
+	{#if log}<span class="rec" class:paused={log.paused} title={log.paused ? t('history.log_paused_hint') : t('termbar.logging')}>{t('termbar.log')}</span>{/if}
 
 	<span class="grow"></span>
 
@@ -165,9 +198,12 @@
 	{#if remote}
 		<button class="ib" type="button" onclick={() => openHistoryPanel({ sessionId: tab.sessionId, sessionName: tab.sessionName, tabId: tab.id })} title={`${t('termbar.history')} (Ctrl+Shift+H)`} aria-label={t('termbar.history')}>{@render icon(ICONS.history)}</button>
 	{/if}
+	<button class="ib" class:on={highlighting} type="button" onclick={() => updateSetting('terminalHighlight', !highlighting)} title={highlightTip} aria-label={t('highlight.setting')} aria-pressed={highlighting}>{@render icon(ICONS.highlight)}</button>
 	<span class="sep"></span>
 	<button class="ib" class:on={broadcasting} type="button" onclick={() => toggleBroadcastTarget(tab.id)} title={t('broadcast.tab_toggle')} aria-label={t('broadcast.tab_toggle')} aria-pressed={broadcasting}>{@render icon(ICONS.broadcast)}</button>
-	<button class="ib" class:on={inSplit} type="button" onclick={toggleSplit} title={inSplit ? t('split.unsplit') : t('split.right')} aria-label={inSplit ? t('split.unsplit') : t('split.right')} aria-pressed={inSplit}>{@render icon(ICONS.split)}</button>
+	{#if splitShown}
+		<button class="ib" class:on={inSplit} type="button" onclick={toggleSplit} class:blocked={splitBlocked} aria-disabled={splitBlocked} title={splitTip} aria-label={splitTip} aria-pressed={inSplit}>{@render icon(ICONS.split)}</button>
+	{/if}
 	<span class="sep"></span>
 	<button class="ib" type="button" onclick={openMore} title={t('termbar.more')} aria-label={t('termbar.more')} aria-haspopup="menu">{@render icon(ICONS.more, 17)}</button>
 </div>
@@ -239,6 +275,12 @@
 		line-height: 16px;
 	}
 
+	.route {
+		flex-shrink: 0;
+		display: inline-flex;
+		color: var(--color-text-secondary);
+	}
+
 	/* Writing to a log file is never silent. */
 	.rec {
 		flex-shrink: 0;
@@ -252,6 +294,11 @@
 		line-height: 18px;
 		color: var(--color-danger);
 		background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+	}
+
+	.rec.paused {
+		color: var(--color-text-secondary);
+		background: color-mix(in srgb, var(--color-text-secondary) 12%, transparent);
 	}
 
 	.rec::before {
@@ -295,6 +342,10 @@
 		background: var(--color-surface-hover);
 		border-color: var(--color-border);
 		color: var(--color-text-primary);
+	}
+
+	.ib.blocked {
+		opacity: 0.45;
 	}
 
 	.ib.on {

@@ -24,15 +24,30 @@ export interface RdpConnectParams {
 	sharePath?: string;
 	/** Advertise the graphics pipeline; see the setting. */
 	graphicsPipeline?: boolean;
+	/** What the clipboard carries: unset for everything, `text` for no files, `off` for nothing. */
+	clipboard?: RdpClipboardMode | null;
 	/** The size the panel can show. The server renders at this size. */
 	width: number;
 	height: number;
 }
 
+/** A session's clipboard choice, as saved with it; absent means everything. */
+export type RdpClipboardMode = 'text' | 'off';
+
+/** What the clipboard reports, on `rdp-clipboard-{id}`. `incoming` is from the desktop to here. */
+export type RdpClipEvent =
+	| { kind: 'progress'; incoming: boolean; done: number; total: number; files: number }
+	| { kind: 'finished'; incoming: boolean; files: number }
+	| { kind: 'cancelled'; incoming: boolean }
+	| { kind: 'failed'; incoming: boolean; reason: string }
+	| { kind: 'held'; files: number; total: number }
+	| { kind: 'heldGone' };
+
 export type RdpStatus =
 	| { state: 'connected' }
 	| { state: 'loggedIn' }
-	| { state: 'closed'; reason: string }
+	/** `clean`: the user logged off or disconnected from the desktop itself. */
+	| { state: 'closed'; reason: string; clean: boolean }
 	| { state: 'error'; message: string };
 
 /** Frame kinds, matching `kind` in src-tauri/src/rdp/mod.rs. */
@@ -94,6 +109,34 @@ export async function rdpDisconnect(id: string): Promise<void> {
  */
 export async function rdpClipboardSync(id: string): Promise<void> {
 	await invoke('rdp_clipboard_sync', { id });
+}
+
+/** Files dropped on the desktop: put them on its clipboard. Only files that were really dropped are taken. */
+export async function rdpClipboardSendFiles(id: string, paths: string[]): Promise<void> {
+	await invoke('rdp_clipboard_send_files', { id, paths });
+}
+
+/** Download what the desktop copied that was too large to take unasked. */
+export async function rdpClipboardFetch(id: string): Promise<void> {
+	await invoke('rdp_clipboard_fetch', { id });
+}
+
+/** The share path that means the app's own folder in Files (iPhone and iPad). */
+export const APP_FILES_SHARE = '@app-files';
+
+/** Pick files with the system's picker and put them on the desktop's clipboard. Resolves to how many (0: none picked). */
+export async function rdpClipboardPickFiles(id: string): Promise<number> {
+	return invoke<number>('rdp_clipboard_pick_files', { id });
+}
+
+/** Save what the last download from the desktop brought, one Save dialog per file; folders are skipped. */
+export async function rdpClipboardSaveReceived(id: string): Promise<{ saved: number; skipped: number }> {
+	return invoke<{ saved: number; skipped: number }>('rdp_clipboard_save_received', { id });
+}
+
+/** Stop the clipboard transfer in progress, either way. */
+export async function rdpClipboardCancel(id: string): Promise<void> {
+	await invoke('rdp_clipboard_cancel', { id });
 }
 
 /** The app window goes full screen, or comes back, for a desktop. */

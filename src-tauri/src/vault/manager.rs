@@ -878,6 +878,11 @@ impl VaultManager {
         self.held || (self.is_locked() && self.unlockers().is_some())
     }
 
+    /// The app's data folder, where the identity and its files live.
+    pub fn app_dir(&self) -> &std::path::Path {
+        &self.app_dir
+    }
+
     /// This identity's device unlock methods (Windows Hello, security keys),
     /// if any are on. A file left from another identity (after an import)
     /// does not count.
@@ -2502,6 +2507,15 @@ impl VaultManager {
         vault_id: &str,
         secret_id: &str,
     ) -> Result<SecretBox<Vec<u8>>, VaultError> {
+        self.read_secret_in_category(vault_id, secret_id, None).await
+    }
+
+    pub(crate) async fn read_secret_in_category(
+        &self,
+        vault_id: &str,
+        secret_id: &str,
+        category: Option<&str>,
+    ) -> Result<SecretBox<Vec<u8>>, VaultError> {
         let vault = self
             .vaults
             .get(vault_id)
@@ -2514,8 +2528,8 @@ impl VaultManager {
         let mut rows = vault
             
             .query(
-                "SELECT nonce, ciphertext, wrapped_dek FROM secrets WHERE id = ?",
-                [secret_id],
+                "SELECT nonce, ciphertext, wrapped_dek FROM secrets WHERE id = ?1 AND (?2 IS NULL OR category = ?2)",
+                (secret_id, category),
             )
             .await?;
 
@@ -3757,7 +3771,7 @@ mod android_keychain {
     }
 
     fn call<T: serde::de::DeserializeOwned>(method: &str, payload: serde_json::Value) -> Result<T, VaultError> {
-        let app = crate::android_app().ok_or_else(|| VaultError::KeychainUnavailable("Reach is still starting".into()))?;
+        let app = crate::android_app().ok_or_else(|| VaultError::KeychainUnavailable("Reacher CM is still starting".into()))?;
         app.state::<Unlock<tauri::Wry>>()
             .call_blocking(method, payload)
             .map_err(VaultError::KeychainUnavailable)

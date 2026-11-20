@@ -104,6 +104,8 @@
 
 html {
   font-family: var(--font-sans);
+  /* No double-tap zoom on a touch screen (pinch is off in app.html). */
+  touch-action: manipulation;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -456,6 +458,28 @@ select:not([multiple]):disabled {
   .settings-content .setting-row > :not(.setting-info):not(.setting-control) {
     justify-self: start;
   }
+
+  /* ...except a switch, which sits on the right of its label on the same
+     line, as in a phone's own settings. */
+  .settings-content .setting-row:has(> .setting-control > .toggle-wrapper:only-child) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 14px;
+  }
+
+  .settings-content .setting-row:has(> .setting-control > .toggle-wrapper:only-child) > .setting-control {
+    justify-content: flex-end;
+  }
+}
+
+/* A row Settings search (or a link into Settings) points at. */
+.settings-content .settings-flash {
+  animation: settings-flash 1.8s ease-out;
+  border-radius: 6px;
+}
+
+@keyframes settings-flash {
+  0%, 35% { background-color: color-mix(in srgb, var(--color-accent) 22%, transparent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 22%, transparent); }
+  100% { background-color: transparent; box-shadow: 0 0 0 6px transparent; }
 }
 
 /* Fields fill the column; buttons and toggles keep their size at its edge. */
@@ -498,4 +522,33 @@ select:not([multiple]):disabled {
   align-items: center;
   gap: 8px;
   padding: 8px 0 4px;
+}
+
+/* The app's own tooltip (lib/utils/tooltip.ts), in the theme's colours
+   rather than the system's. */
+.app-tooltip {
+  position: fixed;
+  z-index: 10000;
+  max-width: min(420px, calc(100vw - 16px));
+  padding: 7px 10px;
+  background-color: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-strong, var(--color-border));
+  border-radius: 6px;
+  box-shadow: var(--shadow-elevated);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+  overflow-wrap: anywhere;
+}
+
+.app-tooltip-head {
+  font-weight: 600;
+}
+
+.app-tooltip-body {
+  margin-top: 3px;
+  color: var(--color-text-secondary);
+  white-space: pre-line;
 }

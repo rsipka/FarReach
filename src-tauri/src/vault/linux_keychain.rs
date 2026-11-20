@@ -44,7 +44,7 @@ fn off_runtime<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Res
             UNANSWERED.store(true, Ordering::Relaxed);
             tracing::warn!(
                 "The Secret Service did not answer within {}s (a locked keychain whose unlock prompt never appeared?); \
-                 until Reach restarts the vault key is kept in the kernel keyring only, which a reboot empties",
+                 until Reacher CM restarts the vault key is kept in the kernel keyring only, which a reboot empties",
                 ANSWER_WITHIN.as_secs()
             );
             Err(Error::PlatformFailure("the Secret Service did not answer".into()))
@@ -84,7 +84,7 @@ impl std::fmt::Debug for Store {
 
 impl CredentialStoreApi for Store {
     fn vendor(&self) -> String {
-        "Reach: Secret Service, then the kernel keyring".into()
+        "Reacher CM: Secret Service, then the kernel keyring".into()
     }
 
     fn id(&self) -> String {

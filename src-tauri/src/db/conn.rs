@@ -202,7 +202,7 @@ impl LiveDb {
             .port(self.port)
             .username(&self.config.username)
             .database(database)
-            .application_name("Reach")
+            .application_name("Reacher CM")
             .ssl_mode(match self.config.tls {
                 TlsMode::Prefer => PgSslMode::Prefer,
                 TlsMode::Require => PgSslMode::Require,
@@ -226,7 +226,7 @@ impl LiveDb {
         cfg.host(&self.host);
         cfg.port(self.port);
         cfg.database(database);
-        cfg.application_name("Reach");
+        cfg.application_name("Reacher CM");
         cfg.authentication(tiberius::AuthMethod::sql_server(
             &self.config.username,
             self.config.password.as_deref().unwrap_or(""),
@@ -412,10 +412,10 @@ fn describe_error(e: sqlx::Error) -> String {
             "client_ed25519" => "ed25519 keys",
             "unix_socket" | "auth_socket" => "the server's own system accounts (unix_socket)",
             "dialog" | "auth_pam" => "PAM",
-            _ => "a method Reach does not support",
+            _ => "a method Reacher CM does not support",
         };
         return format!(
-            "The server offered {how} ({plugin}), which Reach cannot use. If this account also has a password,              enter it and the server will accept that instead. If it has none, connect as a user that does,              e.g. CREATE USER 'reach'@'localhost' IDENTIFIED BY '…'; and GRANT it what it needs."
+            "The server offered {how} ({plugin}), which Reacher CM cannot use. If this account also has a password,              enter it and the server will accept that instead. If it has none, connect as a user that does,              e.g. CREATE USER 'reach'@'localhost' IDENTIFIED BY '…'; and GRANT it what it needs."
         );
     }
     match e {

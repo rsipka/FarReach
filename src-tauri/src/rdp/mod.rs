@@ -35,7 +35,7 @@
 //! many messages as it can paint — under load the picture updates less often
 //! but never late, which is how the reference clients behave. See [`Flow`].
 //!
-//! The clipboard is in — text and files, both ways — with a backend of our
+//! The clipboard is in — text, pictures and files, both ways — with a backend of our
 //! own in [`clipboard`]. Not in this version, on purpose: sound and drive
 //! redirection. Each pulls a native backend into the build, and neither is
 //! needed to see a desktop and drive it. The server's certificate goes
@@ -91,6 +91,10 @@ pub struct RdpConnectParams {
     /// Advertise the graphics pipeline. Off unless the user turned it on.
     #[serde(default)]
     pub graphics_pipeline: bool,
+    /// What the clipboard lets through, as saved with the session: unset
+    /// for everything, `text` for no files, `off` for no clipboard at all.
+    #[serde(default)]
+    pub clipboard: Option<String>,
     /// The size the panel can show, so the server renders at the size it is
     /// seen at rather than being scaled after the fact.
     pub width: u16,
@@ -108,8 +112,25 @@ pub enum RdpStatus {
     Connected,
     /// The server sent its login-complete notification: the desktop is usable.
     LoggedIn,
-    Closed { reason: String },
+    /// `clean`: the session ended as meant to (the user logged off or
+    /// disconnected from the remote desktop), not on an error or a kick.
+    Closed { reason: String, clean: bool },
     Error { message: String },
+}
+
+/// Whether an RDP session that ended without a transport error ended as the
+/// user meant it to: logged off, or disconnected from Windows' own menu. An
+/// idle timeout, another user taking the session, an admin's logoff or a
+/// server going down are not, and keep the panel open to say why.
+fn graceful_is_clean(reason: &ironrdp_session::GracefulDisconnectReason) -> bool {
+    use ironrdp_pdu::rdp::server_error_info::{ErrorInfo, ProtocolIndependentCode};
+    use ironrdp_session::GracefulDisconnectReason as R;
+    match reason {
+        R::UserInitiated | R::ServerInitiated => true,
+        R::Other(text) => [ProtocolIndependentCode::LogoffByUser, ProtocolIndependentCode::RpcInitiatedDisconnectByuser]
+            .into_iter()
+            .any(|c| *text == ErrorInfo::ProtocolIndependentCode(c).description()),
+    }
 }
 
 /// Frame kinds on the wire. Layout is little-endian, header first.
@@ -186,6 +207,11 @@ pub struct Flow {
     pub(crate) notify: Notify,
     /// A new canvas is listening: send it the whole picture next.
     refresh: std::sync::atomic::AtomicBool,
+    /// The session has reported its end (failed or closed). Set before the
+    /// webview hears of it, so a connect that answers the news — a retry —
+    /// starts a new session instead of re-attaching to the one that is
+    /// still winding down its thread.
+    ended: std::sync::atomic::AtomicBool,
 }
 
 impl Flow {
@@ -194,6 +220,7 @@ impl Flow {
             in_flight: AtomicU32::new(0),
             notify: Notify::new(),
             refresh: std::sync::atomic::AtomicBool::new(false),
+            ended: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -203,6 +230,10 @@ impl Flow {
         self.in_flight.store(0, Ordering::Release);
         self.refresh.store(true, Ordering::Release);
         self.notify.notify_one();
+    }
+
+    pub(crate) fn has_ended(&self) -> bool {
+        self.ended.load(Ordering::Acquire)
     }
 
     pub(crate) fn take_refresh(&self) -> bool {
@@ -247,7 +278,8 @@ struct Open {
     /// a page navigation does that — so the session survives it.
     frames: Arc<std::sync::Mutex<Channel<InvokeResponseBody>>>,
     /// Dropped with the entry, which is what ends the clipboard thread.
-    clipboard: clipboard::ClipboardHandle,
+    /// None when the session turned the clipboard off.
+    clipboard: Option<clipboard::ClipboardHandle>,
 }
 
 #[derive(Default)]
@@ -263,7 +295,7 @@ impl RdpManager {
     /// Whether a desktop is open under `id` and still running: a connect for
     /// it only re-attaches the panel.
     pub fn running(&self, id: &str) -> bool {
-        self.open.get(id).is_some_and(|o| !o.session.is_finished())
+        self.open.get(id).is_some_and(|o| !o.session.is_finished() && !o.flow.has_ended())
     }
 
     /// Open a desktop and start streaming it to `frames`.
@@ -283,7 +315,7 @@ impl RdpManager {
         // was left and returned to. The session is still running; give it the
         // new channel and the whole picture, and say it is connected.
         if let Some(open) = self.open.get(&id) {
-            if !open.session.is_finished() {
+            if !open.session.is_finished() && !open.flow.has_ended() {
                 tracing::info!("RDP {id}: panel re-attached to the running session");
                 *open.frames.lock().unwrap_or_else(|e| e.into_inner()) = frames;
                 open.flow.reattached();
@@ -318,15 +350,25 @@ impl RdpManager {
         let input = client.input_sender();
 
         // The clipboard has a thread of its own; see the clipboard module.
-        let (clipboard, clip_factory) = clipboard::spawn(&id, input.clone(), app.clone())
-            .map_err(|e| format!("could not start the RDP clipboard thread: {e}"))?;
-        let mut client = client.with_cliprdr_backend_factory(Box::new(clip_factory));
+        let mut client = client;
+        let clipboard = match clipboard_mode(&params) {
+            Some(mode) => {
+                let (handle, clip_factory) = clipboard::spawn(&id, input.clone(), app.clone(), mode)
+                    .map_err(|e| format!("could not start the RDP clipboard thread: {e}"))?;
+                client = client.with_cliprdr_backend_factory(Box::new(clip_factory));
+                Some(handle)
+            }
+            None => {
+                tracing::info!("RDP {id}: clipboard off for this session");
+                None
+            }
+        };
 
         // A shared folder rides the device channel as one drive. The native
         // backends serve it: IronRDP's own on Windows, its Unix one on the
         // others. Android has no backend for it and says so.
         if let Some(path) = params.share_path.as_deref().filter(|p| !p.trim().is_empty()) {
-            match drive_factory(path) {
+            match resolve_share(path, &app).and_then(|path| drive_factory(&path)) {
                 Ok(factory) => {
                     tracing::info!("RDP {id}: sharing {path} as a drive");
                     client = client.with_rdpdr_backend_factory(factory);
@@ -368,10 +410,58 @@ impl RdpManager {
 
     /// The local clipboard may have changed: offer it to this desktop.
     pub fn clipboard_sync(&self, id: &str) -> Result<(), String> {
-        self.open
-            .get(id)
-            .map(|open| open.clipboard.sync())
-            .ok_or_else(|| format!("no RDP session {id}"))
+        self.with_clipboard(id, |c| c.sync())
+    }
+
+    /// Files dropped on the desktop: put them on its clipboard.
+    pub fn clipboard_send_files(&self, id: &str, paths: Vec<std::path::PathBuf>) -> Result<(), String> {
+        let paths = take_dropped(paths);
+        if paths.is_empty() {
+            return Err("nothing was dropped".to_string());
+        }
+        self.with_clipboard(id, |c| c.send_files(paths))
+    }
+
+    /// Where files picked for this desktop are copied before they are
+    /// offered; None when the session has no clipboard.
+    pub fn clipboard_staging_dir(&self, id: &str) -> Result<Option<std::path::PathBuf>, String> {
+        let open = self.open.get(id).ok_or_else(|| format!("no RDP session {id}"))?;
+        open.clipboard.as_ref().map(|c| c.staging_dir().map_err(|e| e.to_string())).transpose()
+    }
+
+    /// Offer files copied into the staging folder.
+    pub fn clipboard_send_staged(&self, id: &str, paths: Vec<std::path::PathBuf>) -> Result<(), String> {
+        let open = self.open.get(id).ok_or_else(|| format!("no RDP session {id}"))?;
+        match open.clipboard.as_ref() {
+            Some(c) => c.send_staged(paths),
+            None => Ok(()),
+        }
+    }
+
+    /// What the last download from this desktop brought.
+    pub fn clipboard_received(&self, id: &str) -> Result<Vec<std::path::PathBuf>, String> {
+        let open = self.open.get(id).ok_or_else(|| format!("no RDP session {id}"))?;
+        Ok(open.clipboard.as_ref().map(|c| c.received()).unwrap_or_default())
+    }
+
+    /// Download the remote copy that waited for a yes.
+    pub fn clipboard_fetch(&self, id: &str) -> Result<(), String> {
+        self.with_clipboard(id, |c| c.fetch_held())
+    }
+
+    /// Stop the clipboard transfer in progress.
+    pub fn clipboard_cancel(&self, id: &str) -> Result<(), String> {
+        self.with_clipboard(id, |c| c.cancel())
+    }
+
+    /// A session with its clipboard off answers every clipboard call with
+    /// nothing done; that is not an error.
+    fn with_clipboard(&self, id: &str, f: impl FnOnce(&clipboard::ClipboardHandle)) -> Result<(), String> {
+        let open = self.open.get(id).ok_or_else(|| format!("no RDP session {id}"))?;
+        if let Some(c) = open.clipboard.as_ref() {
+            f(c);
+        }
+        Ok(())
     }
 
     /// Ask every open desktop to end. Used on the way out of the app, so the
@@ -551,7 +641,7 @@ fn build_config(p: &RdpConnectParams, app: AppHandle) -> Result<ironrdp_client::
         .with_destination(destination)
         .with_username(&p.username)
         .with_password(&p.password)
-        .with_client_name("Reach")
+        .with_client_name("Reacher CM")
         .with_client_build(client_build())
         .with_client_dir("C:\\Windows\\System32\\mstscax.dll")
         .with_platform(platform)
@@ -569,7 +659,7 @@ fn build_config(p: &RdpConnectParams, app: AppHandle) -> Result<ironrdp_client::
         .with_server_pointer(true)
         .with_pointer_software_rendering(false)
         // Our own backend, handed to the client in `connect`.
-        .with_clipboard(ClipboardType::Enable)
+        .with_clipboard(if clipboard_mode(p).is_some() { ClipboardType::Enable } else { ClipboardType::Disable })
         // Always, folder or no folder. Windows starts audio redirection only
         // when the device channel is present: without it the "Remote Audio"
         // device never appears and the sound channel stays silent (IronRDP
@@ -610,6 +700,61 @@ fn build_config(p: &RdpConnectParams, app: AppHandle) -> Result<ironrdp_client::
     }
 
     builder.build().map_err(|e| e.to_string())
+}
+
+/// The files last dropped on a window, as the OS reported them. A drop on a
+/// desktop sends these and only these: the webview names which, but cannot
+/// name a file nobody dropped.
+static DROPPED: std::sync::Mutex<Vec<std::path::PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Called from the window's drop event.
+pub fn note_drop(paths: &[std::path::PathBuf]) {
+    if let Ok(mut dropped) = DROPPED.lock() {
+        *dropped = paths.to_vec();
+    }
+}
+
+/// The requested paths that were in the last drop. The drop is used up.
+fn take_dropped(requested: Vec<std::path::PathBuf>) -> Vec<std::path::PathBuf> {
+    let Ok(mut dropped) = DROPPED.lock() else { return Vec::new() };
+    let last = std::mem::take(&mut *dropped);
+    requested.into_iter().filter(|p| last.contains(p)).collect()
+}
+
+/// What the session lets through its clipboard; None: no clipboard at all.
+fn clipboard_mode(p: &RdpConnectParams) -> Option<clipboard::ClipboardMode> {
+    match p.clipboard.as_deref() {
+        Some("off") => None,
+        Some("text") => Some(clipboard::ClipboardMode::NoFiles),
+        _ => Some(clipboard::ClipboardMode::All),
+    }
+}
+
+/// The saved `share_path` that means "this app's own folder in Files", for
+/// iPhone and iPad, where no other folder can be named.
+pub const APP_FILES_SHARE: &str = "@app-files";
+
+/// The folder a saved `share_path` names. On iOS, [`APP_FILES_SHARE`] is a
+/// folder in the app's Documents, which the Files app shows under the app's
+/// name (Info.ios.plist turns that on); anywhere else it is refused.
+fn resolve_share(path: &str, app: &AppHandle) -> Result<String, String> {
+    if path != APP_FILES_SHARE {
+        return Ok(path.to_string());
+    }
+    app_files_dir(app)
+}
+
+#[cfg(target_os = "ios")]
+fn app_files_dir(app: &AppHandle) -> Result<String, String> {
+    use tauri::Manager;
+    let dir = app.path().document_dir().map_err(|e| e.to_string())?.join("Shared with desktops");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.to_string_lossy().into_owned())
+}
+
+#[cfg(not(target_os = "ios"))]
+fn app_files_dir(_app: &AppHandle) -> Result<String, String> {
+    Err("the app's Files folder is shared only on iPhone and iPad".into())
 }
 
 /// The drive backend for one shared folder, named after the folder: Reach's
@@ -667,6 +812,9 @@ async fn pump_output(
     flow: Arc<Flow>,
 ) {
     let status = |s: RdpStatus| {
+        if matches!(s, RdpStatus::Error { .. } | RdpStatus::Closed { .. }) {
+            flow.ended.store(true, Ordering::Release);
+        }
         let _ = app.emit(&format!("rdp-status-{id}"), s);
     };
 
@@ -819,15 +967,15 @@ impl Screen {
             }
 
             RdpOutputEvent::Terminated(result) => {
-                let reason = match result {
-                    Ok(graceful) => format!("{graceful:?}"),
+                let (reason, clean) = match result {
+                    Ok(graceful) => (graceful.description(), graceful_is_clean(&graceful)),
                     Err(err) => {
                         tracing::warn!("RDP {id}: session ended with an error: {err:?}");
-                        err.to_string()
+                        (err.to_string(), false)
                     }
                 };
                 tracing::info!("RDP {id}: closed ({reason})");
-                status(RdpStatus::Closed { reason });
+                status(RdpStatus::Closed { reason, clean });
                 return false;
             }
 
@@ -1072,10 +1220,49 @@ fn merge_damage(rects: &[InclusiveRectangle]) -> Vec<InclusiveRectangle> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_dropped_files_are_sent_and_a_drop_is_used_once() {
+        use std::path::PathBuf;
+        note_drop(&[PathBuf::from("/a/one.txt"), PathBuf::from("/a/two.txt")]);
+        let sent = take_dropped(vec![PathBuf::from("/a/one.txt"), PathBuf::from("/etc/shadow")]);
+        assert_eq!(sent, vec![PathBuf::from("/a/one.txt")]);
+        assert!(take_dropped(vec![PathBuf::from("/a/two.txt")]).is_empty(), "the drop was used up");
+    }
+
+    #[test]
+    fn the_clipboard_choice_reads_as_saved() {
+        let mode = |v: Option<&str>| {
+            let p: RdpConnectParams = serde_json::from_value(serde_json::json!({
+                "id": "x", "host": "h", "port": 3389, "username": "u", "width": 800, "height": 600,
+                "clipboard": v,
+            }))
+            .unwrap();
+            clipboard_mode(&p)
+        };
+        assert_eq!(mode(None), Some(clipboard::ClipboardMode::All));
+        assert_eq!(mode(Some("text")), Some(clipboard::ClipboardMode::NoFiles));
+        assert_eq!(mode(Some("off")), None);
+    }
+
     use super::*;
 
     fn nz(v: u16) -> NonZeroU16 {
         NonZeroU16::new(v).unwrap()
+    }
+
+    #[test]
+    fn logoff_is_a_clean_end_and_a_kick_is_not() {
+        use ironrdp_pdu::rdp::server_error_info::{ErrorInfo, ProtocolIndependentCode as C};
+        use ironrdp_session::GracefulDisconnectReason as R;
+        let info = |c| R::Other(ErrorInfo::ProtocolIndependentCode(c).description());
+        assert!(graceful_is_clean(&R::UserInitiated));
+        assert!(graceful_is_clean(&R::ServerInitiated));
+        assert!(graceful_is_clean(&info(C::LogoffByUser)));
+        assert!(graceful_is_clean(&info(C::RpcInitiatedDisconnectByuser)));
+        assert!(!graceful_is_clean(&info(C::IdleTimeout)));
+        assert!(!graceful_is_clean(&info(C::DisconnectedByOtherconnection)));
+        assert!(!graceful_is_clean(&info(C::RpcInitiatedLogoff)));
+        assert!(!graceful_is_clean(&info(C::ServerReboot)));
     }
 
     fn header(bytes: &[u8], at: usize) -> (u8, u16, u16, u16, u16, u16, u16) {

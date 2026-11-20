@@ -17,6 +17,10 @@
 //!   identity grants, and Reach's macOS builds have none. So a random key in
 //!   the login keychain seals the vault key, and Reach reads that key only
 //!   after `LAContext` has confirmed the owner's fingerprint.
+//! - Face ID (or Touch ID) on iOS is a seal: every iOS app has its own
+//!   keychain access group, so a random key goes into a keychain item that
+//!   only the current enrolled faces or fingers can read
+//!   ([`super::apple_biometric`]), and that key seals the vault key.
 //! - A security key gives its `hmac-secret` over a stored salt (see
 //!   [`super::fido2`]); HKDF-SHA256 turns that into the key.
 //!
@@ -44,6 +48,7 @@ const FILE: &str = "vault_unlock.json";
 pub const WINDOWS_HELLO: &str = "windows_hello";
 pub const TOUCH_ID: &str = "touch_id";
 pub const ANDROID_BIOMETRIC: &str = "android_biometric";
+pub const IOS_BIOMETRIC: &str = "ios_biometric";
 pub const FIDO2: &str = "fido2";
 
 /// The Android Keystore alias of the fingerprint key.
@@ -51,6 +56,9 @@ pub const ANDROID_KEY_ALIAS: &str = "reach-vault-fingerprint";
 
 /// The keychain service Touch ID's sealing keys live under, one per seal.
 const TOUCH_ID_SERVICE: &str = "reachercm-vault-touch-id";
+
+/// The keychain service of the iOS Face ID sealing key, one per seal.
+const IOS_BIOMETRIC_SERVICE: &str = "reachercm-vault-face-id";
 
 /// The platform biometric this build offers, if any.
 pub fn platform_method() -> Option<&'static str> {
@@ -60,13 +68,15 @@ pub fn platform_method() -> Option<&'static str> {
         Some(TOUCH_ID)
     } else if cfg!(target_os = "android") {
         Some(ANDROID_BIOMETRIC)
+    } else if cfg!(target_os = "ios") {
+        Some(IOS_BIOMETRIC)
     } else {
         None
     }
 }
 
 fn is_platform(kind: &str) -> bool {
-    kind == WINDOWS_HELLO || kind == TOUCH_ID || kind == ANDROID_BIOMETRIC
+    kind == WINDOWS_HELLO || kind == TOUCH_ID || kind == ANDROID_BIOMETRIC || kind == IOS_BIOMETRIC
 }
 
 /// Every way this device can open the vault besides the password.
@@ -226,6 +236,22 @@ impl Unlockers {
                     .map_err(|e| e.to_string())?;
                 Ok(seal)
             }
+            Some(IOS_BIOMETRIC) => {
+                let key: Zeroizing<[u8; 32]> = Zeroizing::new(rand::random());
+                let seal = self.seal_with(&key, IOS_BIOMETRIC, super::apple_biometric::name(), secret)?;
+                super::apple_biometric::store(IOS_BIOMETRIC_SERVICE, &seal.id, &*key)?;
+                // Writing asks nothing; read it back now, so turning it on
+                // shows the prompt once and proves the item can be read.
+                let back = super::apple_biometric::read(IOS_BIOMETRIC_SERVICE, &seal.id).map_err(|e| {
+                    super::apple_biometric::delete(IOS_BIOMETRIC_SERVICE, &seal.id);
+                    e.to_string()
+                })?;
+                if back.as_slice() != key.as_slice() {
+                    super::apple_biometric::delete(IOS_BIOMETRIC_SERVICE, &seal.id);
+                    return Err("The Face ID key did not read back".into());
+                }
+                Ok(seal)
+            }
             _ => Err("This device has no biometric unlock".into()),
         }
     }
@@ -253,6 +279,16 @@ impl Unlockers {
                     .ok()
                     .and_then(|k| k.try_into().ok())
                     .ok_or("The Touch ID key is damaged")?;
+                self.open_with(&Zeroizing::new(key), seal)
+            }
+            IOS_BIOMETRIC => {
+                let stored = super::apple_biometric::read(IOS_BIOMETRIC_SERVICE, &seal.id).map_err(|e| match e {
+                    super::apple_biometric::ReadError::Gone => {
+                        "Your Face ID or Touch ID changed; use your master password, then turn this on again".to_string()
+                    }
+                    e => e.to_string(),
+                })?;
+                let key: [u8; 32] = stored.as_slice().try_into().map_err(|_| "The Face ID key is damaged")?;
                 self.open_with(&Zeroizing::new(key), seal)
             }
             _ => Err("Biometric unlock is not turned on".into()),
@@ -301,7 +337,7 @@ impl Unlockers {
             .seals
             .iter()
             .find(|s| s.kind == FIDO2 && s.credential_id == credential)
-            .ok_or("This key is not one added to Reach")?;
+            .ok_or("This key is not one added to Reacher CM")?;
         self.open_with(&fido_key(output), seal)
     }
 
@@ -344,6 +380,7 @@ pub fn platform_available() -> bool {
     match platform_method() {
         Some(WINDOWS_HELLO) => hello::available(),
         Some(TOUCH_ID) => touch::available(),
+        Some(IOS_BIOMETRIC) => super::apple_biometric::available(),
         _ => false,
     }
 }
@@ -358,6 +395,7 @@ pub fn forget(seal: &Seal) {
                 let _ = entry.delete_credential();
             }
         }
+        IOS_BIOMETRIC => super::apple_biometric::delete(IOS_BIOMETRIC_SERVICE, &seal.id),
         _ => {}
     }
 }
@@ -413,7 +451,7 @@ mod hello {
         match status {
             KeyCredentialStatus::UserCanceled => "Windows Hello was cancelled".into(),
             KeyCredentialStatus::UserPrefersPassword => "Windows Hello was declined".into(),
-            KeyCredentialStatus::NotFound => "Windows Hello has no key for Reach".into(),
+            KeyCredentialStatus::NotFound => "Windows Hello has no key for Reacher CM".into(),
             KeyCredentialStatus::SecurityDeviceLocked => "Windows Hello is locked after too many attempts".into(),
             other => format!("Windows Hello failed (status {})", other.0),
         }

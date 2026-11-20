@@ -1,12 +1,6 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invokeProject as invoke, type ProjectSummary } from './devops-projects.js';
 
-export interface TofuProject {
-	id: string;
-	name: string;
-	path: string;
-	description: string;
-	createdAt: string;
-	lastOpenedAt: string;
+export interface TofuProject extends ProjectSummary {
 	providers: TofuProviderConfig[];
 	variables: TofuVariable[];
 	environments: TofuEnvironment[];
@@ -296,8 +290,8 @@ export interface TofuCommandRequest {
 	extraArgs: string[];
 }
 
-export async function tofuListProjects(): Promise<TofuProject[]> {
-	return invoke<TofuProject[]>('tofu_list_projects');
+export async function tofuListProjects(): Promise<ProjectSummary[]> {
+	return invoke<ProjectSummary[]>('tofu_list_projects');
 }
 
 export async function tofuCreateProject(

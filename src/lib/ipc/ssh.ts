@@ -10,7 +10,35 @@ export interface TmuxStart {
   ask?: boolean;
   /** tmux's mouse mode on for this session. */
   mouse?: boolean;
+  /** The tab's own view of the session, `{name}-{view}`: a session grouped
+   *  with it, so the tab shows a window of its own. */
+  view?: string;
+  /** The window the view opens on: 'new', or a window id ('@3'); unset:
+   *  the one with the latest activity. */
+  window?: string;
+  /** tmux's status line off in the view. */
+  hideStatus?: boolean;
 }
+
+/** One window of a tab's tmux session. */
+export interface TmuxWindow {
+  /** tmux's id for it ('@3'). */
+  id: string;
+  index: number;
+  name: string;
+  /** The program in its active pane. */
+  command: string;
+  panes: number;
+  /** The one the tab shows. */
+  active: boolean;
+}
+
+/** What a tab's tmux windows dialog does to its view. */
+export type TmuxWindowOp =
+  | { kind: 'select'; window: string }
+  | { kind: 'rename'; window: string; name: string }
+  | { kind: 'close'; window: string }
+  | { kind: 'new' };
 
 /** One of the server's tmux sessions. */
 export interface TmuxListed {
@@ -111,6 +139,25 @@ export async function sessionLogDefaultDir(): Promise<string> {
   return invoke<string>('session_log_default_dir');
 }
 
+/** A terminal's file log, while it is writing or paused. */
+export interface SessionLogStatus {
+  path: string;
+  paused: boolean;
+}
+
+export function sessionLogStatus(stream: string): Promise<SessionLogStatus | null> {
+  return invoke<SessionLogStatus | null>('session_log_status', { stream });
+}
+
+export function sessionLogPause(stream: string, paused: boolean): Promise<SessionLogStatus | null> {
+  return invoke<SessionLogStatus | null>('session_log_pause', { stream, paused });
+}
+
+/** Stops the log and closes its file; false when there was none. */
+export function sessionLogStop(stream: string): Promise<boolean> {
+  return invoke<boolean>('session_log_stop', { stream });
+}
+
 export async function sshConnect(params: SshConnectParams): Promise<string> {
   return invoke<string>('ssh_connect', {
     id: params.id,
@@ -156,6 +203,17 @@ export async function tmuxStartScript(start: TmuxStart): Promise<string> {
   return invoke<string>('tmux_start_script', { start });
 }
 
+/** The windows of a tab's tmux session, as its view sees them. */
+export async function sshTmuxWindows(connectionId: string, start: TmuxStart): Promise<TmuxWindow[]> {
+  return invoke<TmuxWindow[]>('ssh_tmux_windows', { connectionId, name: start.name, view: start.view ?? '' });
+}
+
+/** Switch, rename, close or open a window in a tab's tmux view; a new
+ *  window runs `shell`, the session's login shell, as the first one does. */
+export async function sshTmuxWindow(connectionId: string, start: TmuxStart, op: TmuxWindowOp, shell?: string | null): Promise<void> {
+  return invoke('ssh_tmux_window', { connectionId, name: start.name, view: start.view ?? '', op, shell: shell ?? null });
+}
+
 /** End a tab's tmux session for good, with the ones other tabs joined it as. */
 export async function sshTmuxKill(connectionId: string, name: string): Promise<void> {
   return invoke('ssh_tmux_kill', { connectionId, name });
@@ -185,11 +243,15 @@ export interface HostKeyPrompt {
   randomart?: string | null;
   /** VerifyHostKeyDNS: whether a matching SSHFP record was found. */
   dnsMatch?: boolean | null;
+  /** Where Accept and save keeps the key: with the saved session (synced)
+   *  or in this device's own list. */
+  saveTo?: 'session' | 'device';
 }
 
-/** Report the user's accept/reject decision for a host-key prompt. */
-export async function sshHostkeyResponse(promptId: string, accept: boolean): Promise<void> {
-  return invoke('ssh_hostkey_response', { promptId, accept });
+/** Report the user's answer to a host-key prompt: Don't connect
+ *  (`accept` false), Accept once (`save` false) or Accept and save. */
+export async function sshHostkeyResponse(promptId: string, accept: boolean, save = true): Promise<void> {
+  return invoke('ssh_hostkey_response', { promptId, accept, save });
 }
 
 export async function sshResize(connectionId: string, cols: number, rows: number): Promise<void> {

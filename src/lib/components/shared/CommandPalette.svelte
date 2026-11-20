@@ -36,6 +36,7 @@
 	import { lock, vaultState } from '#lib/state/vault.svelte.js';
 	import { sessionList, type SessionConfig } from '#lib/ipc/sessions.js';
 	import { t } from '#lib/state/i18n.svelte.js';
+	import { isMobile } from '#lib/platform.js';
 	import { sessionAddress } from '#lib/utils/address.js';
 
 	interface Item {
@@ -189,8 +190,9 @@
 				});
 			}
 		}
-		out.push(
-			{
+		// No local shell on a phone or tablet.
+		if (!isMobile()) {
+			out.push({
 				id: 'action:new-tab',
 				group: t('palette.group_actions'),
 				label: t('terminal.new_tab'),
@@ -199,7 +201,9 @@
 					setActivePage('terminal');
 					createTab('local');
 				}
-			},
+			});
+		}
+		out.push(
 			{
 				id: 'action:new-session',
 				group: t('palette.group_actions'),
@@ -231,7 +235,7 @@
 				group: t('palette.group_actions'),
 				label: t('titlebar.open_settings'),
 				hint: shortcutLabel(',', { ctrl: true }),
-				run: openSettings
+				run: () => openSettings()
 			},
 			{
 				id: 'action:lock',

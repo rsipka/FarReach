@@ -4019,6 +4019,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ironrdp-cliprdr-format"
+version = "0.2.0"
+source = "git+https://github.com/Devolutions/IronRDP?rev=bfd16a2e5573d4cd6617dd71b2802b4e7b944a59#bfd16a2e5573d4cd6617dd71b2802b4e7b944a59"
+dependencies = [
+ "ironrdp-core",
+ "png",
+]
+
+[[package]]
 name = "ironrdp-cliprdr-native"
 version = "0.7.0"
 source = "git+https://github.com/Devolutions/IronRDP?rev=bfd16a2e5573d4cd6617dd71b2802b4e7b944a59#bfd16a2e5573d4cd6617dd71b2802b4e7b944a59"
@@ -7270,7 +7279,7 @@ dependencies = [
 
 [[package]]
 name = "reacher-cm"
-version = "0.9.2-dev.4"
+version = "26.11.1-dev.4"
 dependencies = [
  "aes 0.8.4",
  "anyhow",
@@ -7303,12 +7312,15 @@ dependencies = [
  "hyper 1.12.0",
  "hyper-util",
  "if-addrs",
+ "image",
  "ironrdp-client",
  "ironrdp-cliprdr",
+ "ironrdp-cliprdr-format",
  "ironrdp-egfx",
  "ironrdp-graphics",
  "ironrdp-pdu",
  "ironrdp-rdpdr",
+ "ironrdp-session",
  "ironrdp-svc",
  "ironrdp-tls",
  "k8s-openapi",
@@ -7341,6 +7353,7 @@ dependencies = [
  "russh-sftp",
  "rustls",
  "secrecy",
+ "security-framework",
  "semver",
  "serde",
  "serde-saphyr 0.0.29",
@@ -7367,6 +7380,7 @@ dependencies = [
  "tauri-plugin-reach-unlock",
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
+ "tempfile",
  "thiserror 2.0.21",
  "tiberius",
  "tokio",
@@ -7392,6 +7406,7 @@ dependencies = [
  "windows-core 0.62.2",
  "windows-native-keyring-store",
  "x25519-dalek",
+ "xattr",
  "zbus",
  "zbus-secret-service-keyring-store",
  "zeroize",

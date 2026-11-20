@@ -12,7 +12,24 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Reach connects to servers on your local network over SSH, RDP and VNC when you ask it to.</string>
 	<!-- The camera reads another device's link QR code (Settings > Sync). -->
+	<!--
+		Face ID opens the vault and the SSH key passphrases remembered
+		behind it (Settings > Security). Without this string iOS refuses
+		Face ID to the app.
+	-->
+	<key>NSFaceIDUsageDescription</key>
+	<string>Face ID unlocks your vault and the SSH keys you chose to remember with it.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>The camera reads the QR code that links this device to your other one.</string>
+	<!--
+		The app's Documents folder shows in the Files app under the app's
+		name: an RDP session can share its "Shared with desktops" folder
+		into the remote desktop as a drive, and files put there in Files
+		appear on the remote.
+	-->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 </dict>
 </plist>

@@ -8,7 +8,11 @@
 	import type { SshOptions } from '#lib/ipc/sessions.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import SshOptionsReport from './SshOptionsReport.svelte';
-	import { untrack } from 'svelte';
+	import SshAlgorithmsChoice from './SshAlgorithmsChoice.svelte';
+	import { sshAlgorithmCatalog } from '#lib/ipc/sshconfig.js';
+	import { flagOn, syncAccepted, type CatalogGroup } from '#lib/utils/sshAlgorithms.js';
+	import { isMobile } from '#lib/platform.js';
+	import { onMount, untrack } from 'svelte';
 
 	interface Props {
 		options: SshOptions;
@@ -30,6 +34,26 @@
 	let approvedCommands = $state<string[]>(options.my_approved_commands ?? []);
 	let acceptedWeakenings = $state<string[]>(options.my_accepted_weakenings ?? []);
 
+	// The algorithms the engine speaks, for the SSH algorithms choice.
+	let catalog = $state<CatalogGroup[]>([]);
+	onMount(() => {
+		sshAlgorithmCatalog()
+			.then((c) => (catalog = c))
+			.catch(() => {});
+	});
+
+	/** The choice above wrote new lines: keep them, and approve what it picked. */
+	function choiceChanged(next: string[]): void {
+		text = next.join('\n').replace(/\n+$/, '');
+		let accepted = syncAccepted(acceptedWeakenings, next, catalog);
+		for (const kw of ['ForwardAgent', 'ForwardX11']) {
+			const key = `${kw} yes`;
+			accepted = accepted.filter((k) => k !== key);
+			if (flagOn(next, kw)) accepted.push(key);
+		}
+		acceptedWeakenings = accepted;
+	}
+
 	let hasAny = $derived(!!options.imported || (options.lines ?? []).length > 0);
 	$effect(() => {
 		if (hasAny) open = true;
@@ -37,15 +61,6 @@
 
 	/** Common needs, as the lines OpenSSH users would write. */
 	const PRESETS: { label: string; lines: string[] }[] = [
-		{
-			label: 'sshopt.preset_legacy',
-			lines: [
-				'KexAlgorithms +diffie-hellman-group14-sha1,diffie-hellman-group1-sha1',
-				'HostKeyAlgorithms +ssh-rsa',
-				'Ciphers +aes128-cbc,aes256-cbc,3des-cbc',
-				'MACs +hmac-sha1'
-			]
-		},
 		{ label: 'sshopt.preset_keepalive', lines: ['ServerAliveInterval 30', 'ServerAliveCountMax 3'] },
 		{ label: 'sshopt.preset_compression', lines: ['Compression yes'] },
 		{ label: 'sshopt.preset_timeout', lines: ['ConnectTimeout 10', 'ConnectionAttempts 3'] }
@@ -126,6 +141,14 @@
 </script>
 
 <div class="section">
+	<SshAlgorithmsChoice
+		lines={text.split('\n')}
+		{catalog}
+		forwarding={!isMobile()}
+		disabled={disabled || catalog.length === 0}
+		onchange={choiceChanged}
+	/>
+
 	<button type="button" class="toggle" onclick={() => (open = !open)} aria-expanded={open}>
 		<span class="chev" class:open>›</span>
 		<span class="title">{t('sshopt.title')}</span>

@@ -56,6 +56,8 @@ export interface SessionConfig {
   domain?: string | null;
   /** A local folder shown inside the remote desktop as a drive, RDP only. */
   share_path?: string | null;
+  /** RDP only: what the clipboard carries; absent for text, pictures and files. */
+  rdp_clipboard?: 'text' | 'off' | null;
   /** VNC only: a saved SSH session to reach the server through. */
   via_session_id?: string | null;
   /** Key sessions: also offer the SSH agent's keys if this key is refused. Off by default. */
@@ -75,6 +77,10 @@ export interface SessionConfig {
   credential?: CredentialUse | null;
   /** On the start screen's Favorites. Stored on the session, so it syncs. */
   favorite?: boolean;
+  /** Its place among the sessions of its folder (or those outside any),
+   *  lowest first; unset: after those with one. Stored on the session, so
+   *  it syncs. Changed only by sessionSetOrder. */
+  order?: number | null;
   /** Free text about the server (RDM's Description and Notes). */
   notes?: string | null;
   /** Named values kept with the session, in the user's order. */
@@ -96,6 +102,22 @@ export interface SessionConfig {
   /** Start its terminals in tmux on the server; unset: as its folder says
    *  (see #lib/terminal/tmux). */
   tmux?: TmuxSetting | null;
+  /** The server keys it trusts, one per server it goes through. Read
+   *  only: saved by connecting (Accept and save) and changed with
+   *  sessionHostKeyRemove / sessionHostKeyReplace; a save keeps them. */
+  host_keys?: SavedHostKey[] | null;
+}
+
+/** A server key a session trusts. */
+export interface SavedHostKey {
+  /** The server as reached, `host:port` (a jump host's own). */
+  host: string;
+  /** Empty or absent when typed in by hand. */
+  key_type?: string;
+  /** `SHA256:` and base64. */
+  fingerprint: string;
+  /** Seconds since 1970. */
+  saved_at?: number | null;
 }
 
 /** A session's own tmux choice. */
@@ -206,6 +228,7 @@ export async function sessionCreate(params: {
   detectedOs?: string | null;
   osManual?: boolean;
   sharePath?: string | null;
+  rdpClipboard?: 'text' | 'off' | null;
   viaSessionId?: string | null;
   tryAgentKeys?: boolean | null;
   sshOptions?: SshOptions | null;
@@ -239,6 +262,7 @@ export async function sessionCreate(params: {
     detectedOs: params.detectedOs ?? null,
     osManual: params.osManual || null,
     sharePath: params.sharePath?.trim() ? params.sharePath.trim() : null,
+    rdpClipboard: params.kind === 'rdp' ? (params.rdpClipboard ?? null) : null,
     viaSessionId: params.viaSessionId || null,
     tryAgentKeys: params.tryAgentKeys || null,
     sshOptions: params.sshOptions ?? null,
@@ -357,10 +381,42 @@ export async function sessionMoveToFolder(sessionIds: string[], folderId: string
   return invoke<number>('session_move_to_folder', { sessionIds, folderId });
 }
 
+/** Remove a session's key for one server (`host:port`), or all of them
+ *  when `host` is null; the next connect asks again. Returns the keys left. */
+export async function sessionHostKeyRemove(sessionId: string, host: string | null): Promise<SavedHostKey[]> {
+  return invoke<SavedHostKey[]>('session_host_key_remove', { sessionId, host });
+}
+
+/** Trust this fingerprint (as `ssh-keygen -lf` prints it) for one server
+ *  of a session instead of the one saved. Returns the keys now kept. */
+export async function sessionHostKeyReplace(sessionId: string, host: string, fingerprint: string): Promise<SavedHostKey[]> {
+  return invoke<SavedHostKey[]>('session_host_key_replace', { sessionId, host, fingerprint });
+}
+
+/** What hostKeysRemoveAll did. */
+export interface HostKeysCleared {
+  sessions: number;
+  failed: number;
+  device: number;
+}
+
+/** Remove every saved host key: from all sessions (shared vaults too) and
+ *  from this device's own list. */
+export async function hostKeysRemoveAll(): Promise<HostKeysCleared> {
+  return invoke<HostKeysCleared>('host_keys_remove_all');
+}
+
 /** Mark sessions as favorites (or not) in one call. Only that flag
  *  changes; returns how many changed. */
 export async function sessionSetFavorite(sessionIds: string[], favorite: boolean): Promise<number> {
   return invoke<number>('session_set_favorite', { sessionIds, favorite });
+}
+
+/** Put sessions in this order: each gets its index as its place. Give
+ *  all the sessions of one folder (or those outside any). Only that place
+ *  changes; returns how many changed. */
+export async function sessionSetOrder(sessionIds: string[]): Promise<number> {
+  return invoke<number>('session_set_order', { sessionIds });
 }
 
 export async function sessionListFolders(): Promise<Folder[]> {
@@ -383,6 +439,11 @@ export async function sessionSetFolderTmux(folderId: string, tmux: boolean | nul
 /** Set or clear the saved credential a folder's sessions log in with. */
 export async function sessionSetFolderCredential(folderId: string, credentialId: string | null): Promise<Folder> {
   return invoke<Folder>('session_set_folder_credential', { folderId, credentialId });
+}
+
+/** Rename a folder; what is inside stays put. */
+export async function sessionRenameFolder(folderId: string, name: string): Promise<Folder> {
+  return invoke<Folder>('session_rename_folder', { folderId, name });
 }
 
 export async function sessionDeleteFolder(folderId: string): Promise<void> {
@@ -434,6 +495,28 @@ export interface SessionPatch {
   history?: BulkChange<HistoryMode>;
   cursor_style?: BulkChange<CursorStyle>;
   cursor_blink?: BulkChange<boolean>;
+  /** SSH: log in with a key, the agent, or a password (set by `password`). */
+  auth?: AuthMethod;
+  /** SSH key sessions: also offer the agent's keys. */
+  try_agent_keys?: boolean;
+  /** SSH: the whole jump host chain, or none. */
+  jump_chain?: BulkChange<JumpHostConfig[]>;
+  /** SSH: the proxy, or none. */
+  proxy?: BulkChange<ProxySessionConfig>;
+  /** SSH: the login shell, or the server's default. */
+  shell?: BulkChange<string>;
+  /** Custom fields set by name (added or overwritten). */
+  fields_set?: CustomField[];
+  /** Custom fields removed by name. */
+  fields_remove?: string[];
+  /** Telnet: the parts of its options to change. */
+  telnet?: Partial<TelnetOptions>;
+  /** SSH and WSL: server monitoring on or off, or the default. */
+  monitoring?: BulkChange<boolean>;
+  /** SSH and WSL: tmux mode (`inherit`: as the folder says) and mouse. */
+  tmux?: { mode?: 'off' | 'attach' | 'ask' | 'inherit'; mouse?: boolean };
+  /** VNC: the saved SSH session it goes through, or directly. */
+  via_session?: BulkChange<string>;
 }
 
 export interface BulkOutcome {

@@ -9,18 +9,26 @@
 	import Dropdown from '#lib/components/shared/Dropdown.svelte';
 	import DiscordIcon from '#lib/components/shared/DiscordIcon.svelte';
 	import { COMMUNITY } from '#lib/data/community.js';
-	import { SHOW_COMMUNITY, SHOW_SPONSOR } from '#lib/brand.js';
+	import { SHOW_COMMUNITY, SHOW_SPONSOR, WEBSITE_URL, CHANGELOG_URL, LICENSE_URL } from '#lib/brand.js';
 	import LanguageSelect from '#lib/components/shared/LanguageSelect.svelte';
 	import Toggle from '#lib/components/shared/Toggle.svelte';
 	import X11ServerSetting from './X11ServerSetting.svelte';
 	import ReportProblem from './ReportProblem.svelte';
 	import { getSettings, updateSetting, syncTraySettings } from '#lib/state/settings.svelte.js';
-	import { manualUpdateCheck } from '#lib/state/updater.svelte.js';
+	import { manualUpdateCheck, getUpdaterState, openWhatsNew } from '#lib/state/updater.svelte.js';
+	import { openSetupWizard } from '#lib/state/setup-wizard.svelte.js';
 	import { effectiveThreshold, MIN_PASTE_THRESHOLD } from '#lib/terminal/paste.js';
 	import { DEFAULT_WORD_SEPARATORS, rightClickMode } from '#lib/terminal/mouse.js';
 	import { t, changeLocale } from '#lib/state/i18n.svelte.js';
+	import { __APP_VERSION__ } from '#lib/version.js';
+
+	/** Which slice of these rows to show: Settings arranges them by topic,
+	 *  so one tab file feeds several pages (see settings-pages.ts). */
+	type Part = 'general' | 'shell' | 'paste' | 'paste-adv' | 'sessions' | 'tmux' | 'updates' | 'about';
+	let { part }: { part: Part } = $props();
 
 	const settings = getSettings();
+	const updater = getUpdaterState();
 
 	/** Report a problem: the dialog cleans and shows the log before anything is shared. */
 	let reportOpen = $state(false);
@@ -64,6 +72,11 @@
 		{ label: t('settings.term_right_click_copy_paste'), value: 'copy-paste' }
 	]);
 
+	let tmuxWindowOptions = $derived([
+		{ label: t('settings.tmux_windows_last'), value: 'last' },
+		{ label: t('settings.tmux_windows_all'), value: 'all' }
+	]);
+
 	function onLastSessionChange(checked: boolean) {
 		updateSetting('openLastSession', checked);
 	}
@@ -103,26 +116,15 @@
 </script>
 
 <div class="tab-content">
+
+	{#if part === 'general'}
+
 	<div class="setting-row">
 		<div class="setting-info">
 			<span class="setting-label">{t('settings.language')}</span>
 		</div>
 		<div class="setting-control">
 			<LanguageSelect value={settings.locale} onchange={onLanguageChange} />
-		</div>
-	</div>
-
-	<div class="setting-row">
-		<div class="setting-info">
-			<span class="setting-label">{t('settings.default_shell')}</span>
-			<span class="setting-description">{t('settings.shell_desc')}</span>
-		</div>
-		<div class="setting-control">
-			<Dropdown
-				options={shellOptions}
-				selected={settings.defaultShell}
-				onchange={onShellChange}
-			/>
 		</div>
 	</div>
 
@@ -141,68 +143,72 @@
 		</div>
 	</div>
 
+	{#if !isMobile()}
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('settings.minimize_to_tray')}</span>
+				<span class="setting-description">{t('settings.tray_desc')}</span>
+			</div>
+			<div class="setting-control">
+				<Toggle
+					hideLabel
+					checked={settings.minimizeToTray}
+					label={t('settings.minimize_to_tray')}
+					onchange={onMinimizeToTrayChange}
+				/>
+			</div>
+		</div>
+
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('settings.start_with_system')}</span>
+				<span class="setting-description">{t('settings.system_startup_desc')}</span>
+			</div>
+			<div class="setting-control">
+				<Toggle
+					hideLabel
+					checked={settings.startWithSystem}
+					label={t('settings.start_with_system')}
+					onchange={onStartWithSystemChange}
+				/>
+			</div>
+		</div>
+	{/if}
+
+	<!-- The first-run questions again, over whatever is open. -->
 	<div class="setting-row">
 		<div class="setting-info">
-			<span class="setting-label">{t('settings.double_click_open')}</span>
-			<span class="setting-description">{t('settings.double_click_open_desc')}</span>
+			<span class="setting-label">{t('settings.rerun_setup')}</span>
+			<span class="setting-description">{t('settings.rerun_setup_desc')}</span>
 		</div>
 		<div class="setting-control">
-			<Toggle
-				hideLabel
-				checked={settings.doubleClickToOpen}
-				label={t('settings.double_click_open')}
-				onchange={(v) => updateSetting('doubleClickToOpen', v)}
-			/>
-		</div>
-	</div>
-
-	<div class="setting-row">
-		<div class="setting-info">
-			<span class="setting-label">{t('settings.close_tab_on_exit')}</span>
-			<span class="setting-description">{t('settings.close_tab_on_exit_desc')}</span>
-		</div>
-		<div class="setting-control">
-			<Toggle
-				hideLabel
-				checked={settings.closeTabOnExit}
-				label={t('settings.close_tab_on_exit')}
-				onchange={(v) => updateSetting('closeTabOnExit', v)}
-			/>
-		</div>
-	</div>
-
-	<div class="setting-row">
-		<div class="setting-info">
-			<span class="setting-label">{t('settings.server_monitoring')}</span>
-			<span class="setting-description">{t('settings.server_monitoring_desc')}</span>
-		</div>
-		<div class="setting-control">
-			<Toggle
-				hideLabel
-				checked={settings.serverMonitoring}
-				label={t('settings.server_monitoring')}
-				onchange={(v) => updateSetting('serverMonitoring', v)}
-			/>
-		</div>
-	</div>
-
-	<div class="setting-row">
-		<div class="setting-info">
-			<span class="setting-label">{t('settings.check_updates')}</span>
-			<span class="setting-description">{t('settings.check_updates_desc')}</span>
-		</div>
-		<div class="setting-control update-controls">
-			<button class="discord-link" onclick={onCheckNow} disabled={checkingUpdates}>
-				<span>{checkingUpdates ? t('settings.check_updates_checking') : t('settings.check_updates_now')}</span>
+			<button class="discord-link" onclick={openSetupWizard}>
+				<span>{t('settings.rerun_setup_button')}</span>
 			</button>
-			<Toggle
-				hideLabel
-				checked={settings.checkForUpdates}
-				label={t('settings.check_updates')}
-				onchange={onCheckForUpdatesChange}
+		</div>
+	</div>
+
+	{/if}
+
+	{#if part === 'shell'}
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.default_shell')}</span>
+			<span class="setting-description">{t('settings.shell_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Dropdown
+				options={shellOptions}
+				selected={settings.defaultShell}
+				onchange={onShellChange}
 			/>
 		</div>
 	</div>
+
+	{/if}
+
+	{#if part === 'paste'}
 
 	<div class="setting-row">
 		<div class="setting-info">
@@ -240,6 +246,7 @@
 	{/if}
 
 	<!-- The mouse in the terminal; a phone has none. -->
+
 	{#if !isMobile()}
 		<div class="setting-row">
 			<div class="setting-info">
@@ -269,7 +276,13 @@
 				/>
 			</div>
 		</div>
+	{/if}
 
+	{/if}
+
+	{#if part === 'paste-adv'}
+
+	{#if !isMobile()}
 		<div class="setting-row">
 			<div class="setting-info">
 				<span class="setting-label">{t('settings.term_osc52')}</span>
@@ -325,40 +338,176 @@
 		</div>
 	{/if}
 
-	<!-- A phone has no tray, and apps do not start with it: desktop only. -->
+	{/if}
+
+	{#if part === 'sessions'}
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.double_click_open')}</span>
+			<span class="setting-description">{t('settings.double_click_open_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.doubleClickToOpen}
+				label={t('settings.double_click_open')}
+				onchange={(v) => updateSetting('doubleClickToOpen', v)}
+			/>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.close_tab_on_exit')}</span>
+			<span class="setting-description">{t('settings.close_tab_on_exit_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.closeTabOnExit}
+				label={t('settings.close_tab_on_exit')}
+				onchange={(v) => updateSetting('closeTabOnExit', v)}
+			/>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.server_monitoring')}</span>
+			<span class="setting-description">{t('settings.server_monitoring_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.serverMonitoring}
+				label={t('settings.server_monitoring')}
+				onchange={(v) => updateSetting('serverMonitoring', v)}
+			/>
+		</div>
+	</div>
+
+	<!-- A phone has no X server to point at: desktop only. -->
+
 	{#if !isMobile()}
-		<div class="setting-row">
-			<div class="setting-info">
-				<span class="setting-label">{t('settings.minimize_to_tray')}</span>
-				<span class="setting-description">{t('settings.tray_desc')}</span>
-			</div>
-			<div class="setting-control">
-				<Toggle
-					hideLabel
-					checked={settings.minimizeToTray}
-					label={t('settings.minimize_to_tray')}
-					onchange={onMinimizeToTrayChange}
-				/>
-			</div>
-		</div>
-
-		<div class="setting-row">
-			<div class="setting-info">
-				<span class="setting-label">{t('settings.start_with_system')}</span>
-				<span class="setting-description">{t('settings.system_startup_desc')}</span>
-			</div>
-			<div class="setting-control">
-				<Toggle
-					hideLabel
-					checked={settings.startWithSystem}
-					label={t('settings.start_with_system')}
-					onchange={onStartWithSystemChange}
-				/>
-			</div>
-		</div>
-
 		<X11ServerSetting />
 	{/if}
+
+	{/if}
+
+	{#if part === 'tmux'}
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.tmux_new_tab')}</span>
+			<span class="setting-description">{t('settings.tmux_new_tab_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.tmuxNewTabWindow}
+				label={t('settings.tmux_new_tab')}
+				onchange={(v) => updateSetting('tmuxNewTabWindow', v)}
+			/>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.tmux_connect_windows')}</span>
+			<span class="setting-description">{t('settings.tmux_connect_windows_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Dropdown
+				options={tmuxWindowOptions}
+				selected={settings.tmuxConnectWindows}
+				onchange={(v) => updateSetting('tmuxConnectWindows', v === 'all' ? 'all' : 'last')}
+			/>
+		</div>
+	</div>
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.tmux_hide_status')}</span>
+			<span class="setting-description">{t('settings.tmux_hide_status_desc')}</span>
+		</div>
+		<div class="setting-control">
+			<Toggle
+				hideLabel
+				checked={settings.tmuxHideStatus}
+				label={t('settings.tmux_hide_status')}
+				onchange={(v) => updateSetting('tmuxHideStatus', v)}
+			/>
+		</div>
+	</div>
+
+	{/if}
+
+	{#if part === 'updates'}
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.version')}</span>
+		</div>
+		<div class="setting-control"><span class="version">v{__APP_VERSION__}</span></div>
+	</div>
+
+	{#if updater.updateAvailable && updater.updateVersion}
+		<!-- The same What's new dialog as the update banner's Info button. -->
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('updater.available', { version: updater.updateVersion })}</span>
+			</div>
+			<div class="setting-control">
+				<button class="discord-link" onclick={openWhatsNew}>
+					<span>{t('updater.whats_new')}</span>
+				</button>
+			</div>
+		</div>
+	{/if}
+
+	<div class="setting-row">
+		<div class="setting-info">
+			<span class="setting-label">{t('settings.check_updates')}</span>
+			<span class="setting-description">{t('settings.check_updates_desc')}</span>
+		</div>
+		<div class="setting-control update-controls">
+			<button class="discord-link" onclick={onCheckNow} disabled={checkingUpdates}>
+				<span>{checkingUpdates ? t('settings.check_updates_checking') : t('settings.check_updates_now')}</span>
+			</button>
+			<Toggle
+				hideLabel
+				checked={settings.checkForUpdates}
+				label={t('settings.check_updates')}
+				onchange={onCheckForUpdatesChange}
+			/>
+		</div>
+	</div>
+
+	{/if}
+
+	{#if part === 'about'}
+
+	<!-- Website, changelog and license, opened in the system browser
+	     (on phones too, through the opener plugin). -->
+	{#each [
+		{ label: 'settings.website', desc: 'settings.website_desc', url: WEBSITE_URL },
+		{ label: 'settings.changelog', desc: 'settings.changelog_desc', url: CHANGELOG_URL },
+		{ label: 'settings.license', desc: 'settings.license_desc', url: LICENSE_URL }
+	] as link (link.label)}
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t(link.label)}</span>
+				<span class="setting-description">{t(link.desc)}</span>
+			</div>
+			<div class="setting-control">
+				<button class="discord-link" title={link.url} onclick={() => void openUrl(link.url)}>
+					<span>{t('settings.open_link')}</span>
+					<span class="ext"><FaIcon icon={faUpRightFromSquare} size={10} /></span>
+				</button>
+			</div>
+		</div>
+	{/each}
 
 	{#if SHOW_COMMUNITY}
 		<!-- The permanent route to the community. The launch prompt can be
@@ -450,11 +599,20 @@
 			</div>
 		</div>
 	{/if}
+
+	{/if}
+
 </div>
 
 <style>
 	/* The dropdowns' box: it was the page's black, the one dark well in a
 	   column of grey controls. */
+	.version {
+		font-family: var(--font-mono, monospace);
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
+	}
+
 	.update-controls {
 		display: flex;
 		align-items: center;

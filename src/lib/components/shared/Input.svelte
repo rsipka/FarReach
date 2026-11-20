@@ -1,4 +1,6 @@
 <script lang="ts">
+	import RevealButton from './RevealButton.svelte';
+
 	interface Props {
 		label?: string;
 		value?: string;
@@ -21,6 +23,9 @@
 	let inputId = $state(`input-${Math.random().toString(36).slice(2, 9)}`);
 
 	let floated = $derived(focused || value.length > 0);
+	// Password fields get an eye button that shows what was typed.
+	let shown = $state(false);
+	let isPassword = $derived(type === 'password');
 </script>
 
 <div class="input-wrapper" class:disabled>
@@ -34,7 +39,8 @@
 		id={inputId}
 		class="input-field"
 		class:has-label={!!label}
-		{type}
+		class:has-reveal={isPassword}
+		type={isPassword && shown ? 'text' : type}
 		placeholder={label && !focused ? '' : placeholder}
 		{disabled}
 		bind:value
@@ -44,6 +50,10 @@
 	/>
 
 	<div class="input-border" class:focused></div>
+
+	{#if isPassword}
+		<RevealButton bind:shown {disabled} />
+	{/if}
 </div>
 
 <style>
@@ -98,6 +108,10 @@
 	.input-field.has-label {
 		padding-top: 20px;
 		padding-bottom: 6px;
+	}
+
+	.input-field.has-reveal {
+		padding-right: 38px;
 	}
 
 	.input-field::placeholder {

@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.provider.OpenableColumns
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
@@ -166,6 +167,18 @@ class UnlockPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
+    /** Whether the fingerprint key under this alias is still there. */
+    @Command
+    fun biometricHasKey(invoke: Invoke) {
+        val args = invoke.parseArgs(AliasArgs::class.java)
+        val present = try {
+            keyStore().containsAlias(args.alias)
+        } catch (_: Exception) {
+            false
+        }
+        invoke.resolve(JSObject().apply { put("present", present) })
+    }
+
     @Command
     fun biometricForget(invoke: Invoke) {
         val args = invoke.parseArgs(AliasArgs::class.java)
@@ -311,9 +324,22 @@ class UnlockPlugin(private val activity: Activity) : Plugin(activity) {
         val args = invoke.parseArgs(UriArgs::class.java)
         io.execute {
             try {
-                val bytes = activity.contentResolver.openInputStream(Uri.parse(args.uri))?.use { it.readBytes() }
+                val uri = Uri.parse(args.uri)
+                val bytes = activity.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     ?: throw IllegalStateException("The file could not be opened")
-                invoke.resolve(JSObject().apply { put("data", encode(bytes)) })
+                // The name the file goes by in the picker: a content link
+                // says nothing about it (the RDP clipboard needs one).
+                val name = try {
+                    activity.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                        if (c.moveToFirst()) c.getString(0) else null
+                    }
+                } catch (e: Exception) {
+                    null
+                }
+                invoke.resolve(JSObject().apply {
+                    put("data", encode(bytes))
+                    if (name != null) put("name", name)
+                })
             } catch (e: Exception) {
                 invoke.reject(e.message ?: "The file could not be read")
             }

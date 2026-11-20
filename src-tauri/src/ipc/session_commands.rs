@@ -718,6 +718,12 @@ pub async fn session_get(
     Ok(session)
 }
 
+/// The RDP clipboard choice as stored: only the two that differ from the
+/// default, and only on an RDP session.
+pub(crate) fn rdp_clipboard_setting(value: Option<String>, kind: crate::state::SessionKind) -> Option<String> {
+    value.filter(|v| kind == crate::state::SessionKind::Rdp && (v == "text" || v == "off"))
+}
+
 /// Create a new session configuration. O(1) insert.
 /// If vault_id is provided and is a user vault, stores in that vault (for sharing).
 /// Otherwise stores in __sessions__ (private).
@@ -745,6 +751,7 @@ pub async fn session_create(
     detected_os: Option<String>,
     os_manual: Option<bool>,
     share_path: Option<String>,
+    rdp_clipboard: Option<String>,
     via_session_id: Option<String>,
     try_agent_keys: Option<bool>,
     ssh_options: Option<crate::ssh::sshconf::session::SshOptions>,
@@ -796,6 +803,7 @@ pub async fn session_create(
         serial: serial.filter(|_| kind == crate::state::SessionKind::Serial),
         domain: domain.filter(|d| !d.trim().is_empty()),
         share_path: share_path.filter(|d| !d.trim().is_empty()),
+        rdp_clipboard: rdp_clipboard_setting(rdp_clipboard, kind),
         via_session_id: via_session_id.filter(|s| !s.is_empty()),
         try_agent_keys: try_agent_keys.filter(|t| *t),
         folder_id,
@@ -818,6 +826,7 @@ pub async fn session_create(
         ssh_options: ssh_options.filter(|o| !o.is_empty()),
         credential_id: credential_id.filter(|c| !c.is_empty()),
         favorite: false,
+        order: None,
         credential: None,
         notes,
         custom_fields,
@@ -828,6 +837,8 @@ pub async fn session_create(
         history,
         tmux,
         credential_ref_approvals: Default::default(),
+        // Trusted by connecting to it, never by what a form sends.
+        host_keys: None,
     };
     session.tidy_documentation();
 
@@ -838,6 +849,9 @@ pub async fn session_create(
     let logins = creds::logins(&manager).await;
     let vault = session.vault_id.clone();
     creds::check_links(&logins.creds, &session, vault.as_deref())?;
+    if session.folder_id.is_some() {
+        check_folder_vault(&read_folders(&manager).await?, session.folder_id.as_deref(), vault.as_deref())?;
+    }
     let own = creds::fill_for_save(&mut session, vault.as_deref(), &logins.folders, &logins.creds, None);
 
     seal_approvals(&manager, &mut session, None).await;
@@ -906,6 +920,7 @@ async fn prepare_update(
     mut session: SessionConfig,
 ) -> Result<(SessionLoc, Prepared), String> {
     session.tidy_documentation();
+    session.rdp_clipboard = rdp_clipboard_setting(session.rdp_clipboard.take(), session.kind);
 
     // Find which vault contains this session
     let loc = locate_session(manager, &session.id).await
@@ -929,9 +944,25 @@ async fn prepare_update(
         Err(_) => (None, None),
     };
 
+    // Moving it to another folder: one of its own vault. A session an
+    // older version filed across vaults can still be saved as it is.
+    if session.folder_id.is_some() && stored.as_ref().map(|s| &s.folder_id) != Some(&session.folder_id) {
+        check_folder_vault(&read_folders(manager).await?, session.folder_id.as_deref(), vault.as_deref())?;
+    }
+
+    // The place in the list is the stored one (another device may have
+    // moved it since the editor opened); in another folder it starts last.
+    session.order = match stored.as_ref() {
+        Some(s) if s.folder_id == session.folder_id => s.order,
+        _ => None,
+    };
+
     // The approvals kept for a credential's entries are the stored ones,
     // never what the window sent.
     session.credential_ref_approvals = stored.as_ref().map(|s| s.credential_ref_approvals.clone()).unwrap_or_default();
+    // The trusted host keys are the stored ones: a connect may have saved
+    // one while the editor was open, and the editor never changes them.
+    session.host_keys = stored.as_ref().and_then(|s| s.host_keys.clone());
 
     // A login sent is the session's own, unless it is one a credential
     // filled in (the editor shows that one): then the stored own login stays.
@@ -951,6 +982,10 @@ async fn prepare_update(
 mod bulk;
 pub use bulk::*;
 
+#[path = "session_hostkeys_cmds.rs"]
+mod hostkeys;
+pub use hostkeys::*;
+
 /// Move many sessions into a folder (`None`: out of any folder) in one
 /// go. Only `folder_id` changes: each stored session is read and written
 /// back with every other field as it was, including fields a newer Reach
@@ -967,9 +1002,29 @@ pub async fn session_move_to_folder(
     if manager.is_locked() {
         return Err("Vault is locked".to_string());
     }
+    move_to_folder(&manager, &session_ids, folder_id).await
+}
+
+async fn move_to_folder(
+    manager: &crate::vault::VaultManager,
+    session_ids: &[String],
+    folder_id: Option<String>,
+) -> Result<u32, String> {
+    // Every session is checked before any is written, so a move that mixes
+    // vaults leaves them all where they were.
+    let folders = match folder_id {
+        Some(_) => read_folders(manager).await?,
+        None => Vec::new(),
+    };
+    let mut found = Vec::new();
+    for id in session_ids {
+        let Some(loc) = locate_session(manager, id).await else { continue };
+        let vault = creds::vault_of(manager, &loc.vault_id);
+        check_folder_vault(&folders, folder_id.as_deref(), vault.as_deref())?;
+        found.push((id, loc));
+    }
     let mut moved = 0u32;
-    for id in &session_ids {
-        let Some(loc) = locate_session(&manager, id).await else { continue };
+    for (id, loc) in found {
         let plaintext = manager.read_secret(&loc.vault_id, &loc.secret_id).await.map_err(|e| e.to_string())?;
         use secrecy::ExposeSecret;
         let mut value: serde_json::Value =
@@ -980,6 +1035,9 @@ pub async fn session_move_to_folder(
             continue;
         }
         obj.insert("folder_id".into(), target);
+        // Its place among the old folder's sessions means nothing in the
+        // new one: it goes after those already ordered there.
+        obj.remove("order");
         let json = serde_json::to_vec(&value).map_err(|e| e.to_string())?;
         manager
             .update_secret(&loc.vault_id, &loc.secret_id, SecretBox::new(Box::new(json)))
@@ -1033,6 +1091,55 @@ pub async fn session_set_favorite(
     }
     tracing::info!("Set favorite={favorite} on {changed} sessions");
     Ok(changed)
+}
+
+/// Put sessions in this order: each gets its index in `session_ids` as its
+/// `order`. Meant for the sessions of one folder (or those outside any),
+/// all of them, so the list reads the same on every device. Like
+/// `session_set_favorite`, only that field changes and a session whose
+/// place is already right is not written again. Returns how many changed;
+/// a session that no longer exists is skipped.
+#[tauri::command]
+#[tracing::instrument(skip(state, session_ids), fields(count = session_ids.len()))]
+pub async fn session_set_order(state: State<'_, AppState>, session_ids: Vec<String>) -> Result<u32, String> {
+    let manager = state.vault_manager.lock().await;
+    if manager.is_locked() {
+        return Err("Vault is locked".to_string());
+    }
+    set_order(&manager, &session_ids).await
+}
+
+async fn set_order(manager: &crate::vault::VaultManager, session_ids: &[String]) -> Result<u32, String> {
+    let mut changed = 0u32;
+    for (index, id) in session_ids.iter().enumerate() {
+        let Some(loc) = locate_session(manager, id).await else { continue };
+        let plaintext = manager.read_secret(&loc.vault_id, &loc.secret_id).await.map_err(|e| e.to_string())?;
+        use secrecy::ExposeSecret;
+        let mut value: serde_json::Value =
+            serde_json::from_slice(plaintext.expose_secret()).map_err(|e| format!("Invalid session data: {e}"))?;
+        let Some(obj) = value.as_object_mut() else { return Err(format!("Invalid session data: {id}")) };
+        let order = u32::try_from(index).map_err(|_| "Too many sessions".to_string())?;
+        if set_order_field(obj, order) {
+            let json = serde_json::to_vec(&value).map_err(|e| e.to_string())?;
+            manager
+                .update_secret(&loc.vault_id, &loc.secret_id, SecretBox::new(Box::new(json)))
+                .await
+                .map_err(|e| e.to_string())?;
+            changed += 1;
+        }
+    }
+    tracing::info!("Reordered {} sessions, {changed} changed", session_ids.len());
+    Ok(changed)
+}
+
+/// Set a stored session's `order`; false when it already had that one.
+fn set_order_field(obj: &mut serde_json::Map<String, serde_json::Value>, order: u32) -> bool {
+    let target = serde_json::Value::from(order);
+    if obj.get("order") == Some(&target) {
+        return false;
+    }
+    obj.insert("order".into(), target);
+    true
 }
 
 /// Delete a session by ID. O(1) delete.
@@ -1285,6 +1392,20 @@ async fn read_folders(manager: &crate::vault::VaultManager) -> Result<Vec<Folder
     Ok(folders)
 }
 
+/// A session goes only into a folder of its own vault (`None`: this
+/// device's Private sessions and folders), so each vault's folders are its
+/// own and a folder never shows up under another vault. A folder not found
+/// (its vault is not open here) is let through.
+fn check_folder_vault(folders: &[Folder], folder_id: Option<&str>, session_vault: Option<&str>) -> Result<(), String> {
+    let Some(id) = folder_id else { return Ok(()) };
+    match folders.iter().find(|f| f.id == id) {
+        Some(folder) if folder.vault_id.as_deref() != session_vault => {
+            Err("A session can only go into a folder in its own vault".to_string())
+        }
+        _ => Ok(()),
+    }
+}
+
 async fn folders_in(manager: &crate::vault::VaultManager, vault_id: &str) -> Result<Vec<Folder>, String> {
     let secrets = manager
         .read_secrets_in(vault_id, &["folder"])
@@ -1523,6 +1644,40 @@ pub async fn session_set_folder_tmux(
         .await
         .map_err(|e| e.to_string())?;
     tracing::info!("Folder {} tmux: {:?}", folder.id, folder.tmux);
+    Ok(folder)
+}
+
+/// Rename a folder. Its sessions and subfolders stay where they are.
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn session_rename_folder(
+    state: State<'_, AppState>,
+    folder_id: String,
+    name: String,
+) -> Result<Folder, String> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err("Folder name cannot be empty".to_string());
+    }
+    let manager = state.vault_manager.lock().await;
+    if manager.is_locked() {
+        return Err("Vault is locked".to_string());
+    }
+    let mut folder = read_folders(&manager)
+        .await?
+        .into_iter()
+        .find(|f| f.id == folder_id)
+        .ok_or_else(|| format!("Folder not found: {folder_id}"))?;
+    folder.name = name;
+    let vault_id = find_folder_vault(&manager, &folder.id)
+        .await
+        .ok_or_else(|| format!("Folder not found: {}", folder.id))?;
+    let json = serde_json::to_vec(&folder).map_err(|e| e.to_string())?;
+    manager
+        .update_secret(&vault_id, &folder.id, SecretBox::new(Box::new(json)))
+        .await
+        .map_err(|e| e.to_string())?;
+    tracing::info!("Folder {} renamed", folder.id);
     Ok(folder)
 }
 
@@ -2454,5 +2609,89 @@ mod documentation_tests {
         let on = serde_json::to_value(session(serde_json::json!({ "monitoring": true }))).unwrap();
         assert_eq!(on["monitoring"], true);
         assert!(serde_json::to_value(session(serde_json::json!({}))).unwrap().get("monitoring").is_none());
+    }
+}
+
+#[cfg(test)]
+mod folder_vault_tests {
+    use super::*;
+    use crate::vault::types::VaultType;
+
+    fn folder(id: &str, vault: Option<&str>) -> Folder {
+        Folder { id: id.into(), name: id.into(), parent_id: None, vault_id: vault.map(Into::into), credential_id: None, tmux: None }
+    }
+
+    #[test]
+    fn a_session_goes_only_into_its_own_vaults_folders() {
+        let folders = [folder("private", None), folder("team", Some("t"))];
+        assert!(check_folder_vault(&folders, None, Some("t")).is_ok(), "out of any folder");
+        assert!(check_folder_vault(&folders, Some("private"), None).is_ok());
+        assert!(check_folder_vault(&folders, Some("team"), Some("t")).is_ok());
+        assert!(check_folder_vault(&folders, Some("team"), None).is_err(), "a Private session into a vault's folder");
+        assert!(check_folder_vault(&folders, Some("private"), Some("t")).is_err(), "a vault's session into a Private folder");
+        assert!(check_folder_vault(&folders, Some("gone"), Some("t")).is_ok(), "a folder not open here");
+    }
+
+    fn put_session(id: &str) -> SecretBox<Vec<u8>> {
+        let json = serde_json::json!({
+            "id": id, "name": id, "host": "h", "port": 22, "username": "u",
+            "auth_method": { "type": "Agent" }, "folder_id": null, "tags": []
+        });
+        SecretBox::new(Box::new(serde_json::to_vec(&json).unwrap()))
+    }
+
+    #[tokio::test]
+    async fn moving_sessions_across_vaults_is_refused_and_writes_nothing() {
+        let dir = std::env::temp_dir().join(format!("reach-folder-vault-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut m = crate::vault::VaultManager::new(dir.clone());
+        m.init_identity("folder-vault").await.unwrap();
+        let team = m.create_vault("Team", VaultType::Private, None, None).await.unwrap().id;
+        let private = ensure_sessions_vault(&mut m).await.unwrap();
+        m.create_secret_with_id(&private, "mine", "mine", SecretCategory::Session, put_session("mine")).await.unwrap();
+        m.create_secret_with_id(&team, "ours", "ours", SecretCategory::Session, put_session("ours")).await.unwrap();
+        let home = create_folder(&mut m, "Home".into(), None, None).await.unwrap();
+        let servers = create_folder(&mut m, "Servers".into(), None, Some(team.clone())).await.unwrap();
+
+        let both = ["mine".to_string(), "ours".to_string()];
+        assert!(move_to_folder(&m, &both, Some(servers.id.clone())).await.is_err());
+        assert!(move_to_folder(&m, &both, Some(home.id.clone())).await.is_err());
+        let folder_of = |s: SessionConfig| s.folder_id;
+        assert_eq!(folder_of(read_session(&m, &private, "mine").await.unwrap()), None, "nothing moved");
+
+        assert_eq!(move_to_folder(&m, &["ours".to_string()], Some(servers.id.clone())).await.unwrap(), 1);
+        assert_eq!(move_to_folder(&m, &["mine".to_string()], Some(home.id.clone())).await.unwrap(), 1);
+        assert_eq!(folder_of(read_session(&m, &team, "ours").await.unwrap()), Some(servers.id.clone()));
+        assert_eq!(move_to_folder(&m, &both, None).await.unwrap(), 2, "out of folders works across vaults");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn the_order_is_stored_on_each_session_and_a_move_clears_it() {
+        let dir = std::env::temp_dir().join(format!("reach-session-order-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut m = crate::vault::VaultManager::new(dir.clone());
+        m.init_identity("session-order").await.unwrap();
+        let private = ensure_sessions_vault(&mut m).await.unwrap();
+        for id in ["a", "b", "c"] {
+            m.create_secret_with_id(&private, id, id, SecretCategory::Session, put_session(id)).await.unwrap();
+        }
+        let order_of = |s: SessionConfig| s.order;
+        assert_eq!(order_of(read_session(&m, &private, "a").await.unwrap()), None, "none before it is set");
+
+        let ids = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(set_order(&m, &ids(&["c", "a", "gone", "b"])).await.unwrap(), 3, "a missing one is skipped");
+        assert_eq!(order_of(read_session(&m, &private, "c").await.unwrap()), Some(0));
+        assert_eq!(order_of(read_session(&m, &private, "b").await.unwrap()), Some(3));
+        assert_eq!(set_order(&m, &ids(&["c", "a", "gone", "b"])).await.unwrap(), 0, "the same order writes nothing");
+        assert_eq!(set_order(&m, &ids(&["a", "c"])).await.unwrap(), 2);
+
+        let home = create_folder(&mut m, "Home".into(), None, None).await.unwrap();
+        move_to_folder(&m, &ids(&["a"]), Some(home.id.clone())).await.unwrap();
+        assert_eq!(order_of(read_session(&m, &private, "a").await.unwrap()), None, "it starts last in the new folder");
+        assert_eq!(order_of(read_session(&m, &private, "c").await.unwrap()), Some(1), "the others keep theirs");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

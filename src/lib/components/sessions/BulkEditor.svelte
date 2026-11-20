@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PasswordField from '#lib/components/shared/PasswordField.svelte';
 	// Editing many sessions at once. Every field starts as "keep": it shows
 	// the value the sessions share, or "Mixed", and nothing is sent for it.
 	// Typing or picking makes it a change (an accent bar and a revert
@@ -7,11 +8,15 @@
 	import Modal from '#lib/components/shared/Modal.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
 	import TerminalThemeList from '#lib/components/terminal/TerminalThemeList.svelte';
+	import KeyPicker from './KeyPicker.svelte';
+	import BulkSelectRow from './BulkSelectRow.svelte';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { findTerminalTheme, terminalPalette } from '#lib/state/terminal-themes.svelte.js';
 	import {
 		sessionBulkUpdate,
+		type AuthMethod,
 		type BulkResult,
+		type JumpHostConfig,
 		type SessionConfig,
 		type SessionPatch
 	} from '#lib/ipc/sessions.js';
@@ -34,13 +39,15 @@
 	interface Props {
 		open: boolean;
 		sessions: SessionConfig[];
+		/** Every saved session, for jump hosts and a VNC session's SSH tunnel. */
+		allSessions?: SessionConfig[];
 		credentials: SavedCredential[];
 		onclose: () => void;
 		/** After a write: the backend's report, to reload and offer Undo. */
 		onapplied: (result: BulkResult) => void;
 	}
 
-	let { open, sessions, credentials, onclose, onapplied }: Props = $props();
+	let { open, sessions, allSessions = [], credentials, onclose, onapplied }: Props = $props();
 
 	const KEEP = '__keep__';
 	const FOLDER = '__folder__';
@@ -63,6 +70,39 @@
 	let history = $state(KEEP);
 	let cursor = $state(KEEP);
 	let blink = $state(KEEP);
+	// Phase 2: login method, connection, Telnet, server side, custom fields.
+	let authType = $state(KEEP);
+	let keyPath = $state('');
+	let keyId = $state('');
+	let keyPassphrase = $state('');
+	let agentKeys = $state(KEEP);
+	/** One jump host as typed here; `login` is 'agent', 'password' or a credential id. */
+	interface Hop {
+		host: string;
+		port: string;
+		username: string;
+		login: string;
+		password: string;
+	}
+	let jumpMode = $state(KEEP);
+	let hops = $state<Hop[]>([]);
+	let proxyMode = $state(KEEP);
+	let proxyType = $state<'socks5' | 'socks4' | 'http'>('socks5');
+	let proxyHost = $state('');
+	let proxyPort = $state('9050');
+	let proxyUser = $state('');
+	let proxyPass = $state('');
+	let shell = $state<string | null>(null);
+	let shellClear = $state(false);
+	let fieldsSet = $state<{ name: string; value: string; hidden: boolean }[]>([]);
+	let fieldsRemove = $state('');
+	let telnetMode = $state(KEEP);
+	let telnetNewline = $state(KEEP);
+	let telnetBackspace = $state(KEEP);
+	let monitoring = $state(KEEP);
+	let tmuxMode = $state(KEEP);
+	let tmuxMouse = $state(KEEP);
+	let via = $state(KEEP);
 
 	let phase = $state<'edit' | 'confirm' | 'saving' | 'report'>('edit');
 	let error = $state('');
@@ -75,6 +115,17 @@
 		saveAsCredential = true;
 		credentialName = '';
 		credential = history = cursor = blink = KEEP;
+		authType = agentKeys = jumpMode = proxyMode = KEEP;
+		telnetMode = telnetNewline = telnetBackspace = monitoring = tmuxMode = tmuxMouse = via = KEEP;
+		keyPath = keyId = keyPassphrase = '';
+		hops = [newHop()];
+		proxyType = 'socks5';
+		proxyHost = proxyUser = proxyPass = '';
+		proxyPort = '9050';
+		shell = null;
+		shellClear = false;
+		fieldsSet = [];
+		fieldsRemove = '';
 		tagsAdd = tagsRemove = notesText = '';
 		notesOp = 'keep';
 		phase = 'edit';
@@ -107,7 +158,44 @@
 		return { set: credential };
 	});
 
-	const count = (field: BulkField) => countApplying(field, sessions, credentialChange);
+	/** The login method the patch switches SSH sessions to, if any. */
+	let authChange = $derived(authType === KEEP ? undefined : (authType as AuthMethod['type']));
+	const count = (field: BulkField) => countApplying(field, sessions, credentialChange, authChange);
+	const appliesText = (field: BulkField): string | undefined => {
+		const n = count(field);
+		return n < total ? t('bulk.applies', { count: String(n), total: String(total) }) : undefined;
+	};
+	const sshSessions = $derived(allSessions.filter((s) => (s.kind ?? 'ssh') === 'ssh'));
+
+	function newHop(): Hop {
+		return { host: '', port: '22', username: '', login: 'agent', password: '' };
+	}
+
+	/** Fill a hop from a saved SSH session's address and login. */
+	function copyHop(hop: Hop, id: string): void {
+		const from = allSessions.find((s) => s.id === id);
+		if (!from) return;
+		hop.host = from.host;
+		hop.port = String(from.port || 22);
+		hop.username = from.username;
+		const cred = from.credential_id && from.credential_id !== OWN_LOGIN ? from.credential_id : '';
+		hop.login = cred && vaultCredentials.some((c) => c.id === cred) ? cred : 'agent';
+	}
+
+	function hopConfig(h: Hop): JumpHostConfig {
+		const cred = h.login !== 'agent' && h.login !== 'password' ? h.login : null;
+		return {
+			host: h.host.trim(),
+			port: parseInt(h.port, 10) || 22,
+			username: h.username.trim(),
+			auth_method: h.login === 'password' ? { type: 'Password', password: h.password || undefined } : { type: 'Agent' },
+			credential_id: cred
+		};
+	}
+
+	let hopsValid = $derived(hops.length > 0 && hops.every((h) => h.host.trim() && parseInt(h.port, 10) > 0 && parseInt(h.port, 10) < 65536));
+	let proxyValid = $derived(!!proxyHost.trim() && parseInt(proxyPort, 10) > 0 && parseInt(proxyPort, 10) < 65536);
+	let keyMissing = $derived(authType === 'Key' && !keyId && !keyPath.trim());
 	const shows = (field: BulkField) => sessions.some((s) => appliesTo(field, s));
 
 	// ---- Shared values, for placeholders -------------------------------------
@@ -129,6 +217,43 @@
 	);
 	const cursorName = (v: string): string => (v ? t(`cursor.style_${v}`) : t('history.session_default'));
 	const blinkName = (v: string): string => (v ? t(`cursor.blink_${v}`) : t('history.session_default'));
+	const methodName = (m: string): string =>
+		m === 'Key' ? t('session.auth_key') : m === 'Agent' ? t('session.auth_agent') : t('session.auth_password');
+	let methods = $derived(summarize(sessions.filter((s) => appliesTo('auth', s)), (s) => methodName(s.auth_method?.type ?? 'Password')));
+	let agentKeysNow = $derived(summarize(sessions.filter((s) => appliesTo('try_agent_keys', s)), (s) => (s.try_agent_keys ? 'on' : 'off')));
+	let jumps = $derived(
+		summarize(sessions.filter((s) => appliesTo('jump_chain', s)), (s) => (s.jump_chain ?? []).map((j) => j.host).join(' → '))
+	);
+	let proxies = $derived(
+		summarize(sessions.filter((s) => appliesTo('proxy', s)), (s) => (s.proxy ? `${s.proxy.proxy_type.toUpperCase()} ${s.proxy.host}:${s.proxy.port}` : ''))
+	);
+	let shells = $derived(summarize(sessions.filter((s) => appliesTo('shell', s)), (s) => s.shell ?? ''));
+	let vias = $derived(
+		summarize(sessions.filter((s) => appliesTo('via_session', s)), (s) =>
+			s.via_session_id ? (allSessions.find((x) => x.id === s.via_session_id)?.name ?? s.via_session_id) : ''
+		)
+	);
+	const telnets = $derived(sessions.filter((s) => appliesTo('telnet', s)));
+	const telnetLabel = (v: string): string =>
+		({
+			active: t('session.telnet_mode_active'),
+			passive: t('session.telnet_mode_passive'),
+			raw: t('session.telnet_mode_raw'),
+			crlf: 'CR LF',
+			cr: 'CR',
+			lf: 'LF',
+			del: 'DEL (^?)',
+			ctrlh: 'Ctrl+H (^H)'
+		})[v] ?? v;
+	let telnetModes = $derived(summarize(telnets, (s) => telnetLabel(s.telnet?.mode ?? 'active')));
+	let telnetNewlines = $derived(summarize(telnets, (s) => telnetLabel(s.telnet?.newline ?? 'crlf')));
+	let telnetBackspaces = $derived(summarize(telnets, (s) => telnetLabel(s.telnet?.backspace ?? 'del')));
+	let monitorings = $derived(
+		summarize(sessions.filter((s) => appliesTo('monitoring', s)), (s) => (s.monitoring == null ? '' : s.monitoring ? 'on' : 'off'))
+	);
+	let tmuxModes = $derived(summarize(sessions.filter((s) => appliesTo('tmux', s)), (s) => s.tmux?.mode ?? 'inherit'));
+	let tmuxMice = $derived(summarize(sessions.filter((s) => appliesTo('tmux', s)), (s) => (s.tmux?.mouse ? 'on' : 'off')));
+	let fieldNames = $derived(summarize(sessions.flatMap((s) => (s.custom_fields ?? []).map((f) => ({ name: f.name }))), (x) => x.name));
 	let withPassword = $derived(sessions.filter((s) => appliesTo('password', s) && hasOwnPassword(s)).length);
 	let withNotes = $derived(sessions.filter((s) => s.notes?.trim()).length);
 	let allTags = $derived(summarize(sessions.flatMap((s) => s.tags.map((tag) => ({ tag }))), (x) => x.tag));
@@ -166,6 +291,48 @@
 		if (history !== KEEP) p.history = history ? { set: history as HistoryMode } : 'clear';
 		if (cursor !== KEEP) p.cursor_style = cursor ? { set: cursor as CursorStyle } : 'clear';
 		if (blink !== KEEP) p.cursor_blink = blink ? { set: blink === 'on' } : 'clear';
+		if (authType === 'Key') {
+			p.auth = {
+				type: 'Key',
+				key_id: keyId || undefined,
+				path: keyId ? undefined : keyPath.trim() || undefined,
+				passphrase: keyPassphrase || undefined
+			};
+		} else if (authType !== KEEP) {
+			p.auth = { type: authType as 'Password' | 'Agent' };
+		}
+		if (agentKeys !== KEEP) p.try_agent_keys = agentKeys === 'on';
+		if (jumpMode === 'clear') p.jump_chain = 'clear';
+		else if (jumpMode === 'set' && hopsValid) p.jump_chain = { set: hops.map(hopConfig) };
+		if (proxyMode === 'clear') p.proxy = 'clear';
+		else if (proxyMode === 'set' && proxyValid) {
+			p.proxy = {
+				set: {
+					proxy_type: proxyType,
+					host: proxyHost.trim(),
+					port: parseInt(proxyPort, 10),
+					username: proxyType === 'socks4' ? null : proxyUser.trim() || null,
+					password: proxyType === 'socks4' ? null : proxyPass || null
+				}
+			};
+		}
+		if (shellClear) p.shell = 'clear';
+		else if (shell?.trim()) p.shell = { set: shell.trim() };
+		const set = fieldsSet.filter((f) => f.name.trim()).map((f) => ({ name: f.name.trim(), value: f.value, hidden: f.hidden }));
+		if (set.length) p.fields_set = set;
+		const removeFields = fieldsRemove.split(',').map((x) => x.trim()).filter(Boolean);
+		if (removeFields.length) p.fields_remove = removeFields;
+		const telnet: NonNullable<SessionPatch['telnet']> = {};
+		if (telnetMode !== KEEP) telnet.mode = telnetMode as 'active' | 'passive' | 'raw';
+		if (telnetNewline !== KEEP) telnet.newline = telnetNewline as 'crlf' | 'cr' | 'lf';
+		if (telnetBackspace !== KEEP) telnet.backspace = telnetBackspace as 'del' | 'ctrlh';
+		if (Object.keys(telnet).length) p.telnet = telnet;
+		if (monitoring !== KEEP) p.monitoring = monitoring ? { set: monitoring === 'on' } : 'clear';
+		const tmux: NonNullable<SessionPatch['tmux']> = {};
+		if (tmuxMode !== KEEP) tmux.mode = tmuxMode as 'off' | 'attach' | 'ask' | 'inherit';
+		if (tmuxMouse !== KEEP) tmux.mouse = tmuxMouse === 'on';
+		if (Object.keys(tmux).length) p.tmux = tmux;
+		if (via !== KEEP) p.via_session = via ? { set: via } : 'clear';
 		return p;
 	});
 	let fields = $derived(changedFields(patch));
@@ -176,7 +343,10 @@
 	);
 	let portInvalid = $derived(port !== null && port.trim() !== '' && !(parseInt(port, 10) > 0 && parseInt(port, 10) < 65536));
 	let credentialNeedsName = $derived(creatingCredential && (!credentialName.trim() || !credentialUsername));
-	let canApply = $derived(fields.length > 0 && !portInvalid && !credentialNeedsName);
+	let incomplete = $derived(
+		keyMissing || (jumpMode === 'set' && !hopsValid) || (proxyMode === 'set' && !proxyValid)
+	);
+	let canApply = $derived(fields.length > 0 && !portInvalid && !credentialNeedsName && !incomplete);
 
 	// ---- Confirm --------------------------------------------------------------
 	const fieldLabel = (f: BulkField): string =>
@@ -191,8 +361,22 @@
 			terminal_theme: t('termtheme.session_title'),
 			history: t('history.session_label'),
 			cursor_style: t('cursor.session_label'),
-			cursor_blink: t('cursor.blink')
+			cursor_blink: t('cursor.blink'),
+			auth: t('session.auth_method'),
+			try_agent_keys: t('bulk.agent_keys'),
+			jump_chain: t('bulk.jump_hosts'),
+			proxy: t('bulk.proxy'),
+			shell: t('bulk.shell'),
+			custom_fields: t('session.custom_fields'),
+			telnet: t('session.protocol_telnet'),
+			monitoring: t('session.monitoring'),
+			tmux: t('tmux.session_label'),
+			via_session: t('session.vnc_via')
 		})[f];
+
+	const onOff = (on: boolean | undefined): string => (on ? t('session.monitoring_on') : t('session.monitoring_off'));
+	const tmuxModeName = (m: string | undefined): string =>
+		m === 'inherit' ? t('bulk.tmux_folder') : m ? t(`tmux.mode_${m}`) : '';
 
 	function describeChange(f: BulkField): string {
 		const p = patch;
@@ -222,6 +406,28 @@
 				return p.cursor_style === 'clear' ? t('history.session_default') : cursorName(p.cursor_style?.set ?? '');
 			case 'cursor_blink':
 				return p.cursor_blink === 'clear' ? t('history.session_default') : blinkName(p.cursor_blink?.set ? 'on' : 'off');
+			case 'auth':
+				return p.auth?.type === 'Key' ? t('session.auth_key') : p.auth?.type === 'Agent' ? t('session.auth_agent') : t('session.auth_password');
+			case 'try_agent_keys':
+				return onOff(p.try_agent_keys);
+			case 'jump_chain':
+				return p.jump_chain === 'clear' ? t('bulk.jump_none') : (p.jump_chain?.set ?? []).map((j) => `${j.username ? j.username + '@' : ''}${j.host}`).join(' → ');
+			case 'proxy':
+				return p.proxy === 'clear' ? t('bulk.proxy_none') : `${p.proxy?.set.proxy_type.toUpperCase()} ${p.proxy?.set.host}:${p.proxy?.set.port}`;
+			case 'shell':
+				return p.shell === 'clear' ? t('bulk.shell_default') : (p.shell?.set ?? '');
+			case 'custom_fields':
+				return [...(p.fields_set ?? []).map((x) => `+${x.name}`), ...(p.fields_remove ?? []).map((x) => `−${x}`)].join(', ');
+			case 'telnet':
+				return Object.values(p.telnet ?? {}).map((v) => telnetLabel(String(v))).join(', ');
+			case 'monitoring':
+				return p.monitoring === 'clear' ? t('history.session_default') : onOff(p.monitoring?.set);
+			case 'tmux':
+				return [p.tmux?.mode ? tmuxModeName(p.tmux.mode) : '', p.tmux?.mouse !== undefined ? `${t('tmux.mouse')}: ${onOff(p.tmux.mouse)}` : '']
+					.filter(Boolean)
+					.join(', ');
+			case 'via_session':
+				return p.via_session === 'clear' ? t('session.vnc_via_none') : (allSessions.find((x) => p.via_session !== 'clear' && x.id === p.via_session?.set)?.name ?? '');
 		}
 	}
 
@@ -334,14 +540,18 @@
 						{#if passwordClear}
 							<p class="cleared">{t('bulk.will_clear')}</p>
 						{:else}
-							<input
-								id="bulk-password"
-								type="password"
-								autocomplete="new-password"
-								value={password ?? ''}
-								oninput={(e) => (password = e.currentTarget.value)}
-								placeholder={t('bulk.password_set_on', { count: String(withPassword), total: String(count('password')) })}
-							/>
+							<PasswordField>
+								{#snippet children(type)}
+									<input
+										id="bulk-password"
+										{type}
+										autocomplete="new-password"
+										value={password ?? ''}
+										oninput={(e) => (password = e.currentTarget.value)}
+										placeholder={t('bulk.password_set_on', { count: String(withPassword), total: String(count('password')) })}
+									/>
+								{/snippet}
+							</PasswordField>
 						{/if}
 						{#if password && !passwordClear && canCreateCredential}
 							<label class="check">
@@ -374,6 +584,55 @@
 						<button class="clear" type="button" onclick={() => (passwordClear = true)}>{t('bulk.clear')}</button>
 					{/if}
 				</div>
+			{/if}
+
+			{#if shows('auth')}
+				<div class="row" class:changed={authType !== KEEP}>
+					<label class="label" for="bulk-auth">{t('session.auth_method')}</label>
+					<div class="field">
+						<select id="bulk-auth" bind:value={authType} title={tooltipOf(methods, '')}>
+							<option value={KEEP}>{t('bulk.keep_value', { value: placeholderOf(methods, '') })}</option>
+							<option value="Password">{t('session.auth_password')}</option>
+							<option value="Key">{t('session.auth_key')}</option>
+							<option value="Agent">{t('session.auth_agent')}</option>
+						</select>
+						{#if authType === 'Key'}
+							<KeyPicker bind:path={keyPath} bind:keyId />
+							<PasswordField>
+								{#snippet children(type)}
+									<input
+										class="sub-input"
+										{type}
+										autocomplete="new-password"
+										bind:value={keyPassphrase}
+										placeholder={t('session.passphrase_optional')}
+										aria-label={t('session.passphrase_optional')}
+									/>
+								{/snippet}
+							</PasswordField>
+							{#if keyMissing}<p class="hint warn">{t('bulk.key_needed')}</p>{/if}
+						{:else if authType === 'Password'}
+							<p class="hint">{t('bulk.auth_password_hint')}</p>
+						{/if}
+						{#if appliesText('auth')}<p class="applies">{appliesText('auth')}</p>{/if}
+					</div>
+					{#if authType !== KEEP}
+						<button class="revert" type="button" onclick={() => (authType = KEEP)} title={t('bulk.revert')} aria-label={t('bulk.revert')}>↺</button>
+					{/if}
+				</div>
+			{/if}
+
+			{#if sessions.some((s) => appliesTo('try_agent_keys', s, undefined, authChange))}
+				<BulkSelectRow
+					id="bulk-agent-keys"
+					label={t('bulk.agent_keys')}
+					bind:value={agentKeys}
+					keep={KEEP}
+					current={agentKeysNow.same === null ? t('bulk.mixed') : onOff(agentKeysNow.same === 'on')}
+					options={[{ value: 'on', label: t('session.monitoring_on') }, { value: 'off', label: t('session.monitoring_off') }]}
+					hint={t('session.try_agent_keys')}
+					applies={appliesText('try_agent_keys')}
+				/>
 			{/if}
 
 			{#if shows('port')}
@@ -423,6 +682,221 @@
 						<button class="clear" type="button" onclick={() => (domainClear = true)}>{t('bulk.clear')}</button>
 					{/if}
 				</div>
+			{/if}
+
+			{#if shows('jump_chain') || shows('via_session')}
+				<h3 class="section">{t('bulk.section_connection')}</h3>
+			{/if}
+
+			{#if shows('jump_chain')}
+				<div class="row" class:changed={jumpMode !== KEEP}>
+					<label class="label" for="bulk-jump">{t('bulk.jump_hosts')}</label>
+					<div class="field">
+						<select id="bulk-jump" bind:value={jumpMode} title={tooltipOf(jumps, t('bulk.jump_none'))}>
+							<option value={KEEP}>{t('bulk.keep_value', { value: placeholderOf(jumps, t('bulk.jump_none')) })}</option>
+							<option value="set">{t('bulk.jump_replace')}</option>
+							<option value="clear">{t('bulk.jump_none')}</option>
+						</select>
+						{#if jumpMode === 'set'}
+							{#each hops as hop, i (i)}
+								<div class="hop">
+									<div class="hop-head">
+										<span>{t('session.jump_hop', { n: String(i + 1) })}</span>
+										{#if hops.length > 1}
+											<button class="link" type="button" onclick={() => (hops = hops.filter((_, j) => j !== i))}>{t('session.jump_remove_hop')}</button>
+										{/if}
+									</div>
+									{#if sshSessions.length > 0}
+										<select aria-label={t('bulk.hop_copy')} value="" onchange={(e) => { copyHop(hop, e.currentTarget.value); e.currentTarget.value = ''; }}>
+											<option value="">{t('bulk.hop_copy')}</option>
+											{#each sshSessions as s (s.id)}
+												<option value={s.id}>{s.name} ({s.username ? s.username + '@' : ''}{s.host})</option>
+											{/each}
+										</select>
+									{/if}
+									<div class="hop-grid">
+										<input type="text" bind:value={hop.host} placeholder={t('session.host')} aria-label={t('session.host')} spellcheck="false" />
+										<input type="text" inputmode="numeric" bind:value={hop.port} placeholder="22" aria-label={t('session.port')} />
+									</div>
+									<input type="text" bind:value={hop.username} placeholder={t('session.username')} aria-label={t('session.username')} spellcheck="false" />
+									<select bind:value={hop.login} aria-label={t('credential.login')}>
+										<option value="agent">{t('session.auth_agent')}</option>
+										<option value="password">{t('session.auth_password')}</option>
+										{#each vaultCredentials as c (c.id)}
+											<option value={c.id}>{c.name} ({c.username})</option>
+										{/each}
+									</select>
+									{#if hop.login === 'password'}
+										<PasswordField>
+											{#snippet children(type)}
+												<input {type} autocomplete="new-password" bind:value={hop.password} placeholder={t('session.password_optional')} aria-label={t('session.password')} />
+											{/snippet}
+										</PasswordField>
+									{/if}
+								</div>
+							{/each}
+							<button class="link" type="button" onclick={() => (hops = [...hops, newHop()])}>+ {t('session.jump_add_hop')}</button>
+						{/if}
+						{#if appliesText('jump_chain')}<p class="applies">{appliesText('jump_chain')}</p>{/if}
+					</div>
+					{#if jumpMode !== KEEP}
+						<button class="revert" type="button" onclick={() => (jumpMode = KEEP)} title={t('bulk.revert')} aria-label={t('bulk.revert')}>↺</button>
+					{/if}
+				</div>
+			{/if}
+
+			{#if shows('proxy')}
+				<div class="row" class:changed={proxyMode !== KEEP}>
+					<label class="label" for="bulk-proxy">{t('bulk.proxy')}</label>
+					<div class="field">
+						<select id="bulk-proxy" bind:value={proxyMode} title={tooltipOf(proxies, t('bulk.proxy_none'))}>
+							<option value={KEEP}>{t('bulk.keep_value', { value: placeholderOf(proxies, t('bulk.proxy_none')) })}</option>
+							<option value="set">{t('bulk.proxy_set')}</option>
+							<option value="clear">{t('bulk.proxy_none')}</option>
+						</select>
+						{#if proxyMode === 'set'}
+							<select bind:value={proxyType} aria-label={t('bulk.proxy')}>
+								<option value="socks5">SOCKS5</option>
+								<option value="socks4">SOCKS4</option>
+								<option value="http">HTTP CONNECT</option>
+							</select>
+							<div class="hop-grid">
+								<input type="text" bind:value={proxyHost} placeholder={t('proxy.host')} aria-label={t('proxy.host')} spellcheck="false" />
+								<input type="text" inputmode="numeric" bind:value={proxyPort} placeholder="9050" aria-label={t('session.port')} />
+							</div>
+							{#if proxyType !== 'socks4'}
+								<input type="text" bind:value={proxyUser} placeholder={t('proxy.username_optional')} aria-label={t('proxy.username_optional')} spellcheck="false" />
+								<PasswordField>
+									{#snippet children(type)}
+										<input {type} autocomplete="new-password" bind:value={proxyPass} placeholder={t('session.password_optional')} aria-label={t('session.password')} />
+									{/snippet}
+								</PasswordField>
+							{/if}
+						{/if}
+						{#if appliesText('proxy')}<p class="applies">{appliesText('proxy')}</p>{/if}
+					</div>
+					{#if proxyMode !== KEEP}
+						<button class="revert" type="button" onclick={() => (proxyMode = KEEP)} title={t('bulk.revert')} aria-label={t('bulk.revert')}>↺</button>
+					{/if}
+				</div>
+			{/if}
+
+			{#if shows('shell')}
+				<div class="row" class:changed={shellClear || !!shell?.trim()}>
+					<label class="label" for="bulk-shell">{t('bulk.shell')}</label>
+					<div class="field">
+						{#if shellClear}
+							<p class="cleared">{t('bulk.shell_default')}</p>
+						{:else}
+							<input
+								id="bulk-shell"
+								type="text"
+								autocomplete="off"
+								spellcheck="false"
+								value={shell ?? ''}
+								oninput={(e) => (shell = e.currentTarget.value)}
+								placeholder={placeholderOf(shells, t('bulk.shell_default'))}
+								title={tooltipOf(shells, t('bulk.shell_default'))}
+							/>
+						{/if}
+						{#if appliesText('shell')}<p class="applies">{appliesText('shell')}</p>{/if}
+					</div>
+					{#if shellClear || shell}
+						<button class="revert" type="button" onclick={() => { shell = null; shellClear = false; }} title={t('bulk.revert')} aria-label={t('bulk.revert')}>↺</button>
+					{:else}
+						<button class="clear" type="button" onclick={() => (shellClear = true)}>{t('bulk.clear')}</button>
+					{/if}
+				</div>
+			{/if}
+
+			{#if shows('via_session')}
+				<BulkSelectRow
+					id="bulk-via"
+					label={t('session.vnc_via')}
+					bind:value={via}
+					keep={KEEP}
+					current={placeholderOf(vias, t('session.vnc_via_none'))}
+					tooltip={tooltipOf(vias, t('session.vnc_via_none'))}
+					options={[{ value: '', label: t('session.vnc_via_none') }, ...sshSessions.map((s) => ({ value: s.id, label: s.name }))]}
+					applies={appliesText('via_session')}
+				/>
+			{/if}
+
+			{#if shows('telnet')}
+				<h3 class="section">{t('session.protocol_telnet')}</h3>
+				<BulkSelectRow
+					id="bulk-telnet-mode"
+					label={t('session.telnet_mode')}
+					bind:value={telnetMode}
+					keep={KEEP}
+					current={placeholderOf(telnetModes, '')}
+					tooltip={tooltipOf(telnetModes, '')}
+					options={[
+						{ value: 'active', label: t('session.telnet_mode_active') },
+						{ value: 'passive', label: t('session.telnet_mode_passive') },
+						{ value: 'raw', label: t('session.telnet_mode_raw') }
+					]}
+					applies={appliesText('telnet')}
+				/>
+				<BulkSelectRow
+					id="bulk-telnet-enter"
+					label={t('session.telnet_enter')}
+					bind:value={telnetNewline}
+					keep={KEEP}
+					current={placeholderOf(telnetNewlines, '')}
+					tooltip={tooltipOf(telnetNewlines, '')}
+					options={[{ value: 'crlf', label: 'CR LF' }, { value: 'cr', label: 'CR' }, { value: 'lf', label: 'LF' }]}
+				/>
+				<BulkSelectRow
+					id="bulk-telnet-bs"
+					label={t('session.telnet_backspace')}
+					bind:value={telnetBackspace}
+					keep={KEEP}
+					current={placeholderOf(telnetBackspaces, '')}
+					tooltip={tooltipOf(telnetBackspaces, '')}
+					options={[{ value: 'del', label: 'DEL (^?)' }, { value: 'ctrlh', label: 'Ctrl+H (^H)' }]}
+				/>
+			{/if}
+
+			{#if shows('monitoring') || shows('tmux')}
+				<h3 class="section">{t('bulk.section_server')}</h3>
+				<BulkSelectRow
+					id="bulk-monitoring"
+					label={t('session.monitoring')}
+					bind:value={monitoring}
+					keep={KEEP}
+					current={monitorings.same === null ? t('bulk.mixed') : monitorings.same ? onOff(monitorings.same === 'on') : t('history.session_default')}
+					tooltip={tooltipOf(monitorings, t('history.session_default'))}
+					options={[
+						{ value: '', label: t('history.session_default') },
+						{ value: 'on', label: t('session.monitoring_on') },
+						{ value: 'off', label: t('session.monitoring_off') }
+					]}
+					applies={appliesText('monitoring')}
+				/>
+				<BulkSelectRow
+					id="bulk-tmux"
+					label={t('tmux.session_label')}
+					bind:value={tmuxMode}
+					keep={KEEP}
+					current={tmuxModes.same === null ? t('bulk.mixed') : tmuxModeName(tmuxModes.same)}
+					tooltip={tooltipOf(tmuxModes, '')}
+					options={[
+						{ value: 'inherit', label: t('bulk.tmux_folder') },
+						{ value: 'attach', label: t('tmux.mode_attach') },
+						{ value: 'ask', label: t('tmux.mode_ask') },
+						{ value: 'off', label: t('tmux.mode_off') }
+					]}
+					applies={appliesText('tmux')}
+				/>
+				<BulkSelectRow
+					id="bulk-tmux-mouse"
+					label={t('tmux.mouse')}
+					bind:value={tmuxMouse}
+					keep={KEEP}
+					current={tmuxMice.same === null ? t('bulk.mixed') : onOff(tmuxMice.same === 'on')}
+					options={[{ value: 'on', label: t('session.monitoring_on') }, { value: 'off', label: t('session.monitoring_off') }]}
+				/>
 			{/if}
 
 			{#if shows('terminal_theme') || shows('history') || shows('cursor_style')}
@@ -556,6 +1030,38 @@
 				</div>
 				{#if notesOp !== 'keep'}
 					<button class="revert" type="button" onclick={() => { notesOp = 'keep'; notesText = ''; }} title={t('bulk.revert')} aria-label={t('bulk.revert')}>↺</button>
+				{/if}
+			</div>
+			<div class="row" class:changed={fieldsSet.some((f) => f.name.trim()) || !!fieldsRemove.trim()}>
+				<span class="label">{t('session.custom_fields')}</span>
+				<div class="field">
+					{#each fieldsSet as f, i (i)}
+						<div class="custom">
+							<input type="text" bind:value={f.name} placeholder={t('session.field_name')} aria-label={t('session.field_name')} list="bulk-field-names" />
+							<input type={f.hidden ? 'password' : 'text'} autocomplete="off" bind:value={f.value} placeholder={t('session.field_value')} aria-label={t('session.field_value')} />
+							<label class="check" title={t('session.field_hidden_hint')}>
+								<input type="checkbox" bind:checked={f.hidden} />
+								<span>{t('session.field_hidden')}</span>
+							</label>
+							<button class="link" type="button" onclick={() => (fieldsSet = fieldsSet.filter((_, j) => j !== i))} aria-label={t('session.field_remove')}>✕</button>
+						</div>
+					{/each}
+					<button class="link" type="button" onclick={() => (fieldsSet = [...fieldsSet, { name: '', value: '', hidden: false }])}>+ {t('bulk.fields_add')}</button>
+					<input
+						class="sub-input"
+						type="text"
+						autocomplete="off"
+						bind:value={fieldsRemove}
+						placeholder={t('bulk.fields_remove')}
+						aria-label={t('bulk.fields_remove')}
+						title={describeCounts(fieldNames, '')}
+					/>
+					<datalist id="bulk-field-names">
+						{#each fieldNames.counts as [name] (name)}<option value={name}></option>{/each}
+					</datalist>
+				</div>
+				{#if fieldsSet.length || fieldsRemove}
+					<button class="revert" type="button" onclick={() => { fieldsSet = []; fieldsRemove = ''; }} title={t('bulk.revert')} aria-label={t('bulk.revert')}>↺</button>
 				{/if}
 			</div>
 		</div>
@@ -697,6 +1203,40 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-btn);
 		padding: 6px;
+	}
+	.hop {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		padding: 6px 8px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-btn);
+	}
+	.hop-head {
+		display: flex;
+		justify-content: space-between;
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
+	}
+	.hop-grid {
+		display: grid;
+		grid-template-columns: 1fr 80px;
+		gap: 4px;
+	}
+	.custom {
+		display: grid;
+		grid-template-columns: 1fr 1fr auto auto;
+		gap: 4px;
+		align-items: center;
+	}
+	.link {
+		align-self: flex-start;
+		padding: 2px 0;
+		font-size: 0.75rem;
+		color: var(--color-accent);
+		background: none;
+		border: none;
+		cursor: pointer;
 	}
 	.applies,
 	.hint {

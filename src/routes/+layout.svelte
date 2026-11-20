@@ -6,6 +6,7 @@
 	import '../app.css';
 	import AppShell from '#lib/components/layout/AppShell.svelte';
 	import WelcomeScreen from '#lib/components/setup/WelcomeScreen.svelte';
+	import { setupWizard } from '#lib/state/setup-wizard.svelte.js';
 	import CommunityPrompt from '#lib/components/shared/CommunityPrompt.svelte';
 	import { SHOW_COMMUNITY } from '#lib/brand.js';
 	import LockScreen from '#lib/components/shared/LockScreen.svelte';
@@ -23,12 +24,15 @@
 	import { startupUpdateCheck, startPeriodicChecks, stopPeriodicChecks } from '#lib/state/updater.svelte.js';
 	import { changeLocale, t } from '#lib/state/i18n.svelte.js';
 	import { loadSnippets } from '#lib/state/snippets.svelte.js';
-	import { vaultState } from '#lib/state/vault.svelte.js';
+	import { biometricName, biometricPrompt, vaultState } from '#lib/state/vault.svelte.js';
+	import { unlockMethods } from '#lib/ipc/vault.js';
 	import * as mcp from '#lib/state/mcp.svelte.js';
 	import * as share from '#lib/state/share.svelte.js';
 	import { unlockCredentialKeys, setKeysUnlockEnabled } from '#lib/ipc/savedCredentials.js';
 	import { installSelectMenus } from '#lib/utils/selectMenu.js';
+	import { installTooltips } from '#lib/utils/tooltip.js';
 	import { initScreenEdges } from '#lib/edges.js';
+	import { initKeyboardViewport } from '#lib/keyboard-viewport.js';
 	import { onMount } from 'svelte';
 
 	let { children }: { children: Snippet } = $props();
@@ -73,8 +77,12 @@
 		initShortcuts();
 		// Every <select> opens a theme-drawn list, not the platform popup (#110).
 		const stopSelectMenus = installSelectMenus();
+		// Every title shows in a theme-drawn tooltip, not the platform's yellow one.
+		const stopTooltips = installTooltips();
 		// Android's status bar, navigation bar and camera cutout, for --safe-*.
 		initScreenEdges();
+		// iOS: the app fits above the on-screen keyboard instead of scrolling up.
+		const stopKeyboardViewport = initKeyboardViewport();
 		startupUpdateCheck();
 		startPeriodicChecks();
 
@@ -85,6 +93,8 @@
 		return () => {
 			cleanupShortcuts();
 			stopSelectMenus();
+			stopTooltips();
+			stopKeyboardViewport();
 			stopPeriodicChecks();
 		};
 	});
@@ -134,9 +144,20 @@
 		}
 		if (keysAsked) return;
 		keysAsked = true;
-		unlockCredentialKeys()
-			.then((r) => {
+		const biometric = settings.unlockKeysWithBiometrics
+			? {
+					open: biometricPrompt(t('security.keys_biometric_open')),
+					save: biometricPrompt(t('security.keys_biometric_save'))
+				}
+			: undefined;
+		unlockCredentialKeys(biometric)
+			.then(async (r) => {
 				if (r.unlocked > 0) addToast(t('security.keys_unlocked', { count: r.unlocked }), 'success', 3000);
+				if (r.remembered > 0) {
+					const m = await unlockMethods().catch(() => null);
+					const method = biometricName(m?.platform, m?.platform_label);
+					addToast(t('security.keys_biometric_remembered', { method, count: r.remembered }), 'success', 4000);
+				}
 			})
 			.catch((err) => console.error('Unlocking credential keys failed:', err));
 	});
@@ -179,7 +200,9 @@
 {#if isEditorWindow}
 	{@render children()}
 {:else}
-	{#if !settings.setupComplete}
+	<!-- Run again from Settings, setupComplete stays true, so the prompts and
+	     the lock screen below stay mounted under it. -->
+	{#if !settings.setupComplete || setupWizard.rerun}
 		<WelcomeScreen />
 	{/if}
 

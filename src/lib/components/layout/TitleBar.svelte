@@ -23,8 +23,11 @@
 	let aiPanelOpen = $derived(getAIChatState().panelOpen);
 
 	let settingsOpen = $state(false);
+	/** A page or row to show when Settings opens (see openSettings). */
+	let settingsTarget = $state<string | undefined>(undefined);
 
-	function openSettings() {
+	function openSettings(target?: string) {
+		settingsTarget = target;
 		settingsOpen = true;
 	}
 
@@ -57,7 +60,7 @@
 		<button
 			class="settings-btn"
 			class:has-new={settingsHaveNew()}
-			onclick={openSettings}
+			onclick={() => openSettings()}
 			aria-label={t('titlebar.open_settings')}
 		>
 			{#if settingsHaveNew()}
@@ -112,7 +115,7 @@
 	{/if}
 </header>
 
-<Settings open={settingsOpen} onclose={closeSettings} />
+<Settings open={settingsOpen} target={settingsTarget} onclose={closeSettings} />
 
 <style>
 	.titlebar {

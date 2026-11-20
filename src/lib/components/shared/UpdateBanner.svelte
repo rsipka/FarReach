@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getUpdaterState, downloadAndInstall, dismissUpdate, relaunchNow } from '#lib/state/updater.svelte.js';
+	import { getUpdaterState, downloadAndInstall, dismissUpdate, relaunchNow, openWhatsNew } from '#lib/state/updater.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 
 	const updater = getUpdaterState();
@@ -67,6 +67,9 @@
 				{:else if showError && updater.error}
 					<span class="error-text">{updater.error}</span>
 				{:else}
+					<!-- Info: the new version and its release notes; the
+					     update or download stays right here. -->
+					<button class="btn-later" onclick={openWhatsNew}>{t('updater.info')}</button>
 					<button class="btn-update" onclick={downloadAndInstall}>
 						{updater.isDownloadLink ? t('updater.download') : t('updater.update_now')}
 					</button>

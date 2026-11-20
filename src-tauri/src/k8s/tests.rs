@@ -6,7 +6,7 @@ use k8s_openapi::api::core::v1::{
 };
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 
-use super::helm::{command, decode, HelmAction};
+use super::helm::{arguments, decode, remote_command, HelmAction};
 use super::*;
 
 fn status(name: &str, ready: bool, state: ContainerState, restarts: i32) -> ContainerStatus {
@@ -113,12 +113,12 @@ fn helm_release_decodes_from_its_storage_format() {
 #[test]
 fn helm_commands_are_quoted_and_checked() {
     assert_eq!(
-        command(HelmAction::Rollback, "shop", "web", Some(2), Some("prod")).unwrap(),
+        remote_command(&arguments(HelmAction::Rollback, "shop", "web", Some(2), "prod").unwrap()),
         "helm rollback web 2 --wait --namespace shop --kube-context prod"
     );
-    assert!(command(HelmAction::Rollback, "shop", "web", None, None).is_err());
-    assert!(command(HelmAction::Rollback, "shop", "web", Some(0), None).is_err());
-    let hostile = command(HelmAction::Uninstall, "x; reboot", "$(id)", None, None).unwrap();
+    assert!(arguments(HelmAction::Rollback, "shop", "web", None, "prod").is_err());
+    assert!(arguments(HelmAction::Rollback, "shop", "web", Some(0), "prod").is_err());
+    let hostile = remote_command(&arguments(HelmAction::Uninstall, "x; reboot", "$(id)", None, "prod").unwrap());
     assert!(hostile.contains("'$(id)'") && hostile.contains("'x; reboot'"), "{hostile}");
 }
 
@@ -169,6 +169,8 @@ async fn an_unreachable_cluster_says_where() {
     // As the app does at start (lib.rs): rustls needs a provider chosen.
     let _ = rustls::crypto::ring::default_provider().install_default();
     let yaml = "apiVersion: v1\nkind: Config\ncurrent-context: c\nclusters:\n- name: c\n  cluster: {server: 'https://127.0.0.1:1', insecure-skip-tls-verify: true}\ncontexts:\n- name: c\n  context: {cluster: c, user: u}\nusers:\n- name: u\n  user: {token: x}\n";
-    let err = connect(yaml, Some("c"), None).await.err().expect("nothing listens on port 1");
+    let config = credentials::Selection::new(yaml, "c").unwrap()
+        .authorize(None, |_| async { panic!("a token needs no local prompt") }).await.unwrap();
+    let err = connect(config, None).await.err().expect("nothing listens on port 1");
     assert!(err.starts_with("Could not reach the API server at https://127.0.0.1:1"), "{err}");
 }

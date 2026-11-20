@@ -15,8 +15,6 @@ use crate::serial::port::SerialManager;
 use crate::rdp::RdpManager;
 use crate::vnc::VncManager;
 use crate::ssh::client::SshManager;
-use crate::ansible::project::AnsibleProjectManager;
-use crate::tofu::project::TofuProjectManager;
 use crate::tofu::types::SchemaCache;
 use crate::tunnel::manager::TunnelManager;
 use crate::vault::VaultManager;
@@ -78,6 +76,10 @@ pub struct SessionConfig {
     /// A local folder shown inside the remote desktop as a drive, RDP only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub share_path: Option<String>,
+    /// What the RDP clipboard lets through: unset for text, pictures and
+    /// files, `text` for no files, `off` for nothing. RDP only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rdp_clipboard: Option<String>,
     /// Key sessions only: offer the SSH agent's keys if this session's own key
     /// is refused. Off unless the user turned it on; see `build_auth`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -130,6 +132,13 @@ pub struct SessionConfig {
     /// syncs with it; omitted from disk when off.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub favorite: bool,
+    /// Where the session stands among the others in its folder (or among
+    /// the sessions outside any folder), lowest first; set by moving it in
+    /// the list or sorting the folder. Kept on the session so it syncs with
+    /// it. Unset: after the ordered ones, as read. Only `session_set_order`
+    /// changes it; a move to another folder clears it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub order: Option<u32>,
     /// Read only: the saved credential this session's login was filled
     /// from when it was read, if one applies. Never stored.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -175,6 +184,12 @@ pub struct SessionConfig {
     /// see `ipc::saved_credential_commands`.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub credential_ref_approvals: std::collections::BTreeMap<String, Vec<String>>,
+    /// The server keys this session trusts, one per server it goes through
+    /// (see `ssh::session_hostkeys`). Kept on the session so it syncs and is
+    /// shared with it. Changed only by connecting (Accept and save) and the
+    /// `session_host_key_*` commands; an editor's save keeps the stored ones.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_keys: Option<Vec<crate::ssh::session_hostkeys::SavedHostKey>>,
 }
 
 /// One named value of a session's documentation.
@@ -395,8 +410,6 @@ pub struct AppState {
     pub plugin_manager: Arc<tokio::sync::Mutex<PluginManager>>,
     /// URL of the marketplace registry JSON file.
     pub marketplace_index_url: Arc<RwLock<String>>,
-    pub ansible_project_manager: Arc<tokio::sync::Mutex<AnsibleProjectManager>>,
-    pub tofu_project_manager: Arc<tokio::sync::Mutex<TofuProjectManager>>,
     pub tofu_schema_cache: Arc<tokio::sync::Mutex<SchemaCache>>,
     /// Saved and open database connections.
     pub db: Arc<tokio::sync::Mutex<crate::db::DbManager>>,
@@ -446,8 +459,6 @@ impl AppState {
             marketplace_index_url: Arc::new(RwLock::new(
                 crate::plugin::marketplace::DEFAULT_INDEX_URL.to_string(),
             )),
-            ansible_project_manager: Arc::new(tokio::sync::Mutex::new(AnsibleProjectManager::new())),
-            tofu_project_manager: Arc::new(tokio::sync::Mutex::new(TofuProjectManager::new())),
             tofu_schema_cache: Arc::new(tokio::sync::Mutex::new(SchemaCache::default())),
             containers: Arc::new(tokio::sync::Mutex::new(crate::container::ContainerManager::default())),
             k8s: Arc::new(tokio::sync::Mutex::new(crate::k8s::K8sManager::default())),

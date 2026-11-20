@@ -19,10 +19,12 @@ pub mod prompt;
 #[cfg(test)]
 mod proto_live_tests;
 pub mod proxycmd;
+pub mod session_hostkeys;
 pub mod session_log;
 pub mod session_opts;
 pub mod tun;
 pub mod unlocked;
+pub mod biometric_keys;
 pub mod sk;
 pub mod tmux;
 pub mod userauth;

@@ -77,7 +77,7 @@
 			});
 
 			const filePath = await save({
-				filters: [{ name: 'Reach Backup', extensions: ['reachbackup'] }],
+				filters: [{ name: 'Reacher CM Backup', extensions: ['reachbackup'] }],
 				defaultPath: 'reach-backup.reachbackup'
 			});
 
@@ -104,7 +104,7 @@
 
 		try {
 			const selected = await open({
-				filters: [{ name: 'Reach Backup', extensions: ['reachbackup'] }],
+				filters: [{ name: 'Reacher CM Backup', extensions: ['reachbackup'] }],
 				multiple: false
 			});
 

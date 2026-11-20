@@ -321,7 +321,7 @@ pub(crate) async fn ssh_for_route(
 }
 
 /// [`ssh_for_route`]; `pin` as for [`forward_route_pinned`].
-async fn ssh_for_route_pinned(
+pub(crate) async fn ssh_for_route_pinned(
     app: &tauri::AppHandle,
     state: &State<'_, AppState>,
     route: &Route,
@@ -356,13 +356,15 @@ async fn ssh_for_route_pinned(
             // operation: a password manager passphrase that must be asked
             // for is asked once (or not at all, inside a connect that already
             // has it).
+            let trust = Some(crate::ssh::session_hostkeys::SessionTrust::new(s.id.clone(), s.host_keys.clone().unwrap_or_default()));
             let reason = crate::pwmanager::Reason::Connect(s.name.clone());
             let (auth, jumps, proxy) = crate::pwmanager::with_prompt(app, reason, async {
                 let who = LoginFor { app, host: &s.host, port: s.port, username: &s.username };
                 let auth = auth_for(state, &s.auth_method, s.try_agent_keys.unwrap_or(false), who).await?;
                 let mut jumps = Vec::new();
                 for j in s.jump_chain.clone().unwrap_or_default() {
-                    let opts = crate::ssh::sshconf::session::plan_for(s.ssh_options.as_ref(), &j.host, j.port, &j.username, true).into();
+                    let mut opts: crate::ssh::client::HopOptions = crate::ssh::sshconf::session::plan_for(s.ssh_options.as_ref(), &j.host, j.port, &j.username, true).into();
+                    opts.trust = trust.clone();
                     let who = LoginFor { app, host: &j.host, port: j.port, username: &j.username };
                     let auth = auth_for(state, &j.auth_method, false, who).await?;
                     jumps.push(JumpHostParams { auth, host: j.host, port: j.port, username: j.username, opts });
@@ -375,7 +377,8 @@ async fn ssh_for_route_pinned(
                 Ok::<_, String>((auth, jumps, proxy))
             })
             .await?;
-            let opts = crate::ssh::sshconf::session::plan_for(s.ssh_options.as_ref(), &s.host, s.port, &s.username, false).into();
+            let mut opts: crate::ssh::client::HopOptions = crate::ssh::sshconf::session::plan_for(s.ssh_options.as_ref(), &s.host, s.port, &s.username, false).into();
+            opts.trust = trust;
             let ssh = SshManager::open_headless(&s.host, s.port, &s.username, auth, jumps, proxy, app.clone(), opts)
                 .await
                 .map_err(|e| format!("SSH to {}: {e}", s.name))?;
@@ -1359,21 +1362,25 @@ pub async fn db_redis_command(
         (None, Some(l)) => rds::split_args(&l)?,
         (None, None) => return Err("Type a command".into()),
     };
-    let risk = rds::classify(&args);
-    if r.config.read_only && !matches!(risk, Risk::Read) {
-        return Err("This connection is read-only".into());
+    if args.is_empty() {
+        return Err("Type a command".into());
     }
-    if !confirmed {
-        let hold = match &risk {
-            Risk::Danger(reason) => Some(reason.clone()),
-            Risk::Write if r.config.production => Some("This is a production connection".into()),
-            _ => None,
-        };
-        if let Some(reason) = hold {
-            return Ok(RedisOutcome::Confirm { reason });
-        }
+    if let Some(reason) = redis_gate(&r.config, &args, confirmed)? {
+        return Ok(RedisOutcome::Confirm { reason });
     }
     Ok(RedisOutcome::Done { reply: r.command(db, &args).await? })
+}
+
+fn redis_gate(config: &DbConnection, args: &[String], confirmed: bool) -> Result<Option<String>, String> {
+    let risk = rds::classify(args);
+    if config.read_only && !matches!(risk, Risk::Read) {
+        return Err("This connection is read-only".into());
+    }
+    Ok(match risk {
+        Risk::Danger(reason) if !confirmed => Some(reason),
+        Risk::Write if config.production && !confirmed => Some("This is a production connection".into()),
+        _ => None,
+    })
 }
 
 /// Redis INFO: each section's name with its key/value pairs.
@@ -1399,6 +1406,22 @@ mod tests {
             id: "c".into(), name: "c".into(), engine: Engine::Postgres, host: String::new(), port: 0,
             username: String::new(), password: None, password_ref: None, route_approval: None, route_context: None, database: None, file_path: None, route: Route::Direct,
             tls: TlsMode::Prefer, color: None, read_only, production, last_used_at: 0,
+        }
+    }
+
+    #[test]
+    fn redis_policy_checks_read_only_and_confirmation_before_dispatch() {
+        for (line, read, dangerous) in [
+            ("CLIENT LIST", true, false), ("SLOWLOG GET", true, false), ("COMMAND", true, false),
+            ("sLoWlOg ReSeT", false, true), ("CLIENT PAUSE 100", false, true), ("MEMORY PURGE", false, true),
+            ("CLIENT SETNAME editor", false, false), ("OBJECT future-option", false, false), ("SET key value", false, false),
+        ] {
+            let args = rds::split_args(line).unwrap();
+            for confirmed in [false, true] {
+                assert_eq!(redis_gate(&conn(true, false), &args, confirmed).is_ok(), read, "{line}");
+                assert_eq!(redis_gate(&conn(false, true), &args, confirmed).unwrap().is_some(), !read && !confirmed, "{line}");
+                assert_eq!(redis_gate(&conn(false, false), &args, confirmed).unwrap().is_some(), dangerous && !confirmed, "{line}");
+            }
         }
     }
 

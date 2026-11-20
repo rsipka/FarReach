@@ -125,7 +125,7 @@ async fn handle_probe(State(state): State<Arc<McpState>>) -> impl IntoResponse {
         "status": "listening",
         "sharedSessions": state.session_count(),
         "hint": "POST JSON-RPC to /mcp with an Authorization: Bearer <token> header. \
-                 The token is shown in Reach under Settings > AI."
+                 The token is shown in Reacher CM under Settings > AI."
     }))
 }
 
@@ -138,7 +138,7 @@ async fn handle_rpc(
         return (
             StatusCode::UNAUTHORIZED,
             Json(json!({
-                "error": "Missing or invalid bearer token. Reach shows the current token under \
+                "error": "Missing or invalid bearer token. Reacher CM shows the current token under \
                           Settings > AI; it changes when the server is restarted."
             })),
         )

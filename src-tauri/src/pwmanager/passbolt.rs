@@ -539,7 +539,7 @@ impl Passbolt {
         let isolated = isolated_config_path();
         if self.cfg.credentials == CredentialsMode::Reach && std::fs::symlink_metadata(&isolated).is_ok() {
             return Err(Failure::Other(format!(
-                "{NAME}: {} exists, but Reach keeps that path empty so the CLI reads no configuration file. Remove it and try again.",
+                "{NAME}: {} exists, but Reacher CM keeps that path empty so the CLI reads no configuration file. Remove it and try again.",
                 isolated.display()
             )));
         }
@@ -572,7 +572,7 @@ impl Passbolt {
             }
             RunError::Spawn(e) => format!("{NAME}: could not start the CLI: {}", e.kind()),
             RunError::Timeout => format!("{NAME}: no answer within {} seconds.", timeout.as_secs()),
-            RunError::TooLarge => format!("{NAME}: the CLI printed more than Reach accepts."),
+            RunError::TooLarge => format!("{NAME}: the CLI printed more than Reacher CM accepts."),
             RunError::Io(e) => format!("{NAME}: reading the CLI's output failed: {}", e.kind()),
         })?;
         if !out.status.success() {
