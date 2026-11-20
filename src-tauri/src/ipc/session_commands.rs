@@ -1304,6 +1304,8 @@ async fn create_folder(
         vault_id,
         credential_id: None,
         tmux: None,
+        icon: None,
+        color: None,
     };
 
     let json = serde_json::to_string(&folder).map_err(|e| e.to_string())?;
@@ -1706,6 +1708,58 @@ pub async fn session_set_folder_tmux(
         .await
         .map_err(|e| e.to_string())?;
     tracing::info!("Folder {} tmux: {:?}", folder.id, folder.tmux);
+    Ok(folder)
+}
+
+/// The longest icon or colour name a folder keeps; anything longer is not
+/// one of ours.
+const FOLDER_ICON_MAX: usize = 64;
+
+/// An icon or colour name as stored: trimmed, `None` when empty, refused
+/// when it is too long or holds anything but letters, digits, `-`, `_`
+/// and one `:`.
+fn folder_icon_value(value: Option<String>, what: &str) -> Result<Option<String>, String> {
+    let Some(value) = value.map(|v| v.trim().to_string()).filter(|v| !v.is_empty()) else {
+        return Ok(None);
+    };
+    let ok = value.len() <= FOLDER_ICON_MAX
+        && value.matches(':').count() <= 1
+        && value.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | ':'));
+    if ok { Ok(Some(value)) } else { Err(format!("Not a folder {what}: {value}")) }
+}
+
+/// Set or clear a folder's icon and its colour. Both are part of the
+/// folder's record, so they sync with it.
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn session_set_folder_icon(
+    state: State<'_, AppState>,
+    folder_id: String,
+    icon: Option<String>,
+    color: Option<String>,
+) -> Result<Folder, String> {
+    let icon = folder_icon_value(icon, "icon")?;
+    let color = folder_icon_value(color, "colour")?;
+    let manager = state.vault_manager.lock().await;
+    if manager.is_locked() {
+        return Err("Vault is locked".to_string());
+    }
+    let mut folder = read_folders(&manager)
+        .await?
+        .into_iter()
+        .find(|f| f.id == folder_id)
+        .ok_or_else(|| format!("Folder not found: {folder_id}"))?;
+    folder.icon = icon;
+    folder.color = color;
+    let vault_id = find_folder_vault(&manager, &folder.id)
+        .await
+        .ok_or_else(|| format!("Folder not found: {}", folder.id))?;
+    let json = serde_json::to_vec(&folder).map_err(|e| e.to_string())?;
+    manager
+        .update_secret(&vault_id, &folder.id, SecretBox::new(Box::new(json)))
+        .await
+        .map_err(|e| e.to_string())?;
+    tracing::info!("Folder {} icon {:?} colour {:?}", folder.id, folder.icon, folder.color);
     Ok(folder)
 }
 
@@ -2749,7 +2803,34 @@ mod folder_vault_tests {
     use crate::vault::types::VaultType;
 
     fn folder(id: &str, vault: Option<&str>) -> Folder {
-        Folder { id: id.into(), name: id.into(), parent_id: None, vault_id: vault.map(Into::into), credential_id: None, tmux: None }
+        Folder { id: id.into(), name: id.into(), parent_id: None, vault_id: vault.map(Into::into), credential_id: None, tmux: None, icon: None, color: None }
+    }
+
+    #[test]
+    fn folder_icon_values_are_checked() {
+        assert_eq!(folder_icon_value(None, "icon").unwrap(), None);
+        assert_eq!(folder_icon_value(Some("  ".into()), "icon").unwrap(), None);
+        assert_eq!(folder_icon_value(Some(" fa:server ".into()), "icon").unwrap().as_deref(), Some("fa:server"));
+        assert_eq!(folder_icon_value(Some("os:mikrotik".into()), "icon").unwrap().as_deref(), Some("os:mikrotik"));
+        assert_eq!(folder_icon_value(Some("red".into()), "colour").unwrap().as_deref(), Some("red"));
+        assert!(folder_icon_value(Some("fa:a:b".into()), "icon").is_err());
+        assert!(folder_icon_value(Some("<svg onload=x>".into()), "icon").is_err());
+        assert!(folder_icon_value(Some("x".repeat(65)), "icon").is_err());
+    }
+
+    #[test]
+    fn a_folder_without_an_icon_reads_and_writes_as_before() {
+        let old: Folder = serde_json::from_str(r#"{"id":"f","name":"F","parent_id":null}"#).unwrap();
+        assert_eq!(old.icon, None);
+        assert_eq!(old.color, None);
+        let json = serde_json::to_string(&old).unwrap();
+        assert!(!json.contains("icon") && !json.contains("color"), "{json}");
+        let mut with = old.clone();
+        with.icon = Some("fa:server".into());
+        with.color = Some("blue".into());
+        let back: Folder = serde_json::from_str(&serde_json::to_string(&with).unwrap()).unwrap();
+        assert_eq!(back.icon.as_deref(), Some("fa:server"));
+        assert_eq!(back.color.as_deref(), Some("blue"));
     }
 
     #[test]

@@ -322,6 +322,10 @@ export interface Folder {
   credential_id?: string | null;
   /** Start the sessions inside in tmux, unless they or a nearer folder say otherwise. */
   tmux?: boolean | null;
+  /** The icon shown for it: `fa:<symbol>` or `os:<logo>`; none: the plain folder. */
+  icon?: string | null;
+  /** That icon's colour, by name (see data/folder-icons.ts). */
+  color?: string | null;
 }
 
 export async function sessionList(): Promise<SessionConfig[]> {
@@ -575,6 +579,11 @@ export async function sessionSetFolderTmux(folderId: string, tmux: boolean | nul
 /** Set or clear the saved credential a folder's sessions log in with. */
 export async function sessionSetFolderCredential(folderId: string, credentialId: string | null): Promise<Folder> {
   return invoke<Folder>('session_set_folder_credential', { folderId, credentialId });
+}
+
+/** Set or clear a folder's icon and colour (null: the plain folder, the theme's colour). */
+export async function sessionSetFolderIcon(folderId: string, icon: string | null, color: string | null): Promise<Folder> {
+  return invoke<Folder>('session_set_folder_icon', { folderId, icon, color });
 }
 
 /** Rename a folder; what is inside stays put. */
