@@ -1061,6 +1061,12 @@
 			// never resized, as noVNC does by default. RDP still resizes: each
 			// RDP login is a session of its own.
 			if (isVnc()) return;
+			// A tab switched away from (or a page left) is display: none and
+			// measures 0 x 0. That is not a size to render at: sent on, the
+			// server shrank to the fallback size and grew back on return,
+			// moving every window on the remote desktop. Keep the last size.
+			const r = (screen ?? host).getBoundingClientRect();
+			if (r.width < 1 || r.height < 1) return;
 			const s = fitSize();
 			// The size the desktop already has is not a resize. Asking for
 			// it anyway leaves a request the server never answers.
