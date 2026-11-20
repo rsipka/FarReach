@@ -3727,5 +3727,18 @@
   "web.cert_changed": "Тази сесия по-рано се е доверявала на друг сертификат. Ако сертификатът на устройството не е сменян, някой може да е между вас и него.",
   "web.cert_trust": "Доверие за тази сесия",
   "web.cert_cancel": "Не отваряй",
-  "web.opening_browser": "Отворено в браузъра"
+  "web.opening_browser": "Отворено в браузъра",
+  "x11desktop.label": "Работен плот X11",
+  "x11desktop.off": "Изключено (терминал)",
+  "x11desktop.gnome": "GNOME",
+  "x11desktop.kde": "KDE Plasma",
+  "x11desktop.xfce": "Xfce",
+  "x11desktop.mate": "MATE",
+  "x11desktop.cinnamon": "Cinnamon",
+  "x11desktop.lxqt": "LXQt",
+  "x11desktop.openbox": "Openbox",
+  "x11desktop.custom": "Собствена команда",
+  "x11desktop.command": "Команда за стартиране на работния плот",
+  "x11desktop.hint": "Стартира цял работен плот на сървъра и го показва в отделен прозорец. Сървърът трябва да има X11Forwarding yes и xauth. Този компютър се нуждае от Xephyr (Linux), X11 сървъра от Настройки (Windows) или XQuartz (macOS).",
+  "x11desktop.command_needed": "Въведете командата, която стартира работния плот."
 }

@@ -205,6 +205,7 @@ pub async fn ssh_connect(
     key_passphrase_ref: Option<crate::pwmanager::SecretRef>,
     session_id: Option<String>,
     tmux: Option<crate::ssh::tmux::TmuxStart>,
+    x11_desktop: Option<crate::ssh::x11_desktop::X11Desktop>,
 ) -> Result<String, String> {
     // Boxed: Tauri builds a command's future on the main thread and passes it
     // by value before spawning it, and the main thread's stack is small
@@ -213,6 +214,12 @@ pub async fn ssh_connect(
         // Only the approvals of the person connecting count: a session synced
         // from a vault others can write to cannot approve its own commands.
         let mut ssh_options = ssh_options.map(|o| o.effective());
+        // X11 Desktop: the channel starts the desktop, never a shell or tmux.
+        let tmux = if x11_desktop.is_some() { None } else { tmux };
+        let shell = match &x11_desktop {
+            Some(d) => Some(d.launcher()?),
+            None => shell,
+        };
         // Nothing is typed into the user's shell unless the caller asks for it
         // (Settings → Appearance): a caller that does not say gets no setup. The
         // login message is shown unless asked otherwise.
@@ -235,7 +242,7 @@ pub async fn ssh_connect(
             _ => shell,
         };
         let login = crate::ssh::client::LoginOptions {
-            inject_colors: inject_colors.unwrap_or(false) && tmux.is_none(),
+            inject_colors: inject_colors.unwrap_or(false) && tmux.is_none() && x11_desktop.is_none(),
             show_login_message: show_login_message.unwrap_or(true),
             log: session_log,
             tmux_ask,
@@ -324,6 +331,9 @@ pub async fn ssh_connect(
         // A saved session keeps the host keys it trusts, for every hop.
         let trust = crate::ipc::session_commands::session_trust(&state, session_id.as_deref()).await;
         target_opts.trust = trust.clone();
+        if x11_desktop.is_some() {
+            crate::ssh::x11_desktop::apply(&mut target_opts, &host, &format!("{username}@{host}")).await?;
+        }
         let connlog = target_opts.log.as_ref().map(|(level, verbose)| crate::ssh::connlog::ConnLog::new(level.as_deref(), verbose));
         target_opts.connlog = connlog.clone();
         let span = connlog.as_ref().map_or_else(tracing::Span::none, |l| l.span());

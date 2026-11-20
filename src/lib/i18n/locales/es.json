@@ -3727,5 +3727,18 @@
   "web.cert_changed": "Esta sesión confiaba antes en otro certificado. Si el certificado del dispositivo no se cambió, alguien podría estar entre tú y el dispositivo.",
   "web.cert_trust": "Confiar para esta sesión",
   "web.cert_cancel": "No abrir",
-  "web.opening_browser": "Abierto en tu navegador"
+  "web.opening_browser": "Abierto en tu navegador",
+  "x11desktop.label": "Escritorio X11",
+  "x11desktop.off": "Desactivado (terminal)",
+  "x11desktop.gnome": "GNOME",
+  "x11desktop.kde": "KDE Plasma",
+  "x11desktop.xfce": "Xfce",
+  "x11desktop.mate": "MATE",
+  "x11desktop.cinnamon": "Cinnamon",
+  "x11desktop.lxqt": "LXQt",
+  "x11desktop.openbox": "Openbox",
+  "x11desktop.custom": "Comando propio",
+  "x11desktop.command": "Comando de inicio del escritorio",
+  "x11desktop.hint": "Inicia un escritorio completo en el servidor y lo muestra en una ventana propia. El servidor necesita X11Forwarding yes y xauth. Este equipo necesita Xephyr (Linux), el servidor X11 de Ajustes (Windows) o XQuartz (macOS).",
+  "x11desktop.command_needed": "Escribe el comando que inicia el escritorio."
 }

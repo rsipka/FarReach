@@ -413,7 +413,7 @@ fn x11_config(o: &super::resolve::Options, plan: &super::apply::Plan, approved_c
         }
         None => default_xauth(),
     };
-    Some(crate::ssh::x11::X11Config { display, trusted, timeout, xauth })
+    Some(crate::ssh::x11::X11Config { display, trusted, timeout, xauth, nested: None })
 }
 
 /// _PATH_XAUTH as the usual builds set it, plus XQuartz and VcXsrv.

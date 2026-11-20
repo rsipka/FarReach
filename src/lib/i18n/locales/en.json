@@ -3727,5 +3727,18 @@
   "web.cert_changed": "This session trusted a different certificate before. If the device's certificate was not replaced, someone may be between you and it.",
   "web.cert_trust": "Trust for this session",
   "web.cert_cancel": "Don't open",
-  "web.opening_browser": "Opened in your browser"
+  "web.opening_browser": "Opened in your browser",
+  "x11desktop.label": "X11 desktop",
+  "x11desktop.off": "Off (terminal)",
+  "x11desktop.gnome": "GNOME",
+  "x11desktop.kde": "KDE Plasma",
+  "x11desktop.xfce": "Xfce",
+  "x11desktop.mate": "MATE",
+  "x11desktop.cinnamon": "Cinnamon",
+  "x11desktop.lxqt": "LXQt",
+  "x11desktop.openbox": "Openbox",
+  "x11desktop.custom": "Custom command",
+  "x11desktop.command": "Desktop start command",
+  "x11desktop.hint": "Starts a whole desktop on the server and shows it in a window of its own. The server needs X11Forwarding yes and xauth. This computer needs Xephyr (Linux), the X11 server from Settings (Windows) or XQuartz (macOS).",
+  "x11desktop.command_needed": "Enter the command that starts the desktop."
 }

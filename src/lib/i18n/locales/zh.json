@@ -3727,5 +3727,18 @@
   "web.cert_changed": "此会话之前信任的是另一个证书。如果设备证书没有更换，可能有人位于你和设备之间。",
   "web.cert_trust": "在此会话中信任",
   "web.cert_cancel": "不打开",
-  "web.opening_browser": "已在浏览器中打开"
+  "web.opening_browser": "已在浏览器中打开",
+  "x11desktop.label": "X11 桌面",
+  "x11desktop.off": "关闭（终端）",
+  "x11desktop.gnome": "GNOME",
+  "x11desktop.kde": "KDE Plasma",
+  "x11desktop.xfce": "Xfce",
+  "x11desktop.mate": "MATE",
+  "x11desktop.cinnamon": "Cinnamon",
+  "x11desktop.lxqt": "LXQt",
+  "x11desktop.openbox": "Openbox",
+  "x11desktop.custom": "自定义命令",
+  "x11desktop.command": "桌面启动命令",
+  "x11desktop.hint": "在服务器上启动完整桌面，并在单独的窗口中显示。服务器需要 X11Forwarding yes 和 xauth。本机需要 Xephyr（Linux）、设置中的 X11 服务器（Windows）或 XQuartz（macOS）。",
+  "x11desktop.command_needed": "请输入启动桌面的命令。"
 }

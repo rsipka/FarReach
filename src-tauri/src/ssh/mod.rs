@@ -29,5 +29,6 @@ pub mod sk;
 pub mod tmux;
 pub mod userauth;
 pub mod x11;
+pub mod x11_desktop;
 #[cfg(windows)]
 pub mod xserver;

@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { SshOptions } from './sessions';
+import type { SshOptions, X11Desktop } from './sessions';
 import type { SecretRef } from './pwmanager';
 
 /** What a connect asks of tmux on the server (see #lib/terminal/tmux). */
@@ -113,6 +113,9 @@ export interface SshConnectParams {
   /** Start inside this tmux session on the server (attach or create);
    *  absent: no tmux. See #lib/terminal/tmux. */
   tmux?: TmuxStart | null;
+  /** Start this desktop over X11 forwarding, in a window of its own,
+   *  instead of a shell (desktop apps only). */
+  x11Desktop?: X11Desktop | null;
   /** The session's other addresses, for a reconnect to fall back on when
    *  the one it used no longer answers (a laptop that left the office).
    *  Kept on the tab only; not sent to the backend. */
@@ -198,6 +201,7 @@ export async function sshConnect(params: SshConnectParams): Promise<string> {
     sshOptions: params.sshOptions ?? null,
     sessionId: params.sessionId ?? null,
     tmux: params.tmux ?? null,
+    x11Desktop: params.x11Desktop ?? null,
   });
 }
 

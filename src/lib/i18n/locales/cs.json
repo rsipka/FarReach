@@ -3727,5 +3727,18 @@
   "web.cert_changed": "Tato relace dříve důvěřovala jinému certifikátu. Pokud certifikát zařízení nebyl vyměněn, může být někdo mezi vámi a zařízením.",
   "web.cert_trust": "Důvěřovat pro tuto relaci",
   "web.cert_cancel": "Neotevírat",
-  "web.opening_browser": "Otevřeno v prohlížeči"
+  "web.opening_browser": "Otevřeno v prohlížeči",
+  "x11desktop.label": "X11 plocha",
+  "x11desktop.off": "Vypnuto (terminál)",
+  "x11desktop.gnome": "GNOME",
+  "x11desktop.kde": "KDE Plasma",
+  "x11desktop.xfce": "Xfce",
+  "x11desktop.mate": "MATE",
+  "x11desktop.cinnamon": "Cinnamon",
+  "x11desktop.lxqt": "LXQt",
+  "x11desktop.openbox": "Openbox",
+  "x11desktop.custom": "Vlastní příkaz",
+  "x11desktop.command": "Příkaz pro spuštění plochy",
+  "x11desktop.hint": "Spustí na serveru celou plochu a zobrazí ji ve vlastním okně. Server potřebuje X11Forwarding yes a xauth. Tento počítač potřebuje Xephyr (Linux), X11 server z Nastavení (Windows) nebo XQuartz (macOS).",
+  "x11desktop.command_needed": "Zadejte příkaz, který spustí plochu."
 }

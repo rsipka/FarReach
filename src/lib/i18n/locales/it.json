@@ -3727,5 +3727,18 @@
   "web.cert_changed": "Questa sessione si fidava prima di un altro certificato. Se il certificato del dispositivo non è stato sostituito, qualcuno potrebbe trovarsi tra te e il dispositivo.",
   "web.cert_trust": "Fidati per questa sessione",
   "web.cert_cancel": "Non aprire",
-  "web.opening_browser": "Aperto nel browser"
+  "web.opening_browser": "Aperto nel browser",
+  "x11desktop.label": "Desktop X11",
+  "x11desktop.off": "Disattivato (terminale)",
+  "x11desktop.gnome": "GNOME",
+  "x11desktop.kde": "KDE Plasma",
+  "x11desktop.xfce": "Xfce",
+  "x11desktop.mate": "MATE",
+  "x11desktop.cinnamon": "Cinnamon",
+  "x11desktop.lxqt": "LXQt",
+  "x11desktop.openbox": "Openbox",
+  "x11desktop.custom": "Comando personalizzato",
+  "x11desktop.command": "Comando di avvio del desktop",
+  "x11desktop.hint": "Avvia un intero desktop sul server e lo mostra in una finestra propria. Il server richiede X11Forwarding yes e xauth. Questo computer richiede Xephyr (Linux), il server X11 dalle Impostazioni (Windows) o XQuartz (macOS).",
+  "x11desktop.command_needed": "Inserisci il comando che avvia il desktop."
 }

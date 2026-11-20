@@ -1719,7 +1719,9 @@
 				cols: 80,
 				rows: 24,
 				shell: session.shell ?? undefined,
-				tmux: tmuxView(tmuxFor(session, folders)),
+				// An X11 desktop starts the desktop, never tmux.
+				tmux: session.x11_desktop ? null : tmuxView(tmuxFor(session, folders)),
+				x11Desktop: session.x11_desktop ?? null,
 				injectColors: getSettings().typeShellSetup,
 				sessionLog: sessionLogConfig(session.name),
 				showLoginMessage: getSettings().showLoginMessage,

@@ -34,7 +34,7 @@
 	}
 
 	let { session, vault = null, onconnect, onedit, ondelete, oncontextmenu, ondragstart, ondragend, selecting = false, selected = false, onselect, viaName = null }: Props = $props();
-	let unavailable = $derived((session.kind === 'wsl' && !isWindows()) || ((session.kind === 'serial' || session.kind === 'winbox') && isMobile()));
+	let unavailable = $derived((session.kind === 'wsl' && !isWindows()) || ((session.kind === 'serial' || session.kind === 'winbox' || !!session.x11_desktop) && isMobile()));
 	/** WinBox only ever manages a MikroTik: its logo until another is picked. */
 	let osId = $derived(session.detected_os ?? (session.kind === 'winbox' ? 'mikrotik' : null));
 	/** Double-click to open (Settings > General): a mouse click only focuses
@@ -284,6 +284,9 @@
 			<span class="auth-badge">WSL</span>
 		{:else if session.kind === 'serial'}
 			<span class="auth-badge">{unavailable ? t('serial.desktop_only_short') : t('session.protocol_serial')}</span>
+		{:else if session.x11_desktop}
+			<!-- A whole desktop, in a window of its own. -->
+			<span class="auth-badge" title={t(`x11desktop.${session.x11_desktop.desktop}`)}>{unavailable ? t('serial.desktop_only_short') : 'X11'}</span>
 		{:else if session.kind === 'winbox'}
 			<!-- Opens in WinBox, not in a tab here. -->
 			<span class="auth-badge">{unavailable ? t('serial.desktop_only_short') : t('session.protocol_winbox')}</span>

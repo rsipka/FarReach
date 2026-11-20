@@ -187,6 +187,10 @@ pub struct SessionConfig {
     /// `ssh::tmux`); unset: as its folder says, else not.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tmux: Option<crate::ssh::tmux::TmuxSetting>,
+    /// SSH only: start a whole desktop over X11 forwarding, shown in a
+    /// window of its own here, instead of a shell (see `ssh::x11_desktop`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x11_desktop: Option<crate::ssh::x11_desktop::X11Desktop>,
     /// Approvals of the password manager entries a saved credential brings
     /// to this session, by slot (`password`, `jump:0:passphrase`). An entry
     /// in a credential is approved per session and person like one of the
@@ -278,6 +282,9 @@ impl SessionConfig {
         }
         if !matches!(self.history.as_deref(), None | Some("off" | "commands" | "output")) {
             self.history = None;
+        }
+        if self.kind != SessionKind::Ssh || self.x11_desktop.as_ref().is_some_and(|d| d.check().is_err()) {
+            self.x11_desktop = None;
         }
         if self.kind != SessionKind::Spice || self.spice.as_ref().is_some_and(|o| o.is_empty()) {
             self.spice = None;

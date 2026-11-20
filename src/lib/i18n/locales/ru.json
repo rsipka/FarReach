@@ -3727,5 +3727,18 @@
   "web.cert_changed": "Ранее этот сеанс доверял другому сертификату. Если сертификат устройства не заменяли, между вами и устройством может кто-то находиться.",
   "web.cert_trust": "Доверять для этого сеанса",
   "web.cert_cancel": "Не открывать",
-  "web.opening_browser": "Открыто в браузере"
+  "web.opening_browser": "Открыто в браузере",
+  "x11desktop.label": "Рабочий стол X11",
+  "x11desktop.off": "Выкл. (терминал)",
+  "x11desktop.gnome": "GNOME",
+  "x11desktop.kde": "KDE Plasma",
+  "x11desktop.xfce": "Xfce",
+  "x11desktop.mate": "MATE",
+  "x11desktop.cinnamon": "Cinnamon",
+  "x11desktop.lxqt": "LXQt",
+  "x11desktop.openbox": "Openbox",
+  "x11desktop.custom": "Своя команда",
+  "x11desktop.command": "Команда запуска рабочего стола",
+  "x11desktop.hint": "Запускает на сервере полноценный рабочий стол и показывает его в отдельном окне. На сервере нужны X11Forwarding yes и xauth. На этом компьютере нужен Xephyr (Linux), X11-сервер из настроек (Windows) или XQuartz (macOS).",
+  "x11desktop.command_needed": "Введите команду, которая запускает рабочий стол."
 }

@@ -6,7 +6,7 @@
 	import OsIconSelect from './OsIconSelect.svelte';
 	import { osChoices } from '#lib/data/distro-icons.js';
 	import Input from '#lib/components/shared/Input.svelte';
-	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField, type TmuxSetting, type ConnectMode, type SessionAddress, type WebOptions, type WebLogin, type WebCert, webSessionCertAdd, webSessionCertRemove, webSessionClearData } from '#lib/ipc/sessions.js';
+	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField, type TmuxSetting, type X11DesktopKind, X11_DESKTOPS, type ConnectMode, type SessionAddress, type WebOptions, type WebLogin, type WebCert, webSessionCertAdd, webSessionCertRemove, webSessionClearData } from '#lib/ipc/sessions.js';
 	import { defaultTmuxName, folderTmux, validTmuxName } from '#lib/terminal/tmux.js';
 	import { isIos, isMobile, isWindows } from '#lib/platform.js';
 	import { APP_FILES_SHARE } from '#lib/ipc/rdp.js';
@@ -393,6 +393,9 @@
 	let monitoringChoice = $state<'' | 'on' | 'off'>('');
 	/** What its tabs record into the session history; empty: the default from Settings. */
 	let historyChoice = $state<'' | HistoryMode>('');
+	/** SSH: start a desktop over X11 instead of a shell; '' for a terminal. */
+	let x11Desktop = $state<'' | X11DesktopKind>('');
+	let x11Command = $state('');
 	/** tmux on the server: '' as the folder says. See #lib/terminal/tmux. */
 	let tmuxChoice = $state<'' | 'attach' | 'ask' | 'off'>('');
 	let tmuxMouse = $state(false);
@@ -400,7 +403,7 @@
 	let tmuxFolderOn = $derived(folderTmux(folderIdStr || null, folders) === true);
 	let tmuxOn = $derived(tmuxChoice === 'attach' || tmuxChoice === 'ask' || (tmuxChoice === '' && tmuxFolderOn));
 	/** tmux runs on an SSH server, or inside a WSL distribution. */
-	let tmuxKind = $derived(kind === 'ssh' || kind === 'wsl');
+	let tmuxKind = $derived((kind === 'ssh' && !x11Desktop) || kind === 'wsl');
 	let colorsOpen = $state(false);
 	let colorsSummary = $derived(
 		findTerminalTheme(terminalTheme)?.name ?? (terminalTheme ? t('termtheme.missing') : t('termtheme.session_default'))
@@ -539,6 +542,8 @@
 			historyChoice = editSession.history ?? '';
 			tmuxChoice = editSession.tmux?.mode === 'attach' || editSession.tmux?.mode === 'ask' || editSession.tmux?.mode === 'off' ? editSession.tmux.mode : '';
 			tmuxMouse = !!editSession.tmux?.mouse;
+			x11Desktop = editSession.x11_desktop?.desktop ?? '';
+			x11Command = editSession.x11_desktop?.command ?? '';
 			tmuxName = editSession.tmux?.name ?? '';
 			colorsOpen = false;
 			if (editSession.jump_chain && editSession.jump_chain.length > 0) {
@@ -615,6 +620,8 @@
 			historyChoice = '';
 			tmuxChoice = '';
 			tmuxMouse = false;
+			x11Desktop = '';
+			x11Command = '';
 			tmuxName = '';
 			colorsOpen = false;
 			jumpEnabled = false;
@@ -704,6 +711,11 @@
 		const historyToSave = noTerminal ? null : historyChoice || null;
 		// tmux runs on an SSH server only. A name is kept only beside a choice
 		// or a folder that turns it on.
+		const x11ToSave = kind === 'ssh' && x11Desktop ? { desktop: x11Desktop, command: x11Desktop === 'custom' ? x11Command.trim() : null } : null;
+		if (x11ToSave?.desktop === 'custom' && !x11ToSave.command) {
+			error = t('x11desktop.command_needed');
+			return;
+		}
 		const tmuxNameToSave = tmuxName.trim();
 		if (tmuxKind && tmuxOn && tmuxNameToSave && !validTmuxName(tmuxNameToSave)) {
 			error = t('tmux.name_invalid');
@@ -810,6 +822,7 @@
 					monitoring: monitoringToSave,
 					history: historyToSave,
 					tmux: tmuxToSave,
+					x11_desktop: x11ToSave,
 					host_label: altToSave ? (hostLabel.trim() || null) : null,
 					alt_addresses: altToSave,
 					connect_mode: altToSave ? addressMode : null,
@@ -855,6 +868,7 @@
 					monitoring: monitoringToSave,
 					history: historyToSave,
 					tmux: tmuxToSave,
+					x11Desktop: x11ToSave,
 					hostLabel: altToSave ? hostLabel : null,
 					altAddresses: altToSave,
 					connectMode: altToSave ? addressMode : null,
@@ -1680,7 +1694,27 @@
 			</div>
 		{/if}
 
-		{#if kind === 'ssh'}
+		{#if kind === 'ssh' && (!isMobile() || x11Desktop)}
+			<div class="folder-section">
+				<span class="folder-label">{t('x11desktop.label')}</span>
+				<select class="folder-select" bind:value={x11Desktop} disabled={saving}>
+					<option value="">{t('x11desktop.off')}</option>
+					{#each X11_DESKTOPS as d (d)}
+						<option value={d}>{t(`x11desktop.${d}`)}</option>
+					{/each}
+				</select>
+			</div>
+			{#if x11Desktop === 'custom'}
+				<div class="shell-field">
+					<Input label={t('x11desktop.command')} bind:value={x11Command} placeholder="i3" disabled={saving} />
+				</div>
+			{/if}
+			{#if x11Desktop}
+				<p class="shell-hint">{t('x11desktop.hint')}</p>
+			{/if}
+		{/if}
+
+		{#if kind === 'ssh' && !x11Desktop}
 			<div class="shell-field">
 				<Input label={t('session.login_shell_optional')} bind:value={shell} placeholder="fish -l" disabled={saving} />
 				<p class="shell-hint">{t('session.login_shell_hint')}</p>
