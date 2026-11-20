@@ -443,6 +443,8 @@
   "session.rdp_clipboard_text": "Text and pictures, no files",
   "session.rdp_clipboard_off": "Off",
   "session.rdp_clipboard_hint": "What copy and paste carries between this computer and the desktop.",
+  "session.rdp_forward_lock_keys": "Forward lock key presses",
+  "session.rdp_forward_lock_keys_hint": "Send Caps Lock, Num Lock and Scroll Lock presses to the remote desktop for shortcuts. The lock states stay synced either way.",
   "session.rdp_domain": "Domain (optional)",
   "rdp.fullscreen": "Full screen",
   "rdp.exit_fullscreen": "Exit full screen",

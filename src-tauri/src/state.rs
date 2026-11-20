@@ -88,6 +88,9 @@ pub struct SessionConfig {
     /// files, `text` for no files, `off` for nothing. RDP only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rdp_clipboard: Option<String>,
+    /// Forward lock key presses to the remote desktop. Enabled when unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rdp_forward_lock_keys: Option<bool>,
     /// Key sessions only: offer the SSH agent's keys if this session's own key
     /// is refused. Off unless the user turned it on; see `build_auth`.
     #[serde(default, skip_serializing_if = "Option::is_none")]

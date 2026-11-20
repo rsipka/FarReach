@@ -79,7 +79,7 @@
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { untrustedRefsFromError } from '#lib/ipc/sessions.js';
 	import { getSettings, updateSetting } from '#lib/state/settings.svelte.js';
-	import { isMobile } from '#lib/platform.js';
+	import { isMac, isMobile } from '#lib/platform.js';
 	import { isLockKey, localLocks, onLocksChange, type Locks } from '#lib/utils/lock-keys.js';
 	import { setTabLink, setDesktopUp, closeTab } from '#lib/state/tabs.svelte.js';
 	import MobileKeyBar, { type BarKey } from '#lib/components/shared/MobileKeyBar.svelte';
@@ -96,6 +96,7 @@
 
 	const isVnc = (): boolean => protocol === 'vnc';
 	const isSpice = (): boolean => protocol === 'spice';
+	const forwardLockKeys = $derived(protocol === 'rdp' && (params as RdpConnectParams).forwardLockKeys !== false);
 	/** Who the desktop is, for the full-screen bar. */
 	const label = $derived('username' in params && params.username ? `${params.username}@${params.host}` : params.host);
 
@@ -857,24 +858,70 @@
 
 	/** RDP: the lock state last sent to the remote. */
 	let sentLocks: Locks | null = null;
+	const heldLocks = new Set<string>();
+	let lockKeyInput: Promise<void> | null = null;
+	let lockSyncTimer: ReturnType<typeof setTimeout> | undefined;
 
 	/**
 	 * RDP: make the remote's CapsLock, NumLock and ScrollLock the local ones,
 	 * as mstsc and RDM do. A new remote session starts with its own lock
 	 * state, so this runs on connect, on focus, and whenever the local state
 	 * changes, in every connected session, so all of them follow the keyboard.
-	 * Lock keys themselves are not sent: the sync sets the remote, so a key
-	 * press could only toggle it a second time.
+	 * When forwarding lock keys, wait for their releases before syncing so
+	 * the press cannot toggle the remote back after the sync.
 	 */
 	function sendLocks(force = false): void {
-		if (isVnc() || isSpice() || phase !== 'connected') return;
+		if (protocol !== 'rdp' || phase !== 'connected' || heldLocks.size || lockKeyInput) return;
 		const locks = localLocks();
 		if (!locks) return;
 		if (!force && sentLocks && sentLocks.caps === locks.caps && sentLocks.num === locks.num && sentLocks.scroll === locks.scroll) return;
 		sentLocks = locks;
 		sendInput(rdpSyncLocks(id, locks.caps, locks.num, locks.scroll));
 	}
-	const unlistenLocks = onLocksChange(() => sendLocks());
+	const unlistenLocks = onLocksChange(() => {
+		if (!forwardLockKeys) {
+			sendLocks();
+			return;
+		}
+		// The window learns about the change during capture. Let the focused
+		// desktop handle the key before deciding whether to sync.
+		if (lockSyncTimer !== undefined) return;
+		lockSyncTimer = setTimeout(() => {
+			lockSyncTimer = undefined;
+			sendLocks();
+		}, 0);
+	});
+
+	function sendLockKey(input: () => Promise<void>): void {
+		// Keep rapid presses and releases in order across asynchronous IPC.
+		const pending = (lockKeyInput ? lockKeyInput.then(input) : input()).catch(() => {});
+		lockKeyInput = pending;
+		void pending.then(() => {
+			if (lockKeyInput !== pending) return;
+			lockKeyInput = null;
+			sendLocks(true);
+		});
+	}
+
+	function onLockKey(e: KeyboardEvent): void {
+		e.preventDefault();
+		if (!forwardLockKeys || e.repeat) return;
+		const code = e.code;
+		if (isMac()) {
+			// Caps Lock gives one event per press: down when enabled, up when
+			// disabled. The keypad's Clear key arrives with the NumLock code.
+			if (code === 'NumLock') return;
+			sendLockKey(async () => {
+				await pressCode(code, true);
+				await pressCode(code, false);
+			});
+		} else if (e.type === 'keydown') {
+			heldLocks.add(code);
+			sendLockKey(() => pressCode(code, true));
+		} else if (heldLocks.delete(code)) {
+			sendLockKey(() => pressCode(code, false));
+		}
+	}
 
 	/** Whether a key event is one this desktop takes. */
 	function isKey(e: KeyboardEvent): boolean {
@@ -925,10 +972,8 @@
 		}
 		// SPICE is left as it was: its guest repeats a held key itself.
 		if (isSpice() && e.repeat) return;
-		// RDP lock keys reach the remote as a sync of the local state (see
-		// sendLocks), not as keys.
 		if (!isSpice() && isLockKey(e.code)) {
-			e.preventDefault();
+			onLockKey(e);
 			return;
 		}
 		// An RDP server does not repeat a held key: the client sends the key
@@ -957,7 +1002,7 @@
 			return;
 		}
 		if (!isSpice() && isLockKey(e.code)) {
-			e.preventDefault();
+			onLockKey(e);
 			return;
 		}
 		const entry = SCANCODES[e.code];
@@ -973,6 +1018,8 @@
 			if (entry) sendInput(remote.key(entry[0], entry[1], true));
 		}
 		held.clear();
+		for (const code of heldLocks) sendLockKey(() => pressCode(code, false));
+		heldLocks.clear();
 		for (const keysym of heldKeysyms.values()) sendInput(vncKey(id, keysym, false));
 		heldKeysyms.clear();
 	}
@@ -1041,6 +1088,7 @@
 				message = s.clean ? '' : s.reason;
 				// Nothing to release on a desktop that has gone; just forget.
 				held.clear();
+				heldLocks.clear();
 				heldKeysyms.clear();
 			} else if (s.state === 'error') {
 				if (retryWithGraphicsPipeline(s.message)) return;
@@ -1120,6 +1168,7 @@
 	onDestroy(() => {
 		unlisten?.();
 		unlistenLocks();
+		clearTimeout(lockSyncTimer);
 		unlistenClip?.();
 		unlistenDrop?.();
 		sizeObserver?.disconnect();
@@ -1183,6 +1232,7 @@
 			oncompositionend={onSinkComposition}
 			onkeydown={onSinkKeyDown}
 			onkeyup={onSinkKeyUp}
+			onblur={releaseAll}
 		></textarea>
 	{/if}
 

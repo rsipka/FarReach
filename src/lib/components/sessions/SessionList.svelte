@@ -1222,6 +1222,7 @@
 			domain: session.domain ?? undefined,
 			sharePath: session.share_path ?? undefined,
 			clipboard: session.rdp_clipboard ?? null,
+			forwardLockKeys: session.rdp_forward_lock_keys ?? true,
 			// GNOME Remote Desktop serves no client without the graphics
 			// pipeline, so a GNOME session asks for it whatever the setting says.
 			graphicsPipeline: session.detected_os === 'gnome' ? true : undefined,
