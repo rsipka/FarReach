@@ -208,6 +208,17 @@
 			} else if (r.kind === 'quick-connect') {
 				quickPrefill = r.prefill ?? null;
 				showQuickConnect = true;
+			} else if (r.kind === 'connect-many') {
+				setActivePage('terminal');
+				void (async () => {
+					for (const id of r.sessionIds) {
+						try {
+							await handleConnect(await sessionGet(id));
+						} catch {
+							addToast(t('tabs.session_gone'), 'error');
+						}
+					}
+				})();
 			} else {
 				void sessionGet(r.sessionId)
 					.then((s) => {
@@ -1507,7 +1518,7 @@
 				shell: session.shell ?? undefined,
 				tmux: tmuxView(tmuxFor(session, folders)),
 				injectColors: getSettings().typeShellSetup,
-				sessionLog: sessionLogConfig(),
+				sessionLog: sessionLogConfig(session.name),
 				showLoginMessage: getSettings().showLoginMessage,
 				tryAgentKeys: authType === 'Key' && session.try_agent_keys === true,
 				sshOptions: session.ssh_options ?? null,

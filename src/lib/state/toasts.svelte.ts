@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { isMac, isMobile, isWebKit } from '#lib/platform.js';
+import { getSettings } from '#lib/state/settings.svelte.js';
 
 export type ToastType = 'info' | 'success' | 'warning' | 'error';
 
@@ -31,6 +32,7 @@ const VOLUME = 0.4;
  * crashed on the first toast, leaving the window frozen (issue #87).
  */
 function playSound(): void {
+	if (!getSettings().playSounds) return;
 	if (isWebKit() && !isMac() && !isMobile()) {
 		invoke('play_notification_sound', { volume: VOLUME }).catch(() => {});
 		return;

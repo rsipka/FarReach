@@ -127,8 +127,10 @@ export interface SessionLogConfig {
   mode: 'printable' | 'all';
   /** Empty means the default folder (see sessionLogDefaultDir). */
   folder: string;
-  /** PuTTY placeholders: &H &P &Y &M &D &T. */
+  /** PuTTY placeholders: &H &P &Y &M &D &T, plus &S for the session name. */
   name: string;
+  /** The saved session's name for &S; empty for a quick connect. */
+  session: string;
   append: boolean;
   header: boolean;
 }

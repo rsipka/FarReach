@@ -56,3 +56,14 @@ fn fits_rate_channels_and_volume() {
     let six = fit(&clip, 24_000, 6, 1.0);
     assert_eq!(&six[..6], &[0.5, -0.5, 0.0, 0.0, 0.0, 0.0]);
 }
+
+#[test]
+fn the_bell_is_short_audible_and_in_range() {
+    let clip = bell_clip();
+    assert_eq!(clip.channels, 1);
+    let seconds = clip.samples.len() as f64 / clip.rate as f64;
+    assert!((0.05..0.5).contains(&seconds), "{seconds} s");
+    assert!(clip.samples.iter().all(|s| (-1.0..=1.0).contains(s)));
+    assert!(clip.samples.iter().any(|s| s.abs() > 0.2), "too quiet");
+    assert!(clip.samples.last().unwrap().abs() < 0.05, "ends with a click");
+}

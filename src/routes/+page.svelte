@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { takeTmuxTitle } from '#lib/terminal/tmux-tabs.js';
-	import { getTabs, getActiveTab, updateTabTitle, updateTabConnection, setTelnetConnection, setSerialConnection, createTab, activateTab, getSplit, setSplitRatio, getDraggedTab, setDraggedTab, splitWith, unsplit } from '#lib/state/tabs.svelte.js';
-	import { paneOf, paneStyle, dividerStyle, dropZone, neighbour, SPLIT_MIN_WIDTH, type Direction } from '#lib/terminal/split.js';
+	import { getTabs, getActiveTab, updateTabTitle, updateTabConnection, setTelnetConnection, setSerialConnection, createTab, activateTab, getSplit, setSplitRatio, getDraggedTab, setDraggedTab, splitWith, unsplit, dropTab } from '#lib/state/tabs.svelte.js';
+	import { geometry, paneStyle, dividerStyle, ratioAt, dropAt as dropAtPoint, leaves, neighbour, SPLIT_MIN_WIDTH, type Drop, type DividerRect, type Zone } from '#lib/terminal/split.js';
 	import { getActivePage } from '#lib/state/navigation.svelte.js';
 	import { isDevopsEnabled } from '#lib/state/devops.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -19,6 +19,7 @@
 	import MonitoringBar from '#lib/components/terminal/MonitoringBar.svelte';
 	import TerminalBar from '#lib/components/terminal/TerminalBar.svelte';
 	import { getSettings } from '#lib/state/settings.svelte.js';
+	import { freshFind, pendingFind } from '#lib/state/terminal-find.svelte.js';
 	import RemoteTerminal from '#lib/components/share/RemoteTerminal.svelte';
 	import ShareDialog from '#lib/components/share/ShareDialog.svelte';
 	import * as share from '#lib/state/share.svelte.js';
@@ -67,28 +68,36 @@
 	const appSettings = getSettings();
 	/** The tab whose bar has its find field open: a hover-only bar stays. */
 	let findOpenIn = $state<string | null>(null);
+	// With the bar hidden in Settings, Find (Ctrl+Shift+F, the terminal's
+	// menu) shows it for the search and hides it again when the search closes.
+	let lastFindAt = 0;
+	$effect(() => {
+		const r = pendingFind();
+		if (!r || r.at === lastFindAt) return;
+		lastFindAt = r.at;
+		if (freshFind(r) && getSettings().terminalBar === 'hidden') findOpenIn = r.tabId;
+	});
 	let activeTab = $derived(getActiveTab());
 	let activePage = $derived(getActivePage());
 	let broadcastTargets = $derived(getBroadcastTargets());
 
-	// Two tabs side by side (#106); the rules are in #lib/terminal/split.
+	// Tabs side by side, split any way (#106); the rules are in #lib/terminal/split.
 	let areaEl = $state<HTMLDivElement>();
 	let innerWidth = $state(1200);
 	let split = $derived(getSplit());
-	let shownSplit = $derived(
-		split && innerWidth >= SPLIT_MIN_WIDTH && tabs.some((x) => x.id === split.first) && tabs.some((x) => x.id === split.second) ? split : null
-	);
+	let shownSplit = $derived(split && innerWidth >= SPLIT_MIN_WIDTH && leaves(split).every((id) => tabs.some((x) => x.id === id)) ? split : null);
+	let geo = $derived(geometry(shownSplit));
+	let paneRects = $derived(new Map(geo.panes.map((p) => [p.id, p])));
 	let draggedTab = $derived(getDraggedTab());
-	let dropAt = $state<Direction | null>(null);
+	let drop = $state<Drop | null>(null);
 
-	function startResize(e: PointerEvent): void {
-		if (!areaEl || !shownSplit) return;
+	function startResize(e: PointerEvent, d: DividerRect): void {
+		if (!areaEl) return;
 		e.preventDefault();
 		const handle = e.currentTarget as HTMLElement;
 		handle.setPointerCapture(e.pointerId);
 		const rect = areaEl.getBoundingClientRect();
-		const across = shownSplit.direction === 'right';
-		const move = (ev: PointerEvent) => setSplitRatio(across ? (ev.clientX - rect.left) / rect.width : (ev.clientY - rect.top) / rect.height);
+		const move = (ev: PointerEvent) => setSplitRatio(d.path, ratioAt(d, (ev.clientX - rect.left) / rect.width, (ev.clientY - rect.top) / rect.height));
 		const up = () => {
 			handle.removeEventListener('pointermove', move);
 			handle.removeEventListener('pointerup', up);
@@ -99,35 +108,49 @@
 		handle.addEventListener('pointercancel', up);
 	}
 
-	function onDividerKey(e: KeyboardEvent): void {
-		if (!shownSplit) return;
+	function onDividerKey(e: KeyboardEvent, d: DividerRect): void {
 		const step = e.shiftKey ? 0.1 : 0.02;
-		const [back, fwd] = shownSplit.direction === 'right' ? ['ArrowLeft', 'ArrowRight'] : ['ArrowUp', 'ArrowDown'];
-		if (e.key === back) setSplitRatio(shownSplit.ratio - step);
-		else if (e.key === fwd) setSplitRatio(shownSplit.ratio + step);
-		else if (e.key === 'Home') setSplitRatio(0);
-		else if (e.key === 'End') setSplitRatio(1);
+		const [back, fwd] = d.dir === 'row' ? ['ArrowLeft', 'ArrowRight'] : ['ArrowUp', 'ArrowDown'];
+		if (e.key === back) setSplitRatio(d.path, d.ratio - step);
+		else if (e.key === fwd) setSplitRatio(d.path, d.ratio + step);
+		else if (e.key === 'Home') setSplitRatio(d.path, 0);
+		else if (e.key === 'End') setSplitRatio(d.path, 1);
 		else return;
 		e.preventDefault();
 	}
 
-	// A tab dragged from the bar: where it would land, shown while it moves.
+	const DROP_LABEL: Record<Zone, string> = {
+		left: 'split.drop_left',
+		right: 'split.drop_right',
+		top: 'split.drop_up',
+		bottom: 'split.drop_down',
+		center: 'split.drop_here'
+	};
+
+	// A tab dragged from the bar or by a pane's name: where it would land,
+	// shown while it moves.
 	$effect(() => {
 		const id = draggedTab;
 		if (!id) {
-			dropAt = null;
+			drop = null;
 			return;
 		}
 		const move = (ev: PointerEvent) => {
 			const r = areaEl?.getBoundingClientRect();
-			if (!r) return;
-			const inside = ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
-			dropAt = inside && innerWidth >= SPLIT_MIN_WIDTH ? dropZone(ev.clientX - r.left, ev.clientY - r.top, r.width, r.height) : null;
+			if (!r || innerWidth < SPLIT_MIN_WIDTH) {
+				drop = null;
+				return;
+			}
+			const shown = getActiveTab()?.id;
+			const d = dropAtPoint(shownSplit, shown, ev.clientX - r.left, ev.clientY - r.top, r.width, r.height);
+			// Onto its own pane: nothing to do, but for the one tab on screen
+			// dragged to a side (it goes there, the next tab beside it).
+			drop = d && d.target === id && (d.zone === 'center' || shownSplit) ? null : d;
 		};
 		const up = () => {
-			const at = dropAt;
+			const at = drop;
 			setDraggedTab(null);
-			if (at) splitWith(id, at);
+			if (at) dropTab(id, at);
 		};
 		const key = (ev: KeyboardEvent) => {
 			if (ev.key === 'Escape') setDraggedTab(null);
@@ -153,7 +176,7 @@
 				if (!focused) return;
 				e.preventDefault();
 				e.stopPropagation();
-				const other = neighbour(tabs.map((x) => x.id), focused);
+				const other = neighbour(tabs.map((x) => x.id), focused, leaves(split));
 				splitWith(other ?? focused, k === 'e' ? 'right' : 'down');
 			} else if (k === 'u' && split) {
 				e.preventDefault();
@@ -366,7 +389,7 @@
 				<div class="terminal-split" class:sharing={share.isShowingRemote()}>
 				<div class="terminal-area" bind:this={areaEl}>
 					{#each tabs as tab (tab.id)}
-						{@const pane = shownSplit ? paneOf(shownSplit, tab.id) : null}
+						{@const pane = paneRects.get(tab.id) ?? null}
 						{@const focused = tab.id === activeTab?.id}
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<div
@@ -375,7 +398,7 @@
 							class:pane={pane !== null}
 							class:focused={pane !== null && focused}
 							class:broadcast={broadcastTargets.includes(tab.id)}
-							style={pane && shownSplit ? paneStyle(shownSplit, pane) : undefined}
+							style={pane ? paneStyle(pane) : undefined}
 							onpointerdowncapture={() => {
 								if (pane && !focused) activateTab(tab.id);
 							}}
@@ -389,7 +412,7 @@
 									<RdpPanel id={tab.id} params={tab.vncConnectParams} protocol="vnc" active={focused} />
 								{/key}
 							{:else if tab.type !== 'rdp' && tab.type !== 'vnc'}
-								{#if appSettings.terminalBar !== 'hidden'}
+								{#if appSettings.terminalBar !== 'hidden' || findOpenIn === tab.id}
 									<div class="bar-slot" class:hover-only={appSettings.terminalBar === 'hover' && findOpenIn !== tab.id}>
 										<TerminalBar {tab} onfindopen={(open) => (findOpenIn = open ? tab.id : findOpenIn === tab.id ? null : findOpenIn)} />
 									</div>
@@ -420,28 +443,32 @@
 							{/if}
 						</div>
 					{/each}
-					{#if shownSplit}
-						<!-- A focusable separator is ARIA's window splitter: drag it, or move it with the arrow keys. -->
+					<!-- A focusable separator is ARIA's window splitter: drag it, or move it with the arrow keys. -->
+					{#each geo.dividers as d (d.path)}
 						<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 						<div
 							class="split-divider"
-							class:down={shownSplit.direction === 'down'}
-							style={dividerStyle(shownSplit)}
+							class:down={d.dir === 'column'}
+							style={dividerStyle(d)}
 							role="separator"
 							tabindex="0"
-							aria-orientation={shownSplit.direction === 'right' ? 'vertical' : 'horizontal'}
+							aria-orientation={d.dir === 'row' ? 'vertical' : 'horizontal'}
 							aria-label={t('split.divider')}
-							aria-valuemin={20}
-							aria-valuemax={80}
-							aria-valuenow={Math.round(shownSplit.ratio * 100)}
-							onpointerdown={startResize}
-							onkeydown={onDividerKey}
-							ondblclick={() => setSplitRatio(0.5)}
+							aria-valuemin={10}
+							aria-valuemax={90}
+							aria-valuenow={Math.round(d.ratio * 100)}
+							onpointerdown={(e) => startResize(e, d)}
+							onkeydown={(e) => onDividerKey(e, d)}
+							ondblclick={() => setSplitRatio(d.path, 0.5)}
 						></div>
-					{/if}
-					{#if draggedTab && dropAt}
-						<div class="drop-zone" class:down={dropAt === 'down'} aria-hidden="true">
-							<span>{dropAt === 'right' ? t('split.drop_right') : t('split.drop_down')}</span>
+					{/each}
+					{#if draggedTab && drop}
+						<div
+							class="drop-zone"
+							style="left:{drop.preview.x * 100}%;top:{drop.preview.y * 100}%;width:{drop.preview.w * 100}%;height:{drop.preview.h * 100}%"
+							aria-hidden="true"
+						>
+							<span>{t(DROP_LABEL[drop.zone])}</span>
 						</div>
 					{/if}
 				</div>
@@ -656,14 +683,12 @@
 		outline: none;
 	}
 
-	/* Where a tab dragged from the bar would land. */
+	/* Where a dragged tab would land. */
 	.drop-zone {
 		position: absolute;
-		z-index: 3;
-		top: 0;
-		bottom: 0;
-		right: 0;
-		width: 50%;
+		z-index: 7;
+		box-sizing: border-box;
+		transition: left 90ms ease, top 90ms ease, width 90ms ease, height 90ms ease;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -671,13 +696,6 @@
 		border: 2px dashed color-mix(in srgb, var(--color-accent) 70%, transparent);
 		border-radius: 6px;
 		pointer-events: none;
-	}
-
-	.drop-zone.down {
-		top: auto;
-		left: 0;
-		width: auto;
-		height: 50%;
 	}
 
 	.drop-zone span {
