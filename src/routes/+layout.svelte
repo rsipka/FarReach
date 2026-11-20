@@ -5,6 +5,11 @@
 	import type { Snippet } from 'svelte';
 	import '../app.css';
 	import AppShell from '#lib/components/layout/AppShell.svelte';
+	import FloatShell from '#lib/components/layout/FloatShell.svelte';
+	import { isFloatWindow, startWindows, announceLock, announceSettings, onOtherSettings, takeKeptWindows } from '#lib/state/windows.svelte.js';
+	import { openKept } from '#lib/state/layouts.svelte.js';
+	import { readState } from '#lib/state/vault.svelte.js';
+	import { listen } from '@tauri-apps/api/event';
 	import WelcomeScreen from '#lib/components/setup/WelcomeScreen.svelte';
 	import { setupWizard } from '#lib/state/setup-wizard.svelte.js';
 	import CommunityPrompt from '#lib/components/shared/CommunityPrompt.svelte';
@@ -16,7 +21,7 @@
 	import PasswordPrompt from '#lib/components/shared/PasswordPrompt.svelte';
 	import { applyUiZoom } from '#lib/state/ui-zoom.js';
 	import { startAutoLock } from '#lib/state/autolock.svelte.js';
-	import { loadSettings, getSettings, syncTraySettings, recordLaunch, markFeaturesSeen } from '#lib/state/settings.svelte.js';
+	import { loadSettings, getSettings, syncTraySettings, recordLaunch, markFeaturesSeen, onSettingsSaved } from '#lib/state/settings.svelte.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { syncDevopsTools } from '#lib/state/devops.svelte.js';
 	import { loadAISettings } from '#lib/state/ai.svelte.js';
@@ -39,6 +44,42 @@
 
 	const isEditorWindow = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('editor');
 	const settings = getSettings();
+	/** A floating session window (#lib/state/windows): a slim shell, and the main window owns the rest. */
+	const isFloat = isFloatWindow();
+
+	// Settings changed in another window: read again, without telling the
+	// others back (that is where they came from).
+	let quiet = false;
+	function loadQuietly(): void {
+		quiet = true;
+		loadSettings();
+		setTimeout(() => (quiet = false), 100);
+	}
+
+	/** Floating windows open when the app last closed (see takeKeptWindows). */
+	let kept = isFloat ? [] : takeKeptWindows();
+
+	function startFloat(): () => void {
+		loadSettings();
+		applyUiZoom();
+		loadInstalledThemes();
+		void readState();
+		// The main window locked or opened the vault.
+		const stopLock = listen('float-lock', () => void readState());
+		onOtherSettings(loadQuietly);
+		onSettingsSaved(() => {
+			if (!quiet) announceSettings();
+		});
+		const stopSelectMenus = installSelectMenus();
+		const stopTooltips = installTooltips();
+		void startWindows();
+		window.dispatchEvent(new CustomEvent('app-ready'));
+		return () => {
+			void stopLock.then((stop) => stop());
+			stopSelectMenus();
+			stopTooltips();
+		};
+	}
 
 	// Compact layout (Settings > Appearance): one class on the page that the
 	// rows read, so it applies the moment it is switched.
@@ -47,7 +88,13 @@
 	});
 
 	onMount(() => {
+		if (isFloat) return startFloat();
 		loadSettings();
+		onOtherSettings(loadQuietly);
+		onSettingsSaved(() => {
+			if (!quiet) announceSettings();
+		});
+		void startWindows();
 		pushHistoryRetention();
 		// The interface size chosen last time, before anything is laid out.
 		applyUiZoom();
@@ -120,6 +167,7 @@
 	// session back would be making one for them.
 	let mcpRestored = false;
 	$effect(() => {
+		if (isFloat || isEditorWindow) return;
 		if (!vaultState.locked && !mcpRestored) {
 			mcpRestored = true;
 			mcp.restore();
@@ -134,7 +182,7 @@
 	// switched on. Off: the backend forgets what it kept.
 	let keysAsked = false;
 	$effect(() => {
-		if (isEditorWindow) return;
+		if (isEditorWindow || isFloat) return;
 		const wanted = settings.unlockKeysAtStart;
 		const open = !vaultState.locked && !vaultState.held;
 		if (!wanted || !open) {
@@ -164,6 +212,27 @@
 
 	$effect(() => {
 		document.documentElement.style.setProperty('--app-font-size', `${settings.fontSize}px`);
+	});
+
+	// Floating windows cover their sessions while the vault is held locked.
+	$effect(() => {
+		const held = vaultState.held;
+		const locked = vaultState.locked;
+		if (!isFloat && !isEditorWindow) announceLock(held || locked);
+	});
+
+	// Settings > General > "Reopen floating windows": once the vault is open
+	// (their sessions need it), the windows open when the app last closed
+	// open again, one after another, where they were.
+	$effect(() => {
+		if (isFloat || isEditorWindow || vaultState.locked || kept.length === 0) return;
+		const list = kept;
+		kept = [];
+		if (!settings.reopenFloatWindows) return;
+		// After the session list has mounted and can connect.
+		setTimeout(async () => {
+			for (const w of list) await openKept(w);
+		}, 1500);
 	});
 
 	// Fonts are local/system only — no Google Fonts network fetch. The terminal
@@ -199,6 +268,10 @@
 
 {#if isEditorWindow}
 	{@render children()}
+{:else if isFloat}
+	<FloatShell>
+		{@render children()}
+	</FloatShell>
 {:else}
 	<!-- Run again from Settings, setupComplete stays true, so the prompts and
 	     the lock screen below stay mounted under it. -->

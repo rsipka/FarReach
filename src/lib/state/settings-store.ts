@@ -63,6 +63,9 @@ export interface Settings {
 	/** A session that ends on its own (exit typed, the shell finished) closes
 	 *  its tab rather than offering Reconnect. A dropped connection still does. */
 	closeTabOnExit: boolean;
+	/** Floating session windows open when the app closed open again at the
+	 *  next start, where they were, with their saved sessions. */
+	reopenFloatWindows: boolean;
 	/** Server monitoring (CPU, memory, disk, users under an SSH or WSL
 	 *  terminal), unless the session chooses otherwise. */
 	serverMonitoring: boolean;
@@ -240,6 +243,7 @@ export const defaults: Settings = {
 	mobileBarKeys: null,
 	doubleClickToOpen: false,
 	closeTabOnExit: false,
+	reopenFloatWindows: false,
 	serverMonitoring: true,
 	checkForUpdates: true,
 	playSounds: !isMobile(),
@@ -332,6 +336,7 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.terminalBar = parsed.terminalBar === 'hover' || parsed.terminalBar === 'hidden' ? parsed.terminalBar : defaults.terminalBar;
 	settings.doubleClickToOpen = parsed.doubleClickToOpen ?? defaults.doubleClickToOpen;
 	settings.closeTabOnExit = parsed.closeTabOnExit ?? defaults.closeTabOnExit;
+	settings.reopenFloatWindows = parsed.reopenFloatWindows === true;
 	settings.serverMonitoring = parsed.serverMonitoring ?? defaults.serverMonitoring;
 	settings.checkForUpdates = parsed.checkForUpdates ?? defaults.checkForUpdates;
 	settings.playSounds = parsed.playSounds ?? defaults.playSounds;

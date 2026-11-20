@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { canFloat } from '#lib/state/windows.svelte.js';
 	import { allowNotifications } from '#lib/terminal/bell.js';
 	import { invoke } from '@tauri-apps/api/core';
 	import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart';
@@ -447,6 +448,23 @@
 			/>
 		</div>
 	</div>
+
+	{#if canFloat()}
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('settings.reopen_windows')}</span>
+				<span class="setting-description">{t('settings.reopen_windows_desc')}</span>
+			</div>
+			<div class="setting-control">
+				<Toggle
+					hideLabel
+					checked={settings.reopenFloatWindows}
+					label={t('settings.reopen_windows')}
+					onchange={(v) => updateSetting('reopenFloatWindows', v)}
+				/>
+			</div>
+		</div>
+	{/if}
 
 	<div class="setting-row">
 		<div class="setting-info">

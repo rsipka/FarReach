@@ -56,3 +56,20 @@ export function isIos(): boolean {
 	if (typeof navigator === 'undefined') return false;
 	return isMobile() && !/Android/i.test(navigator.userAgent);
 }
+
+let webgl2: boolean | undefined;
+
+/** Whether this webview can draw with WebGL2 at all (asked once: a test context counts against the page's limit). */
+export function hasWebgl2(): boolean {
+	if (webgl2 === undefined) {
+		try {
+			const canvas = document.createElement('canvas');
+			const gl = canvas.getContext('webgl2');
+			webgl2 = !!gl;
+			gl?.getExtension('WEBGL_lose_context')?.loseContext();
+		} catch {
+			webgl2 = false;
+		}
+	}
+	return webgl2;
+}

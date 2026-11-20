@@ -73,6 +73,16 @@ export interface Tab {
 	tmuxWindow?: { id: string; name: string };
 	/** That session's history choice; unset: the default from Settings. */
 	historyMode?: HistoryMode | null;
+	/** A tab just moved here from another window (see #lib/state/windows):
+	 *  its terminal takes over the one there, screen and scrollback, instead of
+	 *  starting anew. Cleared once it has. */
+	handoff?: Handoff;
+}
+
+export interface Handoff {
+	/** The window giving the tab up. */
+	from: string;
+	moveId: string;
 }
 
 let tabs = $state<Tab[]>([]);
@@ -227,6 +237,57 @@ export function createTab(type: TabType, title?: string, connectionId?: string, 
 
 	tabs.push(tab);
 	return tab;
+}
+
+// ---- Moving tabs between windows (see #lib/state/windows) -----------------
+
+/** Tab and connection ids handed to another window: their tab went, but
+ *  their connection, PTY and monitoring live on there, so nothing here may
+ *  end them. */
+const released = new Set<string>();
+
+function connectionIds(tab: Tab): string[] {
+	return [tab.id, tab.connectionId, tab.telnetConnectionId, tab.serialConnectionId].filter((x): x is string => !!x);
+}
+
+/** Was this tab or connection handed to another window? */
+export function isReleased(id: string): boolean {
+	return released.has(id);
+}
+
+/** A tab now shown by another window goes from this one, its session untouched. */
+export function releaseTab(id: string): void {
+	const index = tabs.findIndex((t) => t.id === id);
+	if (index === -1) return;
+	for (const c of connectionIds(tabs[index])) released.add(c);
+	const wasActive = tabs[index].active;
+	const after = splits.remove(split, id);
+	split = after.layout;
+	tabs.splice(index, 1);
+	dropEmptyGroups();
+	if (wasActive && after.focus) activateTab(after.focus);
+	else if (wasActive && tabs.length > 0) tabs[Math.min(index, tabs.length - 1)].active = true;
+}
+
+/**
+ * Tabs moved here from another window: added after the ones here, `layout`
+ * (their split there) shown when nothing here is split, `active` in front.
+ */
+export function adoptTabs(incoming: Tab[], layout: Layout, active?: string): void {
+	for (const tab of incoming) {
+		for (const c of connectionIds(tab)) released.delete(c);
+		// Groups belong to the window they were made in.
+		tabs.push({ ...tab, groupId: undefined, active: false });
+	}
+	if (layout && !split) split = layout;
+	const front = active ?? incoming[0]?.id;
+	if (front) activateTab(front);
+}
+
+/** The tab's terminal has taken over from the other window's. */
+export function clearHandoff(id: string): void {
+	const tab = tabs.find((t) => t.id === id);
+	if (tab?.handoff) tab.handoff = undefined;
 }
 
 export function closeTab(id: string): void {

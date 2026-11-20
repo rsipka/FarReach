@@ -39,6 +39,7 @@ const CHANGED = {
 	mobileBarKeys: ['esc', 'tab'],
 	doubleClickToOpen: true,
 	closeTabOnExit: true,
+	reopenFloatWindows: true,
 	serverMonitoring: false,
 	checkForUpdates: false,
 	playSounds: false,

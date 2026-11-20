@@ -35,6 +35,8 @@ pub mod toolchain_commands;
 pub mod tunnel_commands;
 pub mod vault_commands;
 pub mod editor_commands;
+#[cfg(desktop)]
+pub mod window_commands;
 pub mod snippet_commands;
 pub mod recipe_commands;
 pub mod registry_url_commands;

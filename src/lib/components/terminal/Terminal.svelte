@@ -7,6 +7,9 @@
 	import { SearchAddon } from '@xterm/addon-search';
 	import { registerFinder, requestFind } from '#lib/state/terminal-find.svelte.js';
 	import { Unicode11Addon } from '@xterm/addon-unicode11';
+	import { SerializeAddon } from '@xterm/addon-serialize';
+	import { registerHandoff, requestSnapshot } from '#lib/state/windows.svelte.js';
+	import { chunkKey, overlap, TAIL_CHUNKS, type Chunk } from '#lib/terminal/float-windows.js';
 	import '@xterm/xterm/css/xterm.css';
 	import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 	import { ptyWrite, ptyResize } from '#lib/ipc/pty.js';
@@ -27,12 +30,12 @@
 	import { shouldRearmIme, nudgeCaret, REARM_SETTLE_MS } from '#lib/terminal/ime.js';
 	import { installWebkitInputFix } from '#lib/terminal/webkit-input-fix.js';
 	import { deferLinuxSelectionSync } from '#lib/terminal/selection-sync.js';
-	import { isMac, isMobile, isWebKit } from '#lib/platform.js';
+	import { isMac, isMobile, isWebKit, hasWebgl2 } from '#lib/platform.js';
 	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import { invoke } from '@tauri-apps/api/core';
 	import { trieMatch, registerTerminalInput, unregisterTerminalInput, type TerminalInput } from '#lib/state/snippets.svelte.js';
 	import { terminalFocusRequests } from '#lib/state/palette.svelte.js';
-	import { setTabLink, closeTab } from '#lib/state/tabs.svelte.js';
+	import { setTabLink, closeTab, clearHandoff, type Handoff } from '#lib/state/tabs.svelte.js';
 	import { broadcastInput, getBroadcastTargets } from '#lib/state/broadcast.svelte.js';
 	import { isTerminalReply, TYPED_WINDOW_MS } from '#lib/terminal/broadcast.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -87,9 +90,14 @@
 		historyMode?: HistoryMode | null;
 		/** A WSL tab's distribution. */
 		wslDistro?: string | null;
+		/** Moved here from another window: take over the terminal there
+		 *  (see #lib/state/windows) instead of starting empty. */
+		handoff?: Handoff;
+		/** Moved here with its connection already down: show Reconnect. */
+		startDown?: boolean;
 	}
 
-	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, tmuxSwitch, reconnectRequest, telnetConnectParams, serialConnectParams, onReconnected, onReady, terminalTheme, cursorStyle, cursorBlink, sessionId, sessionName, historyMode, wslDistro }: Props = $props();
+	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, tmuxSwitch, reconnectRequest, telnetConnectParams, serialConnectParams, onReconnected, onReady, terminalTheme, cursorStyle, cursorBlink, sessionId, sessionName, historyMode, wslDistro, handoff, startDown }: Props = $props();
 
 	/**
 	 * Start recording this tab's stream into the session history (and, for
@@ -143,7 +151,7 @@
 	// first render — avoids the state_referenced_locally warning that fires when
 	// reading a reactive prop directly inside $state(...).
 	let currentConnectionId = $state<string | undefined>();
-	let disconnected = $state(false);
+	let disconnected = $state(untrack(() => !!handoff && !!startDown));
 	let reconnecting = $state(false);
 	/** The remote shell ended on its own rather than the connection dropping. */
 	let cleanEnd = $state(false);
@@ -566,6 +574,48 @@
 
 	let unlistenData: UnlistenFn | undefined;
 	let unlistenExit: UnlistenFn | undefined;
+
+	// ---- Moving between windows (#lib/state/windows) ----
+	/** The last output chunks shown, for the window taking this tab over. */
+	let recent: Chunk[] = [];
+	/** While taking over from another window: output held until its screen is in. */
+	let holding: Chunk[] | null = null;
+	let serializer: SerializeAddon | undefined;
+	/** Given to another window: nothing here touches the connection again. */
+	let handedOff = false;
+	let stopHandoff: (() => void) | undefined;
+
+	function writeChunk(term: Terminal, payload: Chunk): void {
+		if (payload instanceof Uint8Array) term.write(payload);
+		else if (Array.isArray(payload)) term.write(new Uint8Array(payload));
+		else if (typeof payload === 'string') term.write(payload);
+	}
+
+	/** The other window's terminal as it stood, then what came since. */
+	async function takeOver(term: Terminal, h: Handoff): Promise<void> {
+		const snap = await requestSnapshot(ptyId, h);
+		const held = holding ?? [];
+		holding = null;
+		let from = 0;
+		if (snap) {
+			term.write(snap.data);
+			from = overlap(snap.tail, held.map(chunkKey));
+		}
+		for (const c of held.slice(from)) writeChunk(term, c);
+		recent = held.slice(-TAIL_CHUNKS);
+		clearHandoff(ptyId);
+	}
+
+	/** Hand this terminal to the window taking the tab: its screen, and it stops listening. */
+	function handOver(): { data: string; tail: string[] } | null {
+		handedOff = true;
+		unlistenData?.();
+		unlistenExit?.();
+		unlistenData = undefined;
+		unlistenExit = undefined;
+		const data = serializer?.serialize() ?? '';
+		return { data, tail: recent.map(chunkKey) };
+	}
 	let unlistenMenuCopy: UnlistenFn | undefined;
 	let unlistenMenuPaste: UnlistenFn | undefined;
 	let unlistenMoved: UnlistenFn | undefined;
@@ -704,6 +754,8 @@
 
 	function loadAddons(term: Terminal, fit: FitAddon, host: HTMLElement): void {
 		term.loadAddon(fit);
+		serializer = new SerializeAddon();
+		term.loadAddon(serializer);
 		// OSC 52: the server copies to this computer's clipboard (tmux copy
 		// mode, vim). Writes only, and only when Settings allow it.
 		term.parser.registerOscHandler(52, (data) => {
@@ -779,6 +831,13 @@
 	 * dropping contexts is not one to keep asking.
 	 */
 	function attachWebgl(term: Terminal, host: HTMLElement, attempt = 0): void {
+		// No WebGL2 at all (a virtual machine without a GPU, say): the addon
+		// throws when the terminal opens, and the terminal never started its
+		// shell. The DOM renderer draws it instead.
+		if (!hasWebgl2()) {
+			console.warn('[Terminal] WebGL2 unavailable, using the DOM renderer');
+			return;
+		}
 		let webgl: WebglAddon;
 		try {
 			// WebKit — WKWebView on macOS, WebKitGTK on Linux — presents a
@@ -818,6 +877,7 @@
 	}
 
 	function sendData(data: number[]): void {
+		if (handedOff) return;
 		if (termType === 'ssh' && currentConnectionId) {
 			// A line typed (Enter) may have changed the folder, for an
 			// explorer following this terminal (#162).
@@ -852,6 +912,8 @@
 	}
 
 	function sendResize(cols: number, rows: number): void {
+		// Another window shows it now, at its own size.
+		if (handedOff) return;
 		if (termType === 'ssh' && currentConnectionId) {
 			sshResize(currentConnectionId, cols, rows).catch((err) => {
 				console.error('[Terminal] Failed to resize SSH:', err);
@@ -1048,15 +1110,17 @@
 		const exitEventName = `${prefix}-exit-${eventId}`;
 		sessionStartedAt = Date.now();
 
-		unlistenData = await listen<number[]>(dataEventName, (event) => {
+		const taking = untrack(() => handoff);
+		if (taking) holding = [];
+		unlistenData = await listen<Chunk>(dataEventName, (event) => {
 			const payload = event.payload;
-			if (payload instanceof Uint8Array) {
-				term.write(payload);
-			} else if (Array.isArray(payload)) {
-				term.write(new Uint8Array(payload));
-			} else if (typeof payload === 'string') {
-				term.write(payload);
+			if (holding) {
+				holding.push(payload);
+				return;
 			}
+			writeChunk(term, payload);
+			recent.push(payload);
+			if (recent.length > TAIL_CHUNKS) recent.shift();
 		});
 
 		unlistenExit = await listen<{ code?: number | null; error?: string | null } | null>(exitEventName, (event) => {
@@ -1086,6 +1150,7 @@
 		await registerHistory(eventId);
 
 		onReady?.();
+		if (taking) void takeOver(term, taking);
 
 		// Listeners are attached — tell the SSH backend to flush any buffered
 		// output (motd/banner) emitted before this terminal mounted.
@@ -1469,6 +1534,8 @@
 			};
 			registerTerminalInput(ptyId, snippetInput);
 
+			stopHandoff = registerHandoff(ptyId, handOver);
+
 			const bufferId = termType === 'ssh' && currentConnectionId ? currentConnectionId : ptyId;
 			registerBufferReader(bufferId, {
 				size: () => ({ cols: term.cols, rows: term.rows }),
@@ -1488,6 +1555,8 @@
 		});
 
 		return () => {
+			stopHandoff?.();
+			stopHandoff = undefined;
 			const bufferId = termType === 'ssh' && currentConnectionId ? currentConnectionId : ptyId;
 			unregisterBufferReader(bufferId);
 			if (snippetInput) unregisterTerminalInput(ptyId, snippetInput);

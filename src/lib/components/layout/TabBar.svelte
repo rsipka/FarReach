@@ -9,7 +9,7 @@
 	import { sshTmuxKill, sshTmuxList, sshTmuxWindows, sshTmuxWindow, type TmuxListed, type TmuxWindow, type TmuxWindowOp } from '#lib/ipc/ssh.js';
 	import { validTmuxName, newViewTag } from '#lib/terminal/tmux.js';
 	import { newTab, isTmuxViewTab, openTmuxWindowTab } from '#lib/terminal/tmux-tabs.js';
-	import { SPLIT_MIN_WIDTH, contains } from '#lib/terminal/split.js';
+	import { SPLIT_MIN_WIDTH, contains, leaves } from '#lib/terminal/split.js';
 	import { isMobile } from '#lib/platform.js';
 	import { getSettings } from '#lib/state/settings.svelte.js';
 	import { shortcutLabel } from '#lib/state/shortcuts.svelte.js';
@@ -32,6 +32,33 @@
 	import DistroIcon from '#lib/components/sessions/DistroIcon.svelte';
 	import * as mcp from '#lib/state/mcp.svelte.js';
 	import { onMount } from 'svelte';
+	import { canFloat, isFloatWindow, otherWindows, moveToNewWindow, moveToWindow, type WindowInfo } from '#lib/state/windows.svelte.js';
+
+	/** A floating window (#lib/state/windows): its tabs only, no pages or saved layouts. */
+	const floating = isFloatWindow();
+	/** The other windows open, for "Move to window"; read when a tab's menu opens. */
+	let windows = $state<WindowInfo[]>([]);
+	const WINDOW_ICON = 'M4 5h16v14H4zM4 9h16';
+
+	function windowName(w: WindowInfo): string {
+		if (w.label === 'main') return t('windows.main');
+		const n = w.label.replace(/^float-/, '');
+		return w.title ? t('windows.numbered_titled', { n, title: w.title }) : t('windows.numbered', { n });
+	}
+
+	/** Moving a tab (or its whole split) to a window of its own, or to another one. */
+	function windowItems(id: string): MenuItem[] {
+		if (!canFloat()) return [];
+		const items: MenuItem[] = [{ label: '', separator: true }];
+		const alone = floating && tabs.length === 1;
+		items.push({ label: t('windows.move_new'), icon: WINDOW_ICON, disabled: alone, action: () => void moveToNewWindow([id]) });
+		if (split && contains(split, id)) {
+			const panes = leaves(split);
+			items.push({ label: t('windows.move_split_new'), icon: WINDOW_ICON, disabled: floating && panes.length === tabs.length, action: () => void moveToNewWindow(panes) });
+		}
+		for (const w of windows) items.push({ label: t('windows.move_to', { window: windowName(w) }), action: () => void moveToWindow([id], w.label) });
+		return items;
+	}
 
 	let mcpStatus = $derived(mcp.getMcpStatus());
 
@@ -170,7 +197,8 @@
 			{ label: t('split.down'), hint: `${mod}O`, disabled: noSplit, action: () => splitWith(id, 'down') }
 		);
 		if (split && contains(split, id)) items.push({ label: t('split.remove'), action: () => removeFromSplit(id) });
-		if (split) items.push({ label: t('split.unsplit'), hint: `${mod}U`, action: unsplit }, { label: t('layouts.save_menu'), action: () => (layoutsOpen = true) });
+		if (split) items.push({ label: t('split.unsplit'), hint: `${mod}U`, action: unsplit });
+		if (split && !floating) items.push({ label: t('layouts.save_menu'), action: () => (layoutsOpen = true) });
 
 		// Groups: a new one, any other there is, or out of the one it is in.
 		items.push(...(items.length && !items[items.length - 1].separator ? [{ label: '', separator: true }] : []), { label: t('tabs.group_new'), icon: GROUP_ICON, action: () => startGroupFrom(id) });
@@ -181,6 +209,7 @@
 		if (tab?.groupId) items.push({ label: t('tabs.group_remove'), action: () => removeFromGroup(id) });
 
 		items.push(...broadcastItems(tab));
+		items.push(...windowItems(id));
 		if (tab && tab.type !== 'rdp' && tab.type !== 'vnc') {
 			items.push({ label: '', separator: true }, { label: t('history.search_menu'), hint: `${mod}H`, action: () => openTabHistory(tab) });
 		}
@@ -243,7 +272,8 @@
 		const host = hostOf(tab);
 		if (host) items.push({ label: t('tabs.copy_host'), action: () => void copyHost(host) });
 		const sessionId = tab.sessionId;
-		if (sessionId) {
+		// The session list is in the main window.
+		if (sessionId && !floating) {
 			items.push(
 				{ label: t('tabs.locate_session'), action: () => requestSessionAction({ kind: 'locate', sessionId }) },
 				{ label: t('tabs.edit_session'), action: () => requestSessionAction({ kind: 'edit', sessionId }) }
@@ -462,8 +492,10 @@
 	<!-- One button for the current page and a menu of the others: side by
 	     side, Terminal, Ansible, OpenTofu and the rest took 550px, more than
 	     a phone's screen and room the session tabs need on a desktop. -->
-	<div class="page-switcher">
-		{#if pages.length > 1}
+	<div class="page-switcher" class:floating>
+		{#if floating}
+			<!-- A floating window shows sessions only: no other pages. -->
+		{:else if pages.length > 1}
 			<button
 				class="page-btn active page-pick"
 				aria-haspopup="menu"
@@ -486,7 +518,7 @@
 	</div>
 
 	{#if activePage === 'terminal'}
-		<div class="divider"></div>
+		{#if !floating}<div class="divider"></div>{/if}
 
 		<div class="tabs-scroll">
 			{#each tabs as tab, i (tab.id)}
@@ -538,6 +570,7 @@
 					oncontextmenu={(e) => {
 						e.preventDefault();
 						menu = { x: e.clientX, y: e.clientY, id: tab.id };
+						void otherWindows().then((w) => (windows = w));
 					}}
 					onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') activateTab(tab.id); }}
 					role="tab"
@@ -616,7 +649,7 @@
 			{/each}
 		</div>
 
-		{#if !mobile}
+		{#if !mobile && !floating}
 			<button
 				class="new-tab-btn"
 				onclick={(e) => {
@@ -953,6 +986,10 @@
 		background-color: var(--color-bg-secondary);
 		border-bottom: 1px solid var(--color-border);
 		user-select: none;
+	}
+
+	.page-switcher.floating {
+		display: none;
 	}
 
 	.page-switcher {
