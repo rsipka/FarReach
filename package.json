@@ -23,6 +23,7 @@
     "discord:github": "node scripts/discord/github-webhook.mjs",
     "discord:invite": "node scripts/discord/invite.mjs",
     "share:test": "node scripts/share-test.mjs",
+    "share:live": "node scripts/share-live-test.mjs",
     "ios-source:test": "node scripts/ios-source-test.mjs",
     "paste:test": "node scripts/paste-test.mjs",
     "mouse:test": "node scripts/mouse-test.mjs",

@@ -13,7 +13,7 @@ import {
 	randomToken, deriveKey, Sealer, TOKEN_BYTES
 } from '../src/lib/share/crypto.ts';
 import {
-	encodeOffer, decodeOffer, encodeAnswer, decodeAnswer,
+	encodeOffer, decodeOffer, encodeAnswer, decodeAnswer, codeKind,
 	deflate, inflate, toBase64Url, fromBase64Url
 } from '../src/lib/share/codec.ts';
 import { encode, decode, chunk, MAX_PAYLOAD } from '../src/lib/share/protocol.ts';
@@ -231,6 +231,44 @@ section('protocol');
 	const parts = chunk(big);
 	check('chunk splits a large burst', parts.length === 3 && parts.reduce((n, p) => n + p.length, 0) === big.length);
 	check('chunk leaves a small burst alone', chunk(new Uint8Array(10)).length === 1);
+}
+
+// ===========================================================================
+section('which code is which');
+{
+	// Both halves start with REACH-, so pasting the wrong one is the easy
+	// mistake. The dialog names it instead of "not for this share".
+	const t = randomToken();
+	const invite = await encodeOffer(t, SDP);
+	const reply = await encodeAnswer(new Sealer(await deriveKey(t), 'guest'), SDP);
+	check('an invitation is an invitation', codeKind(invite) === 'invite');
+	check('a reply is a reply', codeKind(reply) === 'reply');
+	check('chat damage does not change the answer', codeKind(invite.replace('REACH-', 'reach-').replace(/(.{40})/g, '$1\n ')) === 'invite');
+	check('rubbish is neither', codeKind('hello there') === 'unknown');
+	check('a bare prefix is neither', codeKind('REACH-') === 'unknown');
+	// A thousand random tokens: none may look like a reply.
+	let mistaken = 0;
+	for (let i = 0; i < 1000; i++) {
+		if (codeKind(await encodeOffer(randomToken(), SDP)) !== 'invite') mistaken++;
+	}
+	check('random invitations are never taken for replies', mistaken === 0, `${mistaken} of 1000`);
+}
+
+// ===========================================================================
+section('the peer, where there is no WebRTC');
+{
+	// Node has no RTCPeerConnection, which is exactly WebKitGTK with WebRTC
+	// off. Starting must say so, not report a bad code.
+	const { SharePeer, ShareError, unsupportedReason } = await import('../src/lib/share/peer.ts');
+	check('missing WebRTC is reported', /WebRTC/.test(unsupportedReason() ?? ''));
+	let thrown = null;
+	try {
+		new SharePeer([], 'host');
+	} catch (e) {
+		thrown = e;
+	}
+	check('constructing throws a ShareError', thrown instanceof ShareError);
+	check('of kind unsupported, not bad-code', thrown?.failure?.kind === 'unsupported', JSON.stringify(thrown?.failure));
 }
 
 console.log(`\n${failures === 0 ? 'ALL PASS' : failures + ' FAILURE(S)'}`);

@@ -317,6 +317,9 @@ webview2-com = "0.39"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 xattr = "1"
+# Switching WebKitGTK's WebRTC on for session sharing (`enable_webrtc` in
+# lib.rs). The exact version and feature wry already builds.
+webkit2gtk = { version = "=2.0.2", features = ["v2_38"] }
 # The kernel keyring is emptied by every reboot (issue #87): the vault key goes
 # to the desktop's keychain (GNOME Keyring, KWallet) through the Secret
 # Service, with the kernel keyring as the fallback where there is none.

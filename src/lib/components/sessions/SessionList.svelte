@@ -24,7 +24,9 @@
 		faTrashCan,
 		faCheck,
 		faChevronLeft,
-		faChevronRight
+		faChevronRight,
+		faShareNodes,
+		faRightToBracket
 	} from '@fortawesome/free-solid-svg-icons';
 	import { registerSessionActions, shortcutLabel } from '#lib/state/shortcuts.svelte.js';
 	import { pendingSessionAction, takeSessionAction } from '#lib/state/palette.svelte.js';
@@ -51,6 +53,7 @@
 	import type { SessionKind } from '#lib/ipc/sessions.js';
 	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionRenameFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetOrder, sessionSetFolderCredential, sessionSetFolderTmux, sessionBulkUndo, type BulkResult, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
+	import * as share from '#lib/state/share.svelte.js';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
 	import { DEFAULT_SERIAL_OPTIONS } from '#lib/ipc/serial.js';
 	import { osNeedsDetection } from '#lib/data/distro-icons.js';
@@ -2015,6 +2018,17 @@
 						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => contextNewFolder())}>
 							<FaIcon icon={faFolderPlus} size={12} />
 							<span>{t('session.new_folder')}</span>
+						</button>
+						<div class="menu-sep"></div>
+						<!-- Sharing lives in the bottom bar too, but that bar only exists
+						     under a terminal: someone joining usually has none open. -->
+						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => share.openDialog('host'))}>
+							<FaIcon icon={faShareNodes} size={12} />
+							<span>{t('sharing.start')}</span>
+						</button>
+						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => share.openDialog('guest'))}>
+							<FaIcon icon={faRightToBracket} size={12} />
+							<span>{t('sharing.join')}</span>
 						</button>
 						<div class="menu-sep"></div>
 						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => openImport(lastImportSource))}>

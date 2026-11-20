@@ -17,7 +17,7 @@
 
 import type { IceServer } from '#lib/ipc/share.js';
 import { deriveKey, randomToken, Sealer, type Bytes, type Direction } from './crypto.ts';
-import { decodeAnswer, decodeOffer, encodeAnswer, encodeOffer } from './codec.ts';
+import { codeKind, decodeAnswer, decodeOffer, encodeAnswer, encodeOffer } from './codec.ts';
 import { chunk, decode, encode, type Message } from './protocol.ts';
 
 export type PeerState =
@@ -33,14 +33,58 @@ export type PeerState =
 export type ShareFailure =
 	/** ICE found no path. Usually symmetric NAT on one side; TURN or a shared network fixes it. */
 	| { kind: 'no-path'; detail: string }
-	/** The pasted code was not one of ours, or not for this share. */
-	| { kind: 'bad-code'; detail: string }
+	/**
+	 * The pasted code was not one of ours, or not for this share. `reason`
+	 * names the common mix-ups so the dialog can say which one it was.
+	 */
+	| { kind: 'bad-code'; reason: BadCodeReason; detail: string }
+	/** This web engine has no WebRTC (or no CompressionStream), so nothing can start. */
+	| { kind: 'unsupported'; detail: string }
+	/** Anything else that stopped a start or a join. The detail says what. */
+	| { kind: 'error'; detail: string }
 	/** Connected, then lost. */
 	| { kind: 'dropped'; detail: string }
 	/** A frame arrived that did not verify. The link is no longer trusted. */
 	| { kind: 'tampered'; detail: string }
 	/** The other side never turned up. */
 	| { kind: 'timeout'; detail: string };
+
+export type BadCodeReason =
+	/** The host pasted its own invitation where the reply goes. */
+	| 'own-code'
+	/** The host pasted an invitation (someone else's) where the reply goes. */
+	| 'invite-not-reply'
+	/** The guest pasted a reply where the invitation goes. */
+	| 'reply-not-invite'
+	/** Damaged, truncated, or for another share. */
+	| 'other';
+
+/** An error that already knows how to explain itself to the dialog. */
+export class ShareError extends Error {
+	readonly failure: ShareFailure;
+	constructor(failure: ShareFailure) {
+		super(failure.detail);
+		this.failure = failure;
+	}
+}
+
+/**
+ * Whether this web engine can share at all. WebKitGTK builds without
+ * WebRTC (or with it switched off) have no `RTCPeerConnection`; very old
+ * engines have no `CompressionStream` for the codes.
+ */
+export function unsupportedReason(): string | null {
+	if (typeof RTCPeerConnection === 'undefined') {
+		return 'This web engine has no WebRTC (RTCPeerConnection is missing).';
+	}
+	if (typeof CompressionStream === 'undefined' || typeof DecompressionStream === 'undefined') {
+		return 'This web engine has no CompressionStream.';
+	}
+	if (!globalThis.crypto?.subtle) {
+		return 'This web engine has no WebCrypto.';
+	}
+	return null;
+}
 
 export interface PeerCallbacks {
 	onstate?: (state: PeerState) => void;
@@ -52,6 +96,14 @@ export interface PeerCallbacks {
 const GATHER_TIMEOUT_MS = 10_000;
 /** From "answer applied" to "channel open". Generous: two hole-punches and a DTLS handshake. */
 const CONNECT_TIMEOUT_MS = 30_000;
+/**
+ * Guest: from "reply shown" to "channel open". The clock starts before a
+ * person has copied the reply, sent it over chat and the host has pasted it,
+ * so 30 seconds failed nearly every real join. Past a few minutes the ICE
+ * agent stops trying on its own (a reply pasted five minutes later fails in
+ * Chromium), so a longer wait would only hide that.
+ */
+const GUEST_WAIT_MS = 3 * 60_000;
 /** Backpressure. A slow guest must not make the host's terminal stall. */
 const BUFFER_HIGH = 1 * 1024 * 1024;
 const BUFFER_LOW = 256 * 1024;
@@ -61,6 +113,8 @@ export class SharePeer {
 	#dc: RTCDataChannel | null = null;
 	#sealer: Sealer | null = null;
 	#token: Bytes | null = null;
+	/** The host's own invitation, to recognise it if it is pasted back. */
+	#offerCode: string | null = null;
 	#direction: Direction;
 	#state: PeerState = 'idle';
 	#cb: PeerCallbacks;
@@ -79,6 +133,8 @@ export class SharePeer {
 	gathered = new Set<string>();
 
 	constructor(iceServers: IceServer[], direction: Direction, callbacks: PeerCallbacks = {}) {
+		const missing = unsupportedReason();
+		if (missing) throw new ShareError({ kind: 'unsupported', detail: missing });
 		this.#direction = direction;
 		this.#cb = callbacks;
 		this.#pc = new RTCPeerConnection({
@@ -146,18 +202,34 @@ export class SharePeer {
 		await this.#pc.setLocalDescription(offer);
 		await this.#gatherComplete();
 
+		this.#offerCode = await encodeOffer(this.#token, this.#localSdp());
 		this.#setState('awaiting-answer');
-		return encodeOffer(this.#token, this.#localSdp());
+		return this.#offerCode;
 	}
 
 	/** Apply the guest's reply. Throws `bad-code` if it was not for this share. */
 	async acceptAnswer(code: string): Promise<void> {
 		this.#expect('awaiting-answer');
+		const compact = code.replace(/\s+/g, '');
+		if (this.#offerCode && compact.toUpperCase() === this.#offerCode.toUpperCase()) {
+			throw this.#reject({
+				kind: 'bad-code',
+				reason: 'own-code',
+				detail: 'That is the code this share made. Send it to them and paste the code they send back.'
+			});
+		}
+		if (codeKind(compact) === 'invite') {
+			throw this.#reject({
+				kind: 'bad-code',
+				reason: 'invite-not-reply',
+				detail: 'That is an invitation to join a share, not a reply to this one.'
+			});
+		}
 		let sdp: string;
 		try {
-			sdp = await decodeAnswer(this.#sealer!, code);
+			sdp = await decodeAnswer(this.#sealer!, compact);
 		} catch (e) {
-			throw this.#reject({ kind: 'bad-code', detail: (e as Error).message });
+			throw this.#reject({ kind: 'bad-code', reason: 'other', detail: (e as Error).message });
 		}
 		await this.#pc.setRemoteDescription({ type: 'answer', sdp });
 		this.#setState('connecting');
@@ -171,12 +243,19 @@ export class SharePeer {
 	/** Take the host's code, produce the reply. */
 	async acceptOffer(code: string): Promise<string> {
 		this.#expect('idle');
+		if (codeKind(code) === 'reply') {
+			throw this.#reject({
+				kind: 'bad-code',
+				reason: 'reply-not-invite',
+				detail: 'That is a reply code. It goes into the dialog of whoever started the share.'
+			});
+		}
 		let token: Bytes;
 		let sdp: string;
 		try {
 			({ token, sdp } = await decodeOffer(code));
 		} catch (e) {
-			throw this.#reject({ kind: 'bad-code', detail: (e as Error).message });
+			throw this.#reject({ kind: 'bad-code', reason: 'other', detail: (e as Error).message });
 		}
 
 		// This same instance seals the answer and then every channel frame:
@@ -194,7 +273,7 @@ export class SharePeer {
 		await this.#gatherComplete();
 
 		this.#setState('connecting');
-		this.#armConnectTimeout();
+		this.#armConnectTimeout(GUEST_WAIT_MS);
 		return encodeAnswer(this.#sealer, this.#localSdp());
 	}
 
@@ -343,7 +422,7 @@ export class SharePeer {
 		});
 	}
 
-	#armConnectTimeout(): void {
+	#armConnectTimeout(ms = CONNECT_TIMEOUT_MS): void {
 		this.#clearConnectTimeout();
 		this.#connectTimer = setTimeout(() => {
 			if (this.#state === 'connecting') {
@@ -352,7 +431,7 @@ export class SharePeer {
 					detail: 'The other side did not connect in time. Check they pasted the code, and that neither of you is behind a NAT that needs TURN.'
 				});
 			}
-		}, CONNECT_TIMEOUT_MS);
+		}, ms);
 	}
 
 	#clearConnectTimeout(): void {
@@ -389,8 +468,8 @@ export class SharePeer {
 	}
 
 	/** A failure raised from a caller's own action: report it and also throw it. */
-	#reject(failure: ShareFailure): Error {
+	#reject(failure: ShareFailure): ShareError {
 		this.#cb.onfailure?.(failure);
-		return new Error(failure.detail);
+		return new ShareError(failure);
 	}
 }

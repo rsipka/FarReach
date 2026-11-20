@@ -68,6 +68,8 @@ export interface Session {
 }
 
 let config = $state<ShareConfig>({ enabled: false, iceServers: [] });
+/** The Share dialog is one per app, opened from the bottom bar or the Sessions + menu. */
+let dialog = $state<{ open: boolean; role: Role | null }>({ open: false, role: null });
 let session = $state<Session | null>(null);
 let configLoaded = $state(false);
 
@@ -99,6 +101,24 @@ export function isEnabled(): boolean {
 
 export function getSession(): Session | null {
 	return session;
+}
+
+export function isDialogOpen(): boolean {
+	return dialog.open;
+}
+
+/** The role picked by whoever opened the dialog, if any. */
+export function dialogRole(): Role | null {
+	return dialog.role;
+}
+
+/** Open the Share dialog, optionally on Start or Join already picked. */
+export function openDialog(role: Role | null = null): void {
+	dialog = { open: true, role };
+}
+
+export function closeDialog(): void {
+	dialog = { open: false, role: null };
 }
 
 /** True while the remote pane should be on screen. */
@@ -147,11 +167,16 @@ export async function resetIceServers(): Promise<void> {
 async function makePeer(role: Role): Promise<SharePeer> {
 	// The only place the sharing code is loaded from. See the module doc.
 	const { SharePeer } = await import('#lib/share/peer.js');
-	return new SharePeer(config.iceServers, role, {
-		onstate: onPeerState,
-		onmessage: onPeerMessage,
-		onfailure: onPeerFailure
+	// Events from a peer that has already been replaced or torn down (its own
+	// close() reports 'closed') must not touch the session that follows it.
+	let self: SharePeer | null = null;
+	const live = () => self !== null && self === peer;
+	self = new SharePeer(config.iceServers, role, {
+		onstate: (s) => live() && onPeerState(s),
+		onmessage: (m) => live() && onPeerMessage(m),
+		onfailure: (f) => live() && onPeerFailure(f)
 	});
+	return self;
 }
 
 function onPeerState(state: PeerState): void {
@@ -265,8 +290,11 @@ export async function acceptAnswer(code: string): Promise<void> {
 	try {
 		await peer.acceptAnswer(code);
 		session.phase = 'connecting';
-	} catch {
-		// onPeerFailure already recorded a bad-code failure for the UI.
+	} catch (e) {
+		// A bad code is already recorded by onPeerFailure and the host can
+		// paste again. Anything else ends this attempt with its reason.
+		// (Read back through the getter: TypeScript still thinks it is null.)
+		if (getSession()?.failure?.kind !== 'bad-code') fail(e);
 	}
 }
 
@@ -290,14 +318,24 @@ export async function joinWithCode(
 	}
 }
 
+/**
+ * A start or join that threw. Only a code the user pasted is "bad code" and
+ * worth pasting again; everything else — no WebRTC in this web engine, a
+ * peer connection that would not build — is shown with its own reason.
+ * Before this, every error here was labelled "That code is not for this
+ * share", including a host's Start that never got as far as making a code.
+ */
 function fail(e: unknown): void {
 	if (!session) return;
-	if (!session.failure) {
-		session.failure = { kind: 'bad-code', detail: e instanceof Error ? e.message : String(e) };
+	const carried = (e as { failure?: ShareFailure } | null)?.failure;
+	if (carried) session.failure = carried;
+	else if (!session.failure) {
+		session.failure = { kind: 'error', detail: e instanceof Error ? e.message : String(e) };
 	}
-	if (session.failure.kind !== 'bad-code') session.phase = 'failed';
-	else session.phase = 'idle';
+	session.phase = session.failure.kind === 'bad-code' ? 'idle' : 'failed';
+	const p = peer;
 	teardown();
+	p?.close();
 }
 
 // ---------------------------------------------------------------------------

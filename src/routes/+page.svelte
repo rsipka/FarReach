@@ -20,6 +20,7 @@
 	import TerminalBar from '#lib/components/terminal/TerminalBar.svelte';
 	import { getSettings } from '#lib/state/settings.svelte.js';
 	import RemoteTerminal from '#lib/components/share/RemoteTerminal.svelte';
+	import ShareDialog from '#lib/components/share/ShareDialog.svelte';
 	import * as share from '#lib/state/share.svelte.js';
 	import { monitorBarShown, monitoringWanted } from '#lib/state/monitor-bar.svelte.js';
 	import { vaultState } from '#lib/state/vault.svelte.js';
@@ -490,6 +491,12 @@
 			{#key vaultState.userUuid}<TofuPage />{/key}
 		{/if}
 	</div>
+	<!-- One Share dialog for the whole app: the bottom bar's Share chip and the
+	     Sessions + menu both open it, and it must be reachable with no
+	     terminal open, or a guest has nowhere to paste the code. -->
+	{#if share.isDialogOpen()}
+		<ShareDialog />
+	{/if}
 {/if}
 
 <style>

@@ -7397,6 +7397,7 @@ dependencies = [
  "uuid",
  "vnc-rs",
  "vte",
+ "webkit2gtk",
  "webpki-root-certs",
  "webpki-roots",
  "webview2-com",
