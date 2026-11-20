@@ -10,6 +10,7 @@
 export type PageId =
 	| 'general'
 	| 'appearance'
+	| 'shortcuts'
 	| 'terminal'
 	| 'sessions'
 	| 'remote'
@@ -30,6 +31,8 @@ export interface SettingsPage {
 	group: GroupId | null;
 	/** An SVG path, drawn with a 1.8 stroke in a 24 box. */
 	icon: string;
+	/** Not shown on a phone or tablet. */
+	desktopOnly?: boolean;
 }
 
 export const GROUPS: { id: GroupId; label: string }[] = [
@@ -42,6 +45,7 @@ export const GROUPS: { id: GroupId; label: string }[] = [
 const ICON = {
 	gear: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z',
 	sun: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z',
+	keyboard: 'M3 6h18a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V7a1 1 0 011-1zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10',
 	terminal: 'M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zM7 10l3 2-3 2M12 15h5',
 	sessions: 'M4 6h16M4 12h16M4 18h10',
 	monitor: 'M3 4h18v12H3zM8 20h8M12 16v4',
@@ -57,6 +61,7 @@ const ICON = {
 export const PAGES: SettingsPage[] = [
 	{ id: 'general', label: 'settings.general', group: 'app', icon: ICON.gear },
 	{ id: 'appearance', label: 'settings.appearance', group: 'app', icon: ICON.sun },
+	{ id: 'shortcuts', label: 'shortcuts.page', group: 'app', icon: ICON.keyboard, desktopOnly: true },
 	{ id: 'terminal', label: 'settings.page_terminal', group: 'connections', icon: ICON.terminal },
 	{ id: 'sessions', label: 'settings.page_sessions', group: 'connections', icon: ICON.sessions },
 	{ id: 'remote', label: 'settings.rdp_section', group: 'connections', icon: ICON.monitor },

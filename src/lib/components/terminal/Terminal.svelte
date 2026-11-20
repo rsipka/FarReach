@@ -42,7 +42,7 @@
 	import { URL_PATTERN } from '#lib/terminal/links.js';
 	import { bellActions, playBell, lastBellSound, windowSeen, notifyBell } from '#lib/terminal/bell.js';
 	import Modal from '#lib/components/shared/Modal.svelte';
-	import { openSettings } from '#lib/state/shortcuts.svelte.js';
+	import { openSettings, matchesAction } from '#lib/state/shortcuts.svelte.js';
 	import MobileKeyBar, { type BarKey } from '#lib/components/shared/MobileKeyBar.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
 	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
@@ -998,40 +998,29 @@
 				return true;
 			}
 
-			// Ctrl+Shift+F (Cmd+Shift+F): find in this terminal, in its bar.
-			if ((event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'f') {
+			// Find in this terminal, in its bar (Ctrl+Shift+F unless changed
+			// in Settings > Keyboard shortcuts, as are the keys below).
+			if (matchesAction(event, 'terminal.find')) {
 				event.preventDefault();
 				requestFind(ptyId, findText(term));
 				return false;
 			}
 
-			// Ctrl+Shift+H (Cmd+Shift+H): search history, from this session.
-			if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'h') {
+			// Search history, from this session.
+			if (matchesAction(event, 'terminal.history')) {
 				event.preventDefault();
 				openHistoryPanel({ text: term.getSelection().trim().slice(0, 200), sessionId, sessionName, tabId: ptyId });
 				return false;
 			}
 
-			if (event.ctrlKey && event.key === 'c' && term.hasSelection()) {
-				void copySelection(term);
-				return false;
-			}
-
-			// macOS: Cmd+C copies the selection (Cmd is never used as a terminal
-			// control key, so this is safe on all platforms).
-			if (event.metaKey && event.key === 'c' && term.hasSelection()) {
+			// Copy only while text is selected, so Ctrl+C still interrupts.
+			if (term.hasSelection() && matchesAction(event, 'terminal.copy')) {
 				event.preventDefault();
 				void copySelection(term);
 				return false;
 			}
 
-			if (event.ctrlKey && event.key === 'v') {
-				event.preventDefault();
-				void pasteFromClipboard(term);
-				return false;
-			}
-
-			if (event.metaKey && event.key === 'v') {
+			if (matchesAction(event, 'terminal.paste')) {
 				event.preventDefault();
 				void pasteFromClipboard(term);
 				return false;

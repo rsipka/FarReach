@@ -8,7 +8,7 @@
 	import { sessionAddress } from '#lib/utils/address.js';
 	import { requestSessionAction, openPalette } from '#lib/state/palette.svelte.js';
 	import { recentSessionIds } from '#lib/state/recents.svelte.js';
-	import { shortcutLabel } from '#lib/state/shortcuts.svelte.js';
+	import { actionLabel } from '#lib/state/shortcuts.svelte.js';
 	import { sessionList, sessionSetFavorite, type SessionConfig } from '#lib/ipc/sessions.js';
 	import { getSettings } from '#lib/state/settings.svelte.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
@@ -175,7 +175,7 @@
 						<button class="action" onclick={() => createTab('local')}>
 							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="icon" aria-hidden="true"><path d="M5 8l4 4-4 4M12 16h7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
 							<span class="label">{t('start.local')}</span>
-							<kbd>{shortcutLabel('T', { ctrl: true })}</kbd>
+							{#if actionLabel('tab.new')}<kbd>{actionLabel('tab.new')}</kbd>{/if}
 						</button>
 					</li>
 				{/if}
@@ -183,14 +183,14 @@
 					<button class="action" onclick={() => requestSessionAction({ kind: 'new-session' })}>
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="icon" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
 						<span class="label">{t('session.new_session')}</span>
-						<kbd>{shortcutLabel('N', { ctrl: true })}</kbd>
+						{#if actionLabel('session.new')}<kbd>{actionLabel('session.new')}</kbd>{/if}
 					</button>
 				</li>
 				<li>
 					<button class="action" onclick={openPalette}>
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="icon" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" /><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
 						<span class="label">{t('palette.title')}</span>
-						<kbd>{shortcutLabel('P', { ctrl: true, shift: true })}</kbd>
+						{#if actionLabel('app.palette')}<kbd>{actionLabel('app.palette')}</kbd>{/if}
 					</button>
 				</li>
 			</ul>

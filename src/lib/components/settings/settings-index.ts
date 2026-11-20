@@ -34,6 +34,7 @@ export const SETTINGS_INDEX: IndexedRow[] = [
 	{ page: 'appearance', label: 'settings.theme', words: 'dark light colours colors' },
 	{ page: 'appearance', label: 'themes.marketplace' },
 	{ page: 'appearance', label: 'settings.ui_zoom', desc: 'settings.ui_zoom_hint', words: 'scale zoom size interface', desktopOnly: true },
+	{ page: 'shortcuts', label: 'shortcuts.title', desc: 'shortcuts.desc', words: 'keyboard shortcuts hotkeys keybindings keys bind rebind', desktopOnly: true },
 	{ page: 'appearance', label: 'settings.compact_layout', desc: 'settings.compact_layout_desc' },
 	{ page: 'appearance', label: 'termbar.setting', desc: 'termbar.setting_desc' },
 	{ page: 'terminal', label: 'settings.terminal_font', desc: 'settings.font_desc', words: 'font typeface monospace' },
