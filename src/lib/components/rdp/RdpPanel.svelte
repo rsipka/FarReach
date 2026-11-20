@@ -80,7 +80,7 @@
 	import { untrustedRefsFromError } from '#lib/ipc/sessions.js';
 	import { getSettings, updateSetting } from '#lib/state/settings.svelte.js';
 	import { isMac, isMobile } from '#lib/platform.js';
-	import { setTabLink, closeTab } from '#lib/state/tabs.svelte.js';
+	import { setTabLink, setDesktopUp, closeTab } from '#lib/state/tabs.svelte.js';
 	import MobileKeyBar, { type BarKey } from '#lib/components/shared/MobileKeyBar.svelte';
 
 	interface Props {
@@ -162,6 +162,8 @@
 	// app does not count it as a live session.
 	$effect(() => {
 		setTabLink(id, phase === 'closed' || phase === 'error' ? 'down' : undefined);
+		// The sessions list marks a session whose desktop is up.
+		setDesktopUp(id, phase === 'connected');
 	});
 	let message = $state('');
 	// Closed because the user logged off or disconnected, not on an error.

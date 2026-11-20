@@ -454,6 +454,8 @@
   "session.select_key_file": "Изберете SSH частен ключ",
   "session.ssh_private_key_filter": "SSH частен ключ",
   "session.connected_toast": "Свързан с {{name}}",
+  "session.connected_mark": "Свързан",
+  "session.open_mark": "Отворен в раздел",
   "session.identity_created_toast": "Идентичността е създадена. Вашият ключ за криптиране е съхранен сигурно в ключодържателя на ОС.",
   "session.identity_restored_toast": "Идентичността е възстановена успешно.",
   "session.data_cleared_toast": "Данните са изчистени. Вече можете да инициализирате.",

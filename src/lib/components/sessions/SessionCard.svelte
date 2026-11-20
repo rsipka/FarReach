@@ -32,9 +32,15 @@
 		onselect?: (e: MouseEvent) => void;
 		/** VNC: the name of the saved SSH session it is reached through. */
 		viaName?: string | null;
+		/** It has a tab open in this window: a slight tint. */
+		open?: boolean;
+		/** Its tab is the one on screen: shown as picked. */
+		current?: boolean;
+		/** One of its tabs is connected: a green dot by the name. */
+		connected?: boolean;
 	}
 
-	let { session, vault = null, onconnect, onedit, ondelete, oncontextmenu, ondragstart, ondragend, selecting = false, selected = false, onselect, viaName = null }: Props = $props();
+	let { session, vault = null, onconnect, onedit, ondelete, oncontextmenu, ondragstart, ondragend, selecting = false, selected = false, onselect, viaName = null, open = false, current = false, connected = false }: Props = $props();
 	let unavailable = $derived((session.kind === 'wsl' && !isWindows()) || ((session.kind === 'serial' || session.kind === 'winbox' || !!session.x11_desktop) && isMobile()));
 	/** WinBox only ever manages a MikroTik: its logo until another is picked. */
 	let osId = $derived(session.detected_os ?? (session.kind === 'winbox' ? 'mikrotik' : null));
@@ -141,7 +147,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="session-card" class:selected class:unavailable class:dbl={needsDouble} class:names-only={compact} oncontextmenu={oncontextmenu} use:longPress={!!oncontextmenu} role="group">
+<div class="session-card" class:selected class:open class:current class:unavailable class:dbl={needsDouble} class:names-only={compact} oncontextmenu={oncontextmenu} use:longPress={!!oncontextmenu} role="group">
 	{#if selecting}
 		<input
 			class="select-box"
@@ -194,6 +200,13 @@
 		<div class="session-info">
 			<span class="session-name-row">
 				<span class="session-name">{session.name}</span>
+				{#if connected}
+					<!-- Connected: a green dot right by the name, so it stays in
+					     Compact layout and on phones. -->
+					<span class="mark-tip" title={t('session.connected_mark')}><span class="live-mark" role="img" aria-label={t('session.connected_mark')}></span></span>
+				{:else if open}
+					<span class="visually-hidden">{t('session.open_mark')}</span>
+				{/if}
 				{#if session.favorite}
 					<span class="mark-tip" title={t('session.favorite')}><svg class="fav-mark" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label={t('session.favorite')}>
 						<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
@@ -378,6 +391,33 @@
 	.session-card.selected:hover {
 		background-color: var(--color-accent-subtle);
 		box-shadow: inset 2px 0 0 var(--color-accent);
+	}
+
+	/* Open in a tab: a slight accent tint, below a hover in strength. */
+	.session-card.open {
+		background-color: color-mix(in srgb, var(--color-accent) 7%, transparent);
+	}
+
+	.session-card.open:hover {
+		background-color: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-hover));
+	}
+
+	.live-mark {
+		display: inline-block;
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background-color: var(--color-success);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-success) 25%, transparent);
+	}
+
+	.visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
 	}
 
 	.select-box {
@@ -691,6 +731,15 @@
 	   it is clear something happened. */
 	.session-card.dbl:focus-within {
 		background-color: var(--color-surface-hover);
+	}
+
+	/* The session of the tab on screen: picked, as a selected row looks.
+	   It follows the tab bar. */
+	.session-card.current,
+	.session-card.current:hover,
+	.session-card.current:focus-within {
+		background-color: var(--color-accent-subtle);
+		box-shadow: inset 2px 0 0 var(--color-accent);
 	}
 
 	/* Compact layout: the icon and the name only, as a list of many servers

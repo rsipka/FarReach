@@ -83,6 +83,9 @@ export interface Tab {
 	/** An SSH tab showing the full-pane file manager (this computer beside
 	 *  the server) in place of its terminal, which keeps running behind it. */
 	filesView?: boolean;
+	/** A remote desktop tab whose desktop is up (set by its panel); unset
+	 *  while it connects, and once it closed. */
+	desktopUp?: boolean;
 }
 
 export interface Handoff {
@@ -362,6 +365,61 @@ export function toggleFilesView(id: string, on?: boolean): void {
 export function setTabLink(id: string, link: Tab['link']): void {
 	const tab = tabs.find((t) => t.id === id);
 	if (tab && tab.link !== link) tab.link = link;
+}
+
+/** Mark a remote desktop tab's desktop as up or not (see RdpPanel). */
+export function setDesktopUp(id: string, up: boolean): void {
+	const tab = tabs.find((t) => t.id === id);
+	if (tab && !!tab.desktopUp !== up) tab.desktopUp = up;
+}
+
+/** The saved session a tab was opened from: remote desktops keep it in
+ *  their connect params only. */
+export function tabSessionId(tab: Tab): string | undefined {
+	return tab.sessionId ?? tab.rdpConnectParams?.sessionId ?? tab.vncConnectParams?.sessionId ?? tab.spiceConnectParams?.sessionId ?? undefined;
+}
+
+/** Is the tab's connection up: not dropped, not still connecting? A local
+ *  shell (WSL) counts while its tab is open. */
+export function isTabConnected(tab: Tab): boolean {
+	if (tab.link) return false;
+	switch (tab.type) {
+		case 'ssh':
+			return !!tab.connectionId;
+		case 'telnet':
+			return !!tab.telnetConnectionId;
+		case 'serial':
+			return !!tab.serialConnectionId;
+		case 'local':
+			return true;
+		default:
+			return !!tab.desktopUp;
+	}
+}
+
+export interface SessionTabState {
+	/** The session of the tab on screen (the focused pane in a split). */
+	current: boolean;
+	/** At least one of its tabs is connected. */
+	connected: boolean;
+}
+
+/** By saved session id: the sessions that have a tab open in this window. */
+let sessionTabStates = $derived.by(() => {
+	const states = new Map<string, SessionTabState>();
+	for (const tab of tabs) {
+		const id = tabSessionId(tab);
+		if (!id) continue;
+		const state = states.get(id) ?? { current: false, connected: false };
+		if (tab.active) state.current = true;
+		if (isTabConnected(tab)) state.connected = true;
+		states.set(id, state);
+	}
+	return states;
+});
+
+export function getSessionTabStates(): Map<string, SessionTabState> {
+	return sessionTabStates;
 }
 
 export function updateTabOs(connectionId: string, os: string): void {
