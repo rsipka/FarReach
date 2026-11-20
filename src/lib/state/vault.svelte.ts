@@ -265,6 +265,16 @@ export async function resume(via?: ResumeVia): Promise<boolean> {
 	return success;
 }
 
+/**
+ * A floating window (#lib/state/windows) reads whether the vault is open,
+ * without unlocking anything: the main window owns locking and unlocking.
+ */
+export async function readState(): Promise<void> {
+	vaultState.hasIdentity = await vaultIpc.hasIdentity();
+	vaultState.locked = await vaultIpc.isLocked();
+	vaultState.held = await vaultIpc.isHeld();
+}
+
 export async function checkState(): Promise<void> {
 	vaultState.hasIdentity = await vaultIpc.hasIdentity();
 	vaultState.locked = await vaultIpc.isLocked();

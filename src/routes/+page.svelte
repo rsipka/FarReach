@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { takeTmuxTitle } from '#lib/terminal/tmux-tabs.js';
-	import { getTabs, getActiveTab, updateTabTitle, updateTabConnection, setTelnetConnection, setSerialConnection, createTab, activateTab, getSplit, setSplitRatio, getDraggedTab, setDraggedTab, splitWith, unsplit, dropTab, canShowFilesView, toggleFilesView } from '#lib/state/tabs.svelte.js';
+	import { getTabs, getActiveTab, updateTabTitle, updateTabConnection, setTelnetConnection, setSerialConnection, createTab, activateTab, getSplit, setSplitRatio, getDraggedTab, setDraggedTab, splitWith, unsplit, dropTab, canShowFilesView, toggleFilesView, isReleased } from '#lib/state/tabs.svelte.js';
+	import { canFloat, isFloatWindow, tearOff } from '#lib/state/windows.svelte.js';
 	import { geometry, paneStyle, dividerStyle, ratioAt, dropAt as dropAtPoint, leaves, neighbour, SPLIT_MIN_WIDTH, type Drop, type DividerRect, type Zone } from '#lib/terminal/split.js';
 	import { getActivePage } from '#lib/state/navigation.svelte.js';
 	import { isDevopsEnabled } from '#lib/state/devops.svelte.js';
@@ -150,10 +151,12 @@
 			// dragged to a side (it goes there, the next tab beside it).
 			drop = d && d.target === id && (d.zone === 'center' || shownSplit) ? null : d;
 		};
-		const up = () => {
+		const up = (ev: PointerEvent) => {
 			const at = drop;
 			setDraggedTab(null);
 			if (at) dropTab(id, at);
+			// Let go outside the window: the tab gets a window of its own there.
+			else if (canFloat() && outsideWindow(ev)) void tearOff(id);
 		};
 		const key = (ev: KeyboardEvent) => {
 			if (ev.key === 'Escape') setDraggedTab(null);
@@ -167,6 +170,11 @@
 			window.removeEventListener('keydown', key);
 		};
 	});
+
+	/** Is the pointer outside this window (a tab dragged out of it)? */
+	function outsideWindow(ev: PointerEvent): boolean {
+		return ev.clientX < 0 || ev.clientY < 0 || ev.clientX > window.innerWidth || ev.clientY > window.innerHeight;
+	}
 
 	// Ctrl+Shift+E splits right, Ctrl+Shift+O down (as Terminator), Ctrl+Shift+U
 	// back to one, Ctrl+Shift+B in or out of the broadcast, unless changed in
@@ -225,6 +233,8 @@
 	function handleTerminalReady(tab: (typeof tabs)[number]) {
 		if (tab.type === 'local' && !spawnedPtys.has(tab.id)) {
 			spawnedPtys.add(tab.id);
+			// Moved here from another window: its shell is already running.
+			if (tab.handoff) return;
 			ptySpawn(tab.id, tab.localCommand?.program, undefined, undefined, tab.localCommand?.args).catch((err) => {
 				console.error(`Failed to spawn PTY for tab ${tab.id}:`, err);
 			});
@@ -248,9 +258,12 @@
 
 	function stopMonitoring(connId: string) {
 		monitoredConnections.delete(connId);
-		monitoringStop(connId).catch((err) => {
-			console.error(`Failed to stop monitoring for ${connId}:`, err);
-		});
+		// Moved to another window, which watches it now.
+		if (!isReleased(connId)) {
+			monitoringStop(connId).catch((err) => {
+				console.error(`Failed to stop monitoring for ${connId}:`, err);
+			});
+		}
 		const interval = pollIntervals.get(connId);
 		if (interval) {
 			clearInterval(interval);
@@ -335,9 +348,11 @@
 			tabs.filter((t) => t.connectionId).map((t) => t.connectionId!)
 		);
 
+		// A tab moved to another window took its session there: only forgotten here.
 		for (const id of spawnedPtys) {
 			if (!tabIds.has(id)) {
 				spawnedPtys.delete(id);
+				if (isReleased(id)) continue;
 				ptyClose(id).catch((err) => {
 					console.error(`Failed to close PTY ${id}:`, err);
 				});
@@ -347,6 +362,7 @@
 		for (const connId of connectedSsh) {
 			if (!activeConnectionIds.has(connId)) {
 				connectedSsh.delete(connId);
+				if (isReleased(connId)) continue;
 				stopExternalEdits(connId);
 				sshDisconnect(connId).catch((err) => {
 					console.error(`Failed to disconnect SSH ${connId}:`, err);
@@ -359,6 +375,7 @@
 		for (const connId of connectedTelnet) {
 			if (!openTelnet.has(connId)) {
 				connectedTelnet.delete(connId);
+				if (isReleased(connId)) continue;
 				telnetDisconnect(connId).catch(() => {});
 			}
 		}
@@ -368,6 +385,7 @@
 		for (const connId of connectedSerial) {
 			if (!openSerial.has(connId)) {
 				connectedSerial.delete(connId);
+				if (isReleased(connId)) continue;
 				serialDisconnect(connId).catch(() => {});
 			}
 		}
@@ -386,7 +404,7 @@
 	<div class="page-container">
 		<div class="page-view" class:active={activePage === 'terminal'}>
 			{#if tabs.length === 0}
-				<StartScreen />
+				{#if !isFloatWindow()}<StartScreen />{/if}
 			{:else}
 				<!-- Side by side with the other person's terminal while a share is
 				     connected and they are sharing one. Left is always mine. -->
@@ -444,7 +462,9 @@
 									sessionId={tab.sessionId}
 									sessionName={tab.sessionName}
 									historyMode={tab.historyMode}
-									wslDistro={tab.wslDistro}/>
+									wslDistro={tab.wslDistro}
+									handoff={tab.handoff}
+									startDown={tab.link === 'down'}/>
 								<!-- The full-pane file manager over the terminal, which keeps
 								     running behind it; F10 or the bar's button goes back. -->
 								{#if filesShown && tab.connectionId}

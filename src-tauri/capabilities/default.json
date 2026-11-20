@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/nicholasraphael/nicholasr_app/main/.schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main", "editor-*"],
+  "windows": ["main", "editor-*", "float-*"],
   "permissions": [
     "core:default",
     "core:event:default",
@@ -19,6 +19,7 @@
     "core:window:allow-set-focus",
     "core:window:allow-is-maximized",
     "core:window:allow-start-dragging",
+    "core:window:allow-set-title",
     "core:webview:allow-create-webview-window",
     "opener:allow-open-url",
     "opener:allow-default-urls",

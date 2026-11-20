@@ -14,6 +14,8 @@ import { getTabs, getSplit, createTab, setLayout, unsplit, activateTab } from '#
 import { requestSessionAction } from '#lib/state/palette.svelte.js';
 import { isMobile } from '#lib/platform.js';
 import { toSaved, savedLeaves, fill, claim, parseLayouts, type SavedLayout } from '#lib/terminal/layouts.js';
+import { windowLeaves, type KeptWindow } from '#lib/terminal/float-windows.js';
+import { reopenAround } from '#lib/state/windows.svelte.js';
 
 const KEY = 'reach-split-layouts';
 /** How long an opening layout waits for its sessions' tabs. */
@@ -117,4 +119,54 @@ export function openLayout(id: string): void {
 		stopWaiting = null;
 	};
 	requestSessionAction({ kind: 'connect-many', sessionIds: sessions });
+}
+
+/**
+ * A floating window kept from the last run (#lib/state/windows), opened
+ * again: its sessions connect here, as a layout's do, then move to a window
+ * of their own where it was. Resolves once that window is asked for.
+ */
+export function openKept(kept: KeptWindow): Promise<void> {
+	const { leaves, inTree } = windowLeaves(kept);
+	const slots: (string | null)[] = leaves.map(() => null);
+	const before = new Set(getTabs().map((t) => t.id));
+	const keep = getSplit();
+	leaves.forEach((leaf, i) => {
+		if ('local' in leaf) {
+			const tab = createTab('local', undefined, undefined, undefined, undefined, leaf.command, leaf.wslDistro);
+			before.add(tab.id);
+			slots[i] = tab.id;
+		}
+	});
+	// New tabs must not take the panes of a split here.
+	setLayout(keep);
+	const sessions = leaves.flatMap((l) => ('session' in l ? [l.session] : []));
+
+	return new Promise((resolve) => {
+		let done = false;
+		const finish = () => {
+			if (done) return;
+			done = true;
+			clearTimeout(timer);
+			stop();
+			const ids = slots.filter((s): s is string => s !== null);
+			const layout = kept.tree ? fill(kept.tree, slots.slice(0, inTree)) : null;
+			void reopenAround(ids, kept, layout).finally(resolve);
+		};
+		const stop = $effect.root(() => {
+			$effect(() => {
+				for (const tab of getTabs()) {
+					const sid = tab.sessionId;
+					if (before.has(tab.id) || !sid) continue;
+					before.add(tab.id);
+					const i = claim(leaves, slots, sid);
+					if (i >= 0) slots[i] = tab.id;
+				}
+				if (slots.every((s) => s !== null)) queueMicrotask(finish);
+			});
+		});
+		const timer = setTimeout(finish, WAIT_MS);
+		if (sessions.length) requestSessionAction({ kind: 'connect-many', sessionIds: sessions });
+		else queueMicrotask(finish);
+	});
 }
