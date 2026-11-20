@@ -21,6 +21,7 @@
 	import HostKeyDialog from '#lib/components/shared/HostKeyDialog.svelte';
 	import AuthPromptDialog from '#lib/components/shared/AuthPromptDialog.svelte';
 	import PassphrasePrompt from '#lib/components/pwmanager/PassphrasePrompt.svelte';
+	import WebCertPrompt from '#lib/components/sessions/WebCertPrompt.svelte';
 	import DuplicateVaultsDialog from '#lib/components/vault/DuplicateVaultsDialog.svelte';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -273,6 +274,7 @@
 	<HostKeyDialog />
 	<AuthPromptDialog />
 	<PassphrasePrompt />
+	<WebCertPrompt />
 	<McpConfirmDialog />
 </div>
 

@@ -118,6 +118,84 @@ export interface SessionConfig {
   connect_mode?: ConnectMode | null;
   /** Check which addresses answer before connecting; unset: as Settings says. */
   address_check?: boolean | null;
+  /** Web only: address, storage, sign-in, trusted certificates. */
+  web?: WebOptions | null;
+}
+
+/** A web session's settings (see src-tauri/src/web/mod.rs). */
+export interface WebOptions {
+  /** Unset: https. */
+  scheme?: 'http' | null;
+  /** Path and query after the address; unset: `/`. */
+  path?: string | null;
+  /** Unset: its own window; `browser`: the system's browser. */
+  open_in?: 'browser' | null;
+  /** Unset: kept for this session alone. */
+  storage?: 'profile' | 'temporary' | null;
+  profile?: string | null;
+  /** Unset: `auto`. */
+  login?: WebLogin | null;
+  username_selector?: string | null;
+  password_selector?: string | null;
+  submit_selector?: string | null;
+  /** Press the login button once filled; unset: yes. */
+  submit?: boolean | null;
+  /** Read only: certificates trusted by answering the prompt; changed
+   *  with webSessionCertAdd / webSessionCertRemove, a save keeps them. */
+  certs?: WebCert[];
+}
+
+export type WebLogin = 'auto' | 'off' | 'idrac' | 'ilo' | 'proxmox' | 'unifi' | 'generic' | 'custom';
+
+export interface WebCert {
+  /** SHA-256 as AB:CD:… */
+  sha256: string;
+  host: string;
+  saved_at?: number | null;
+}
+
+/** What `web-cert-ask` carries: a certificate a web window met that the
+ *  system does not trust and the session does not either. */
+export interface WebCertAsk {
+  label: string;
+  sessionId: string;
+  sessionName: string;
+  host: string;
+  fingerprint: string;
+  /** The session trusted other certificates before. */
+  changed: boolean;
+}
+
+/** The address a web session opens, as the backend builds it. */
+export function webSessionUrl(s: Pick<SessionConfig, 'host' | 'port' | 'web'>): string {
+  const scheme = s.web?.scheme === 'http' ? 'http' : 'https';
+  const host = s.host.trim().replace(/^\[|\]$/g, '');
+  const hostPart = host.includes(':') ? `[${host}]` : host;
+  const def = scheme === 'http' ? 80 : 443;
+  const port = s.port && s.port !== def ? `:${s.port}` : '';
+  const path = s.web?.path ? (s.web.path.startsWith('/') ? s.web.path : `/${s.web.path}`) : '/';
+  return `${scheme}://${hostPart}${port}${path}`;
+}
+
+/** Open a web session in its own window (desktop); resolves with its label. */
+export async function webSessionOpen(sessionId: string): Promise<string> {
+  return invoke<string>('web_session_open', { sessionId });
+}
+
+export async function webSessionCertAnswer(label: string, fingerprint: string, trust: boolean): Promise<void> {
+  return invoke('web_session_cert_answer', { label, fingerprint, trust });
+}
+
+export async function webSessionCertAdd(sessionId: string, fingerprint: string, host?: string): Promise<WebCert[]> {
+  return invoke<WebCert[]>('web_session_cert_add', { sessionId, fingerprint, host: host ?? null });
+}
+
+export async function webSessionCertRemove(sessionId: string, fingerprint?: string): Promise<WebCert[]> {
+  return invoke<WebCert[]>('web_session_cert_remove', { sessionId, fingerprint: fingerprint ?? null });
+}
+
+export async function webSessionClearData(sessionId: string): Promise<void> {
+  return invoke('web_session_clear_data', { sessionId });
 }
 
 /** `auto`: by priority, skipping what does not answer; `ask`: a picker on
@@ -202,7 +280,7 @@ export interface SshOptions {
 }
 
 /** `winbox`: MikroTik's WinBox 4, started as a program of its own (desktop). */
-export type SessionKind = 'ssh' | 'rdp' | 'vnc' | 'spice' | 'wsl' | 'telnet' | 'serial' | 'winbox';
+export type SessionKind = 'ssh' | 'rdp' | 'vnc' | 'spice' | 'wsl' | 'telnet' | 'serial' | 'winbox' | 'web';
 
 export function sessionKind(session: Pick<SessionConfig, 'kind'>): SessionKind {
   return session.kind ?? 'ssh';
@@ -276,6 +354,7 @@ export async function sessionCreate(params: {
   altAddresses?: SessionAddress[] | null;
   connectMode?: ConnectMode | null;
   addressCheck?: boolean | null;
+  web?: WebOptions | null;
 }): Promise<SessionConfig> {
   return invoke<SessionConfig>('session_create', {
     name: params.name,
@@ -315,6 +394,7 @@ export async function sessionCreate(params: {
     altAddresses: params.altAddresses?.length ? params.altAddresses : null,
     connectMode: params.altAddresses?.length ? (params.connectMode ?? null) : null,
     addressCheck: params.altAddresses?.length ? (params.addressCheck ?? null) : null,
+    web: params.kind === 'web' ? (params.web ?? {}) : null,
   });
 }
 
