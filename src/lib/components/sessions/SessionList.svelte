@@ -1194,7 +1194,7 @@
 		addToast(t('session.connected_toast', { name: session.name }), 'success');
 
 		const stored = session.auth_method.type === 'Password' ? session.auth_method.password : undefined;
-		if (remember && !passwordRef && password && password !== stored) {
+		if (remember && !passwordRef && password && password !== stored && !oneOffCredential(session)) {
 			try {
 				await sessionUpdate({ ...session, auth_method: { type: 'Password', password } });
 				await loadSessions();
@@ -1433,6 +1433,50 @@
 		} finally {
 			approvingRefs = false;
 		}
+	}
+
+	// ---- Connect with: one connect with another saved credential ---------
+	/** A session as one connect sees it with credential `c` in place of its
+	 *  own login. Never saved: openRdp and the prompt's Remember leave it be. */
+	type OneOff = SessionConfig & { one_off_credential: string };
+	function withCredential(session: SessionConfig, c: SavedCredential): OneOff {
+		return {
+			...session,
+			username: c.username,
+			auth_method: c.auth_method,
+			domain: c.domain?.trim() ? c.domain : session.domain,
+			credential: { id: c.id, name: c.name, folder_id: null, missing: false },
+			one_off_credential: c.id,
+		};
+	}
+	function oneOffCredential(s: SessionConfig): string | undefined {
+		return (s as Partial<OneOff>).one_off_credential;
+	}
+	/** Kinds that log in with a user name and a password or key. */
+	function takesCredential(s: SessionConfig): boolean {
+		const k = sessionKind(s);
+		return k === 'ssh' || k === 'rdp' || k === 'telnet';
+	}
+	/** The credentials the session's menu offers: its vault's, and for RDP
+	 *  and Telnet only those with a password. */
+	function connectWithChoices(s: SessionConfig): SavedCredential[] {
+		const k = sessionKind(s);
+		return credentialsFor(savedCredentials, s.vault_id).filter((c) => k === 'ssh' || c.auth_method.type === 'Password');
+	}
+	/** Why a credential cannot be used once (a tooltip), or undefined. A
+	 *  password manager entry is approved for the session it is linked to,
+	 *  and the backend reads it from the stored session; the same holds for
+	 *  the entries of the jump hosts and proxy, approved for its user name. */
+	function connectWithBlocked(s: SessionConfig, c: SavedCredential): string | undefined {
+		const a = c.auth_method;
+		if ((a.type === 'Password' && a.password_ref) || (a.type === 'Key' && a.passphrase_ref)) return t('session.connect_with_ref');
+		const routeRefs = (s.jump_chain ?? []).some((j) => (j.auth_method.type === 'Password' && j.auth_method.password_ref) || (j.auth_method.type === 'Key' && j.auth_method.passphrase_ref)) || !!s.proxy?.password_ref;
+		if (routeRefs && c.username !== s.username) return t('session.connect_with_route');
+		return undefined;
+	}
+	function connectWith(session: SessionConfig, c: SavedCredential): void {
+		closeContextMenu();
+		void handleConnect(withCredential(session, c));
 	}
 
 	function hasRefs(s: SessionConfig): boolean {
@@ -2411,6 +2455,22 @@
 					{/each}
 					<div class="context-sep"></div>
 				{/if}
+				{#if takesCredential(contextMenu.session) && connectWithChoices(contextMenu.session).length > 0}
+					{@const menuSession = contextMenu.session}
+					{@const linked = menuSession.credential && !menuSession.credential.missing ? menuSession.credential.id : null}
+					<div class="context-label" title={t('session.connect_with_hint')}>{t('session.connect_with')}</div>
+					<!-- Scrollable like the folders below: a vault can hold many. -->
+					<div class="context-folders">
+						{#each connectWithChoices(menuSession) as c (c.id)}
+							{@const blocked = connectWithBlocked(menuSession, c)}
+							<button class="context-item context-via" class:context-current={linked === c.id} disabled={!!blocked} title={blocked ?? t('session.connect_with_hint')} onclick={() => connectWith(menuSession, c)} type="button">
+								{c.name}
+								<span class="context-hint">{c.domain?.trim() ? `${c.domain}\\` : ''}{c.username}</span>
+							</button>
+						{/each}
+					</div>
+					<div class="context-sep"></div>
+				{/if}
 				{#if selected.has(contextMenu.session.id) && selected.size > 1}
 					<button class="context-item" onclick={openBulkEdit} type="button">
 						{t('bulk.edit_n', { count: String(selected.size) })}
@@ -2751,7 +2811,7 @@
 					<div class="fallback-hint">{t('pwmanager.prompt_uses_ref', { name: `${providerName(ref.provider)} · ${ref.label?.trim() || ref.entry_id}` })}</div>
 				{/if}
 
-				{#if askSecret && connectSession.auth_method.type !== 'Agent' && !passwordFallback}
+				{#if askSecret && connectSession.auth_method.type !== 'Agent' && !passwordFallback && !oneOffCredential(connectSession)}
 					<label class="remember-label">
 						<input type="checkbox" class="remember-check" bind:checked={rememberPassword} disabled={connecting} />
 						<span class="remember-text">{hasSavedPassword ? t('session.password_saved') : t('session.remember_password')}</span>
