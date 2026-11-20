@@ -37,7 +37,9 @@ pub mod tofu;
 pub mod toolchain;
 pub mod tunnel;
 pub mod vault;
+pub mod web;
 pub mod wsl;
+pub mod zmodem;
 
 use std::sync::atomic::Ordering;
 
@@ -69,6 +71,7 @@ use ipc::serial_commands::*;
 #[cfg(desktop)]
 use ipc::winbox_commands::*;
 use ipc::telnet_commands::*;
+use ipc::zmodem_commands::*;
 use ipc::saved_credential_commands::*;
 use ipc::session_commands::*;
 use ipc::sftp_commands::*;
@@ -434,7 +437,7 @@ pub fn run() {
 
     #[cfg(desktop)]
     {
-        builder = builder.invoke_handler(tauri::generate_handler![
+        builder = builder.invoke_handler(refuse_web_pages(tauri::generate_handler![
             // MCP server. Off until the user enables it; nothing here starts
             // a listener or shares a session on its own.
             mcp_start,
@@ -442,6 +445,10 @@ pub fn run() {
             telnet_send,
             telnet_resize,
             telnet_disconnect,
+            // ZMODEM in SSH, Telnet and serial sessions
+            zmodem_upload,
+            zmodem_download,
+            zmodem_cancel,
             rdp_connect,
             rdp_disconnect,
             rdp_mouse,
@@ -557,6 +564,7 @@ pub fn run() {
             k8s_helm_run,
             ssh_resize,
             ssh_list_connections,
+            ssh_connection_algorithms,
             ssh_detect_os,
             ssh_tmux_kill,
             ssh_tmux_chosen,
@@ -857,6 +865,12 @@ pub fn run() {
             float_window_take,
             float_window_list,
             float_window_focus,
+            // Web sessions (see `web`)
+            web_session_open,
+            web_session_cert_answer,
+            web_session_cert_add,
+            web_session_cert_remove,
+            web_session_clear_data,
             // Snippet commands
             snippet_list,
             snippet_create,
@@ -934,12 +948,12 @@ pub fn run() {
             set_close_to_tray,
             get_close_to_tray,
             quit_app,
-        ]);
+        ]));
     }
 
     #[cfg(not(desktop))]
     {
-        builder = builder.invoke_handler(tauri::generate_handler![
+        builder = builder.invoke_handler(refuse_web_pages(tauri::generate_handler![
             // MCP server. Off until the user enables it; nothing here starts
             // a listener or shares a session on its own.
             mcp_start,
@@ -947,6 +961,10 @@ pub fn run() {
             telnet_send,
             telnet_resize,
             telnet_disconnect,
+            // ZMODEM in SSH, Telnet and serial sessions
+            zmodem_upload,
+            zmodem_download,
+            zmodem_cancel,
             rdp_connect,
             rdp_disconnect,
             rdp_mouse,
@@ -1062,6 +1080,7 @@ pub fn run() {
             k8s_helm_run,
             ssh_resize,
             ssh_list_connections,
+            ssh_connection_algorithms,
             ssh_detect_os,
             ssh_tmux_kill,
             ssh_tmux_chosen,
@@ -1121,6 +1140,8 @@ pub fn run() {
             session_delete,
             session_move_to_folder,
             session_set_favorite,
+            web_session_cert_add,
+            web_session_cert_remove,
             session_host_key_remove,
             session_host_key_replace,
             host_keys_remove_all,
@@ -1408,7 +1429,7 @@ pub fn run() {
             set_close_to_tray,
             get_close_to_tray,
             quit_app,
-        ]);
+        ]));
     }
 
 
@@ -1806,6 +1827,10 @@ pub fn run() {
             if let tauri::WindowEvent::Destroyed = event {
                 if window.label() == "main" {
                     ipc::window_commands::close_floating(tauri::Manager::app_handle(window));
+                    web::window::close_all(tauri::Manager::app_handle(window));
+                }
+                if web::is_web_label(window.label()) {
+                    web::window::destroyed(window.label());
                 }
             }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -1823,6 +1848,23 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running Reach application");
+}
+
+/// Messages from a web session's window never reach a command, whatever
+/// page it shows and whatever the capabilities say (see `web`).
+fn refuse_web_pages<F>(handler: F) -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static
+where
+    F: Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static,
+{
+    move |invoke| {
+        let webview = invoke.message.webview_ref();
+        if web::is_web_label(webview.label()) || web::is_web_label(webview.window_ref().label()) {
+            tracing::warn!("Refused a command from a web session window");
+            invoke.resolver.reject("Not available to web pages");
+            return true;
+        }
+        handler(invoke)
+    }
 }
 
 #[cfg(test)]

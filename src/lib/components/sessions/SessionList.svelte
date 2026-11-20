@@ -52,6 +52,8 @@
 	import UntrustedRefsDialog from '#lib/components/pwmanager/UntrustedRefsDialog.svelte';
 	import { sessionUntrustedSecretRefs, sessionApproveSecretRefs, untrustedRefsFromError, type UntrustedRefs } from '#lib/ipc/sessions.js';
 	import type { SessionKind } from '#lib/ipc/sessions.js';
+	import { webSessionOpen, webSessionUrl } from '#lib/ipc/sessions.js';
+	import { openUrl } from '@tauri-apps/plugin-opener';
 	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionRenameFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetOrder, sessionSetFolderCredential, sessionSetFolderTmux, sessionBulkUndo, type BulkResult, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
 	import * as share from '#lib/state/share.svelte.js';
@@ -282,6 +284,7 @@
 		{ id: 'spice', label: 'SPICE' },
 		{ id: 'telnet', label: 'Telnet' },
 		{ id: 'winbox', label: 'WinBox' },
+		{ id: 'web', label: 'Web' },
 		{ id: 'wsl', label: 'WSL' }
 	];
 	function loadView(): { sort: SortKey; favorites: boolean; kinds: SessionKind[]; tags: string[] } {
@@ -1507,6 +1510,23 @@
 		return true;
 	}
 
+	/**
+	 * A web session: its own window (no tab), which the backend opens and
+	 * signs in; or the system's browser, which nothing here can sign in.
+	 */
+	async function openWeb(session: SessionConfig): Promise<void> {
+		try {
+			if (session.web?.open_in === 'browser' || isMobile()) {
+				await openUrl(webSessionUrl(session));
+				addToast(t('web.opening_browser'), 'success');
+			} else {
+				await webSessionOpen(session.id);
+			}
+		} catch (err) {
+			addToast(String(err), 'error');
+		}
+	}
+
 	async function handleConnect(session: SessionConfig, address?: ResolvedAddress): Promise<void> {
 		// A session set to Ask: the address first.
 		if (!address && sessionKind(session) === 'ssh' && connectMode(session) === 'ask') {
@@ -1539,6 +1559,10 @@
 		}
 		if (sessionKind(session) === 'winbox') {
 			void openWinbox(session);
+			return;
+		}
+		if (sessionKind(session) === 'web') {
+			void openWeb(session);
 			return;
 		}
 		// Check if credentials are stored in the session (from vault)

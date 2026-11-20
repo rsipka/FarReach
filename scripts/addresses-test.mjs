@@ -6,7 +6,7 @@
  * Run: node --import ./scripts/resolve-lib.mjs scripts/addresses-test.mjs
  */
 
-import { addressKey, autoOrder, checksAddresses, plainOrder, connectMode, hasAltAddresses, isUnreachable, sessionAddresses } from '../src/lib/sessions/addresses.ts';
+import { addressKey, addressLabelled, autoOrder, checksAddresses, plainOrder, connectMode, hasAltAddresses, isUnreachable, sessionAddresses } from '../src/lib/sessions/addresses.ts';
 
 let failures = 0;
 const check = (name, cond, extra = '') => {
@@ -68,6 +68,14 @@ check('a key error does not', !isUnreachable('Connection failed: Auth error: bad
 check('an unknown server key turned down does not', !isUnreachable('Connection failed: Unknown server key'));
 check('a name that does not resolve moves on', isUnreachable('Connection failed: failed to lookup address information: Name or service not known'));
 check('a rejected host key does not', !isUnreachable('Connection failed: Host key rejected by user'));
+
+console.log('Tooltip text');
+{
+	const s = { ...plain, alt_addresses: [{ label: 'Office', host: '10.0.0.5' }, { label: '', host: '10.0.0.6', port: 2222 }] };
+	const [, office, bare] = sessionAddresses(s);
+	check('label with its address', addressLabelled(office, 22) === 'Office (10.0.0.5)');
+	check('no label: the address alone, with its own port', addressLabelled(bare, 22) === '10.0.0.6:2222');
+}
 
 if (failures) {
 	console.log(`\n${failures} failed`);

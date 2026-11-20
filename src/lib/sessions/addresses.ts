@@ -87,6 +87,12 @@ export function addressName(a: ResolvedAddress, sessionPort: number): string {
 	return a.label || addressText(a, sessionPort);
 }
 
+/** The label with the address beside it, else the address alone. */
+export function addressLabelled(a: ResolvedAddress, sessionPort: number): string {
+	const text = addressText(a, sessionPort);
+	return a.label ? `${a.label} (${text})` : text;
+}
+
 /**
  * The order Auto tries the addresses in. `probes[i]` is what the check of
  * `addresses[i]` found: milliseconds, or null when it did not answer

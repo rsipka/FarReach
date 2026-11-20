@@ -374,3 +374,57 @@ fn none_of_them_is_offered_by_default() {
         assert!(!p.kex.contains(k), "{k:?}");
     }
 }
+
+// ------------------------------------------- group exchange with old servers
+
+/// A server whose only group exchange prime is one fixed group, whatever
+/// range the client asks for, as old appliances do.
+#[derive(Clone)]
+struct FixedGexServer(russh::kex::dh::groups::DhGroup);
+
+impl server::Handler for FixedGexServer {
+    type Error = russh::Error;
+
+    async fn lookup_dh_gex_group(
+        &mut self,
+        _gex_params: &client::GexParams,
+    ) -> Result<Option<russh::kex::dh::groups::DhGroup>, Self::Error> {
+        Ok(Some(self.0.clone()))
+    }
+}
+
+/// Whether the key exchange gets through with `gex` on the client.
+async fn gex_against(group: russh::kex::dh::groups::DhGroup, gex: client::GexParams) -> bool {
+    let mut server_config = server::Config::default();
+    server_config.inactivity_timeout = None;
+    server_config
+        .keys
+        .push(PrivateKey::random(&mut rand::rng(), ssh_key::Algorithm::Ed25519).unwrap());
+    server_config.preferred = preferred(Some(kex::DH_GEX_SHA1), None);
+    let server_config = Arc::new(server_config);
+    let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = socket.local_addr().unwrap();
+    tokio::spawn(async move {
+        let (socket, _) = socket.accept().await.unwrap();
+        if let Ok(s) = server::run_stream(server_config, socket, FixedGexServer(group)).await {
+            let _ = s.await;
+        }
+    });
+    let mut client_config = client::Config::default();
+    client_config.preferred = preferred(Some(kex::DH_GEX_SHA1), None);
+    client_config.gex = gex;
+    let negotiated: Negotiated = Arc::default();
+    client::connect(Arc::new(client_config), addr, Client { negotiated }).await.is_ok()
+}
+
+#[tokio::test]
+async fn group_exchange_with_a_2048_bit_only_server() {
+    use russh::kex::dh::groups::{DH_GROUP1, DH_GROUP14};
+    // russh's own range (3072 and up) refuses the server's 2048-bit prime.
+    assert!(!gex_against(DH_GROUP14, client::GexParams::default()).await);
+    // OpenSSH's minimum, 2048, takes it.
+    assert!(gex_against(DH_GROUP14, client::GexParams::new(2048, 8192, 8192).unwrap()).await);
+    // A 1024-bit prime needs the legacy minimum.
+    assert!(!gex_against(DH_GROUP1, client::GexParams::new(2048, 8192, 8192).unwrap()).await);
+    assert!(gex_against(DH_GROUP1, client::GexParams::for_legacy_client(1024, 8192, 8192).unwrap()).await);
+}

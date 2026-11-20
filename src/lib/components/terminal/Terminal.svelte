@@ -23,7 +23,7 @@
 	import { terminalPalette } from '#lib/state/terminal-themes.svelte.js';
 	import { getSettings, updateSetting, sessionLogConfig } from '#lib/state/settings.svelte.js';
 	import { historyStart, type HistoryMode } from '#lib/ipc/history.js';
-	import { setTabHistory, openHistoryPanel } from '#lib/state/history.svelte.js';
+	import { setTabHistory, openHistoryPanel, openCommandPicker } from '#lib/state/history.svelte.js';
 	import { countPasteLines, shouldWarnOnPaste } from '#lib/terminal/paste.js';
 	import { autoReconnectDelay, needsUser } from '#lib/terminal/tmux.js';
 	import { osc52Text } from '#lib/terminal/osc52.js';
@@ -46,8 +46,9 @@
 	import { URL_PATTERN } from '#lib/terminal/links.js';
 	import { bellActions, playBell, lastBellSound, windowSeen, notifyBell } from '#lib/terminal/bell.js';
 	import Modal from '#lib/components/shared/Modal.svelte';
-	import { openSettings, matchesAction } from '#lib/state/shortcuts.svelte.js';
+	import { openSettings, matchesAction, actionLabel } from '#lib/state/shortcuts.svelte.js';
 	import MobileKeyBar, { type BarKey } from '#lib/components/shared/MobileKeyBar.svelte';
+	import ZmodemBar from './ZmodemBar.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
 	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
 	import { cssFontFamily } from '#lib/utils/font.js';
@@ -442,6 +443,11 @@
 						]
 					: []),
 				{ label: '', separator: true },
+				{
+					label: t('history.picker_menu'),
+					hint: actionLabel('terminal.commandPicker'),
+					action: () => openCommandPicker({ text: findText(term), sessionId, sessionName, tabId: ptyId })
+				},
 				{
 					label: t('history.search_menu'),
 					hint: `${isMac() ? '⌘⇧' : 'Ctrl+Shift+'}H`,
@@ -1073,6 +1079,13 @@
 			if (matchesAction(event, 'terminal.history')) {
 				event.preventDefault();
 				openHistoryPanel({ text: term.getSelection().trim().slice(0, 200), sessionId, sessionName, tabId: ptyId });
+				return false;
+			}
+
+			// Pick an earlier command to paste, from this session.
+			if (matchesAction(event, 'terminal.commandPicker')) {
+				event.preventDefault();
+				openCommandPicker({ text: findText(term), sessionId, sessionName, tabId: ptyId });
 				return false;
 			}
 
@@ -1794,6 +1807,9 @@
 	</div>
 	{#if onPhone && !disconnected}
 		<MobileKeyBar bind:ctrl={barCtrl} bind:alt={barAlt} zoom onkey={onBarKey} />
+	{/if}
+	{#if remote}
+		<ZmodemBar connectionId={currentConnectionId} />
 	{/if}
 	{#if disconnected && remote}
 		<div class="reconnect-overlay">
