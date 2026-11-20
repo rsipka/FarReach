@@ -84,7 +84,7 @@ fn search_dirs() -> Vec<PathBuf> {
     dirs
 }
 
-fn find_in(dirs: &[PathBuf], name: &str) -> Option<PathBuf> {
+pub(crate) fn find_in(dirs: &[PathBuf], name: &str) -> Option<PathBuf> {
     let names: Vec<String> = if cfg!(windows) {
         ["exe", "cmd", "bat"].iter().map(|ext| format!("{name}.{ext}")).collect()
     } else {
@@ -96,13 +96,13 @@ fn find_in(dirs: &[PathBuf], name: &str) -> Option<PathBuf> {
 }
 
 #[cfg(unix)]
-fn is_program(p: &Path) -> bool {
+pub(crate) fn is_program(p: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
     std::fs::metadata(p).map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0).unwrap_or(false)
 }
 
 #[cfg(not(unix))]
-fn is_program(p: &Path) -> bool {
+pub(crate) fn is_program(p: &Path) -> bool {
     p.is_file()
 }
 
