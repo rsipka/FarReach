@@ -4,7 +4,7 @@
  * clear a contrast floor (WCAG ratios; translucent colours are laid over the
  * background first).
  *
- * Run: node scripts/app-themes-test.mjs
+ * Run: node --import ./scripts/resolve-lib.mjs scripts/app-themes-test.mjs
  */
 
 import { readFileSync } from 'node:fs';

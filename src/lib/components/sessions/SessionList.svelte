@@ -49,12 +49,15 @@
 	import ConfirmAction from '#lib/components/devops/ConfirmAction.svelte';
 	import Modal from '#lib/components/shared/Modal.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
+	import FolderIcon from './FolderIcon.svelte';
+	import FolderIconPicker from './FolderIconPicker.svelte';
 	import UntrustedRefsDialog from '#lib/components/pwmanager/UntrustedRefsDialog.svelte';
 	import { sessionUntrustedSecretRefs, sessionApproveSecretRefs, untrustedRefsFromError, type UntrustedRefs } from '#lib/ipc/sessions.js';
 	import type { SessionKind, JumpHostConfig } from '#lib/ipc/sessions.js';
 	import { webSessionOpen, webSessionUrl } from '#lib/ipc/sessions.js';
 	import { openUrl } from '@tauri-apps/plugin-opener';
-	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionRenameFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetOrder, sessionSetFolderCredential, sessionSetFolderTmux, sessionBulkUndo, type BulkResult, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
+	import { sessionKind, sessionGet, sessionList, sessionDelete, sessionUpdate, sessionListFolders, sessionCreateFolder, sessionUpdateFolderParent, sessionDeleteFolder, sessionRenameFolder, sessionMoveToFolder, sessionSetFavorite, sessionSetOrder, sessionSetFolderCredential, sessionSetFolderTmux,
+		sessionSetFolderIcon, sessionBulkUndo, type BulkResult, type SessionConfig, type Folder } from '#lib/ipc/sessions.js';
 	import { setActivePage } from '#lib/state/navigation.svelte.js';
 	import * as share from '#lib/state/share.svelte.js';
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
@@ -1135,6 +1138,26 @@
 		}
 	}
 
+	/** The folder whose icon is being picked. */
+	let iconFolder = $state<Folder | null>(null);
+
+	function pickFolderIcon(folder: Folder): void {
+		closeContextMenu();
+		iconFolder = folder;
+	}
+
+	async function saveFolderIcon(icon: string | null, color: string | null): Promise<void> {
+		const folder = iconFolder;
+		iconFolder = null;
+		if (!folder || ((folder.icon ?? null) === icon && (folder.color ?? null) === color)) return;
+		try {
+			await sessionSetFolderIcon(folder.id, icon, color);
+			folders = await sessionListFolders();
+		} catch (err) {
+			addToast(String(err), 'error');
+		}
+	}
+
 	async function loadSessions(): Promise<void> {
 		try {
 			[sessions, folders] = await Promise.all([sessionList(), sessionListFolders()]);
@@ -2139,7 +2162,7 @@
 			{:else}
 			<button class="folder-toggle" onclick={() => toggleFolder(node.folder.id)} onkeydown={(e) => { if (e.key === 'F2') { e.preventDefault(); startRename(node.folder); } }} aria-expanded={!collapsedFolders.has(node.folder.id)} title={folderPath(node.folder.id, folders)}>
 				<svg width="10" height="10" viewBox="0 0 10 10" fill="none" class="folder-chevron" class:collapsed={collapsedFolders.has(node.folder.id)}><path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" class="folder-icon"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+				<FolderIcon icon={node.folder.icon} color={node.folder.color} />
 				<span class="folder-name">{node.folder.name}</span><span class="folder-count">{node.totalSessions}</span>
 			</button>
 			{/if}
@@ -2528,9 +2551,7 @@
 				<div class="context-folders">
 					{#each moveTargets(targetsOf(contextMenu.session)) as folder (folder.id)}
 						<button class="context-item context-folder-item" onclick={() => { if (contextMenu?.session) moveToFolder(contextMenu.session, folder.id); }} type="button">
-							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" class="ctx-folder-icon">
-								<path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-							</svg>
+							<FolderIcon icon={folder.icon} color={folder.color} />
 							{folderPath(folder.id, folders)}
 						</button>
 					{/each}
@@ -2567,6 +2588,7 @@
 					<button class="context-item" disabled={inside.length === 0 && !sessions.some(s => s.folder_id === folder.id)} onclick={() => void sortFolderByName(folder)} type="button">{t('folder.sort_by_name')}</button>
 					<button class="context-item" onclick={() => contextNewFolder(folder.id)} type="button">{t('folder.new_subfolder')}</button>
 					<button class="context-item" onclick={() => startRename(folder)} type="button">{t('folder.rename')}<kbd class="context-kbd">F2</kbd></button>
+					<button class="context-item context-icon-item" onclick={() => pickFolderIcon(folder)} type="button"><span>{t('folder.icon')}</span><FolderIcon icon={folder.icon} color={folder.color} /></button>
 					<div class="context-sep"></div>
 					<button class="context-item" disabled={inside.length === 0} onclick={() => selectFolderSessions(folder)} type="button">{t('bulk.select_folder')}</button>
 					<button class="context-item" disabled={inside.length === 0} onclick={() => editFolderSessions(folder)} type="button">{t('folder.edit_inside')}</button>
@@ -2641,6 +2663,15 @@
 	{/if}
 </div>
 
+<FolderIconPicker
+	open={iconFolder !== null}
+	name={iconFolder?.name ?? ''}
+	icon={iconFolder?.icon ?? null}
+	color={iconFolder?.color ?? null}
+	onclose={() => (iconFolder = null)}
+	onsave={(icon, color) => void saveFolderIcon(icon, color)}
+/>
+
 <BulkEditor
 	open={bulkEditOpen}
 	sessions={bulkEditSessions}
@@ -2661,7 +2692,7 @@
 		<div class="move-list" role="radiogroup" aria-label={t('session.move_to')}>
 			{#each moveFolders as folder (folder.id)}
 				<button type="button" role="radio" aria-checked={moveTarget === folder.id} class="move-option" class:chosen={moveTarget === folder.id} onclick={() => (moveTarget = folder.id)} ondblclick={() => { moveTarget = folder.id; void confirmMove(); }}>
-					<FaIcon icon={faFolder} size={12} />
+					{#if folder.icon || folder.color}<FolderIcon icon={folder.icon} color={folder.color} />{:else}<FaIcon icon={faFolder} size={12} />{/if}
 					<span class="move-name">{folderPath(folder.id, folders)}</span>
 					<span class="move-count">{sessions.filter(s => s.folder_id === folder.id).length}</span>
 				</button>
@@ -3216,11 +3247,6 @@
 		transform: rotate(0deg);
 	}
 
-	.folder-icon {
-		color: var(--color-warning, var(--color-warning));
-		opacity: 0.7;
-	}
-
 	.folder-name {
 		min-width: 0;
 		overflow: hidden;
@@ -3424,6 +3450,10 @@
 		letter-spacing: 0.05em;
 		color: var(--color-text-secondary);
 		opacity: 0.6;
+	}
+
+	.context-icon-item {
+		justify-content: space-between;
 	}
 
 	.ctx-folder-icon {
