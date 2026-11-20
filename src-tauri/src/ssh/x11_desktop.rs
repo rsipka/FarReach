@@ -299,7 +299,7 @@ mod tests {
         let login = crate::ssh::client::AuthParams { key: None, password: std::env::var("X11_DESKTOP_TEST_PASSWORD").ok(), allow_agent: false };
         crate::ssh::client::login(&mut handle, &user, &login, &opts, None, host, port).await.unwrap().into_result().unwrap();
         let mut ch = handle.channel_open_session().await.unwrap();
-        crate::ssh::session_opts::setup_channel(&ch, opts.session.as_ref().unwrap(), 80, 24, Some(&desktop.launcher().unwrap()), Some(&x11)).await.unwrap();
+        crate::ssh::session_opts::setup_channel(&ch, opts.session.as_ref().unwrap(), 80, 24, Some(&desktop.launcher().unwrap()), Some(&x11), crate::ssh::terminal::DEFAULT_TERM).await.unwrap();
 
         // The window manager takes the nested display within a few seconds.
         let mut out = String::new();

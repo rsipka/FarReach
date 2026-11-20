@@ -7583,6 +7583,7 @@ dependencies = [
  "cryptoki-sys",
  "ctap-hid-fido2",
  "dirs 7.0.0",
+ "encoding_rs",
  "flate2",
  "fontdb",
  "futures-util",

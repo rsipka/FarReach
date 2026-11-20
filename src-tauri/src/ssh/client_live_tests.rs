@@ -318,7 +318,7 @@ async fn live_config_session() {
         crate::ssh::client::login(&mut handle, "reach", &auth, &opts, None, host, port).await.map_err(|e| e.to_string())?.into_result().map_err(|e| e.to_string())?;
         let mut ch = handle.channel_open_session().await.map_err(|e| e.to_string())?;
         let p = opts.session.clone().unwrap();
-        let tty = crate::ssh::session_opts::setup_channel(&ch, &p, 80, 24, None, None).await?;
+        let tty = crate::ssh::session_opts::setup_channel(&ch, &p, 80, 24, None, None, crate::ssh::terminal::DEFAULT_TERM).await?;
         let mut out = format!("tty={tty} ");
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
         while let Ok(Some(msg)) = tokio::time::timeout_at(deadline, ch.wait()).await {
@@ -550,7 +550,7 @@ echo "GOOD=$(send "$c")"
 echo "BAD=$(send 00112233445566778899aabbccddeeff)"
 exit
 "#;
-    let tty = crate::ssh::session_opts::setup_channel(&ch, &p, 80, 24, Some("bash -s"), Some(&x11)).await.unwrap();
+    let tty = crate::ssh::session_opts::setup_channel(&ch, &p, 80, 24, Some("bash -s"), Some(&x11), crate::ssh::terminal::DEFAULT_TERM).await.unwrap();
     assert!(!tty);
     ch.data(script.as_bytes()).await.unwrap();
     ch.eof().await.unwrap();

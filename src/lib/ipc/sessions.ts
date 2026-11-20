@@ -108,6 +108,9 @@ export interface SessionConfig {
   /** SSH only: start this desktop over X11 forwarding, in a window of its
    *  own, instead of a shell. */
   x11_desktop?: X11Desktop | null;
+  /** SSH only: terminal type, Backspace and encoding; unset: xterm-256color,
+   *  DEL and UTF-8. */
+  terminal?: TerminalOptions | null;
   /** The server keys it trusts, one per server it goes through. Read
    *  only: saved by connecting (Accept and save) and changed with
    *  sessionHostKeyRemove / sessionHostKeyReplace; a save keeps them. */
@@ -233,6 +236,26 @@ export interface SavedHostKey {
 /** The desktops an X11 Desktop session can start. */
 export const X11_DESKTOPS = ['gnome', 'kde', 'xfce', 'mate', 'cinnamon', 'lxqt', 'openbox', 'custom'] as const;
 export type X11DesktopKind = (typeof X11_DESKTOPS)[number];
+
+/** An SSH session's terminal settings (see `ssh::terminal`). Unset fields
+ *  are the defaults. */
+export interface TerminalOptions {
+  /** TERM announced to the server, e.g. vt100. */
+  term?: string | null;
+  /** What Backspace sends. */
+  backspace?: 'del' | 'ctrlh' | null;
+  /** The server's character encoding (WHATWG name), e.g. ISO-8859-2. */
+  encoding?: string | null;
+}
+
+/** Terminal types offered in the session editor; any other can be typed. */
+export const TERMINAL_TYPES = ['xterm-256color', 'xterm', 'vt100', 'vt220', 'linux', 'screen-256color', 'tmux-256color', 'ansi', 'dumb'];
+
+/** Encodings offered in the session editor (ssh/terminal.rs `ENCODINGS`). */
+export const TERMINAL_ENCODINGS = [
+  'UTF-8', 'ISO-8859-2', 'ISO-8859-7', 'ISO-8859-15', 'windows-1250', 'windows-1251', 'windows-1252', 'windows-1253', 'KOI8-R', 'KOI8-U', 'IBM866',
+  'Shift_JIS', 'EUC-JP', 'EUC-KR', 'GBK', 'gb18030', 'Big5'
+];
 
 /** A session's X11 desktop (see `ssh::x11_desktop`). */
 export interface X11Desktop {
@@ -372,6 +395,7 @@ export async function sessionCreate(params: {
   history?: HistoryMode | null;
   tmux?: TmuxSetting | null;
   x11Desktop?: X11Desktop | null;
+  terminal?: TerminalOptions | null;
   hostLabel?: string | null;
   altAddresses?: SessionAddress[] | null;
   connectMode?: ConnectMode | null;
@@ -413,6 +437,7 @@ export async function sessionCreate(params: {
     history: params.history || null,
     tmux: params.tmux ?? null,
     x11Desktop: params.kind === 'ssh' || !params.kind ? (params.x11Desktop ?? null) : null,
+    terminal: params.kind === 'ssh' || !params.kind ? (params.terminal ?? null) : null,
     hostLabel: params.hostLabel?.trim() || null,
     altAddresses: params.altAddresses?.length ? params.altAddresses : null,
     connectMode: params.altAddresses?.length ? (params.connectMode ?? null) : null,

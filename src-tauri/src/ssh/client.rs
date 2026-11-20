@@ -240,9 +240,10 @@ async fn open_interactive_shell(
     cols: u16,
     rows: u16,
     shell: Option<&str>,
+    term: &str,
 ) -> Result<(), SshError> {
     channel
-        .request_pty(false, "xterm-256color", cols as u32, rows as u32, 0, 0, &[])
+        .request_pty(false, term, cols as u32, rows as u32, 0, 0, &[])
         .await
         .map_err(|e| SshError::ChannelError(format!("PTY request failed: {}", e)))?;
 
@@ -747,6 +748,8 @@ pub struct LoginOptions {
     pub log: Option<crate::ssh::session_log::SessionLogConfig>,
     /// Ask which tmux session to start in, once logged in (`ssh::tmux::Ask`).
     pub tmux_ask: Option<crate::ssh::tmux::Ask>,
+    /// Terminal type, Backspace and encoding (`ssh::terminal`).
+    pub terminal: crate::ssh::terminal::TerminalOptions,
 }
 
 /// Getting the server's login message past the init's clear. The init is
@@ -1193,7 +1196,7 @@ impl SshManager {
             tracing::info!("SSH authenticated for {}@{}:{}", username, host, port);
 
             stage.begin("shell");
-            let (channel, tty) = open_session(&handle, &opts, cols, rows, shell.as_deref(), login.tmux_ask.as_ref()).await?;
+            let (channel, tty) = open_session(&handle, &opts, cols, rows, shell.as_deref(), login.tmux_ask.as_ref(), login.terminal.term()).await?;
 
             tracing::info!("SSH shell opened for {}@{}:{}", username, host, port);
 
@@ -1421,7 +1424,7 @@ impl SshManager {
         );
 
         // Open session, request PTY and the (optionally overridden) shell on target
-        let (channel, tty) = open_session(&target_handle, &opts, cols, rows, shell.as_deref(), login.tmux_ask.as_ref()).await?;
+        let (channel, tty) = open_session(&target_handle, &opts, cols, rows, shell.as_deref(), login.tmux_ask.as_ref(), login.terminal.term()).await?;
 
         tracing::info!(
             "SSH shell opened for {}@{}:{} (via jump)",
@@ -2607,6 +2610,7 @@ async fn open_session(
     rows: u16,
     shell: Option<&str>,
     tmux_ask: Option<&crate::ssh::tmux::Ask>,
+    term: &str,
 ) -> Result<(Option<russh::Channel<russh::client::Msg>>, bool), SshError> {
     use crate::ssh::session_opts::{setup_channel, SessionType};
     // The tmux picker: what it chose replaces the shell.
@@ -2630,11 +2634,11 @@ async fn open_session(
             },
             None => None,
         };
-        let tty = setup_channel(&channel, p, cols, rows, shell, x11.as_ref()).await.map_err(SshError::ChannelError)?;
+        let tty = setup_channel(&channel, p, cols, rows, shell, x11.as_ref(), term).await.map_err(SshError::ChannelError)?;
         return Ok((Some(channel), tty));
     }
     let channel = handle.channel_open_session().await.map_err(|e| SshError::ChannelError(format!("Failed to open session: {}", e)))?;
-    open_interactive_shell(&channel, cols, rows, shell).await?;
+    open_interactive_shell(&channel, cols, rows, shell, term).await?;
     Ok((Some(channel), true))
 }
 
@@ -2663,7 +2667,7 @@ async fn shared_session(
     tracing::info!("ControlMaster: {}@{}:{} shares the connection at {}", info.username, info.host, info.port, cp.path);
     let opened = {
         let h = shared.lock().await;
-        open_session(&h, opts, cols, rows, shell, login.tmux_ask.as_ref()).await
+        open_session(&h, opts, cols, rows, shell, login.tmux_ask.as_ref(), login.terminal.term()).await
     };
     let (channel, tty) = match opened {
         Ok(x) => x,
@@ -2732,6 +2736,7 @@ async fn into_active_connection(
         }
     });
 
+    let terminal_opts = login.terminal.clone();
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
     let task_id = info.id.clone();
     let task_handle = app_handle.clone();
@@ -2748,7 +2753,7 @@ async fn into_active_connection(
     };
     tokio::spawn(tracing::Instrument::in_current_span(async move {
         match channel {
-            Some(channel) => ssh_session_task(channel, cmd_rx, task_id, task_handle, flow, log, SessionExtras { policy: session, tty, handle: task_shared, host: host_label, forwarder, notes: forward_notes, connlog: connlog.clone() }).await,
+            Some(channel) => ssh_session_task(channel, cmd_rx, task_id, task_handle, flow, log, SessionExtras { policy: session, tty, handle: task_shared, host: host_label, forwarder, notes: forward_notes, connlog: connlog.clone(), terminal: terminal_opts }).await,
             None => {
                 if let Some(cl) = connlog.as_ref() {
                     crate::ssh::connlog::close(cl);
@@ -2779,6 +2784,8 @@ struct SessionExtras {
     notes: Vec<String>,
     /// LogLevel: what ssh would print about the connection.
     connlog: Option<Arc<crate::ssh::connlog::ConnLog>>,
+    /// Backspace and encoding (`ssh::terminal`).
+    terminal: crate::ssh::terminal::TerminalOptions,
 }
 
 /// SessionType none: the connection carries no session, only what else it
@@ -2845,8 +2852,10 @@ async fn ssh_session_task(
     // multi-byte character can straddle two of them. Decode as a stream,
     // not per chunk. stdout and stderr are independent streams and each
     // needs its own carry-over.
-    let mut out_decoder = crate::text::Utf8Stream::new();
-    let mut err_decoder = crate::text::Utf8Stream::new();
+    let mut out_decoder = extras.terminal.decoder();
+    let mut err_decoder = extras.terminal.decoder();
+    // Keystrokes as the server expects them (Backspace, encoding).
+    let mut input = extras.terminal.encoder();
     // rz/sz on the remote: a ZMODEM transfer over this channel.
     let mut zmodem = crate::zmodem::Tap::for_app(&app_handle, &connection_id, crate::zmodem::WINDOW_NETWORK);
     let mut zmodem_tick = tokio::time::interval(std::time::Duration::from_millis(100));
@@ -3071,6 +3080,7 @@ async fn ssh_session_task(
                         if data.is_empty() {
                             continue;
                         }
+                        let data = input.encode(data);
                         if let Some(o) = obscure.as_mut() {
                             o.keystroke(&data);
                             continue;
