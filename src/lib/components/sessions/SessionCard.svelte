@@ -5,7 +5,7 @@
 	import { getDistroIcon } from '#lib/data/distro-icons.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { sessionAddress } from '#lib/utils/address.js';
-	import { addressName, hasAltAddresses, sessionAddresses } from '#lib/sessions/addresses.js';
+	import { addressLabelled, hasAltAddresses, sessionAddresses } from '#lib/sessions/addresses.js';
 	import { isMobile, isWindows } from '#lib/platform.js';
 	import { getSettings } from '#lib/state/settings.svelte.js';
 	import { tooltip } from '#lib/utils/tooltip.js';
@@ -107,7 +107,7 @@
 	/** The session's other addresses, for the tooltips. */
 	let otherAddresses = $derived(
 		hasAltAddresses(session)
-			? t('session.more_addresses', { addresses: sessionAddresses(session).slice(1).map((a) => addressName(a, session.port)).join(', ') })
+			? t('session.more_addresses', { addresses: sessionAddresses(session).slice(1).map((a) => addressLabelled(a, session.port)).join(', ') })
 			: ''
 	);
 	let detailsTooltip = $derived.by(() => {
