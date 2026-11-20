@@ -805,6 +805,8 @@
   "settings.rdp_hw_render_desc": "Dessine le bureau via le GPU. S'applique aux bureaux ouverts après la modification.",
   "settings.rdp_gfx": "Graphics pipeline (H.264)",
   "settings.rdp_gfx_desc": "Demande à l'hôte le pipeline graphique, qui transporte la vidéo en H.264 sur les hôtes qui l'encodent. Sur un hôte qui ne le fait pas, l'image devient plus lourde, pas plus légère.",
+  "settings.rdp_gfx_new": "Formats d'image récents",
+  "settings.rdp_gfx_new_desc": "Permet au pipeline graphique d'utiliser AVC444 (texte et couleurs plus nets en H.264) et RemoteFX progressive (utilisé par GNOME Remote Desktop). Désactivez si un hôte affiche une image cassée ou coupe la session ; les anciens formats sont alors utilisés.",
   "settings.rdp_fs_button": "Bouton Plein écran",
   "settings.rdp_fs_button_desc": "Affiche le bouton Plein écran sur un bureau distant. Faites-le glisser où vous voulez pour libérer les boutons du système distant ; il reste à cet endroit. Sans lui, Ctrl+Alt+Entrée bascule toujours en plein écran.",
   "settings.shell_desc": "Shell utilise lors de l'ouverture de nouveaux terminaux locaux.",

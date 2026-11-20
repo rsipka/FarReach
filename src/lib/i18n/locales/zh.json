@@ -805,6 +805,8 @@
   "settings.rdp_hw_render_desc": "通过 GPU 绘制桌面。对更改后打开的桌面生效。",
   "settings.rdp_gfx": "Graphics pipeline (H.264)",
   "settings.rdp_gfx_desc": "向主机请求图形管道，在支持编码的主机上以 H.264 传输视频。在不支持的主机上，画面会更重而不是更轻。",
+  "settings.rdp_gfx_new": "较新的图像格式",
+  "settings.rdp_gfx_new_desc": "允许图形管道使用 AVC444（H.264 中文字和颜色更清晰）和 RemoteFX progressive（GNOME 远程桌面使用）。如果主机画面损坏或会话断开，请关闭；此时使用较旧的格式。",
   "settings.rdp_fs_button": "全屏按钮",
   "settings.rdp_fs_button_desc": "在远程桌面上显示全屏按钮。可将其拖到任意位置，避免遮住远程系统自己的按钮；它会停留在您放置的位置。隐藏后，Ctrl+Alt+Enter 仍可切换全屏。",
   "settings.shell_desc": "打开新的本地终端时使用的 Shell。",

@@ -789,6 +789,8 @@
   "settings.rdp_hw_render_desc": "Vykreslovat plochu přes GPU. Platí pro plochy otevřené po změně.",
   "settings.rdp_gfx": "Grafický kanál (H.264)",
   "settings.rdp_gfx_desc": "Požádat hostitele o grafický kanál, který na hostitelích, jež to umí kódovat, přenáší video jako H.264. Na hostiteli, který to neumí, bude obraz náročnější, ne lehčí.",
+  "settings.rdp_gfx_new": "Novější formáty obrazu",
+  "settings.rdp_gfx_new_desc": "Grafický kanál smí použít AVC444 (ostřejší text a barvy v H.264) a RemoteFX progressive (používá ho GNOME Remote Desktop). Vypněte, pokud hostitel ukazuje rozbitý obraz nebo spojení padá; pak se použijí starší formáty.",
   "settings.rdp_fs_button": "Tlačítko celé obrazovky",
   "settings.rdp_fs_button_desc": "Zobrazovat nad vzdálenou plochou tlačítko Celá obrazovka. Přetáhněte ho kamkoli, aby nepřekáželo tlačítkům vzdálené plochy; zůstane tam, kam ho umístíte. I bez něj přepíná celou obrazovku Ctrl+Alt+Enter.",
   "settings.shell_desc": "Shell použitý při otevírání nových místních terminálů.",

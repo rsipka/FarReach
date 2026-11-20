@@ -91,6 +91,10 @@ pub struct RdpConnectParams {
     /// Advertise the graphics pipeline. Off unless the user turned it on.
     #[serde(default)]
     pub graphics_pipeline: bool,
+    /// Keep the graphics pipeline to the older picture formats (no AVC444,
+    /// no RemoteFX progressive). Off unless the user turned the newer ones off.
+    #[serde(default)]
+    pub older_graphics_formats: bool,
     /// What the clipboard lets through, as saved with the session: unset
     /// for everything, `text` for no files, `off` for no clipboard at all.
     #[serde(default)]
@@ -666,17 +670,21 @@ fn build_config(p: &RdpConnectParams, app: AppHandle) -> Result<ironrdp_client::
         // #1791). With no folder the client attaches its no-op backend.
         .with_rdpdr(true)
         .with_graphics_pipeline(p.graphics_pipeline)
+        .with_egfx_thin_client(p.older_graphics_formats)
         // H.264 for the graphics pipeline, one decoder per connection. With
         // it the client advertises AVC420 and a Windows server sends video as
         // video rather than as tiles. Made here rather than once, because a
-        // reconnect builds the pipeline again.
-        .with_h264_decoder_factory(Arc::new(|| match ironrdp_egfx::decode::OpenH264Decoder::new() {
-            Ok(decoder) => Some(Box::new(decoder) as Box<dyn ironrdp_egfx::decode::H264Decoder>),
-            Err(e) => {
-                tracing::warn!("RDP: no H.264 decoder, video will come as tiles: {e}");
-                None
+        // reconnect builds the pipeline again. OpenH264 on every platform,
+        // Windows too, where IronRDP would otherwise pick Media Foundation.
+        .with_h264_decoder(Some(ironrdp_client::h264::H264DecoderFactory::new(|| {
+            match ironrdp_egfx::decode::OpenH264Decoder::new() {
+                Ok(decoder) => Some(Box::new(decoder) as Box<dyn ironrdp_egfx::decode::H264Decoder>),
+                Err(e) => {
+                    tracing::warn!("RDP: no H.264 decoder, video will come as tiles: {e}");
+                    None
+                }
             }
-        }))
+        })))
         .with_certificate_validation(ironrdp_tls::CertificateValidation::Strict)
         .with_certificate_validation_callback(verify);
 
@@ -993,9 +1001,21 @@ impl Screen {
             | RdpOutputEvent::RailControl(_)
             | RdpOutputEvent::PostLogonDisplayRedraw
             | RdpOutputEvent::MalformedBitmapDisplayRedraw
-            | RdpOutputEvent::AutoReconnected => {}
-            RdpOutputEvent::DisplayResizeFallback(size) => {
-                tracing::info!("RDP {id}: server has no display control; resize to {size:?} means a reconnect");
+            | RdpOutputEvent::AutoReconnected
+            | RdpOutputEvent::ServerInputFlags(_)
+            | RdpOutputEvent::MonitorLayoutRejected
+            | RdpOutputEvent::RemoteSessionId(_)
+            | RdpOutputEvent::WindowSurfaceUpdates(_)
+            | RdpOutputEvent::NetworkCharacteristics { .. }
+            | RdpOutputEvent::RdpeiInputState(_) => {}
+            RdpOutputEvent::LogonError(info) => {
+                tracing::info!("RDP {id}: server reported a logon error: {info:?}");
+            }
+            RdpOutputEvent::ServerRedirected { .. } => {
+                tracing::info!("RDP {id}: server redirected the connection");
+            }
+            RdpOutputEvent::DisplayResizeFallback(reason) => {
+                tracing::info!("RDP {id}: resize falls back to a reconnect ({reason:?})");
             }
             RdpOutputEvent::AutoReconnecting { .. } => {
                 tracing::info!("RDP {id}: reconnecting");

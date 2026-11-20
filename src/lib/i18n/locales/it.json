@@ -805,6 +805,8 @@
   "settings.rdp_hw_render_desc": "Disegna il desktop tramite la GPU. Vale per i desktop aperti dopo la modifica.",
   "settings.rdp_gfx": "Graphics pipeline (H.264)",
   "settings.rdp_gfx_desc": "Chiede all'host la pipeline grafica, che trasporta il video come H.264 sugli host che lo codificano. Su un host che non lo fa, l'immagine diventa più pesante, non più leggera.",
+  "settings.rdp_gfx_new": "Formati immagine più recenti",
+  "settings.rdp_gfx_new_desc": "Consente alla pipeline grafica di usare AVC444 (testo e colori più nitidi in H.264) e RemoteFX progressive (usato da GNOME Remote Desktop). Disattiva se un host mostra un'immagine rovinata o chiude la sessione; si usano allora i formati più vecchi.",
   "settings.rdp_fs_button": "Pulsante Schermo intero",
   "settings.rdp_fs_button_desc": "Mostra il pulsante Schermo intero sopra un desktop remoto. Trascinalo dove vuoi per non coprire i pulsanti del sistema remoto; resta dove lo lasci. Senza di esso, Ctrl+Alt+Invio attiva ancora lo schermo intero.",
   "settings.shell_desc": "Shell utilizzata per aprire nuovi terminali locali.",
