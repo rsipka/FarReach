@@ -10,7 +10,7 @@
 	 */
 	import { tick } from 'svelte';
 	import { isPaletteOpen, closePalette, requestSessionAction, requestTerminalFocus } from '#lib/state/palette.svelte.js';
-	import { openHistoryPanel } from '#lib/state/history.svelte.js';
+	import { openHistoryPanel, openTabCommandPicker } from '#lib/state/history.svelte.js';
 	import {
 		getTabs,
 		getActiveTab,
@@ -233,6 +233,18 @@
 			},
 			// The tab in front, as its own menu in the tab bar has it (#160).
 			...activeTabActions(),
+			...(canPasteSnippet()
+				? [
+						{
+							id: 'action:command-picker',
+							group: t('palette.group_actions'),
+							label: t('history.picker_menu'),
+							hint: actionLabel('terminal.commandPicker'),
+							keywords: 'history commands paste ctrl+r',
+							run: () => openTabCommandPicker(getActiveTab())
+						}
+					]
+				: []),
 			{
 				id: 'action:history',
 				group: t('palette.group_actions'),

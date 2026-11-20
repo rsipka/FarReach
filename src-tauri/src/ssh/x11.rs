@@ -21,6 +21,9 @@ pub struct X11Config {
     pub timeout: Option<Duration>,
     /// XAuthLocation.
     pub xauth: String,
+    /// An X11 Desktop session: a nested X server of its own, with this
+    /// window title (see `x11_desktop`); `display` is not used.
+    pub nested: Option<String>,
 }
 
 /// What the session asked for, kept to check and rewrite each connection.
@@ -35,11 +38,20 @@ pub struct X11Auth {
     /// ForwardX11Timeout: connections after this are refused.
     deadline: Option<Instant>,
     pub screen: u32,
+    /// The nested X server of an X11 Desktop session, kept as long as
+    /// anything forwards to it.
+    nested: Option<std::sync::Arc<super::x11_desktop::Nested>>,
 }
 
 impl X11Auth {
     pub fn fake_hex(&self) -> String {
         hex(&self.fake)
+    }
+
+    /// The nested X server's display and authority file, for an X11
+    /// Desktop session.
+    pub fn nested(&self) -> Option<(&str, &std::path::Path)> {
+        self.nested.as_ref().map(|n| (n.display.as_str(), n.auth_file.as_path()))
     }
 }
 
@@ -95,10 +107,14 @@ async fn run_with(cmd: &str, args: &[&str], xauthority: Option<&std::path::Path>
 
 /// A directory only this user can open (mkdtemp), removed with its
 /// contents when dropped.
-struct PrivateDir(std::path::PathBuf);
+pub(crate) struct PrivateDir(std::path::PathBuf);
 
 impl PrivateDir {
-    fn new() -> std::io::Result<Self> {
+    pub(crate) fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+
+    pub(crate) fn new() -> std::io::Result<Self> {
         let mut last = None;
         for _ in 0..8 {
             let d = std::env::temp_dir().join(format!("reach-xauth-{:016x}", rand::random::<u64>()));
@@ -135,6 +151,25 @@ fn parse_list(out: &str) -> Option<(String, Vec<u8>)> {
 /// fake one the server gets. Untrusted forwarding without a cookie from
 /// xauth fails, as with ssh, instead of falling back to trusted.
 pub async fn prepare(cfg: &X11Config) -> Result<X11Auth, String> {
+    if let Some(title) = &cfg.nested {
+        let mut local = X11Config { nested: None, trusted: true, timeout: None, ..cfg.clone() };
+        return match super::x11_desktop::start(title).await? {
+            Some(n) => {
+                local.display = n.display.clone();
+                let mut a = prepare_own(&local, n.cookie.clone(), &n.auth_file).await?;
+                a.nested = Some(std::sync::Arc::new(n));
+                Ok(a)
+            }
+            // XQuartz on a Mac without Xephyr.
+            None => {
+                local.display = std::env::var("DISPLAY").unwrap_or_default();
+                if local.xauth.is_empty() {
+                    local.xauth = "/opt/X11/bin/xauth".into();
+                }
+                Box::pin(prepare(&local)).await
+            }
+        };
+    }
     // Windows without DISPLAY: an X server already running here, or the
     // one Reach starts (see `xserver`), as MobaXterm brings its own.
     #[cfg(windows)]
@@ -196,13 +231,25 @@ pub async fn prepare(cfg: &X11Config) -> Result<X11Auth, String> {
         fake,
         deadline: if cfg.trusted { None } else { cfg.timeout.map(|t| Instant::now() + t) },
         screen: screen_of(&cfg.display),
+        nested: None,
     })
 }
 
-/// For the X server Reach started: the cookie is Reach's own. Trusted
+/// An Xauthority entry for display `n` (any address: the server checks
+/// the cookie, not where it is presented from).
+pub(crate) fn authority(n: u16, cookie: &[u8]) -> Vec<u8> {
+    // FamilyWild (0xffff) with an empty address matches any address.
+    let mut out = vec![0xff, 0xff, 0, 0];
+    for field in [n.to_string().as_bytes(), PROTO.as_bytes(), cookie] {
+        out.extend((field.len() as u16).to_be_bytes());
+        out.extend(field);
+    }
+    out
+}
+
+/// For an X server Reach started: the cookie is Reach's own. Trusted
 /// forwarding uses it as the real one; untrusted forwarding has xauth
 /// (proving itself with that cookie) ask the server for a restricted one.
-#[cfg(windows)]
 async fn prepare_own(cfg: &X11Config, cookie: Vec<u8>, auth_file: &std::path::Path) -> Result<X11Auth, String> {
     let real = if cfg.trusted {
         cookie
@@ -232,6 +279,7 @@ async fn prepare_own(cfg: &X11Config, cookie: Vec<u8>, auth_file: &std::path::Pa
         fake,
         deadline: if cfg.trusted { None } else { cfg.timeout.map(|t| Instant::now() + t) },
         screen: 0,
+        nested: None,
     })
 }
 
@@ -350,7 +398,7 @@ mod tests {
     use super::*;
 
     fn auth(real: &[u8], fake: &[u8]) -> X11Auth {
-        X11Auth { display: ":0".into(), proto: PROTO.into(), real: real.to_vec(), fake: fake.to_vec(), deadline: None, screen: 0 }
+        X11Auth { display: ":0".into(), proto: PROTO.into(), real: real.to_vec(), fake: fake.to_vec(), deadline: None, screen: 0, nested: None }
     }
 
     fn setup(order: u8, proto: &str, data: &[u8]) -> Vec<u8> {

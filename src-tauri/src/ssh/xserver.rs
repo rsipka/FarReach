@@ -16,6 +16,8 @@ use std::time::Duration;
 
 use sha2::{Digest, Sha256};
 
+use super::x11::authority;
+
 /// The files of the official VcXsrv 21.1.16.1 release (unpacked from
 /// vcxsrv-64.21.1.16.1.installer.noadmin.exe, SHA-256 dea6c7d6…d620,
 /// without uninstall.exe and plink.exe), with its licence and a note on
@@ -89,7 +91,7 @@ pub async fn ensure() -> Result<Display, String> {
     if !installed() {
         return Err("no X server on this computer: turn on the X11 server in Settings, General".into());
     }
-    let running = start(&root()).await?;
+    let running = start(&root(), &["-multiwindow"]).await?;
     let display = running.display.clone();
     *st = Some(running);
     Ok(display)
@@ -218,19 +220,20 @@ fn unpack(bytes: &[u8], into: &Path, cancel: &AtomicBool, progress: &impl Fn(Pro
     Ok(())
 }
 
-/// An Xauthority entry for display `n` (any address: the server checks
-/// the cookie, not where it is presented from).
-fn authority(n: u16, cookie: &[u8]) -> Vec<u8> {
-    // FamilyWild (0xffff) with an empty address matches any address.
-    let mut out = vec![0xff, 0xff, 0, 0];
-    for field in [n.to_string().as_bytes(), b"MIT-MAGIC-COOKIE-1".as_slice(), cookie] {
-        out.extend((field.len() as u16).to_be_bytes());
-        out.extend(field);
+/// A VcXsrv of its own for an X11 Desktop session: one window holding the
+/// whole remote desktop, resized with it, ended with the session (and with
+/// Reach).
+pub async fn start_nested() -> Result<super::x11_desktop::Nested, String> {
+    if !installed() {
+        return Err("X11 desktop: no X server on this computer: turn on the X11 server in Settings, General".into());
     }
-    out
+    let r = start(&root(), &["-screen", "0", "1280x800", "-resize=randr"]).await?;
+    let Display { name, cookie, auth_file, .. } = r.display;
+    Ok(super::x11_desktop::Nested::new(name, cookie.unwrap_or_default(), auth_file.unwrap_or_default(), r.child, Box::new(r._job)))
 }
 
-async fn start(dir: &Path) -> Result<Running, String> {
+/// Starts VcXsrv in `mode` (multiwindow, or one window).
+async fn start(dir: &Path, mode: &[&str]) -> Result<Running, String> {
     // The first free display from 10 up: below that MobaXterm and the like
     // usually sit. A display with an X<n>.hosts file is skipped: hosts
     // listed there get in without the cookie.
@@ -244,11 +247,13 @@ async fn start(dir: &Path) -> Result<Running, String> {
     let auth_name = format!("reach-auth.{n}");
     let auth_file = dir.join(&auth_name);
     std::fs::write(&auth_file, authority(n, &cookie)).map_err(|e| format!("X server: {e}"))?;
-    let log = dir.join("reach-vcxsrv.log");
+    let log_name = format!("reach-vcxsrv.{n}.log");
+    let log = dir.join(&log_name);
 
     let mut cmd = std::process::Command::new(dir.join("vcxsrv.exe"));
     cmd.arg(format!(":{n}"))
-        .args(["-multiwindow", "-clipboard", "-wgl", "-silent-dup-error", "-notrayicon", "-auth", &auth_name, "-logfile", "reach-vcxsrv.log"])
+        .args(mode)
+        .args(["-clipboard", "-wgl", "-silent-dup-error", "-notrayicon", "-auth", &auth_name, "-logfile", &log_name])
         .current_dir(dir)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
@@ -366,6 +371,8 @@ struct Job(windows::Win32::Foundation::HANDLE);
 
 // SAFETY: a job handle may be used from any thread.
 unsafe impl Send for Job {}
+// SAFETY: Job has no methods that change it through a shared reference.
+unsafe impl Sync for Job {}
 
 impl Job {
     fn new() -> windows::core::Result<Self> {

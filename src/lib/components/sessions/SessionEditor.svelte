@@ -6,7 +6,7 @@
 	import OsIconSelect from './OsIconSelect.svelte';
 	import { osChoices } from '#lib/data/distro-icons.js';
 	import Input from '#lib/components/shared/Input.svelte';
-	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField, type TmuxSetting, type ConnectMode, type SessionAddress } from '#lib/ipc/sessions.js';
+	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField, type TmuxSetting, type X11DesktopKind, X11_DESKTOPS, type ConnectMode, type SessionAddress, type WebOptions, type WebLogin, type WebCert, webSessionCertAdd, webSessionCertRemove, webSessionClearData } from '#lib/ipc/sessions.js';
 	import { defaultTmuxName, folderTmux, validTmuxName } from '#lib/terminal/tmux.js';
 	import { isIos, isMobile, isWindows } from '#lib/platform.js';
 	import { APP_FILES_SHARE } from '#lib/ipc/rdp.js';
@@ -97,6 +97,88 @@
 	let spiceTlsPort = $state('');
 	let spiceCa = $state('');
 	let spiceSubject = $state('');
+	/** Web only: see WebOptions. Certificates are changed by their own commands. */
+	let webScheme = $state<'https' | 'http'>('https');
+	let webPath = $state('');
+	let webOpenIn = $state<'' | 'browser'>('');
+	let webStorage = $state<'' | 'profile' | 'temporary'>('');
+	let webProfile = $state('');
+	let webLogin = $state<WebLogin>('auto');
+	let webUserSel = $state('');
+	let webPassSel = $state('');
+	let webSubmitSel = $state('');
+	let webSubmit = $state(true);
+	let webCerts = $state<WebCert[]>([]);
+	let webCertTyped = $state('');
+	let webCertError = $state('');
+	let webDataCleared = $state(false);
+
+	/** A whole address pasted into the host field is split into its parts. */
+	function splitWebAddress(): void {
+		const text = host.trim();
+		if (!/^https?:\/\//i.test(text)) return;
+		try {
+			const u = new URL(text);
+			webScheme = u.protocol === 'http:' ? 'http' : 'https';
+			host = u.hostname.replace(/^\[|\]$/g, '');
+			portStr = u.port || (webScheme === 'http' ? '80' : '443');
+			const rest = `${u.pathname}${u.search}`;
+			webPath = rest === '/' ? '' : rest;
+		} catch {
+			/* left as typed; the backend says what is wrong */
+		}
+	}
+
+	function webToSave(): WebOptions {
+		const o: WebOptions = {};
+		if (webScheme === 'http') o.scheme = 'http';
+		if (webPath.trim() && webPath.trim() !== '/') o.path = webPath.trim();
+		if (webOpenIn) o.open_in = webOpenIn;
+		if (webStorage === 'temporary') o.storage = 'temporary';
+		if (webStorage === 'profile' && webProfile.trim()) {
+			o.storage = 'profile';
+			o.profile = webProfile.trim();
+		}
+		if (webLogin !== 'auto') o.login = webLogin;
+		if (webLogin === 'custom') {
+			o.username_selector = webUserSel.trim() || null;
+			o.password_selector = webPassSel.trim() || null;
+			o.submit_selector = webSubmitSel.trim() || null;
+		}
+		if (!webSubmit) o.submit = false;
+		return o;
+	}
+
+	async function addWebCert(): Promise<void> {
+		if (!editSession) return;
+		webCertError = '';
+		try {
+			webCerts = await webSessionCertAdd(editSession.id, webCertTyped, host.trim());
+			webCertTyped = '';
+		} catch (e) {
+			webCertError = String(e);
+		}
+	}
+
+	async function removeWebCert(fp?: string): Promise<void> {
+		if (!editSession) return;
+		try {
+			webCerts = await webSessionCertRemove(editSession.id, fp);
+		} catch (e) {
+			webCertError = String(e);
+		}
+	}
+
+	async function clearWebData(): Promise<void> {
+		if (!editSession) return;
+		webCertError = '';
+		try {
+			await webSessionClearData(editSession.id);
+			webDataCleared = true;
+		} catch (e) {
+			webCertError = String(e);
+		}
+	}
 	/** Serial only: line settings. The port name is kept in `host`. */
 	let serialOptions = $state<SerialOptions>({ ...DEFAULT_SERIAL_OPTIONS });
 	let serialPorts = $state<SerialPortInfo[]>([]);
@@ -265,7 +347,7 @@
 		return list.length ? list : null;
 	}
 
-	const DEFAULT_PORT: Record<SessionKind, string> = { ssh: '22', rdp: '3389', vnc: '5900', spice: '5900', wsl: '0', telnet: '23', serial: '0', winbox: '8291' };
+	const DEFAULT_PORT: Record<SessionKind, string> = { ssh: '22', rdp: '3389', vnc: '5900', spice: '5900', wsl: '0', telnet: '23', serial: '0', winbox: '8291', web: '443' };
 
 	function setKind(next: SessionKind): void {
 		if (next === kind) return;
@@ -312,6 +394,9 @@
 	let monitoringChoice = $state<'' | 'on' | 'off'>('');
 	/** What its tabs record into the session history; empty: the default from Settings. */
 	let historyChoice = $state<'' | HistoryMode>('');
+	/** SSH: start a desktop over X11 instead of a shell; '' for a terminal. */
+	let x11Desktop = $state<'' | X11DesktopKind>('');
+	let x11Command = $state('');
 	/** tmux on the server: '' as the folder says. See #lib/terminal/tmux. */
 	let tmuxChoice = $state<'' | 'attach' | 'ask' | 'off'>('');
 	let tmuxMouse = $state(false);
@@ -319,7 +404,7 @@
 	let tmuxFolderOn = $derived(folderTmux(folderIdStr || null, folders) === true);
 	let tmuxOn = $derived(tmuxChoice === 'attach' || tmuxChoice === 'ask' || (tmuxChoice === '' && tmuxFolderOn));
 	/** tmux runs on an SSH server, or inside a WSL distribution. */
-	let tmuxKind = $derived(kind === 'ssh' || kind === 'wsl');
+	let tmuxKind = $derived((kind === 'ssh' && !x11Desktop) || kind === 'wsl');
 	let colorsOpen = $state(false);
 	let colorsSummary = $derived(
 		findTerminalTheme(terminalTheme)?.name ?? (terminalTheme ? t('termtheme.missing') : t('termtheme.session_default'))
@@ -343,7 +428,7 @@
 	let canSave = $derived(
 		name.trim().length > 0 &&
 		(kind === 'wsl' ? wslDistro.trim().length > 0 : host.trim().length > 0) &&
-		(kind === 'vnc' || kind === 'spice' || kind === 'wsl' || kind === 'telnet' || kind === 'serial' || !!usedCredential || username.trim().length > 0) &&
+		(kind === 'vnc' || kind === 'spice' || kind === 'wsl' || kind === 'telnet' || kind === 'serial' || kind === 'web' || !!usedCredential || username.trim().length > 0) &&
 		!saving
 	);
 
@@ -393,6 +478,23 @@
 		}
 	}
 
+	function fillWeb(w: WebOptions | null): void {
+		webScheme = w?.scheme === 'http' ? 'http' : 'https';
+		webPath = w?.path ?? '';
+		webOpenIn = w?.open_in ?? '';
+		webStorage = w?.storage ?? '';
+		webProfile = w?.profile ?? '';
+		webLogin = w?.login ?? 'auto';
+		webUserSel = w?.username_selector ?? '';
+		webPassSel = w?.password_selector ?? '';
+		webSubmitSel = w?.submit_selector ?? '';
+		webSubmit = w?.submit !== false;
+		webCerts = w?.certs ?? [];
+		webCertTyped = '';
+		webCertError = '';
+		webDataCleared = false;
+	}
+
 	function fillForm(editSession: SessionConfig | undefined): void {
 		osCleared = false;
 		osChoice = editSession?.os_manual ? (editSession.detected_os ?? '') : '';
@@ -409,6 +511,7 @@
 			spiceTlsPort = editSession.spice?.tls_port ? String(editSession.spice.tls_port) : '';
 			spiceCa = editSession.spice?.ca ?? '';
 			spiceSubject = editSession.spice?.host_subject ?? '';
+			fillWeb(editSession.web ?? null);
 			credentialId = editSession.credential_id ?? '';
 			name = editSession.name;
 			host = editSession.host;
@@ -440,6 +543,8 @@
 			historyChoice = editSession.history ?? '';
 			tmuxChoice = editSession.tmux?.mode === 'attach' || editSession.tmux?.mode === 'ask' || editSession.tmux?.mode === 'off' ? editSession.tmux.mode : '';
 			tmuxMouse = !!editSession.tmux?.mouse;
+			x11Desktop = editSession.x11_desktop?.desktop ?? '';
+			x11Command = editSession.x11_desktop?.command ?? '';
 			tmuxName = editSession.tmux?.name ?? '';
 			colorsOpen = false;
 			if (editSession.jump_chain && editSession.jump_chain.length > 0) {
@@ -516,6 +621,8 @@
 			historyChoice = '';
 			tmuxChoice = '';
 			tmuxMouse = false;
+			x11Desktop = '';
+			x11Command = '';
 			tmuxName = '';
 			colorsOpen = false;
 			jumpEnabled = false;
@@ -544,6 +651,8 @@
 		saving = true;
 		error = undefined;
 
+		// A whole address pasted into a web session's host field is split first.
+		if (kind === 'web') splitWebAddress();
 		const port = kind === 'wsl' || kind === 'serial' ? 0 : (parseInt(portStr, 10) || parseInt(DEFAULT_PORT[kind], 10) || 22);
 		const rdp = kind === 'rdp';
 		const vnc = kind === 'vnc';
@@ -552,8 +661,9 @@
 		const telnet = kind === 'telnet';
 		const serial = kind === 'serial';
 		const winbox = kind === 'winbox';
+		const web = kind === 'web';
 		/** Jump hosts, proxies, login shells and ssh_config are SSH's alone. */
-		const desktop = rdp || vnc || spice || wsl || telnet || serial || winbox;
+		const desktop = rdp || vnc || spice || wsl || telnet || serial || winbox || web;
 		const via = vnc || spice ? viaSessionId || null : null;
 		const tlsPort = parseInt(spiceTlsPort, 10);
 		const spiceToSave: SpiceOptions | null = spice
@@ -564,7 +674,7 @@
 				}
 			: null;
 		/** WSL and VNC have no username to share; their login stays their own. */
-		const credential = rdp || telnet || winbox || kind === 'ssh' ? credentialId || null : null;
+		const credential = rdp || telnet || winbox || web || kind === 'ssh' ? credentialId || null : null;
 		// RDP and VNC are password logons; the toggle below is SSH-only and
 		// its value is ignored here rather than trusted. WSL signs in by
 		// itself: nothing to keep, so a password left in the form is not saved.
@@ -602,6 +712,11 @@
 		const historyToSave = noTerminal ? null : historyChoice || null;
 		// tmux runs on an SSH server only. A name is kept only beside a choice
 		// or a folder that turns it on.
+		const x11ToSave = kind === 'ssh' && x11Desktop ? { desktop: x11Desktop, command: x11Desktop === 'custom' ? x11Command.trim() : null } : null;
+		if (x11ToSave?.desktop === 'custom' && !x11ToSave.command) {
+			error = t('x11desktop.command_needed');
+			return;
+		}
 		const tmuxNameToSave = tmuxName.trim();
 		if (tmuxKind && tmuxOn && tmuxNameToSave && !validTmuxName(tmuxNameToSave)) {
 			error = t('tmux.name_invalid');
@@ -695,6 +810,7 @@
 					wsl_distro: kind === 'wsl' ? wslDistro.trim() : null,
 					telnet: telnet ? { ...telnetOptions } : null,
 					serial: serial ? { ...serialOptions } : null,
+					web: web ? { ...webToSave(), certs: webCerts } : null,
 					spice: spiceToSave,
 					ssh_options: sshOptionsToSave,
 					credential_id: credential,
@@ -707,6 +823,7 @@
 					monitoring: monitoringToSave,
 					history: historyToSave,
 					tmux: tmuxToSave,
+					x11_desktop: x11ToSave,
 					host_label: altToSave ? (hostLabel.trim() || null) : null,
 					alt_addresses: altToSave,
 					connect_mode: altToSave ? addressMode : null,
@@ -741,6 +858,7 @@
 					wslDistro: kind === 'wsl' ? wslDistro.trim() : null,
 					telnet: telnet ? { ...telnetOptions } : null,
 					serial: serial ? { ...serialOptions } : null,
+					web: web ? webToSave() : null,
 					spice: spiceToSave,
 					credentialId: credential,
 					notes: notesToSave,
@@ -751,6 +869,7 @@
 					monitoring: monitoringToSave,
 					history: historyToSave,
 					tmux: tmuxToSave,
+					x11Desktop: x11ToSave,
 					hostLabel: altToSave ? hostLabel : null,
 					altAddresses: altToSave,
 					connectMode: altToSave ? addressMode : null,
@@ -853,6 +972,9 @@
 				<button type="button" class="auth-btn" class:active={kind === 'telnet'} disabled={saving} onclick={() => setKind('telnet')}>
 					{t('session.protocol_telnet')}
 				</button>
+				<button type="button" class="auth-btn" class:active={kind === 'web'} disabled={saving} onclick={() => setKind('web')}>
+					{t('session.protocol_web')}
+				</button>
 				<!-- WinBox is a program on this computer: none on a phone. -->
 				{#if !isMobile() || kind === 'winbox'}
 					<button type="button" class="auth-btn" class:active={kind === 'winbox'} disabled={saving} onclick={() => setKind('winbox')}>
@@ -874,7 +996,7 @@
 			</div>
 		</div>
 
-		<Input label={t('session.name')} bind:value={name} placeholder={kind === 'rdp' ? 'Office PC' : kind === 'telnet' ? 'Core switch' : kind === 'serial' ? 'Switch console' : kind === 'winbox' ? 'Router' : 'My Server'} disabled={saving} />
+		<Input label={t('session.name')} bind:value={name} placeholder={kind === 'rdp' ? 'Office PC' : kind === 'telnet' ? 'Core switch' : kind === 'serial' ? 'Switch console' : kind === 'winbox' ? 'Router' : kind === 'web' ? 'iDRAC rack 3' : 'My Server'} disabled={saving} />
 
 		{#if kind === 'wsl'}
 			<div class="shell-field">
@@ -927,7 +1049,7 @@
 		{:else}
 			<div class="row">
 				<div class="field-host">
-					<Input label={t('session.host')} bind:value={host} placeholder="192.168.1.1" disabled={saving} />
+					<Input label={kind === 'web' ? t('web.address') : t('session.host')} bind:value={host} placeholder={kind === 'web' ? 'https://192.168.1.10:8006' : '192.168.1.1'} disabled={saving} />
 				</div>
 				<div class="field-port">
 					<Input label={t('session.port')} bind:value={portStr} type="number" placeholder={DEFAULT_PORT[kind]} disabled={saving} />
@@ -938,7 +1060,7 @@
 			{/if}
 		{/if}
 
-		{#if kind === 'ssh' || kind === 'rdp' || kind === 'telnet' || kind === 'winbox'}
+		{#if kind === 'ssh' || kind === 'rdp' || kind === 'telnet' || kind === 'winbox' || kind === 'web'}
 			<div class="shell-field">
 				<label class="via-label" for="session-login">{t('credential.login')}</label>
 				<select id="session-login" class="via-select" value={credentialId} onchange={(e) => pickCredential(e.currentTarget.value)} disabled={saving}>
@@ -964,7 +1086,7 @@
 		{/if}
 
 		{#if kind !== 'vnc' && kind !== 'spice' && kind !== 'wsl' && kind !== 'serial' && !usedCredential}
-			<Input label={kind === 'telnet' ? t('session.telnet_username') : t('session.username')} bind:value={username} placeholder={kind === 'rdp' ? 'Administrator' : kind === 'telnet' || kind === 'winbox' ? 'admin' : 'root'} disabled={saving} />
+			<Input label={kind === 'telnet' ? t('session.telnet_username') : t('session.username')} bind:value={username} placeholder={kind === 'rdp' ? 'Administrator' : kind === 'telnet' || kind === 'winbox' || kind === 'web' ? 'admin' : 'root'} disabled={saving} />
 		{/if}
 
 		{#if kind === 'rdp'}
@@ -1098,6 +1220,103 @@
 				</div>
 			</div>
 			<p class="shell-hint">{t('session.telnet_keys_hint')}</p>
+		{:else if kind === 'web'}
+			<!-- The page runs in a window of its own that cannot reach the app;
+			     the login is typed into it from the backend. See src-tauri/src/web. -->
+			{#if !usedCredential}
+				<div class="shell-field">
+					<SecretRefField approvable label={t('session.password_optional')} bind:value={password} bind:secretRef={passwordRef} placeholder={t('session.stored_encrypted')} disabled={saving} onpick={(e) => (username = nameFromEntry(username, e))} />
+				</div>
+			{/if}
+			<div class="row">
+				<div class="shell-field telnet-half">
+					<label class="via-label" for="web-scheme">{t('web.scheme')}</label>
+					<select id="web-scheme" class="via-select" bind:value={webScheme} disabled={saving} onchange={() => { if (portStr === '443' || portStr === '80' || !portStr.trim()) portStr = webScheme === 'http' ? '80' : '443'; }}>
+						<option value="https">HTTPS</option>
+						<option value="http">HTTP</option>
+					</select>
+				</div>
+				<div class="shell-field telnet-half">
+					<Input label={t('web.path')} bind:value={webPath} placeholder="/" disabled={saving} />
+				</div>
+			</div>
+			<div class="shell-field">
+				<label class="via-label" for="web-login">{t('web.login')}</label>
+				<select id="web-login" class="via-select" bind:value={webLogin} disabled={saving}>
+					<option value="auto">{t('web.login_auto')}</option>
+					<option value="idrac">Dell iDRAC</option>
+					<option value="ilo">HPE iLO</option>
+					<option value="proxmox">Proxmox VE / PBS</option>
+					<option value="unifi">UniFi</option>
+					<option value="generic">{t('web.login_generic')}</option>
+					<option value="custom">{t('web.login_custom')}</option>
+					<option value="off">{t('web.login_off')}</option>
+				</select>
+				<p class="shell-hint">{webLogin === 'off' ? t('web.login_off_hint') : t('web.login_hint')}</p>
+			</div>
+			{#if webLogin === 'custom'}
+				<Input label={t('web.sel_username')} bind:value={webUserSel} placeholder="#username" disabled={saving} />
+				<Input label={t('web.sel_password')} bind:value={webPassSel} placeholder="input[type=password]" disabled={saving} />
+				<Input label={t('web.sel_submit')} bind:value={webSubmitSel} placeholder="button[type=submit]" disabled={saving} />
+			{/if}
+			{#if webLogin !== 'off'}
+				<label class="jump-toggle">
+					<input type="checkbox" bind:checked={webSubmit} disabled={saving} />
+					<span class="jump-toggle-text">{t('web.submit')}</span>
+				</label>
+			{/if}
+			<div class="shell-field">
+				<label class="via-label" for="web-open">{t('web.open_in')}</label>
+				<select id="web-open" class="via-select" bind:value={webOpenIn} disabled={saving}>
+					<option value="">{isMobile() ? t('web.open_browser') : t('web.open_window')}</option>
+					{#if !isMobile()}<option value="browser">{t('web.open_browser')}</option>{/if}
+				</select>
+				<p class="shell-hint">{webOpenIn === 'browser' || isMobile() ? t('web.open_browser_hint') : t('web.open_window_hint')}</p>
+			</div>
+			{#if webOpenIn !== 'browser' && !isMobile()}
+				<div class="shell-field">
+					<label class="via-label" for="web-storage">{t('web.storage')}</label>
+					<select id="web-storage" class="via-select" bind:value={webStorage} disabled={saving}>
+						<option value="">{t('web.storage_session')}</option>
+						<option value="profile">{t('web.storage_profile')}</option>
+						<option value="temporary">{t('web.storage_temporary')}</option>
+					</select>
+					{#if webStorage === 'profile'}
+						<Input label={t('web.profile')} bind:value={webProfile} placeholder="pve-cluster" disabled={saving} />
+					{/if}
+					<p class="shell-hint">{webStorage === 'profile' ? t('web.storage_profile_hint') : webStorage === 'temporary' ? t('web.storage_temporary_hint') : t('web.storage_session_hint')}</p>
+					{#if editSession && webStorage === ''}
+						<div class="key-path-row">
+							<Button variant="secondary" size="sm" onclick={clearWebData} disabled={saving || webDataCleared}>
+								{webDataCleared ? t('web.data_cleared') : t('web.clear_data')}
+							</Button>
+						</div>
+					{/if}
+				</div>
+				{#if editSession}
+					<div class="shell-field">
+						<span class="via-label">{t('web.certs')}</span>
+						{#if webCerts.length === 0}
+							<p class="shell-hint">{t('web.certs_none')}</p>
+						{:else}
+							{#each webCerts as c (c.sha256)}
+								<div class="key-path-row">
+									<code class="web-fp" title={c.sha256}>{c.host ? `${c.host} · ` : ''}{c.sha256}</code>
+									<Button variant="secondary" size="sm" onclick={() => removeWebCert(c.sha256)} disabled={saving}>{t('web.cert_remove')}</Button>
+								</div>
+							{/each}
+						{/if}
+						<div class="key-path-row">
+							<div class="key-path-input">
+								<Input bind:value={webCertTyped} placeholder={t('web.cert_add_placeholder')} disabled={saving} />
+							</div>
+							<Button variant="secondary" size="sm" onclick={addWebCert} disabled={saving || !webCertTyped.trim()}>{t('web.cert_add')}</Button>
+						</div>
+						{#if webCertError}<p class="shell-hint web-error">{webCertError}</p>{/if}
+						<p class="shell-hint">{t('web.certs_hint')}</p>
+					</div>
+				{/if}
+			{/if}
 		{:else if kind === 'serial'}
 			<!-- A serial line has no login of its own; the device's console may
 			     ask for one, typed in the terminal. -->
@@ -1476,7 +1695,27 @@
 			</div>
 		{/if}
 
-		{#if kind === 'ssh'}
+		{#if kind === 'ssh' && (!isMobile() || x11Desktop)}
+			<div class="folder-section">
+				<span class="folder-label">{t('x11desktop.label')}</span>
+				<select class="folder-select" bind:value={x11Desktop} disabled={saving}>
+					<option value="">{t('x11desktop.off')}</option>
+					{#each X11_DESKTOPS as d (d)}
+						<option value={d}>{t(`x11desktop.${d}`)}</option>
+					{/each}
+				</select>
+			</div>
+			{#if x11Desktop === 'custom'}
+				<div class="shell-field">
+					<Input label={t('x11desktop.command')} bind:value={x11Command} placeholder="i3" disabled={saving} />
+				</div>
+			{/if}
+			{#if x11Desktop}
+				<p class="shell-hint">{t('x11desktop.hint')}</p>
+			{/if}
+		{/if}
+
+		{#if kind === 'ssh' && !x11Desktop}
 			<div class="shell-field">
 				<Input label={t('session.login_shell_optional')} bind:value={shell} placeholder="fish -l" disabled={saving} />
 				<p class="shell-hint">{t('session.login_shell_hint')}</p>
@@ -2059,5 +2298,18 @@
 	.jump-add-btn:disabled {
 		opacity: 0.4;
 		cursor: not-allowed;
+	}
+	.web-fp {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 0.72rem;
+		color: var(--color-text-secondary);
+	}
+
+	.web-error {
+		color: var(--color-danger, #e5484d);
 	}
 </style>

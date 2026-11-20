@@ -12,6 +12,7 @@
 	import Sidebar from './Sidebar.svelte';
 	import StatusBar from './StatusBar.svelte';
 	import HistoryPanel from '#lib/components/terminal/HistoryPanel.svelte';
+	import CommandPicker from '#lib/components/terminal/CommandPicker.svelte';
 	import { monitorBarShown } from '#lib/state/monitor-bar.svelte.js';
 	import Toast from '#lib/components/shared/Toast.svelte';
 	import UpdateBanner from '#lib/components/shared/UpdateBanner.svelte';
@@ -21,6 +22,7 @@
 	import HostKeyDialog from '#lib/components/shared/HostKeyDialog.svelte';
 	import AuthPromptDialog from '#lib/components/shared/AuthPromptDialog.svelte';
 	import PassphrasePrompt from '#lib/components/pwmanager/PassphrasePrompt.svelte';
+	import WebCertPrompt from '#lib/components/sessions/WebCertPrompt.svelte';
 	import DuplicateVaultsDialog from '#lib/components/vault/DuplicateVaultsDialog.svelte';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -249,6 +251,7 @@
 	<!-- Outside the bar's condition: an SSH or WSL tab swaps the status bar
 	     for the monitor bar, and the panel must open over those too. -->
 	<HistoryPanel />
+	<CommandPicker />
 	<Toast />
 	<UpdateBanner />
 	<UpdateDialog open={updater.startupBlocking} />
@@ -273,6 +276,7 @@
 	<HostKeyDialog />
 	<AuthPromptDialog />
 	<PassphrasePrompt />
+	<WebCertPrompt />
 	<McpConfirmDialog />
 </div>
 
