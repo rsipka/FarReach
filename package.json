@@ -41,6 +41,7 @@
     "import-managers:test": "node --import ./scripts/resolve-lib.mjs scripts/import-managers-test.mjs",
     "logsource:test": "node scripts/logsource-test.mjs",
     "split:test": "node scripts/split-test.mjs",
+    "layouts:test": "node scripts/layouts-test.mjs",
     "broadcast:test": "node scripts/broadcast-test.mjs",
     "release:test": "node scripts/release-test.mjs",
     "webkit:test": "node --import ./scripts/resolve-lib.mjs scripts/webkit-input-test.mjs",

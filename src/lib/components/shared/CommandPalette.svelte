@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getLayouts, openLayout } from '#lib/state/layouts.svelte.js';
 	/**
 	 * One box to reach anything: a session to connect, an open tab, a page,
 	 * or an action. Ctrl+Shift+P (⇧⌘P on a Mac), or the search button in the
@@ -143,6 +144,18 @@
 				detail: sessionAddress(s),
 				keywords: s.tags.join(' '),
 				run: () => requestSessionAction({ kind: 'connect', sessionId: s.id })
+			});
+		}
+		for (const l of getLayouts()) {
+			out.push({
+				id: `layout:${l.id}`,
+				group: t('palette.group_actions'),
+				label: t('layouts.open_named', { name: l.name }),
+				keywords: t('layouts.keywords'),
+				run: () => {
+					setActivePage('terminal');
+					openLayout(l.id);
+				}
 			});
 		}
 		for (const tab of getTabs()) {
