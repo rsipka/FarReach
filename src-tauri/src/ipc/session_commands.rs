@@ -824,7 +824,9 @@ pub async fn session_create(
         // out on first connect.
         detected_os: detected_os
             .filter(|os| !os.is_empty())
-            .or_else(|| (kind == crate::state::SessionKind::Rdp).then(|| "windows".to_string())),
+            .or_else(|| (kind == crate::state::SessionKind::Rdp).then(|| "windows".to_string()))
+            // WinBox only ever manages a MikroTik.
+            .or_else(|| (kind == crate::state::SessionKind::Winbox).then(|| "mikrotik".to_string())),
         os_manual: os_manual.unwrap_or(false),
         vault_id: if storage_vault_id != ensure_sessions_vault(&mut manager).await.unwrap_or_default() {
             Some(storage_vault_id.clone())

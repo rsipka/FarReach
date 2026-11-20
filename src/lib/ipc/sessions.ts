@@ -276,7 +276,8 @@ export interface SshOptions {
   my_accepted_weakenings?: string[] | null;
 }
 
-export type SessionKind = 'ssh' | 'rdp' | 'vnc' | 'wsl' | 'telnet' | 'serial' | 'web';
+/** `winbox`: MikroTik's WinBox 4, started as a program of its own (desktop). */
+export type SessionKind = 'ssh' | 'rdp' | 'vnc' | 'wsl' | 'telnet' | 'serial' | 'winbox' | 'web';
 
 export function sessionKind(session: Pick<SessionConfig, 'kind'>): SessionKind {
   return session.kind ?? 'ssh';
