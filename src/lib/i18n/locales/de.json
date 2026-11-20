@@ -454,6 +454,8 @@
   "session.select_key_file": "SSH-Privatschlüssel auswählen",
   "session.ssh_private_key_filter": "SSH-Privatschlüssel",
   "session.connected_toast": "Verbunden mit {{name}}",
+  "session.connected_mark": "Verbunden",
+  "session.open_mark": "In einem Tab geöffnet",
   "session.identity_created_toast": "Identität erstellt. Dein Verschlüsselungsschlüssel ist sicher im OS-Schlüsselbund gespeichert.",
   "session.identity_restored_toast": "Identität erfolgreich wiederhergestellt.",
   "session.data_cleared_toast": "Daten gelöscht. Du kannst jetzt initialisieren.",

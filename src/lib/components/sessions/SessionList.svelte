@@ -70,7 +70,7 @@
 	import { addressName, autoOrder, checksAddresses, plainOrder, connectMode, hasAltAddresses, isUnreachable, lastAddress, rememberAddress, sessionAddresses, type ResolvedAddress } from '#lib/sessions/addresses.js';
 	import AddressPicker from './AddressPicker.svelte';
 	// Passwords are now stored encrypted in vault, not in memory cache
-	import { createTab, updateTabOs } from '#lib/state/tabs.svelte.js';
+	import { createTab, updateTabOs, getSessionTabStates } from '#lib/state/tabs.svelte.js';
 	import { getSettings, sessionLogConfig } from '#lib/state/settings.svelte.js';
 	import { isMobile } from '#lib/platform.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
@@ -412,6 +412,9 @@
 	// never reaches one the search has hidden.
 	let selectMode = $state(false);
 	let selected = $state(new Set<string>());
+	/** Sessions with a tab open: tinted, the one on screen picked, a green
+	 *  dot when connected (see SessionCard). */
+	let tabStates = $derived(getSessionTabStates());
 	let lastSelected = $state<string | null>(null);
 	let selecting = $derived(selectMode || selected.size > 0);
 	let bulkDeleteConfirm = $state(false);
@@ -2157,7 +2160,7 @@
 		</div>
 	{:else}
 		<div class:folder-session={depth >= 0} class:drop-before={dropSlot?.id === session.id && dropSlot.before} class:drop-after={dropSlot?.id === session.id && !dropSlot.before} class:located={locatedId === session.id} data-session-id={session.id} style:padding-left={depth >= 0 ? `${Math.min(depth + 1, 8) * 14}px` : undefined}>
-			<SessionCard {session} vault={selectedVaultId === ALL_VAULTS && session.vault_id ? (vaultState.vaults.get(session.vault_id) ?? null) : null} onconnect={() => handleConnect(session)} onedit={() => handleEdit(session)} ondelete={() => handleDelete(session)} oncontextmenu={(e) => openSessionContextMenu(e, session)} ondragstart={(e) => handleDragStart(e, session)} ondragend={() => {}} {selecting} selected={selected.has(session.id)} onselect={(e) => toggleSelect(session, e)} viaName={session.via_session_id ? (sessions.find((s) => s.id === session.via_session_id)?.name ?? null) : null} />
+			<SessionCard {session} vault={selectedVaultId === ALL_VAULTS && session.vault_id ? (vaultState.vaults.get(session.vault_id) ?? null) : null} onconnect={() => handleConnect(session)} onedit={() => handleEdit(session)} ondelete={() => handleDelete(session)} oncontextmenu={(e) => openSessionContextMenu(e, session)} ondragstart={(e) => handleDragStart(e, session)} ondragend={() => {}} {selecting} selected={selected.has(session.id)} onselect={(e) => toggleSelect(session, e)} open={tabStates.has(session.id)} current={tabStates.get(session.id)?.current ?? false} connected={tabStates.get(session.id)?.connected ?? false} viaName={session.via_session_id ? (sessions.find((s) => s.id === session.via_session_id)?.name ?? null) : null} />
 		</div>
 	{/if}
 {/snippet}
