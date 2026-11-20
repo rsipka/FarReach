@@ -28,6 +28,7 @@
 //! entry therefore asks once, the first time each person connects with it,
 //! and again if the credential is pointed at another entry.
 
+use crate::ipc::password_history as pwh;
 use crate::ipc::session_commands as sessions;
 use crate::state::{AppState, AuthMethod, CredentialUse, Folder, JumpHostConfig, SavedCredential, SessionConfig};
 use crate::vault::types::SecretCategory;
@@ -412,7 +413,12 @@ pub async fn saved_credential_list(state: State<'_, AppState>) -> Result<Vec<Sav
     if manager.is_locked() {
         return Ok(Vec::new());
     }
-    Ok(read_credentials(&manager).await)
+    let mut list = read_credentials(&manager).await;
+    // Old passwords are read one credential at a time, when asked for.
+    for c in &mut list {
+        c.password_history = None;
+    }
+    Ok(list)
 }
 
 /// Save a new credential in a vault (None, or one not a user vault: this
@@ -448,6 +454,7 @@ pub async fn saved_credential_create(
         domain: domain.filter(|d| !d.trim().is_empty()),
         auth_method,
         vault_id,
+        password_history: None,
     };
     let json = serde_json::to_vec(&cred).map_err(|e| e.to_string())?;
     manager
@@ -473,16 +480,32 @@ pub async fn saved_credential_update(
     let (vault, row) = locate(&manager, &credential.id)
         .await
         .ok_or_else(|| format!("Credential not found: {}", credential.id))?;
-    let cred = SavedCredential {
+    // The history is the stored one, with the stored password in front
+    // when this save replaces it; never what the window sent.
+    let stored = manager
+        .read_secret(&vault, &row)
+        .await
+        .ok()
+        .and_then(|p| serde_json::from_slice::<SavedCredential>(p.expose_secret()).ok());
+    let password_history = pwh::carry(
+        stored.as_ref().and_then(|c| c.password_history.as_deref()),
+        stored.as_ref().and_then(|c| pwh::typed_password(&c.auth_method)),
+        pwh::typed_password(&credential.auth_method),
+        pwh::limit(&manager).await,
+        pwh::now(),
+    );
+    let mut cred = SavedCredential {
         name: credential.name.trim().to_string(),
         username: credential.username.trim().to_string(),
         domain: credential.domain.filter(|d| !d.trim().is_empty()),
         vault_id: vault_of(&manager, &vault),
+        password_history,
         ..credential
     };
     let json = serde_json::to_vec(&cred).map_err(|e| e.to_string())?;
     manager.update_secret(&vault, &row, SecretBox::new(Box::new(json))).await.map_err(|e| e.to_string())?;
     tracing::info!("Updated saved credential {}", cred.id);
+    cred.password_history = None;
     Ok(cred)
 }
 
@@ -832,6 +855,7 @@ mod tests {
             domain: None,
             auth_method: AuthMethod::Password { password: Some(format!("{user}-pw")), password_ref: None },
             vault_id: vault.map(Into::into),
+            password_history: None,
         }
     }
 
