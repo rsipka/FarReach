@@ -776,6 +776,7 @@ pub async fn session_create(
     host_label: Option<String>,
     alt_addresses: Option<Vec<crate::state::SessionAddress>>,
     connect_mode: Option<String>,
+    address_check: Option<bool>,
 ) -> Result<SessionConfig, String> {
     let mut manager = state.vault_manager.lock().await;
     let kind = kind.unwrap_or_default();
@@ -851,6 +852,7 @@ pub async fn session_create(
         host_label,
         alt_addresses,
         connect_mode,
+        address_check,
     };
     session.tidy_documentation();
 

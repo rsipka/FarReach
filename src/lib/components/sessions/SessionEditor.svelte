@@ -239,6 +239,8 @@
 	let hostLabel = $state('');
 	let addressRows = $state<AddressRow[]>([]);
 	let addressMode = $state<ConnectMode>('auto');
+	let addressCheck = $state<'' | 'on' | 'off'>('');
+	const addressCheckToSave = () => (addressCheck === '' ? null : addressCheck === 'on');
 
 	/** The other addresses as they are saved: rows without a host dropped. */
 	function addressesToSave(): SessionAddress[] | null {
@@ -403,6 +405,7 @@
 			hostLabel = editSession.host_label ?? '';
 			addressRows = (editSession.alt_addresses ?? []).map((a) => ({ label: a.label ?? '', host: a.host, port: a.port ? String(a.port) : '', direct: !!a.direct }));
 			addressMode = editSession.connect_mode ?? 'auto';
+			addressCheck = editSession.address_check == null ? '' : editSession.address_check ? 'on' : 'off';
 			username = editSession.username;
 			authType = editSession.auth_method.type === 'Password' && editSession.auth_method.password_ref ? 'Manager' : editSession.auth_method.type;
 			password = editSession.auth_method.password ?? '';
@@ -475,6 +478,7 @@
 			hostLabel = '';
 			addressRows = [];
 			addressMode = 'auto';
+			addressCheck = '';
 			username = 'root';
 			authType = 'Password';
 			password = '';
@@ -681,6 +685,7 @@
 					host_label: altToSave ? (hostLabel.trim() || null) : null,
 					alt_addresses: altToSave,
 					connect_mode: altToSave ? addressMode : null,
+					address_check: altToSave ? addressCheckToSave() : null,
 				});
 				// Its open tabs take the new colours (and monitoring choice) at once.
 				setSessionTerminalTheme(editSession.id, themeToSave);
@@ -722,7 +727,8 @@
 					tmux: tmuxToSave,
 					hostLabel: altToSave ? hostLabel : null,
 					altAddresses: altToSave,
-					connectMode: altToSave ? addressMode : null
+					connectMode: altToSave ? addressMode : null,
+					addressCheck: altToSave ? addressCheckToSave() : null
 				});
 			}
 			onsave?.();
@@ -893,7 +899,7 @@
 				</div>
 			</div>
 			{#if kind === 'ssh'}
-				<SessionAddresses bind:mainLabel={hostLabel} bind:rows={addressRows} bind:mode={addressMode} routed={jumpEnabled || proxyEnabled} port={portStr} disabled={saving} />
+				<SessionAddresses bind:mainLabel={hostLabel} bind:rows={addressRows} bind:mode={addressMode} bind:check={addressCheck} checkByDefault={getSettings().checkAddresses} routed={jumpEnabled || proxyEnabled} port={portStr} disabled={saving} />
 			{/if}
 		{/if}
 

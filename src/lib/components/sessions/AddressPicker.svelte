@@ -9,7 +9,8 @@
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { sshProbeAddresses } from '#lib/ipc/ssh.js';
 	import type { SessionConfig } from '#lib/ipc/sessions.js';
-	import { addressText, lastAddress, addressKey, sessionAddresses, type ResolvedAddress } from '#lib/sessions/addresses.js';
+	import { getSettings } from '#lib/state/settings.svelte.js';
+	import { addressText, checksAddresses, lastAddress, addressKey, sessionAddresses, type ResolvedAddress } from '#lib/sessions/addresses.js';
 
 	interface Props {
 		session: SessionConfig;
@@ -24,9 +25,13 @@
 	let probes = $state<(number | null | undefined)[]>([]);
 	let last = $derived(lastAddress(session.id));
 
+	// Silent mode: no dots, nothing sent until an address is picked.
+	let check = $derived(checksAddresses(session, getSettings().checkAddresses));
+
 	$effect(() => {
 		const list = addresses;
 		probes = list.map(() => undefined);
+		if (!check) return;
 		let gone = false;
 		sshProbeAddresses(list.map((a) => (a.routed ? { host: '', port: 0 } : { host: a.host, port: a.port })))
 			.then((r) => {
@@ -42,6 +47,7 @@
 
 	function status(a: ResolvedAddress, i: number): { cls: string; text: string } {
 		if (a.routed) return { cls: 'routed', text: t('session.address_routed') };
+		if (!check) return { cls: 'unchecked', text: t('session.address_not_checked') };
 		const p = probes[i];
 		if (p === undefined) return { cls: 'checking', text: t('session.address_checking') };
 		if (p === null) return { cls: 'down', text: t('session.address_no_answer') };

@@ -66,6 +66,10 @@ export interface Settings {
 	/** Server monitoring (CPU, memory, disk, users under an SSH or WSL
 	 *  terminal), unless the session chooses otherwise. */
 	serverMonitoring: boolean;
+	/** Before connecting a session with several addresses, check which of
+	 *  them answer (a plain TCP connect to each), unless the session says
+	 *  otherwise. Off: silent, they are tried in order without checking. */
+	checkAddresses: boolean;
 	/** Look for a new release at launch and every 45 minutes. Off: only
 	 *  Settings > General > Check now asks, so nothing goes out on its own. */
 	checkForUpdates: boolean;
@@ -241,6 +245,7 @@ export const defaults: Settings = {
 	doubleClickToOpen: false,
 	closeTabOnExit: false,
 	serverMonitoring: true,
+	checkAddresses: true,
 	checkForUpdates: true,
 	playSounds: !isMobile(),
 	terminalBellSound: !isMobile(),
@@ -333,6 +338,7 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.doubleClickToOpen = parsed.doubleClickToOpen ?? defaults.doubleClickToOpen;
 	settings.closeTabOnExit = parsed.closeTabOnExit ?? defaults.closeTabOnExit;
 	settings.serverMonitoring = parsed.serverMonitoring ?? defaults.serverMonitoring;
+	settings.checkAddresses = parsed.checkAddresses ?? defaults.checkAddresses;
 	settings.checkForUpdates = parsed.checkForUpdates ?? defaults.checkForUpdates;
 	settings.playSounds = parsed.playSounds ?? defaults.playSounds;
 	settings.terminalBellSound = parsed.terminalBellSound ?? defaults.terminalBellSound;

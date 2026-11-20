@@ -3498,8 +3498,17 @@
   "session.connect_mode_auto": "Автоматично",
   "session.connect_mode_ask": "Питане при всяко свързване",
   "session.connect_mode_main": "Само основният адрес",
-  "session.connect_mode_auto_hint": "Проверява кои адреси отговарят и използва първия в този ред. Ако е недостъпен, опитва следващия.",
+  "session.connect_mode_auto_hint": "Използва първия достъпен адрес в този ред; ако някой е недостъпен, опитва следващия.",
   "session.connect_mode_ask_hint": "При всяко свързване показва адресите и кои от тях отговарят.",
   "session.connect_mode_main_hint": "Винаги основният адрес. Десен бутон › Свързване чрез избира друг.",
-  "session.more_addresses": "Също: {{addresses}}"
+  "session.more_addresses": "Също: {{addresses}}",
+  "settings.check_addresses": "Проверка кои адреси отговарят",
+  "settings.check_addresses_desc": "Преди свързване на сесия с няколко адреса проверява кои отговарят оттук, за да избере най-добрия. Изключено (тих режим): към адрес не се изпраща нищо, докато не бъде опитан, и се опитват подред. Всяка сесия може да избере сама.",
+  "session.address_check": "Проверка кои адреси отговарят",
+  "session.address_check_default_on": "По подразбиране (вкл.)",
+  "session.address_check_default_off": "По подразбиране (изкл., тих)",
+  "session.address_check_on": "Вкл.",
+  "session.address_check_off": "Изкл. (тих)",
+  "session.address_check_hint": "Тих режим: към адрес не се изпраща нищо, докато не бъде опитан. Автоматичният избор ги опитва подред и минава на следващия, ако някой е недостъпен.",
+  "session.address_not_checked": "Непроверен"
 }

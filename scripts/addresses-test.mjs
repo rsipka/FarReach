@@ -6,7 +6,7 @@
  * Run: node --import ./scripts/resolve-lib.mjs scripts/addresses-test.mjs
  */
 
-import { addressKey, autoOrder, connectMode, hasAltAddresses, isUnreachable, sessionAddresses } from '../src/lib/sessions/addresses.ts';
+import { addressKey, autoOrder, checksAddresses, plainOrder, connectMode, hasAltAddresses, isUnreachable, sessionAddresses } from '../src/lib/sessions/addresses.ts';
 
 let failures = 0;
 const check = (name, cond, extra = '') => {
@@ -54,6 +54,12 @@ check('last good goes first within its group', order.map((a) => a.index).join() 
 // The last good one is routed while the office answers: the office still wins.
 order = autoOrder(all, [undefined, 3, null], 'server.example.com:2222');
 check('last good never beats an answering direct one', order[0].index === 1);
+
+// Silent mode: in priority order, the last good one first.
+check('silent keeps priority order', plainOrder(all).map((a) => a.index).join() === '0,1,2');
+check('silent puts the last good first', plainOrder(all, '10.0.0.5:22').map((a) => a.index).join() === '1,0,2');
+check('the session wins over the setting', checksAddresses({ address_check: false }, true) === false && checksAddresses({ address_check: true }, false) === true);
+check('unset follows the setting', checksAddresses({}, false) === false && checksAddresses({ address_check: null }, true) === true);
 
 check('a timeout moves on', isUnreachable('Connection failed: Connection timed out'));
 check('a refused port moves on', isUnreachable('Connection failed: could not reach 10.0.0.5:22: connection refused'));

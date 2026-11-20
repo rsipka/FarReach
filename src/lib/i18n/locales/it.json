@@ -3498,8 +3498,17 @@
   "session.connect_mode_auto": "Automatico",
   "session.connect_mode_ask": "Chiedi a ogni connessione",
   "session.connect_mode_main": "Solo indirizzo principale",
-  "session.connect_mode_auto_hint": "Verifica quali indirizzi rispondono e usa il primo in quest’ordine. Se non è raggiungibile, prova il successivo.",
+  "session.connect_mode_auto_hint": "Usa il primo indirizzo raggiungibile in quest’ordine; se uno non è raggiungibile, prova il successivo.",
   "session.connect_mode_ask_hint": "Mostra gli indirizzi, e quali rispondono, a ogni connessione.",
   "session.connect_mode_main_hint": "Sempre l’indirizzo principale. Clic destro › Connetti tramite ne sceglie comunque un altro.",
-  "session.more_addresses": "Anche: {{addresses}}"
+  "session.more_addresses": "Anche: {{addresses}}",
+  "settings.check_addresses": "Verifica quali indirizzi rispondono",
+  "settings.check_addresses_desc": "Prima di connettere una sessione con più indirizzi, verifica quali rispondono da qui per scegliere il migliore. Disattivato (modalità silenziosa): nulla viene inviato a un indirizzo finché non viene provato, e sono provati in ordine. Ogni sessione può scegliere da sé.",
+  "session.address_check": "Verifica quali indirizzi rispondono",
+  "session.address_check_default_on": "Predefinito (attivo)",
+  "session.address_check_default_off": "Predefinito (disattivo, silenzioso)",
+  "session.address_check_on": "Attivo",
+  "session.address_check_off": "Disattivo (silenzioso)",
+  "session.address_check_hint": "Silenzioso: nulla viene inviato a un indirizzo finché non viene provato. La modalità automatica li prova in ordine e passa al successivo se uno non è raggiungibile.",
+  "session.address_not_checked": "Non verificato"
 }

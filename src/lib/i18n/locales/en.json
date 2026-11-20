@@ -3498,8 +3498,17 @@
   "session.connect_mode_auto": "Automatic",
   "session.connect_mode_ask": "Ask on every connect",
   "session.connect_mode_main": "Main address only",
-  "session.connect_mode_auto_hint": "Checks which addresses answer and uses the first one in this order. If it cannot be reached, the next one is tried.",
+  "session.connect_mode_auto_hint": "Uses the first address in this order that can be reached; if one cannot be reached, the next one is tried.",
   "session.connect_mode_ask_hint": "Shows the addresses, and which of them answer, each time you connect.",
   "session.connect_mode_main_hint": "Always the main address. Right-click › Connect via still picks another one.",
-  "session.more_addresses": "Also: {{addresses}}"
+  "session.more_addresses": "Also: {{addresses}}",
+  "settings.check_addresses": "Check which addresses answer",
+  "settings.check_addresses_desc": "Before connecting a session that has several addresses, check which of them answer from here, to pick the best one. Off (silent mode): nothing is sent to an address until it is tried, and they are tried in order. A session can choose for itself in its settings.",
+  "session.address_check": "Check which addresses answer",
+  "session.address_check_default_on": "Default (on)",
+  "session.address_check_default_off": "Default (off, silent)",
+  "session.address_check_on": "On",
+  "session.address_check_off": "Off (silent)",
+  "session.address_check_hint": "Silent: nothing is sent to an address until it is tried. Automatic then tries them in order and moves on when one cannot be reached.",
+  "session.address_not_checked": "Not checked"
 }

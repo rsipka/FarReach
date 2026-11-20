@@ -11,7 +11,7 @@
 	import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 	import { ptyWrite, ptyResize } from '#lib/ipc/pty.js';
 	import { sshSend, sshResize, sshConnect, sshReady, sshDisconnect, sshProbeAddresses, type SshConnectParams } from '#lib/ipc/ssh.js';
-	import { addressKey, addressName, autoOrder, isUnreachable, rememberAddress } from '#lib/sessions/addresses.js';
+	import { addressKey, addressName, autoOrder, isUnreachable, plainOrder, rememberAddress } from '#lib/sessions/addresses.js';
 	import { telnetConnect, telnetDisconnect, telnetSend, telnetResize, type TelnetConnectParams } from '#lib/ipc/telnet.js';
 	import { serialConnect, serialDisconnect, serialSend, serialBreak, serialSummary as serialLabel, type SerialConnectParams } from '#lib/ipc/serial.js';
 	import { untrustedRefsFromError } from '#lib/ipc/sessions.js';
@@ -1218,10 +1218,13 @@
 				if (!fb || !isUnreachable(String(err))) throw err;
 				const usedKey = addressKey(sshConnectParams);
 				const rest = fb.addresses.filter((a) => addressKey(a) !== usedKey);
-				const probes = await sshProbeAddresses(rest.map((a) => (a.routed ? { host: '', port: 0 } : { host: a.host, port: a.port }))).catch(() => rest.map(() => null));
+				// Silent mode: in order, nothing sent before an address is tried.
+				const order = fb.check === false
+					? plainOrder(rest)
+					: autoOrder(rest, await sshProbeAddresses(rest.map((a) => (a.routed ? { host: '', port: 0 } : { host: a.host, port: a.port }))).catch(() => rest.map(() => null)));
 				let last = err;
 				let done = false;
-				for (const a of autoOrder(rest, probes)) {
+				for (const a of order) {
 					term.write(`\x1b[33m[${t('session.trying_address', { name: addressName(a, fb.sessionPort) })}]\x1b[0m\r\n`);
 					const moved = { host: a.host, port: a.port, jumpChain: a.routed ? fb.jumpChain : undefined, proxy: a.routed ? fb.proxy : undefined };
 					try {

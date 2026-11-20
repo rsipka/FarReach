@@ -113,6 +113,8 @@ export interface SessionConfig {
   alt_addresses?: SessionAddress[] | null;
   /** How a session with other addresses picks one; unset: `auto`. */
   connect_mode?: ConnectMode | null;
+  /** Check which addresses answer before connecting; unset: as Settings says. */
+  address_check?: boolean | null;
 }
 
 /** `auto`: by priority, skipping what does not answer; `ask`: a picker on
@@ -268,6 +270,7 @@ export async function sessionCreate(params: {
   hostLabel?: string | null;
   altAddresses?: SessionAddress[] | null;
   connectMode?: ConnectMode | null;
+  addressCheck?: boolean | null;
 }): Promise<SessionConfig> {
   return invoke<SessionConfig>('session_create', {
     name: params.name,
@@ -305,6 +308,7 @@ export async function sessionCreate(params: {
     hostLabel: params.hostLabel?.trim() || null,
     altAddresses: params.altAddresses?.length ? params.altAddresses : null,
     connectMode: params.altAddresses?.length ? (params.connectMode ?? null) : null,
+    addressCheck: params.altAddresses?.length ? (params.addressCheck ?? null) : null,
   });
 }
 

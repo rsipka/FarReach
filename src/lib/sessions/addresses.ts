@@ -38,6 +38,21 @@ export function hasAltAddresses(s: AddressSession): boolean {
 	return (s.kind ?? 'ssh') === 'ssh' && (s.alt_addresses?.some((a) => a.host.trim()) ?? false);
 }
 
+/** Whether a connect checks which addresses answer first: the session's
+ *  own choice, else the setting (`checkByDefault`). Off is silent mode:
+ *  nothing is sent to an address until it is tried. */
+export function checksAddresses(s: Pick<SessionConfig, 'address_check'>, checkByDefault: boolean): boolean {
+	return s.address_check ?? checkByDefault;
+}
+
+/** Silent mode's order: by priority, the address that worked last first. */
+export function plainOrder(addresses: ResolvedAddress[], lastGood?: string | null): ResolvedAddress[] {
+	const list = [...addresses];
+	const at = lastGood ? list.findIndex((a) => addressKey(a) === lastGood) : -1;
+	if (at > 0) list.unshift(...list.splice(at, 1));
+	return list;
+}
+
 export function connectMode(s: AddressSession): ConnectMode {
 	if (!hasAltAddresses(s)) return 'main';
 	return s.connect_mode === 'ask' || s.connect_mode === 'main' ? s.connect_mode : 'auto';

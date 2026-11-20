@@ -3498,8 +3498,17 @@
   "session.connect_mode_auto": "Automaticky",
   "session.connect_mode_ask": "Ptát se při každém připojení",
   "session.connect_mode_main": "Jen hlavní adresa",
-  "session.connect_mode_auto_hint": "Ověří, které adresy odpovídají, a použije první v tomto pořadí. Když se k ní nedá připojit, zkusí další.",
+  "session.connect_mode_auto_hint": "Použije první dosažitelnou adresu v tomto pořadí; když se k některé nedá připojit, zkusí další.",
   "session.connect_mode_ask_hint": "Při každém připojení ukáže adresy a které z nich odpovídají.",
   "session.connect_mode_main_hint": "Vždy hlavní adresa. Pravým tlačítkem › Připojit přes lze vybrat jinou.",
-  "session.more_addresses": "Další: {{addresses}}"
+  "session.more_addresses": "Další: {{addresses}}",
+  "settings.check_addresses": "Ověřovat, které adresy odpovídají",
+  "settings.check_addresses_desc": "Před připojením relace s více adresami ověří, které z nich odsud odpovídají, a vybere nejlepší. Vypnuto (tichý režim): na adresu se nic nepošle, dokud se nezkouší, a zkoušejí se popořadě. Relace si to může nastavit sama.",
+  "session.address_check": "Ověřovat, které adresy odpovídají",
+  "session.address_check_default_on": "Výchozí (zapnuto)",
+  "session.address_check_default_off": "Výchozí (vypnuto, tichý režim)",
+  "session.address_check_on": "Zapnuto",
+  "session.address_check_off": "Vypnuto (tichý režim)",
+  "session.address_check_hint": "Tichý režim: na adresu se nic nepošle, dokud se nezkouší. Automatický výběr je pak zkouší popořadě a při nedostupnosti přejde na další.",
+  "session.address_not_checked": "Neověřeno"
 }

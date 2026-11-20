@@ -3498,8 +3498,17 @@
   "session.connect_mode_auto": "Automática",
   "session.connect_mode_ask": "Preguntar en cada conexión",
   "session.connect_mode_main": "Solo la dirección principal",
-  "session.connect_mode_auto_hint": "Comprueba qué direcciones responden y usa la primera en este orden. Si no se puede alcanzar, prueba la siguiente.",
+  "session.connect_mode_auto_hint": "Usa la primera dirección alcanzable en este orden; si una no se puede alcanzar, prueba la siguiente.",
   "session.connect_mode_ask_hint": "Muestra las direcciones, y cuáles responden, cada vez que te conectas.",
   "session.connect_mode_main_hint": "Siempre la dirección principal. Clic derecho › Conectar a través de permite elegir otra.",
-  "session.more_addresses": "También: {{addresses}}"
+  "session.more_addresses": "También: {{addresses}}",
+  "settings.check_addresses": "Comprobar qué direcciones responden",
+  "settings.check_addresses_desc": "Antes de conectar una sesión con varias direcciones, comprueba cuáles responden desde aquí para elegir la mejor. Desactivado (modo silencioso): no se envía nada a una dirección hasta probarla, y se prueban en orden. Cada sesión puede elegirlo en su configuración.",
+  "session.address_check": "Comprobar qué direcciones responden",
+  "session.address_check_default_on": "Predeterminado (activado)",
+  "session.address_check_default_off": "Predeterminado (desactivado, silencioso)",
+  "session.address_check_on": "Activado",
+  "session.address_check_off": "Desactivado (silencioso)",
+  "session.address_check_hint": "Silencioso: no se envía nada a una dirección hasta probarla. La opción automática las prueba en orden y pasa a la siguiente si una no responde.",
+  "session.address_not_checked": "Sin comprobar"
 }

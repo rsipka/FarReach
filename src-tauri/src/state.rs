@@ -205,6 +205,11 @@ pub struct SessionConfig {
     /// `main` (the main address only). Unset: `auto`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub connect_mode: Option<String>,
+    /// Check which addresses answer before connecting (Auto, and the
+    /// picker of Ask): on or off; unset: as Settings says. Off: Auto tries
+    /// them in order without checking first.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address_check: Option<bool>,
 }
 
 /// One more address of a session's server.
@@ -282,6 +287,9 @@ impl SessionConfig {
         }
         if !matches!(self.connect_mode.as_deref(), None | Some("auto" | "ask" | "main")) || self.alt_addresses.is_none() {
             self.connect_mode = None;
+        }
+        if self.alt_addresses.is_none() {
+            self.address_check = None;
         }
     }
 

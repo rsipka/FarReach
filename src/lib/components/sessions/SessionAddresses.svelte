@@ -22,13 +22,17 @@
 		mainLabel: string;
 		rows: AddressRow[];
 		mode: ConnectMode;
+		/** '' as Settings says, 'on' or 'off'. */
+		check: '' | 'on' | 'off';
+		/** What Settings says, for the default's label. */
+		checkByDefault: boolean;
 		/** The session goes through jump hosts or a proxy: addresses can skip them. */
 		routed: boolean;
 		port: string;
 		disabled?: boolean;
 	}
 
-	let { mainLabel = $bindable(), rows = $bindable(), mode = $bindable(), routed, port, disabled = false }: Props = $props();
+	let { mainLabel = $bindable(), rows = $bindable(), mode = $bindable(), check = $bindable(), checkByDefault, routed, port, disabled = false }: Props = $props();
 
 	// Folded until there is something in it; open once addresses are read
 	// in (the editor fills its form after this section is made).
@@ -99,6 +103,17 @@
 				</select>
 				<p class="hint">{mode === 'auto' ? t('session.connect_mode_auto_hint') : mode === 'ask' ? t('session.connect_mode_ask_hint') : t('session.connect_mode_main_hint')}</p>
 			</div>
+			{#if mode !== 'main'}
+				<div class="mode">
+					<label class="mode-label" for="address-check">{t('session.address_check')}</label>
+					<select id="address-check" bind:value={check} {disabled}>
+						<option value="">{checkByDefault ? t('session.address_check_default_on') : t('session.address_check_default_off')}</option>
+						<option value="on">{t('session.address_check_on')}</option>
+						<option value="off">{t('session.address_check_off')}</option>
+					</select>
+					<p class="hint">{t('session.address_check_hint')}</p>
+				</div>
+			{/if}
 		{/if}
 	</div>
 </Disclosure>

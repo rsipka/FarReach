@@ -3498,8 +3498,17 @@
   "session.connect_mode_auto": "自动",
   "session.connect_mode_ask": "每次连接时询问",
   "session.connect_mode_main": "仅主地址",
-  "session.connect_mode_auto_hint": "检查哪些地址有响应，并按此顺序使用第一个。无法连接时尝试下一个。",
+  "session.connect_mode_auto_hint": "按此顺序使用第一个可连接的地址；无法连接时尝试下一个。",
   "session.connect_mode_ask_hint": "每次连接时显示各地址及其是否有响应。",
   "session.connect_mode_main_hint": "始终使用主地址。右键 › 连接方式 仍可选择其他地址。",
-  "session.more_addresses": "另有：{{addresses}}"
+  "session.more_addresses": "另有：{{addresses}}",
+  "settings.check_addresses": "检查哪些地址有响应",
+  "settings.check_addresses_desc": "连接有多个地址的会话前，检查哪些地址可从此处访问，以选择最佳地址。关闭（静默模式）：在尝试某个地址之前不会向其发送任何内容，并按顺序尝试。每个会话可在其设置中单独选择。",
+  "session.address_check": "检查哪些地址有响应",
+  "session.address_check_default_on": "默认（开启）",
+  "session.address_check_default_off": "默认（关闭，静默）",
+  "session.address_check_on": "开启",
+  "session.address_check_off": "关闭（静默）",
+  "session.address_check_hint": "静默：在尝试某个地址之前不会向其发送任何内容。自动模式按顺序尝试，无法连接时换下一个。",
+  "session.address_not_checked": "未检查"
 }

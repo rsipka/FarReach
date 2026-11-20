@@ -3498,8 +3498,17 @@
   "session.connect_mode_auto": "Automatique",
   "session.connect_mode_ask": "Demander à chaque connexion",
   "session.connect_mode_main": "Adresse principale seulement",
-  "session.connect_mode_auto_hint": "Vérifie quelles adresses répondent et utilise la première dans cet ordre. Si elle est injoignable, la suivante est essayée.",
+  "session.connect_mode_auto_hint": "Utilise la première adresse joignable dans cet ordre ; si une est injoignable, la suivante est essayée.",
   "session.connect_mode_ask_hint": "Affiche les adresses, et celles qui répondent, à chaque connexion.",
   "session.connect_mode_main_hint": "Toujours l’adresse principale. Clic droit › Se connecter via permet d’en choisir une autre.",
-  "session.more_addresses": "Aussi : {{addresses}}"
+  "session.more_addresses": "Aussi : {{addresses}}",
+  "settings.check_addresses": "Vérifier quelles adresses répondent",
+  "settings.check_addresses_desc": "Avant de connecter une session à plusieurs adresses, vérifie lesquelles répondent d’ici pour choisir la meilleure. Désactivé (mode silencieux) : rien n’est envoyé à une adresse avant de l’essayer, et elles sont essayées dans l’ordre. Une session peut choisir pour elle-même.",
+  "session.address_check": "Vérifier quelles adresses répondent",
+  "session.address_check_default_on": "Par défaut (activé)",
+  "session.address_check_default_off": "Par défaut (désactivé, silencieux)",
+  "session.address_check_on": "Activé",
+  "session.address_check_off": "Désactivé (silencieux)",
+  "session.address_check_hint": "Silencieux : rien n’est envoyé à une adresse avant de l’essayer. Le mode automatique les essaie alors dans l’ordre et passe à la suivante si une est injoignable.",
+  "session.address_not_checked": "Non vérifiée"
 }

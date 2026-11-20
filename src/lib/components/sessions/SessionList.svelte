@@ -58,7 +58,7 @@
 	import { DEFAULT_SERIAL_OPTIONS } from '#lib/ipc/serial.js';
 	import { osNeedsDetection } from '#lib/data/distro-icons.js';
 	import { sshConnect, sshDisconnect, sshDetectOs, sshProbeAddresses, sshTmuxChosen, tmuxStartScript, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
-	import { addressName, autoOrder, connectMode, hasAltAddresses, isUnreachable, lastAddress, rememberAddress, sessionAddresses, type ResolvedAddress } from '#lib/sessions/addresses.js';
+	import { addressName, autoOrder, checksAddresses, plainOrder, connectMode, hasAltAddresses, isUnreachable, lastAddress, rememberAddress, sessionAddresses, type ResolvedAddress } from '#lib/sessions/addresses.js';
 	import AddressPicker from './AddressPicker.svelte';
 	// Passwords are now stored encrypted in vault, not in memory cache
 	import { createTab, updateTabOs } from '#lib/state/tabs.svelte.js';
@@ -1509,7 +1509,10 @@
 		const all = sessionAddresses(session);
 		if (connectAddress) targets = [connectAddress];
 		else if (connectMode(session) !== 'auto') targets = [all[0]];
-		else {
+		else if (!checksAddresses(session, getSettings().checkAddresses)) {
+			// Silent: nothing goes to an address before it is tried.
+			targets = plainOrder(all, lastAddress(session.id));
+		} else {
 			const probes = await sshProbeAddresses(all.map((a) => (a.routed ? { host: '', port: 0 } : { host: a.host, port: a.port }))).catch(() => all.map(() => null));
 			targets = autoOrder(all, probes, lastAddress(session.id));
 			// Cancelled while checking.
@@ -1567,7 +1570,7 @@
 				} : undefined,
 			});
 			// A reconnect may need another address: the tab keeps them all.
-			const fallback = hasAltAddresses(session) ? { addresses: all, jumpChain, proxy: paramsFor(all[0]).proxy ?? undefined, sessionPort: session.port } : undefined;
+			const fallback = hasAltAddresses(session) ? { addresses: all, jumpChain, proxy: paramsFor(all[0]).proxy ?? undefined, sessionPort: session.port, check: checksAddresses(session, getSettings().checkAddresses) } : undefined;
 			// Each address in turn, while the last one could not be reached.
 			// A refused login stops here: it is the same server.
 			let connectParams = paramsFor(targets[0]);

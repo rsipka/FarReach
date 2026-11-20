@@ -126,6 +126,8 @@ export interface AddressFallback {
   jumpChain?: JumpHostConnectParams[];
   proxy?: ProxyConfig;
   sessionPort: number;
+  /** Check which answer before trying them; off: silent, in order. */
+  check?: boolean;
 }
 
 export interface ConnectionInfo {
