@@ -933,8 +933,8 @@
 		// down again for each repeat, as mstsc does, and the server counts each
 		// one. A held lock key must not toggle again.
 		if (e.repeat && LOCK_KEYS.has(e.code)) return;
-		// A lock key's local state at its own keydown is not reliably the new
-		// one yet; its keyup sets the remote instead.
+		// A lock key's local state at its own key events is not reliably the
+		// new one yet, so only another key (or a click) syncs.
 		if (locksPending && !LOCK_KEYS.has(e.code)) syncLocks(e);
 
 		const entry = SCANCODES[e.code];
@@ -963,9 +963,10 @@
 		e.preventDefault();
 		held.delete(e.code);
 		sendInput(remote.key(entry[0], entry[1], true));
-		// The key toggled the remote's lock; make sure it now matches the local
-		// one, in case the two were apart before it.
-		if (LOCK_KEYS.has(e.code)) syncLocks(e);
+		// A lock key's own press already toggles the remote's lock. No sync
+		// here: at a lock key's keyup the webview may still report the old
+		// local state (seen after a tab switch), and setting the remote to it
+		// undid every press, so the key did nothing.
 	}
 
 	function releaseAll(): void {
