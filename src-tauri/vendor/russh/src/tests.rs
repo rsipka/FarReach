@@ -801,6 +801,13 @@ mod gex {
 
         assert!(matches!(error, Error::InvalidConfig(_)));
     }
+
+    #[test]
+    fn legacy_client_config_allows_1024_but_not_less() {
+        let params = client::GexParams::for_legacy_client(1024, 8192, 8192).unwrap();
+        assert_eq!(params.min_group_size(), 1024);
+        assert!(client::GexParams::for_legacy_client(768, 8192, 8192).is_err());
+    }
 }
 
 mod server_kex_junk {
