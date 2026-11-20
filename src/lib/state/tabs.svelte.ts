@@ -1,6 +1,7 @@
 import type { SshConnectParams } from '#lib/ipc/ssh.js';
 import { rdpDisconnect, type RdpConnectParams } from '#lib/ipc/rdp.js';
 import { vncDisconnect, type VncConnectParams } from '#lib/ipc/vnc.js';
+import { spiceDisconnect, type SpiceConnectParams } from '#lib/ipc/spice.js';
 import type { TelnetConnectParams } from '#lib/ipc/telnet.js';
 import type { SerialConnectParams } from '#lib/ipc/serial.js';
 import type { HistoryMode } from '#lib/ipc/history.js';
@@ -8,11 +9,11 @@ import * as splits from '#lib/terminal/split.js';
 import { isMobile } from '#lib/platform.js';
 import type { Direction, Layout, Side } from '#lib/terminal/split.js';
 
-export type TabType = 'local' | 'ssh' | 'rdp' | 'vnc' | 'telnet' | 'serial';
+export type TabType = 'local' | 'ssh' | 'rdp' | 'vnc' | 'spice' | 'telnet' | 'serial';
 
 /** A tab that shows a remote desktop rather than a terminal. */
 export function isDesktopTab(tab: Pick<Tab, 'type'> | undefined): boolean {
-	return tab?.type === 'rdp' || tab?.type === 'vnc';
+	return tab?.type === 'rdp' || tab?.type === 'vnc' || tab?.type === 'spice';
 }
 
 export interface Tab {
@@ -31,6 +32,8 @@ export interface Tab {
 	rdpConnectParams?: RdpConnectParams;
 	/** What a VNC tab connects to. */
 	vncConnectParams?: VncConnectParams;
+	/** What a SPICE tab connects to. */
+	spiceConnectParams?: SpiceConnectParams;
 	/** What a Telnet tab connects to; its terminal connects once it listens. */
 	telnetConnectParams?: TelnetConnectParams;
 	/** A Telnet tab's open connection. Kept apart from `connectionId`, which
@@ -228,7 +231,7 @@ export function createTab(type: TabType, title?: string, connectionId?: string, 
 
 	const tab: Tab = {
 		id,
-		title: title ?? numbered(type === 'local' ? 'Local' : type === 'rdp' ? 'RDP' : type === 'vnc' ? 'VNC' : type === 'telnet' ? 'Telnet' : type === 'serial' ? 'Serial' : 'SSH'),
+		title: title ?? numbered(type === 'local' ? 'Local' : type === 'rdp' ? 'RDP' : type === 'vnc' ? 'VNC' : type === 'spice' ? 'SPICE' : type === 'telnet' ? 'Telnet' : type === 'serial' ? 'Serial' : 'SSH'),
 		type,
 		connectionId,
 		active: true,
@@ -303,6 +306,8 @@ export function closeTab(id: string): void {
 		void rdpDisconnect(id).catch(() => {});
 	} else if (tabs[index].type === 'vnc') {
 		void vncDisconnect(id).catch(() => {});
+	} else if (tabs[index].type === 'spice') {
+		void spiceDisconnect(id).catch(() => {});
 	}
 
 	const wasActive = tabs[index].active;

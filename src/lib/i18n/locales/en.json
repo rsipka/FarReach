@@ -3621,5 +3621,18 @@
   "session.address_check_on": "On",
   "session.address_check_off": "Off (silent)",
   "session.address_check_hint": "Silent: nothing is sent to an address until it is tried. Automatic then tries them in order and moves on when one cannot be reached.",
-  "session.address_not_checked": "Not checked"
+  "session.address_not_checked": "Not checked",
+  "session.protocol_spice": "SPICE",
+  "spice.password_hint": "The display's SPICE password, if it has one. For Proxmox VE, use Open SPICE file with the file from the SPICE console button instead.",
+  "spice.tls_port": "TLS port",
+  "spice.tls_port_placeholder": "None",
+  "spice.tls_port_hint": "With a TLS port, everything goes encrypted to it and the port above is not used.",
+  "spice.ca": "CA certificate",
+  "spice.ca_hint": "The certificate (PEM) of the CA that signed the server's. It is then the only one trusted, and the server's name need not match. Empty: the usual public CAs, and the name must match.",
+  "spice.host_subject": "Certificate subject",
+  "spice.host_subject_hint": "Optional: the subject the server's certificate must have, as virt-viewer's host-subject.",
+  "spice.via_hint": "SPICE without TLS is not encrypted. Through a saved SSH session it is, and the port can stay closed to the network; the host above is then as that SSH server sees it, such as localhost.",
+  "spice.open_vv": "Open SPICE file (.vv)…",
+  "spice.vv_files": "virt-viewer files",
+  "spice.vv_failed": "Could not open the file: {{error}}"
 }

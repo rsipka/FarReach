@@ -3621,5 +3621,18 @@
   "session.address_check_on": "Zapnuto",
   "session.address_check_off": "Vypnuto (tichý režim)",
   "session.address_check_hint": "Tichý režim: na adresu se nic nepošle, dokud se nezkouší. Automatický výběr je pak zkouší popořadě a při nedostupnosti přejde na další.",
-  "session.address_not_checked": "Neověřeno"
+  "session.address_not_checked": "Neověřeno",
+  "session.protocol_spice": "SPICE",
+  "spice.password_hint": "SPICE heslo displeje, pokud nějaké má. Pro Proxmox VE použijte raději Otevřít soubor SPICE se souborem z tlačítka konzole SPICE.",
+  "spice.tls_port": "Port TLS",
+  "spice.tls_port_placeholder": "Žádný",
+  "spice.tls_port_hint": "S portem TLS jde vše šifrovaně na něj a port výše se nepoužije.",
+  "spice.ca": "Certifikát CA",
+  "spice.ca_hint": "Certifikát (PEM) certifikační autority, která podepsala certifikát serveru. Pak se věří jen jí a název serveru se nemusí shodovat. Prázdné: běžné veřejné autority a název se shodovat musí.",
+  "spice.host_subject": "Subjekt certifikátu",
+  "spice.host_subject_hint": "Volitelné: subjekt, který musí mít certifikát serveru, jako host-subject ve virt-viewer.",
+  "spice.via_hint": "SPICE bez TLS není šifrované. Přes uloženou SSH relaci ano a port může zůstat pro síť zavřený; hostitel výše je pak adresa z pohledu toho SSH serveru, například localhost.",
+  "spice.open_vv": "Otevřít soubor SPICE (.vv)…",
+  "spice.vv_files": "Soubory virt-viewer",
+  "spice.vv_failed": "Soubor nelze otevřít: {{error}}"
 }

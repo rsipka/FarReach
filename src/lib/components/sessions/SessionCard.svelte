@@ -78,9 +78,9 @@
 	/** How the session gets to its server when not directly: through jump
 	 *  hosts or a saved SSH session (VNC), or through a proxy. Remote
 	 *  desktops keep no jump chain or proxy, so stale ones are not shown. */
-	let desktopKind = $derived(session.kind === 'rdp' || session.kind === 'vnc');
+	let desktopKind = $derived(session.kind === 'rdp' || session.kind === 'vnc' || session.kind === 'spice');
 	let jumpTip = $derived.by(() => {
-		if (session.kind === 'vnc') return session.via_session_id ? t('session.via_session', { name: viaName || '?' }) : '';
+		if (session.kind === 'vnc' || session.kind === 'spice') return session.via_session_id ? t('session.via_session', { name: viaName || '?' }) : '';
 		if (desktopKind || !session.jump_chain?.length) return '';
 		return t('session.via_jump', { hops: formatHops(session.jump_chain) });
 	});
@@ -169,7 +169,7 @@
 				<DistroIcon osId={session.detected_os} size={18} />
 			{:else}
 				<svg class="kind-mark" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-					{#if session.kind === 'rdp' || session.kind === 'vnc'}
+					{#if session.kind === 'rdp' || session.kind === 'vnc' || session.kind === 'spice'}
 						<rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" />
 					{:else if session.kind === 'wsl'}
 						<path d="M5 8l4 4-4 4M11 16h7" />
