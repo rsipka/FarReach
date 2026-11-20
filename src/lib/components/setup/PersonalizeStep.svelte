@@ -17,6 +17,7 @@
 	import {
 		themeState,
 		applyTheme,
+		themeFor,
 		validateTheme,
 		DARK,
 		LIGHT,
@@ -26,6 +27,7 @@
 	import { themeFetchRegistry, themeInstall, type ThemeEntry } from '#lib/ipc/theme.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { matchesQuery } from '#lib/utils/search.js';
+	import { pairTheme } from '#lib/themes/resolve.js';
 
 	interface Props {
 		onNext: () => void;
@@ -133,6 +135,10 @@
 		}
 	}
 
+	/** System's pair, drawn on its card (picked in Settings > Appearance). */
+	let pairLight = $derived(pairTheme(settings, false, themeState.all, { light: LIGHT, dark: DARK }));
+	let pairDark = $derived(pairTheme(settings, true, themeState.all, { light: LIGHT, dark: DARK }));
+
 	let selectedTheme = $derived(settings.themeId ?? (settings.theme === 'system' ? SYSTEM : null));
 
 	function selectLanguage(code: string) {
@@ -144,7 +150,7 @@
 		if (id === SYSTEM) {
 			updateSetting('themeId', undefined);
 			updateSetting('theme', 'system');
-			applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? DARK : LIGHT);
+			applyTheme(themeFor(settings));
 			return;
 		}
 		const theme = themeState.all.find((th) => th.id === id);
@@ -180,7 +186,11 @@
 						onclick={() => selectTheme(choice.id)}
 						aria-pressed={selectedTheme === choice.id}
 					>
-						<ThemeSwatch theme={choice.theme} dark={DARK} light={LIGHT} />
+						<ThemeSwatch
+							theme={choice.theme}
+							dark={choice.theme ? DARK : pairDark}
+							light={choice.theme ? LIGHT : pairLight}
+						/>
 						<span class="theme-name">{choice.name}</span>
 					</button>
 				{/each}

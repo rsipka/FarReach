@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { pushHistoryRetention } from '#lib/state/history.svelte.js';
-	import { applyTheme, themeState, loadInstalledThemes, DARK, LIGHT } from '#lib/state/theme.svelte.js';
+	import { applyTheme, themeFor, loadInstalledThemes } from '#lib/state/theme.svelte.js';
 	import { loadCustomTerminalThemes } from '#lib/state/terminal-themes.svelte.js';
 	import type { Snippet } from 'svelte';
 	import '../app.css';
@@ -242,24 +242,17 @@
 	// Resolve the setting to an actual theme and apply it. Previously this only
 	// toggled a class, so the palette lived in two places (CSS for the app,
 	// hardcoded JS for the terminal) and could not be extended past two options.
+	// "System" follows the OS live, with the light and dark theme of the pair
+	// picked in Settings > Appearance (see #lib/themes/resolve).
 	$effect(() => {
-		const setting = settings.theme;
-		const themeId = settings.themeId;
-
-		// An installed theme wins; otherwise fall back to the light/dark/system
-		// setting so existing preferences keep working.
-		const chosen = themeId ? themeState.all.find((t) => t.id === themeId) : undefined;
-		if (chosen) {
-			applyTheme(chosen);
-			return;
-		}
-
-		if (setting === 'system') {
-			const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-			applyTheme(prefersDark ? DARK : LIGHT);
-		} else {
-			applyTheme(setting === 'light' ? LIGHT : DARK);
-		}
+		applyTheme(
+			themeFor({
+				theme: settings.theme,
+				themeId: settings.themeId,
+				themeLight: settings.themeLight,
+				themeDark: settings.themeDark
+			})
+		);
 	});
 </script>
 

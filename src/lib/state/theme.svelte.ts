@@ -1,5 +1,6 @@
 import { themeListInstalled } from '#lib/ipc/theme.js';
 import { BUNDLED } from '#lib/themes/bundled.js';
+import { resolveTheme, type ThemeChoice } from '#lib/themes/resolve.js';
 
 /**
  * Theme engine.
@@ -275,6 +276,32 @@ class ThemeState {
 }
 
 export const themeState = new ThemeState();
+
+/**
+ * Whether the OS is in dark mode right now, kept live.
+ *
+ * "System" used to read the media query once, when the theme effect ran, so
+ * the app only caught up with the OS at the next start or the next change of
+ * the theme setting. This updates as the OS switches (sunset, a schedule, the
+ * user flipping it), and the theme effect in +layout.svelte reads it.
+ */
+class SystemAppearance {
+	dark = $state(false);
+
+	constructor() {
+		if (typeof window === 'undefined' || !window.matchMedia) return;
+		const mq = window.matchMedia('(prefers-color-scheme: dark)');
+		this.dark = mq.matches;
+		mq.addEventListener('change', (e) => (this.dark = e.matches));
+	}
+}
+
+export const systemAppearance = new SystemAppearance();
+
+/** The theme the settings ask for, given what the OS shows now. */
+export function themeFor(choice: ThemeChoice): Theme {
+	return resolveTheme(choice, systemAppearance.dark, themeState.all, { light: LIGHT, dark: DARK });
+}
 
 /**
  * Pull installed themes off disk into the engine.
