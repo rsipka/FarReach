@@ -555,6 +555,7 @@ pub async fn ssh_detect_os(
     let unix = match release {
         Ok((out, _, 0)) => Some(os_from_os_release(&out)),
         _ => match exec_on_connection_with_exit_code_timeout(&handle, "uname -s", OS_PROBE_TIMEOUT).await {
+            Ok((out, err, _)) if is_routeros_reply(&out) || is_routeros_reply(&err) => return Ok("mikrotik".to_string()),
             Ok((out, _, 0)) => os_from_uname(&out),
             _ => None,
         },

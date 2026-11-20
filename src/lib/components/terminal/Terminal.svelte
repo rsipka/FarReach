@@ -26,6 +26,7 @@
 	import { rightClickAction, wordSeparator, MIDDLE_CLICK_PASTE_MS } from '#lib/terminal/mouse.js';
 	import { shouldRearmIme, nudgeCaret, REARM_SETTLE_MS } from '#lib/terminal/ime.js';
 	import { installWebkitInputFix } from '#lib/terminal/webkit-input-fix.js';
+	import { deferLinuxSelectionSync } from '#lib/terminal/selection-sync.js';
 	import { isMac, isMobile, isWebKit } from '#lib/platform.js';
 	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import { invoke } from '@tauri-apps/api/core';
@@ -47,6 +48,10 @@
 	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
 	import { cssFontFamily } from '#lib/utils/font.js';
 	import { cursorOptions } from '#lib/terminal/cursor.js';
+	import { scrollbackLines } from '#lib/terminal/scrollback.js';
+	import { LineClock, gutterTime, numberWidth } from '#lib/terminal/gutter.js';
+	import { Highlighter } from '#lib/terminal/highlighter.js';
+	import { highlightColors, highlightKinds, parseCustomRules } from '#lib/terminal/highlight.js';
 
 	interface Props {
 		ptyId: string;
@@ -61,6 +66,9 @@
 		/** Bumped by Switch tmux session: connect again, into the tmux
 		 *  session sshConnectParams now names. */
 		tmuxSwitch?: number;
+		/** Bumped by the tab menu's Reconnect: drop the connection and make it
+		 *  again (SSH, Telnet, serial). */
+		reconnectRequest?: number;
 		/** Telnet: where to connect. The terminal connects once it listens. */
 		telnetConnectParams?: TelnetConnectParams;
 		/** Serial: the port to open. The terminal opens it once it listens. */
@@ -81,7 +89,7 @@
 		wslDistro?: string | null;
 	}
 
-	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, tmuxSwitch, telnetConnectParams, serialConnectParams, onReconnected, onReady, terminalTheme, cursorStyle, cursorBlink, sessionId, sessionName, historyMode, wslDistro }: Props = $props();
+	let { ptyId, type: termType, connectionId, active, visible, onTitleChange, sshConnectParams, tmuxSwitch, reconnectRequest, telnetConnectParams, serialConnectParams, onReconnected, onReady, terminalTheme, cursorStyle, cursorBlink, sessionId, sessionName, historyMode, wslDistro }: Props = $props();
 
 	/**
 	 * Start recording this tab's stream into the session history (and, for
@@ -111,7 +119,7 @@
 				secrets,
 				patterns: s.historyPatterns.split('\n').map((p) => p.trim()).filter(Boolean),
 				// SSH writes its own file log, asked for at connect.
-				log: ssh ? null : sessionLogConfig()
+				log: ssh ? null : sessionLogConfig(sessionName ?? '')
 			});
 			setTabHistory(ptyId, stream, status, ssh && sessionLogConfig() !== null);
 		} catch (e) {
@@ -200,6 +208,35 @@
 		lastSwitch = n;
 		untrack(() => void switchTmux());
 	});
+
+	// Reconnect from the tab menu: the same, on a connection that may still
+	// be up (a hung one, say) or already down.
+	let lastReconnect: number | undefined;
+	$effect(() => {
+		const n = reconnectRequest;
+		if (lastReconnect === undefined || n === undefined || n === lastReconnect) {
+			lastReconnect = n ?? 0;
+			return;
+		}
+		lastReconnect = n;
+		untrack(() => void reconnectNow());
+	});
+
+	async function reconnectNow(): Promise<void> {
+		if (!terminal || reconnecting) return;
+		if (termType === 'ssh') {
+			await switchTmux();
+		} else if (termType === 'telnet') {
+			// Not listened to any more, so its end does not close the tab.
+			const old = currentConnectionId;
+			unlistenData?.();
+			unlistenExit?.();
+			if (old && !disconnected) await telnetDisconnect(old).catch(() => {});
+			await connectTelnet(terminal);
+		} else if (termType === 'serial') {
+			await connectSerial(terminal);
+		}
+	}
 
 	async function switchTmux(): Promise<void> {
 		if (!terminal || termType !== 'ssh' || reconnecting) return;
@@ -382,6 +419,11 @@
 				{ label: t('textmenu.copy'), hint: `${mod}C`, disabled: !term.hasSelection(), action: () => void copySelection(term) },
 				{ label: t('textmenu.paste'), hint: `${mod}V`, action: () => void pasteFromClipboard(term) },
 				{ label: '', separator: true },
+				{
+					label: t('terminal.menu_find'),
+					hint: `${isMac() ? '⌘⇧' : 'Ctrl+Shift+'}F`,
+					action: () => requestFind(ptyId, findText(term))
+				},
 				{ label: t('textmenu.select_all'), action: () => term.selectAll() },
 				{ label: t('terminal.menu_clear'), action: () => term.clear() },
 				...(termType === 'serial'
@@ -398,6 +440,12 @@
 				}
 			]
 		};
+	}
+
+	/** A one-line selection is what to look for; longer ones are not. */
+	function findText(term: Terminal): string | undefined {
+		const text = term.getSelection().trim();
+		return text && !text.includes('\n') ? text.slice(0, 200) : undefined;
 	}
 
 	function closeMenu(): void {
@@ -600,7 +648,7 @@
 			fontFamily: terminalFont(appSettings.fontFamily),
 			fontSize: appSettings.fontSize ?? 14,
 			...cursorLook,
-			scrollback: 10000,
+			scrollback: scrollbackLines(appSettings.terminalScrollback, onPhone),
 			wordSeparator: wordSeparator(appSettings.terminalWordSeparators),
 			allowProposedApi: true,
 			theme: { ...palette }
@@ -629,6 +677,25 @@
 		if (term.options.cursorBlink !== c.cursorBlink) term.options.cursorBlink = c.cursorBlink;
 		if (term.options.cursorInactiveStyle !== c.cursorInactiveStyle) term.options.cursorInactiveStyle = c.cursorInactiveStyle;
 		if (term.options.cursorWidth !== c.cursorWidth) term.options.cursorWidth = c.cursorWidth;
+	});
+
+	// Errors, warnings and addresses in colour, when Settings or the
+	// terminal bar turn it on (#lib/terminal/highlight). Colours come from
+	// the terminal theme, so they follow a theme change.
+	let highlighter: Highlighter | undefined;
+	$effect(() => {
+		const s = getSettings();
+		const options = {
+			enabled: s.terminalHighlight,
+			kinds: highlightKinds(s.terminalHighlightKinds),
+			custom: parseCustomRules(s.terminalHighlightCustom).rules,
+			colors: highlightColors(palette)
+		};
+		const term = terminal;
+		if (!term) return;
+		if (!highlighter && !options.enabled) return;
+		highlighter ??= new Highlighter(term);
+		highlighter.setOptions(options);
 	});
 
 	/** A server tried OSC 52 while it is off: said once per tab. */
@@ -934,7 +1001,7 @@
 			// Ctrl+Shift+F (Cmd+Shift+F): find in this terminal, in its bar.
 			if ((event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'f') {
 				event.preventDefault();
-				requestFind(ptyId);
+				requestFind(ptyId, findText(term));
 				return false;
 			}
 
@@ -1191,6 +1258,16 @@
 			if (!containerEl) return;
 			term.open(containerEl);
 
+			clock = new LineClock(term, term.options.scrollback ?? 0);
+			clock.update(Date.now());
+			term.onWriteParsed(() => {
+				clock?.update(Date.now());
+				scheduleGutter();
+			});
+			term.onRender(scheduleGutter);
+			term.onScroll(scheduleGutter);
+			term.onResize(scheduleGutter);
+
 			requestAnimationFrame(() => {
 				safeFitAndResize(term, fit, containerEl!);
 			});
@@ -1247,7 +1324,13 @@
 				window.addEventListener('mouseup', onSelectEnd, true);
 			}
 			termEl.addEventListener('mousedown', onSelectStart, true);
-			unlistenSelectEnd = () => window.removeEventListener('mouseup', onSelectEnd, true);
+			// Linux: the primary selection gets the text once the button is
+			// up, not on every move of the drag (#lib/terminal/selection-sync).
+			const undoSelectionSync = deferLinuxSelectionSync(term, { host: termEl, win: window });
+			unlistenSelectEnd = () => {
+				window.removeEventListener('mouseup', onSelectEnd, true);
+				undoSelectionSync();
+			};
 
 			// A middle click pastes. On Linux the webview does it itself, with
 			// the selection (X11's primary), as a paste event on xterm's
@@ -1421,6 +1504,12 @@
 			resizeObserver?.disconnect();
 			unregisterFinder?.();
 			unregisterFinder = undefined;
+			if (gutterFrame) cancelAnimationFrame(gutterFrame);
+			gutterFrame = 0;
+			clock?.dispose();
+			clock = undefined;
+			highlighter?.dispose();
+			highlighter = undefined;
 			term.dispose();
 			terminal = undefined;
 			fitAddon = undefined;
@@ -1462,6 +1551,58 @@
 	$effect(() => {
 		const separator = wordSeparator(appSettings.terminalWordSeparators);
 		if (terminal && terminal.options.wordSeparator !== separator) terminal.options.wordSeparator = separator;
+	});
+
+	// The scrollback follows Settings; xterm.js keeps what fits the new size.
+	$effect(() => {
+		const lines = scrollbackLines(appSettings.terminalScrollback, onPhone);
+		clock?.setKeep(lines);
+		if (terminal && terminal.options.scrollback !== lines) terminal.options.scrollback = lines;
+	});
+
+	// ---- Line numbers and timestamps (#lib/terminal/gutter) -----------------
+	// Times are taken for every line from the start, so turning the gutter on
+	// later still shows when earlier lines came.
+	let clock: LineClock | undefined;
+	let gutterNumbers = $derived(appSettings.terminalLineNumbers);
+	let gutterTimes = $derived(appSettings.terminalTimestamps);
+	let gutterOn = $derived(gutterNumbers || gutterTimes);
+	let gutterRows = $state<{ num: string; time: string }[]>([]);
+	let gutterRowHeight = $state(17);
+	let gutterTop = $state(8);
+	let gutterFontSize = $state(14);
+	let gutterNumWidth = $state(5);
+	let gutterFrame = 0;
+
+	function scheduleGutter(): void {
+		if (!gutterOn || gutterFrame) return;
+		gutterFrame = requestAnimationFrame(() => {
+			gutterFrame = 0;
+			drawGutter();
+		});
+	}
+
+	function drawGutter(): void {
+		const term = terminal;
+		if (!term || !clock || !containerEl) return;
+		const screen = term.element?.querySelector<HTMLElement>('.xterm-screen');
+		if (screen && term.rows > 0) {
+			const box = screen.getBoundingClientRect();
+			if (box.height > 0) {
+				gutterRowHeight = box.height / term.rows;
+				gutterTop = box.top - containerEl.getBoundingClientRect().top;
+			}
+		}
+		gutterFontSize = term.options.fontSize ?? 14;
+		gutterNumWidth = numberWidth(clock.lastLine);
+		gutterRows = clock.rows().map((r) => ({
+			num: r ? String(r.line) : '',
+			time: r && r.time !== undefined ? gutterTime(r.time) : ''
+		}));
+	}
+
+	$effect(() => {
+		if (gutterOn && terminal) scheduleGutter();
 	});
 
 	// Auto-focus xterm AND re-fit when this tab becomes active (Ctrl+Tab, click, sidebar switch).
@@ -1539,7 +1680,28 @@
 	style:display={shown ? 'flex' : 'none'}
 	style:--term-bg={palette.background}
 >
-	<div bind:this={containerEl} class="terminal-container" class:bell-flash={flashing}></div>
+	<div class="terminal-row">
+		{#if gutterOn}
+			<!-- Line numbers and times, row for row with the terminal's screen. -->
+			<div
+				class="terminal-gutter"
+				aria-hidden="true"
+				style:padding-top="{gutterTop}px"
+				style:font-family={terminalFont(appSettings.fontFamily)}
+				style:font-size="{Math.max(8, gutterFontSize - 2)}px"
+				style:--gutter-row="{gutterRowHeight}px"
+				style:color={palette.foreground}
+			>
+				{#each gutterRows as row, i (i)}
+					<div class="gutter-row">
+						{#if gutterNumbers}<span class="gutter-num" style:width="{gutterNumWidth}ch">{row.num}</span>{/if}
+						{#if gutterTimes}<span class="gutter-time">{row.time}</span>{/if}
+					</div>
+				{/each}
+			</div>
+		{/if}
+		<div bind:this={containerEl} class="terminal-container" class:bell-flash={flashing}></div>
+	</div>
 	{#if onPhone && !disconnected}
 		<MobileKeyBar bind:ctrl={barCtrl} bind:alt={barAlt} zoom onkey={onBarKey} />
 	{/if}
@@ -1676,10 +1838,58 @@
 	}
 
 	/* Takes what the key bar leaves, on a phone; all of it elsewhere. */
-	.terminal-container {
+	.terminal-row {
+		display: flex;
 		width: 100%;
 		flex: 1;
 		min-height: 0;
+	}
+
+	.terminal-container {
+		flex: 1;
+		min-width: 0;
+		height: 100%;
+	}
+
+	/* Line numbers and times: dim, out of the way of a selection, and as wide
+	   whatever they show, so the terminal is not refitted as they change. */
+	.terminal-gutter {
+		flex: none;
+		height: 100%;
+		overflow: hidden;
+		box-sizing: border-box;
+		padding-left: 10px;
+		background: var(--term-bg);
+		opacity: 0.45;
+		user-select: none;
+		pointer-events: none;
+		font-variant-numeric: tabular-nums;
+		border-right: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+	}
+
+	.gutter-row {
+		display: flex;
+		gap: 1ch;
+		height: var(--gutter-row);
+		line-height: var(--gutter-row);
+		padding-right: 6px;
+		white-space: pre;
+	}
+
+	.gutter-num {
+		display: inline-block;
+		text-align: right;
+	}
+
+	.gutter-time {
+		display: inline-block;
+		width: 8ch;
+	}
+
+	@media (max-width: 640px) {
+		.terminal-gutter {
+			padding-left: 4px;
+		}
 	}
 
 

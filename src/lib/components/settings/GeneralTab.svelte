@@ -16,7 +16,7 @@
 	import X11ServerSetting from './X11ServerSetting.svelte';
 	import ReportProblem from './ReportProblem.svelte';
 	import { getSettings, updateSetting, syncTraySettings } from '#lib/state/settings.svelte.js';
-	import { manualUpdateCheck } from '#lib/state/updater.svelte.js';
+	import { manualUpdateCheck, getUpdaterState, openWhatsNew } from '#lib/state/updater.svelte.js';
 	import { openSetupWizard } from '#lib/state/setup-wizard.svelte.js';
 	import { effectiveThreshold, MIN_PASTE_THRESHOLD } from '#lib/terminal/paste.js';
 	import { DEFAULT_WORD_SEPARATORS, rightClickMode } from '#lib/terminal/mouse.js';
@@ -29,6 +29,7 @@
 	let { part }: { part: Part } = $props();
 
 	const settings = getSettings();
+	const updater = getUpdaterState();
 
 	/** Report a problem: the dialog cleans and shows the log before anything is shared. */
 	let reportOpen = $state(false);
@@ -526,6 +527,20 @@
 		</div>
 		<div class="setting-control"><span class="version">v{__APP_VERSION__}</span></div>
 	</div>
+
+	{#if updater.updateAvailable && updater.updateVersion}
+		<!-- The same What's new dialog as the update banner's Info button. -->
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('updater.available', { version: updater.updateVersion })}</span>
+			</div>
+			<div class="setting-control">
+				<button class="discord-link" onclick={openWhatsNew}>
+					<span>{t('updater.whats_new')}</span>
+				</button>
+			</div>
+		</div>
+	{/if}
 
 	<div class="setting-row">
 		<div class="setting-info">
