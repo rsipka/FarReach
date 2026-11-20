@@ -364,7 +364,7 @@ pub async fn vault_unlock_methods(app: tauri::AppHandle, state: State<'_, AppSta
     Ok(UnlockMethods {
         platform,
         platform_label: (platform == Some(biometric::IOS_BIOMETRIC)).then(crate::vault::apple_biometric::name),
-        keys_biometric: crate::ssh::biometric_keys::supported() && platform_available,
+        keys_biometric: platform_available && crate::ssh::biometric_keys::storage_available().await,
         platform_available,
         keys_supported: fido2::supported(),
         keys_ask_pin: fido2::asks_pin_itself(),

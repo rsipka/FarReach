@@ -2237,6 +2237,7 @@
   "security.keys_unlocked": "Odemčené klíče: {{count}}",
   "security.keys_biometric": "Pamatovat heslové fráze klíčů pomocí {{method}}",
   "security.keys_biometric_desc": "Heslová fráze zadaná při odemykání klíčů po spuštění se uloží v tomto zařízení za {{method}}, takže se příští spuštění zeptá jen jednou na {{method}} místo každé heslové fráze. Heslové fráze nikdy nejdou do trezoru a nesynchronizují se. Přidání nového obličeje nebo otisku je zneplatní; zadáte je ještě jednou.",
+  "security.keys_windows_hello_desc": "Heslové fráze zadané při spuštění zůstanou v tomto zařízení. Při příštím odemčení trezoru stačí použít Windows Hello jednou pro všechny zapamatované klíče. Windows může nabídnout PIN pro Windows Hello.",
   "security.keys_biometric_needs_start": "Nejprve zapněte Odemknout klíče přihlašovacích údajů po spuštění.",
   "security.keys_biometric_open": "Odemknout SSH klíče",
   "security.keys_biometric_save": "Zapamatovat heslové fráze SSH klíčů",

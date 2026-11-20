@@ -583,6 +583,8 @@ pub struct KeysUnlocked {
     pub by_biometric: u32,
     /// Passphrases newly remembered behind the biometric.
     pub remembered: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remember_error: Option<String>,
 }
 
 /// Remembering key passphrases behind the device biometric
@@ -598,6 +600,8 @@ pub struct KeysBiometric {
 
 /// Only one round of questions at a time.
 static UNLOCKING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static BIOMETRIC_REVISION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static BIOMETRIC_STORE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// Settings → Security → "Unlock credential keys at start", switched on or
 /// off. On: a key passphrase typed from now on is kept in memory until the
@@ -612,9 +616,11 @@ pub fn credential_keys_unlock_enabled(enabled: bool) {
 #[tauri::command]
 #[tracing::instrument(skip(app, state))]
 pub async fn credential_keys_biometric_forget(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    let dir = state.vault_manager.lock().await.app_dir().to_path_buf();
     if crate::ssh::biometric_keys::supported() {
-        crate::ssh::biometric_keys::forget(&app, &dir).await;
+        BIOMETRIC_REVISION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let _store = BIOMETRIC_STORE.lock().await;
+        let dir = state.vault_manager.lock().await.app_dir().to_path_buf();
+        crate::ssh::biometric_keys::forget(&app, &dir).await?;
     }
     Ok(())
 }
@@ -631,6 +637,7 @@ pub async fn credential_keys_unlock(
     biometric: Option<KeysBiometric>,
 ) -> Result<KeysUnlocked, String> {
     use crate::ssh::prompt::{ask, Field, Kind};
+    use crate::ssh::unlocked;
     use std::sync::atomic::Ordering;
 
     crate::ssh::unlocked::set_enabled(true);
@@ -644,42 +651,48 @@ pub async fn credential_keys_unlock(
         }
     }
     let _done = Done;
+    let biometric_revision = BIOMETRIC_REVISION.load(Ordering::SeqCst);
 
     // Read under the lock, ask without it: a question can stay open for
     // minutes and everything else needs the vault meanwhile.
     let biometric = biometric.filter(|_| crate::ssh::biometric_keys::supported());
-    let (keys, dir) = {
+    let (keys, dir, revision) = {
         let manager = state.vault_manager.lock().await;
-        if manager.is_locked() {
+        if manager.is_locked() || manager.is_held() {
             return Ok(KeysUnlocked::default());
         }
         let creds = read_credentials(&manager).await;
         let stored = crate::ipc::sshkey_commands::all_materials(&manager).await;
-        (locked_keys(&creds, &stored), manager.app_dir().to_path_buf())
+        (locked_keys(&creds, &stored), manager.app_dir().to_path_buf(), unlocked::revision())
     };
+    let round_current = || unlocked::enabled() && unlocked::revision() == revision;
+    let biometric_current = || BIOMETRIC_REVISION.load(Ordering::SeqCst) == biometric_revision;
 
     let mut result = KeysUnlocked::default();
     // One biometric check opens every passphrase remembered behind it.
     // Cancelled, the keys are asked for as usual, and nothing typed now is
     // remembered (that would lose the ones not opened).
     let mut remembered: Option<Vec<crate::ssh::biometric_keys::Entry>> = None;
-    let keys = match &biometric {
+    let keys = match biometric.as_ref().filter(|_| biometric_current()) {
         Some(bio) if !keys.is_empty() && crate::ssh::biometric_keys::exists(&dir) => {
             match crate::ssh::biometric_keys::open(&app, &dir, &bio.open).await {
-                Ok(entries) => {
-                    if !crate::ssh::unlocked::enabled() || state.vault_manager.lock().await.is_locked() {
+                Ok(entries) if biometric_current() => {
+                    let manager = state.vault_manager.lock().await;
+                    if !round_current() || manager.is_locked() || manager.is_held() {
                         return Ok(result);
                     }
-                    for e in &entries {
-                        crate::ssh::unlocked::remember_ids(&e.ids, &e.passphrase);
+                    for entry in &entries {
+                        unlocked::remember_ids(&entry.ids, &entry.passphrase, revision);
                     }
-                    remembered = Some(entries);
+                    drop(manager);
                     let (open, still): (Vec<_>, Vec<_>) =
-                        keys.into_iter().partition(|k| crate::ssh::unlocked::opens(&k.material, None));
+                        keys.into_iter().partition(|key| unlocked::opens(&key.material, None));
                     result.by_biometric = open.len() as u32;
                     result.unlocked += result.by_biometric;
+                    remembered = Some(entries);
                     still
                 }
+                Ok(_) => keys,
                 Err(crate::ssh::biometric_keys::OpenError::Gone) => {
                     tracing::info!("Remembered key passphrases are void (biometric changed); asking again");
                     remembered = Some(Vec::new());
@@ -703,6 +716,9 @@ pub async fn credential_keys_unlock(
         let used_by = key.used_by.join(", ");
         let mut opened = false;
         for attempt in 0..3 {
+            if !round_current() {
+                return Ok(result);
+            }
             // The window words the question itself (`unlock`): the
             // credential names as the host, the key as the title, and
             // "retry" after a wrong passphrase.
@@ -711,16 +727,17 @@ pub async fn credential_keys_unlock(
                 break;
             };
             // Locked, or switched off, while the question was open.
-            if !crate::ssh::unlocked::enabled() || state.vault_manager.lock().await.is_locked() {
-                return Ok(result);
-            }
-            let pass = answers.into_iter().next().unwrap_or_default();
+            let pass = zeroize::Zeroizing::new(answers.into_iter().next().unwrap_or_default());
             if crate::ssh::client::decode_key(&key.material, Some(&pass)).is_ok_and(|k| !k.is_encrypted()) {
-                crate::ssh::unlocked::remember(&key.material, &pass);
-                typed.push(crate::ssh::biometric_keys::Entry {
-                    ids: crate::ssh::unlocked::key_ids(&key.material),
-                    passphrase: pass.clone(),
-                });
+                let manager = state.vault_manager.lock().await;
+                if !round_current() || manager.is_locked() || manager.is_held() {
+                    return Ok(result);
+                }
+                let ids = unlocked::key_ids(&key.material);
+                unlocked::remember_ids(&ids, &pass, revision);
+                if remembered.is_some() && biometric_current() {
+                    typed.push(crate::ssh::biometric_keys::Entry { ids, passphrase: pass.to_string() });
+                }
                 opened = true;
                 break;
             }
@@ -732,11 +749,17 @@ pub async fn credential_keys_unlock(
         }
     }
     if let (Some(bio), Some(old), false) = (&biometric, remembered, typed.is_empty()) {
+        let _store = BIOMETRIC_STORE.lock().await;
+        if !round_current() || !biometric_current() {
+            return Ok(result);
+        }
         let count = typed.len() as u32;
         let entries = crate::ssh::biometric_keys::merge(old, typed);
         match crate::ssh::biometric_keys::save(&app, &dir, &entries, &bio.save).await {
-            Ok(()) => result.remembered = count,
-            Err(e) => tracing::info!("Key passphrases not remembered with the biometric: {}", e),
+            Ok(()) if biometric_current() && round_current() => result.remembered = count,
+            Ok(()) => {}
+            Err(e) if biometric_current() && round_current() => result.remember_error = Some(e),
+            Err(_) => {}
         }
     }
     tracing::info!(
