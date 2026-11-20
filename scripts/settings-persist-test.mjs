@@ -86,6 +86,8 @@ const CHANGED = {
 	fileEditor: 'custom',
 	fileEditorCommand: 'subl -w',
 	fileEditorTerminal: true,
+	winboxPath: '/opt/winbox/WinBox',
+	winboxPassword: 'clipboard',
 	setupComplete: true,
 	pendingTursoOrg: 'my-org',
 	pendingTursoApiToken: 'token',
