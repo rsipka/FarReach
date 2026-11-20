@@ -85,9 +85,26 @@ pub fn fit(clip: &Clip, rate: u32, channels: u16, volume: f32) -> Vec<f32> {
     out
 }
 
+/// The terminal bell: a short, soft two-partial ping (about 0.15 s), made
+/// here rather than shipped as a file.
+pub fn bell_clip() -> Clip {
+    const RATE: u32 = 48_000;
+    let n = (RATE as f32 * 0.15) as usize;
+    let samples = (0..n)
+        .map(|i| {
+            let t = i as f32 / RATE as f32;
+            let attack = (t / 0.004).min(1.0);
+            let decay = (-t * 30.0).exp();
+            let w = std::f32::consts::TAU * t;
+            attack * decay * (0.7 * (w * 880.0).sin() + 0.3 * (w * 1760.0).sin()) * 0.8
+        })
+        .collect();
+    Clip { rate: RATE, channels: 1, samples }
+}
+
 #[cfg(target_os = "linux")]
 mod play {
-    use super::{decode_wav, fit, Clip};
+    use super::{bell_clip, decode_wav, fit, Clip};
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
     use cpal::{FromSample, SizedSample};
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -96,23 +113,33 @@ mod play {
 
     static CLIP: LazyLock<Result<Clip, String>> =
         LazyLock::new(|| decode_wav(include_bytes!("../../static/sounds/notification.wav")));
+    static BELL: LazyLock<Clip> = LazyLock::new(bell_clip);
     /// One chime at a time: a burst of toasts would otherwise stack them up.
     static PLAYING: AtomicBool = AtomicBool::new(false);
+    /// One bell at a time: `yes $'\a'` would otherwise open a stream per byte.
+    static RINGING: AtomicBool = AtomicBool::new(false);
 
     pub fn notification(volume: f32) {
-        if PLAYING.swap(true, Ordering::AcqRel) {
+        once(&PLAYING, move || CLIP.as_ref().map_err(|e| e.clone()).and_then(|c| play(c, volume)));
+    }
+
+    pub fn bell(volume: f32) {
+        once(&RINGING, move || play(&BELL, volume));
+    }
+
+    fn once(busy: &'static AtomicBool, run: impl FnOnce() -> Result<(), String> + Send + 'static) {
+        if busy.swap(true, Ordering::AcqRel) {
             return;
         }
         std::thread::spawn(move || {
-            if let Err(e) = play(volume) {
-                tracing::info!("Notification sound not played: {e}");
+            if let Err(e) = run() {
+                tracing::info!("Sound not played: {e}");
             }
-            PLAYING.store(false, Ordering::Release);
+            busy.store(false, Ordering::Release);
         });
     }
 
-    fn play(volume: f32) -> Result<(), String> {
-        let clip = CLIP.as_ref().map_err(|e| e.clone())?;
+    fn play(clip: &Clip, volume: f32) -> Result<(), String> {
         let device = cpal::default_host().default_output_device().ok_or("no audio output device")?;
         let config = device.default_output_config().map_err(|e| e.to_string())?;
         let samples = Arc::new(fit(clip, config.sample_rate(), config.channels(), volume));
@@ -157,6 +184,15 @@ mod play {
 pub fn play_notification_sound(volume: f32) {
     #[cfg(target_os = "linux")]
     play::notification(volume.clamp(0.0, 1.0));
+    #[cfg(not(target_os = "linux"))]
+    let _ = volume;
+}
+
+/// Play the terminal bell. Only the Linux page calls this, as above.
+#[tauri::command]
+pub fn play_bell_sound(volume: f32) {
+    #[cfg(target_os = "linux")]
+    play::bell(volume.clamp(0.0, 1.0));
     #[cfg(not(target_os = "linux"))]
     let _ = volume;
 }

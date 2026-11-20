@@ -233,6 +233,7 @@
 		<SettingsCard title={t('settings.section_scrollback')}><AppearanceTab part="scrollback" /></SettingsCard>
 		<SettingsCard title={t('settings.section_paste')}><GeneralTab part="paste" /></SettingsCard>
 		<SettingsCard title={t('settings.section_shell')}><GeneralTab part="shell" /></SettingsCard>
+		<SettingsCard title={t('settings.section_bell')}><GeneralTab part="bell" /></SettingsCard>
 		{#if mobile}
 			<SettingsCard title={t('settings.section_phone')}><PhoneKeysSetting /></SettingsCard>
 		{/if}

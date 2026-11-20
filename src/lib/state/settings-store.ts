@@ -4,6 +4,7 @@
  * setting survives a save and a restart (scripts/settings-persist-test.mjs).
  */
 
+import { isMobile } from '#lib/platform.js';
 import { DEFAULT_PASTE_THRESHOLD } from '#lib/terminal/paste.js';
 import { DEFAULT_SCROLLBACK, scrollbackSetting } from '#lib/terminal/scrollback.js';
 import { DEFAULT_RIGHT_CLICK, DEFAULT_WORD_SEPARATORS, rightClickMode, type RightClickMode } from '#lib/terminal/mouse.js';
@@ -68,6 +69,17 @@ export interface Settings {
 	/** Look for a new release at launch and every 45 minutes. Off: only
 	 *  Settings > General > Check now asks, so nothing goes out on its own. */
 	checkForUpdates: boolean;
+	/** The chime when a notification (toast) appears. Off by default on phones
+	 *  and tablets, where the system's own sounds already say enough. */
+	playSounds: boolean;
+	/** The terminal bell (^G) plays a short sound (and Play sounds is on).
+	 *  On by default on desktop. See #lib/terminal/bell. */
+	terminalBellSound: boolean;
+	/** The bell flashes the terminal. On by default on phones and tablets. */
+	terminalBellFlash: boolean;
+	/** The bell sends a system notification when its tab is not in view or
+	 *  the app is in the background. Off by default: it asks permission. */
+	terminalBellNotify: boolean;
 	fontFamily: string;
 	defaultShell: string;
 	openLastSession: boolean;
@@ -230,6 +242,10 @@ export const defaults: Settings = {
 	closeTabOnExit: false,
 	serverMonitoring: true,
 	checkForUpdates: true,
+	playSounds: !isMobile(),
+	terminalBellSound: !isMobile(),
+	terminalBellFlash: isMobile(),
+	terminalBellNotify: false,
 	fontFamily: 'monospace',
 	defaultShell: '/bin/bash',
 	openLastSession: false,
@@ -318,6 +334,10 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.closeTabOnExit = parsed.closeTabOnExit ?? defaults.closeTabOnExit;
 	settings.serverMonitoring = parsed.serverMonitoring ?? defaults.serverMonitoring;
 	settings.checkForUpdates = parsed.checkForUpdates ?? defaults.checkForUpdates;
+	settings.playSounds = parsed.playSounds ?? defaults.playSounds;
+	settings.terminalBellSound = parsed.terminalBellSound ?? defaults.terminalBellSound;
+	settings.terminalBellFlash = parsed.terminalBellFlash ?? defaults.terminalBellFlash;
+	settings.terminalBellNotify = parsed.terminalBellNotify ?? defaults.terminalBellNotify;
 	settings.fontFamily = parsed.fontFamily ?? defaults.fontFamily;
 	settings.defaultShell = parsed.defaultShell ?? defaults.defaultShell;
 	settings.openLastSession = parsed.openLastSession ?? defaults.openLastSession;
