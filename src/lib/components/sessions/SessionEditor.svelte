@@ -29,6 +29,7 @@
 	import type { SpiceOptions } from '#lib/ipc/spice.js';
 	import type { HistoryMode } from '#lib/ipc/history.js';
 	import type { CursorStyle } from '#lib/terminal/cursor.js';
+	import { jumpChainToSave } from '#lib/utils/route.js';
 
 	interface Props {
 		open: boolean;
@@ -619,8 +620,7 @@
 			.filter((f) => f.name.trim() || f.value.trim())
 			.map((f) => (f.hidden ? { name: f.name.trim(), value: f.value, hidden: true } : { name: f.name.trim(), value: f.value }));
 
-		const jumpChain: JumpHostConfig[] | undefined = !desktop && jumpEnabled && jumpHops.length > 0
-			? jumpHops.map(h => {
+		const jumpChain: JumpHostConfig[] | null = jumpChainToSave(desktop, jumpEnabled, jumpHops.map(h => {
 				const hopAuth: AuthMethod = h.authType === 'Password'
 					? passwordAuth(h.password, null)
 					: h.authType === 'Manager'
@@ -643,8 +643,7 @@
 					auth_method: filled && h.read ? h.read.auth_method : hopAuth,
 					credential_id: h.credentialId || null,
 				};
-			})
-			: undefined;
+			}));
 
 		// The weakenings in force are stored with the session, those written
 		// here included, so the session list can flag a weaker session.
@@ -677,7 +676,7 @@
 					auth_method: filled ? editSession.auth_method : authMethod,
 					folder_id: folderIdStr || null,
 					tags,
-					jump_chain: desktop ? null : (jumpChain ?? editSession.jump_chain ?? null),
+					jump_chain: jumpChain,
 					proxy: proxyConfig,
 					shell: desktop ? null : (shell.trim() || null),
 					kind,
@@ -726,7 +725,7 @@
 					folderId: folderIdStr || null,
 					tags,
 					vaultId: sessionVault,
-					jumpChain: jumpChain ?? null,
+					jumpChain,
 					proxy: proxyConfig,
 					shell: desktop ? null : (shell.trim() || null),
 					kind,
