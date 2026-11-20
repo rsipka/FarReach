@@ -28,7 +28,7 @@
 		faShareNodes,
 		faRightToBracket
 	} from '@fortawesome/free-solid-svg-icons';
-	import { registerSessionActions, shortcutLabel } from '#lib/state/shortcuts.svelte.js';
+	import { registerSessionActions, shortcutLabel, actionLabel } from '#lib/state/shortcuts.svelte.js';
 	import { pendingSessionAction, takeSessionAction } from '#lib/state/palette.svelte.js';
 	import { parseAddress } from '#lib/utils/address.js';
 	import { noteSessionUsed, forgetSession, recentSessionIds } from '#lib/state/recents.svelte.js';
@@ -2082,12 +2082,12 @@
 						<button class="menu-item" role="menuitem" onclick={() => fromMenu(handleNewSession)}>
 							<FaIcon icon={faServer} size={12} />
 							<span>{t('session.new_session')}</span>
-							<kbd>{shortcutLabel('n', { ctrl: true })}</kbd>
+							{#if actionLabel('session.new')}<kbd>{actionLabel('session.new')}</kbd>{/if}
 						</button>
 						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => { quickPrefill = null; showQuickConnect = true; })}>
 							<FaIcon icon={faBolt} size={12} />
 							<span>{t('session.quick_connect')}</span>
-							<kbd>{shortcutLabel('n', { ctrl: true, shift: true })}</kbd>
+							{#if actionLabel('session.quickConnect')}<kbd>{actionLabel('session.quickConnect')}</kbd>{/if}
 						</button>
 						<button class="menu-item" role="menuitem" onclick={() => fromMenu(() => contextNewFolder())}>
 							<FaIcon icon={faFolderPlus} size={12} />

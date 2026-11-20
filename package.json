@@ -36,6 +36,8 @@
     "snippet:test": "node scripts/snippet-test.mjs",
     "links:test": "node scripts/links-test.mjs",
     "ime:test": "node scripts/ime-test.mjs",
+    "editor-command:test": "node scripts/editor-command-test.mjs",
+    "compare:test": "node scripts/compare-test.mjs",
     "select:test": "node --import ./scripts/resolve-lib.mjs scripts/select-test.mjs",
     "rdp-import:test": "node scripts/rdp-import-test.mjs",
     "rdm-import:test": "node scripts/rdm-import-test.mjs",
@@ -60,6 +62,7 @@
     "devops-vault:test": "node scripts/devops-vault-test.mjs",
     "ansible:test": "node scripts/ansible-recap-test.mjs && node scripts/ansible-sessions-test.mjs",
     "session-folders:test": "node --import ./scripts/resolve-lib.mjs scripts/session-folders-test.mjs",
+    "keybindings:test": "node --import ./scripts/resolve-lib.mjs scripts/keybindings-test.mjs",
     "settings-persist:test": "node --import ./scripts/resolve-lib.mjs scripts/settings-persist-test.mjs",
     "setup-wizard:test": "node --import ./scripts/resolve-lib.mjs scripts/setup-wizard-test.mjs"
   },
