@@ -2354,8 +2354,33 @@ impl GexParams {
         )
     }
 
+    /// Like [`GexParams::for_client_config`], but lets the minimum go down
+    /// to 1024 bits, for old servers whose only group exchange primes are
+    /// that small. Only for a client that already offers 1024-bit
+    /// `diffie-hellman-group1-sha1`, which is no stronger.
+    pub fn for_legacy_client(
+        min_group_size: usize,
+        preferred_group_size: usize,
+        max_group_size: usize,
+    ) -> Result<Self, Error> {
+        Self::build(
+            min_group_size,
+            preferred_group_size,
+            max_group_size,
+            ValidationKind::LegacyClientConfig,
+        )
+    }
+
     fn validate(&self, kind: ValidationKind) -> Result<(), Error> {
         match kind {
+            ValidationKind::LegacyClientConfig => {
+                if self.min_group_size < 1024 {
+                    return Err(Error::InvalidConfig(format!(
+                        "min_group_size must be at least 1024 bits. We got {} bits",
+                        self.min_group_size
+                    )));
+                }
+            }
             ValidationKind::ClientConfig => {
                 if self.min_group_size < 2048 {
                     return Err(Error::InvalidConfig(format!(
@@ -2434,6 +2459,7 @@ impl GexParams {
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum ValidationKind {
     ClientConfig,
+    LegacyClientConfig,
     PeerRequest,
 }
 

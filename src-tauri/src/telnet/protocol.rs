@@ -335,6 +335,26 @@ impl TelnetCodec {
         }
     }
 
+    /// Binary data (a ZMODEM transfer) as it goes on the wire: only what
+    /// Telnet itself asks for, IAC doubled and, in text mode, CR followed
+    /// by NUL, which the server takes off again. No newline or backspace
+    /// changes.
+    pub fn encode_raw(&self, input: &[u8]) -> Vec<u8> {
+        if !self.telnet() {
+            return input.to_vec();
+        }
+        let binary_out = self.local[OPT_BINARY as usize].enabled;
+        let mut out = Vec::with_capacity(input.len() + input.len() / 64 + 4);
+        for &b in input {
+            match b {
+                IAC => out.extend_from_slice(&[IAC, IAC]),
+                b'\r' if !binary_out => out.extend_from_slice(&[b'\r', 0]),
+                _ => out.push(b),
+            }
+        }
+        out
+    }
+
     /// What the user typed, as it goes on the wire.
     pub fn encode(&self, input: &[u8]) -> Vec<u8> {
         let telnet = self.telnet();
@@ -606,6 +626,17 @@ mod tests {
         assert_eq!(c.encode(&[0x7f]), vec![0x08]);
         let c = TelnetCodec::new(opts(TelnetNewline::Lf, TelnetBackspace::Del), 80, 24);
         assert_eq!(c.encode(b"\r"), b"\n");
+    }
+
+    #[test]
+    fn binary_data_keeps_its_bytes() {
+        // ZMODEM data: only Telnet's own escaping, never the Enter or
+        // Backspace settings.
+        let opts = TelnetOptions { mode: TelnetMode::Active, newline: TelnetNewline::Crlf, backspace: TelnetBackspace::CtrlH };
+        let c = TelnetCodec::new(opts, 80, 24);
+        assert_eq!(c.encode_raw(&[b'\r', 0x7f, IAC, b'\n']), vec![b'\r', 0, 0x7f, IAC, IAC, b'\n']);
+        let raw = TelnetCodec::new(TelnetOptions { mode: TelnetMode::Raw, ..opts }, 80, 24);
+        assert_eq!(raw.encode_raw(&[b'\r', 0x7f, IAC]), vec![b'\r', 0x7f, IAC]);
     }
 
     #[test]
