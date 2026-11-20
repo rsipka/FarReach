@@ -93,6 +93,7 @@
 	const onIos = isIos();
 	/** What the RDP clipboard carries: '' for everything, 'text' for no files, 'off'. */
 	let rdpClipboard = $state<'' | 'text' | 'off'>('');
+	let rdpClient = $state<'ironrdp' | 'freerdp'>('ironrdp');
 	/** VNC only: the saved SSH session to go through, or '' for direct. */
 	let viaSessionId = $state('');
 	let wslDistro = $state('');
@@ -522,6 +523,7 @@
 			os = editSession.detected_os === 'linux' || editSession.detected_os === 'gnome' ? editSession.detected_os : 'windows';
 			sharePath = editSession.share_path ?? '';
 			rdpClipboard = editSession.rdp_clipboard ?? '';
+			rdpClient = editSession.rdp_use_freerdp ? 'freerdp' : 'ironrdp';
 			viaSessionId = editSession.via_session_id ?? '';
 			wslDistro = editSession.wsl_distro ?? '';
 			telnetOptions = { ...DEFAULT_TELNET_OPTIONS, ...(editSession.telnet ?? {}) };
@@ -605,6 +607,7 @@
 			os = 'windows';
 			sharePath = '';
 			rdpClipboard = '';
+			rdpClient = 'ironrdp';
 			viaSessionId = '';
 			telnetOptions = { ...DEFAULT_TELNET_OPTIONS };
 			serialOptions = { ...DEFAULT_SERIAL_OPTIONS };
@@ -836,6 +839,7 @@
 					os_manual: !rdp && !!osChoice,
 					share_path: rdp ? (sharePath.trim() || null) : null,
 					rdp_clipboard: rdp && rdpClipboard ? rdpClipboard : null,
+					rdp_use_freerdp: rdp && rdpClient === 'freerdp',
 					via_session_id: via,
 					try_agent_keys: !desktop && authType === 'Key' && tryAgentKeys ? true : null,
 					wsl_distro: kind === 'wsl' ? wslDistro.trim() : null,
@@ -884,6 +888,7 @@
 					osManual: !rdp && !!osChoice,
 					sharePath: rdp ? sharePath : null,
 					rdpClipboard: rdp && rdpClipboard ? rdpClipboard : null,
+					rdpUseFreerdp: rdp && rdpClient === 'freerdp',
 					viaSessionId: via,
 					tryAgentKeys: !desktop && authType === 'Key' && tryAgentKeys,
 					sshOptions: sshOptionsToSave,
@@ -1138,6 +1143,16 @@
 		{/if}
 
 		{#if kind === 'rdp'}
+			{#if !isMobile()}
+				<div class="shell-field">
+					<label class="via-label" for="rdp-client">{t('session.rdp_client')}</label>
+					<select id="rdp-client" class="via-select" bind:value={rdpClient} disabled={saving}>
+						<option value="ironrdp">{t('session.rdp_client_ironrdp')}</option>
+						<option value="freerdp">{t('session.rdp_client_freerdp')}</option>
+					</select>
+					{#if rdpClient === 'freerdp'}<p class="shell-hint">{t('session.rdp_client_freerdp_hint')}</p>{/if}
+				</div>
+			{/if}
 			{#if !usedCredential}
 			<div class="shell-field">
 				<SecretRefField approvable label={t('session.password_optional')} bind:value={password} bind:secretRef={passwordRef} placeholder={t('session.stored_encrypted')} disabled={saving} onpick={(e) => (username = nameFromEntry(username, e))} />
