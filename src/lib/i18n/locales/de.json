@@ -443,6 +443,8 @@
   "session.rdp_clipboard_text": "Text und Bilder, keine Dateien",
   "session.rdp_clipboard_off": "Aus",
   "session.rdp_clipboard_hint": "Was Kopieren und Einfügen zwischen diesem Computer und dem Desktop überträgt.",
+  "session.rdp_forward_lock_keys": "Tastendrücke der Sperrtasten weiterleiten",
+  "session.rdp_forward_lock_keys_hint": "Sendet Caps Lock, Num Lock und Scroll Lock für Tastenkürzel an den Remotedesktop. Die Zustände der Sperrtasten bleiben immer synchronisiert.",
   "session.rdp_domain": "Domäne (optional)",
   "rdp.fullscreen": "Vollbild",
   "rdp.exit_fullscreen": "Vollbild beenden",

@@ -443,6 +443,8 @@
   "session.rdp_clipboard_text": "Κείμενο και εικόνες, χωρίς αρχεία",
   "session.rdp_clipboard_off": "Ανενεργό",
   "session.rdp_clipboard_hint": "Τι μεταφέρει η αντιγραφή και επικόλληση μεταξύ αυτού του υπολογιστή και της επιφάνειας εργασίας.",
+  "session.rdp_forward_lock_keys": "Προώθηση πατημάτων πλήκτρων κλειδώματος",
+  "session.rdp_forward_lock_keys_hint": "Στέλνει τα πατήματα των Caps Lock, Num Lock και Scroll Lock στην απομακρυσμένη επιφάνεια εργασίας για συντομεύσεις. Η κατάσταση των πλήκτρων συγχρονίζεται σε κάθε περίπτωση.",
   "session.rdp_domain": "Τομέας (προαιρετικό)",
   "rdp.fullscreen": "Πλήρης οθόνη",
   "rdp.exit_fullscreen": "Έξοδος από πλήρη οθόνη",

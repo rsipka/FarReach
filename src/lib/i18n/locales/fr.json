@@ -443,6 +443,8 @@
   "session.rdp_clipboard_text": "Texte et images, sans fichiers",
   "session.rdp_clipboard_off": "Désactivé",
   "session.rdp_clipboard_hint": "Ce que le copier-coller transfère entre cet ordinateur et le bureau.",
+  "session.rdp_forward_lock_keys": "Transmettre les appuis sur les touches de verrouillage",
+  "session.rdp_forward_lock_keys_hint": "Envoie les appuis sur Verr. maj., Verr. num. et Arrêt défil. au bureau distant pour les raccourcis. L’état de ces touches reste toujours synchronisé.",
   "session.rdp_domain": "Domaine (facultatif)",
   "rdp.fullscreen": "Plein écran",
   "rdp.exit_fullscreen": "Quitter le plein écran",
