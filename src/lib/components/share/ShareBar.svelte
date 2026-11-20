@@ -4,14 +4,12 @@
 	Renders nothing at all while sharing is turned off — not a disabled
 	button, nothing. Someone who never wants this never sees it. When on and
 	idle it is one button; during a share it is the status, and the way back
-	to the dialog.
+	to the dialog (mounted once by the main page).
 -->
 <script lang="ts">
-	import ShareDialog from './ShareDialog.svelte';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import * as share from '#lib/state/share.svelte.js';
 
-	let open = $state(false);
 	let session = $derived(share.getSession());
 	let phase = $derived(session?.phase ?? 'idle');
 
@@ -42,7 +40,7 @@
 		class:active={!!session && phase !== 'idle'}
 		class:live={phase === 'connected'}
 		class:bad={phase === 'failed'}
-		onclick={() => (open = true)}
+		onclick={() => share.openDialog()}
 		title={t('sharing.title')}
 	>
 		<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -54,8 +52,6 @@
 			<span class="mode">{session.localMode === 'read-write' ? 'RW' : 'RO'}</span>
 		{/if}
 	</button>
-
-	<ShareDialog {open} onclose={() => (open = false)} />
 {/if}
 
 <style>

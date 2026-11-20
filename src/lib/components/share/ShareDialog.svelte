@@ -3,8 +3,9 @@
 
 	The whole handshake is two pastes: the host gives a code, the guest gives
 	one back. This dialog walks each side through its half and is otherwise
-	out of the way — once connected it can be closed, and the bottom bar
-	carries the status.
+	out of the way — it can be closed while waiting or connected, and the
+	bottom bar or the Sessions + menu brings it back. There is one per app,
+	mounted by the main page; `share.openDialog()` opens it.
 
 	The one setting that matters is stated in the user's own terms: "what may
 	they do to my terminal". It defaults to read-only, and it is enforced on
@@ -19,12 +20,10 @@
 	import * as share from '#lib/state/share.svelte.js';
 	import type { Mode } from '#lib/share/protocol.js';
 
-	interface Props {
-		open: boolean;
-		onclose: () => void;
-	}
-
-	let { open, onclose }: Props = $props();
+	let open = $derived(share.isDialogOpen());
+	let enabled = $derived(share.isEnabled());
+	let enabling = $state(false);
+	const onclose = () => share.closeDialog();
 
 	let session = $derived(share.getSession());
 	let phase = $derived(session?.phase ?? 'idle');
@@ -42,11 +41,22 @@
 	$effect(() => {
 		if (open && !session) {
 			localTabId = getActiveTab()?.id ?? '';
-			role = null;
+			role = share.dialogRole();
 			pasted = '';
 			copied = false;
 		}
 	});
+
+	async function turnOn(): Promise<void> {
+		enabling = true;
+		try {
+			await share.setEnabled(true);
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : String(e), 'error');
+		} finally {
+			enabling = false;
+		}
+	}
 
 	async function start(): Promise<void> {
 		busy = true;
@@ -110,7 +120,20 @@
 			case 'no-path':
 				return t('sharing.fail_no_path');
 			case 'bad-code':
-				return t('sharing.fail_bad_code');
+				switch (f.reason) {
+					case 'own-code':
+						return t('sharing.fail_own_code');
+					case 'invite-not-reply':
+						return t('sharing.fail_invite_not_reply');
+					case 'reply-not-invite':
+						return t('sharing.fail_reply_not_invite');
+					default:
+						return t('sharing.fail_bad_code');
+				}
+			case 'unsupported':
+				return t('sharing.fail_unsupported');
+			case 'error':
+				return t('sharing.fail_error');
 			case 'dropped':
 				return t('sharing.fail_dropped');
 			case 'tampered':
@@ -121,9 +144,14 @@
 	});
 </script>
 
-<Modal {open} onclose={phase === 'idle' || phase === 'connected' ? onclose : dismiss} title={t('sharing.title')} maxWidth="560px">
+<!-- Closing only hides the dialog: a share that is waiting for its reply or
+     already connected carries on, and Share in the bottom bar or the + menu
+     brings it back. Cancel and End are the ways to stop one. -->
+<Modal {open} onclose={phase === 'failed' || phase === 'ended' ? dismiss : onclose} title={t('sharing.title')} maxWidth="560px">
 	<div class="share">
-		{#if !session || phase === 'idle'}
+		{#if !enabled && !session}
+			<p class="status">{t('sharing.off_note')}</p>
+		{:else if !session || phase === 'idle'}
 			<!-- Role -->
 			<div class="roles">
 				<button class="role" class:picked={role === 'host'} onclick={() => (role = 'host')}>
@@ -232,6 +260,9 @@
 			</div>
 		{:else if phase === 'failed'}
 			<p class="error">{failureText}</p>
+			{#if session.failure?.kind === 'unsupported'}
+				<p class="detail">{t('sharing.unsupported_linux')}</p>
+			{/if}
 			{#if session.failure?.detail}
 				<p class="detail">{session.failure.detail}</p>
 			{/if}
@@ -241,7 +272,10 @@
 	</div>
 
 	{#snippet actions()}
-		{#if !session || phase === 'idle'}
+		{#if !enabled && !session}
+			<Button variant="secondary" onclick={onclose}>{t('common.cancel')}</Button>
+			<Button variant="primary" disabled={enabling} onclick={turnOn}>{t('sharing.turn_on')}</Button>
+		{:else if !session || phase === 'idle'}
 			<Button variant="secondary" onclick={onclose}>{t('common.cancel')}</Button>
 			{#if role === 'host'}
 				<Button variant="primary" disabled={busy} onclick={start}>{t('sharing.start')}</Button>
