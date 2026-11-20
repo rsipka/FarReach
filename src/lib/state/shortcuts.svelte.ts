@@ -1,5 +1,5 @@
 import { newTab } from '#lib/terminal/tmux-tabs.js';
-import { createTab, closeTab, getActiveTab, getTabs, activateTab } from './tabs.svelte';
+import { createTab, closeTab, getActiveTab, getTabs, activateTab, canShowFilesView, toggleFilesView } from './tabs.svelte';
 import { toggleAIPanel } from './ai-chat.svelte';
 import { togglePalette, requestSessionAction } from './palette.svelte';
 import { stepUiZoom } from './ui-zoom';
@@ -110,6 +110,10 @@ const handlers: Partial<Record<ActionId, () => void>> = {
 	'app.settings': () => openSettings(),
 	'app.palette': openCommandPalette,
 	'app.aiPanel': toggleAIPanel,
+	'files.toggle': () => {
+		const active = getActiveTab();
+		if (active && canShowFilesView(active)) toggleFilesView(active.id);
+	},
 	// The interface's size, as in a browser. Not on a phone: it follows the system.
 	...(isMobile()
 		? {}

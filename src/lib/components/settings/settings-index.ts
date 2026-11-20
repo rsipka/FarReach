@@ -75,6 +75,7 @@ export const SETTINGS_INDEX: IndexedRow[] = [
 	{ page: 'general', label: 'settings.play_sounds', desc: 'settings.play_sounds_desc', words: 'sound mute chime notification audio beep quiet' },
 	{ page: 'general', label: 'settings.rerun_setup', desc: 'settings.rerun_setup_desc', words: 'wizard first run onboarding welcome' },
 	{ page: 'about', label: 'settings.check_updates', desc: 'settings.check_updates_desc', words: 'update version' },
+	{ page: 'terminal', label: 'settings.file_editor', desc: 'settings.file_editor_desc', words: 'editor vim nano emacs code codium vscode sublime f4', desktopOnly: true },
 	{ page: 'terminal', label: 'settings.default_shell', desc: 'settings.shell_desc', words: 'bash zsh powershell cmd' },
 	{ page: 'terminal', label: 'settings.bell_sound', desc: 'settings.bell_sound_desc', words: 'bell beep ^g sound audible' },
 	{ page: 'terminal', label: 'settings.bell_flash', desc: 'settings.bell_flash_desc', words: 'bell visual flash' },

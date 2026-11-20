@@ -33,7 +33,8 @@ export type ActionId =
 	| 'split.right'
 	| 'split.down'
 	| 'split.unsplit'
-	| 'broadcast.toggle';
+	| 'broadcast.toggle'
+	| 'files.toggle';
 
 export type ActionGroup = 'tabs' | 'app' | 'terminal' | 'split';
 
@@ -77,7 +78,9 @@ export const ACTIONS: ActionDef[] = [
 	{ id: 'split.right', group: 'split', label: 'shortcuts.split_right', defaults: ['Mod+Shift+E'] },
 	{ id: 'split.down', group: 'split', label: 'shortcuts.split_down', defaults: ['Mod+Shift+O'] },
 	{ id: 'split.unsplit', group: 'split', label: 'shortcuts.unsplit', defaults: ['Mod+Shift+U'] },
-	{ id: 'broadcast.toggle', group: 'split', label: 'shortcuts.broadcast', defaults: ['Mod+Shift+B'] }
+	{ id: 'broadcast.toggle', group: 'split', label: 'shortcuts.broadcast', defaults: ['Mod+Shift+B'] },
+	// An SSH tab's full-pane file manager, and back to its terminal.
+	{ id: 'files.toggle', group: 'terminal', label: 'shortcuts.files_view', defaults: ['Mod+Shift+S'] }
 ];
 
 const BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));

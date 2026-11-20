@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { takeTmuxTitle } from '#lib/terminal/tmux-tabs.js';
-	import { getTabs, getActiveTab, updateTabTitle, updateTabConnection, setTelnetConnection, setSerialConnection, createTab, activateTab, getSplit, setSplitRatio, getDraggedTab, setDraggedTab, splitWith, unsplit, dropTab } from '#lib/state/tabs.svelte.js';
+	import { getTabs, getActiveTab, updateTabTitle, updateTabConnection, setTelnetConnection, setSerialConnection, createTab, activateTab, getSplit, setSplitRatio, getDraggedTab, setDraggedTab, splitWith, unsplit, dropTab, canShowFilesView, toggleFilesView } from '#lib/state/tabs.svelte.js';
 	import { geometry, paneStyle, dividerStyle, ratioAt, dropAt as dropAtPoint, leaves, neighbour, SPLIT_MIN_WIDTH, type Drop, type DividerRect, type Zone } from '#lib/terminal/split.js';
 	import { getActivePage } from '#lib/state/navigation.svelte.js';
 	import { isDevopsEnabled } from '#lib/state/devops.svelte.js';
@@ -13,6 +13,8 @@
 	import { monitoringStart, monitoringStop, monitoringGetStats, monitoringStartWsl } from '#lib/ipc/monitoring.js';
 	import { updateStats, removeStats } from '#lib/state/monitoring.svelte.js';
 	import Terminal from '#lib/components/terminal/Terminal.svelte';
+	import DualPane from '#lib/components/explorer/DualPane.svelte';
+	import { stopExternalEdits } from '#lib/explorer/external-edit.js';
 	import RdpPanel from '#lib/components/rdp/RdpPanel.svelte';
 	import BroadcastBar from '#lib/components/terminal/BroadcastBar.svelte';
 	import { getBroadcastTargets, toggleBroadcastTarget } from '#lib/state/broadcast.svelte.js';
@@ -345,6 +347,7 @@
 		for (const connId of connectedSsh) {
 			if (!activeConnectionIds.has(connId)) {
 				connectedSsh.delete(connId);
+				stopExternalEdits(connId);
 				sshDisconnect(connId).catch((err) => {
 					console.error(`Failed to disconnect SSH ${connId}:`, err);
 				});
@@ -393,6 +396,7 @@
 					{#each tabs as tab (tab.id)}
 						{@const pane = paneRects.get(tab.id) ?? null}
 						{@const focused = tab.id === activeTab?.id}
+						{@const filesShown = !!tab.filesView && canShowFilesView(tab)}
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<div
 							class="terminal-wrapper"
@@ -424,7 +428,7 @@
 									ptyId={tab.id}
 									type={tab.type}
 									connectionId={tab.type === 'telnet' ? tab.telnetConnectionId : tab.type === 'serial' ? tab.serialConnectionId : tab.connectionId}
-									active={focused}
+									active={focused && !filesShown}
 									visible={focused || pane !== null}
 									onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
 									sshConnectParams={tab.sshConnectParams}
@@ -441,6 +445,11 @@
 									sessionName={tab.sessionName}
 									historyMode={tab.historyMode}
 									wslDistro={tab.wslDistro}/>
+								<!-- The full-pane file manager over the terminal, which keeps
+								     running behind it; F10 or the bar's button goes back. -->
+								{#if filesShown && tab.connectionId}
+									<DualPane connectionId={tab.connectionId} active={focused} onclose={() => toggleFilesView(tab.id, false)} />
+								{/if}
 								</div>
 							{/if}
 						</div>
