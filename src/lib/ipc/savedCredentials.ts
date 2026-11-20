@@ -58,10 +58,11 @@ export interface KeysUnlocked {
   by_biometric: number;
   /** Passphrases newly remembered behind the biometric. */
   remembered: number;
+  remember_error?: string;
 }
 
-/** Remember key passphrases behind the phone's biometric: Android's prompt
- *  texts for opening and for remembering (iOS words its own). */
+/** Remember key passphrases with device authentication. Android uses these
+ *  texts for opening and remembering. Other systems provide their own. */
 export interface KeysBiometric {
   open: PromptText;
   save: PromptText;

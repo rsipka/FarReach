@@ -223,6 +223,38 @@ jobs:
           } >> "$GITHUB_ENV"
           echo "macOS signing enabled."
 
+      # A Developer ID profile for this app enables the Data Protection
+      # Keychain used by SSH passphrases protected with Touch ID.
+      - name: Configure macOS Touch ID when a provisioning profile is present
+        if: matrix.platform == 'macos'
+        shell: bash
+        env:
+          PROFILE_BASE64: ${{ secrets.APPLE_MACOS_PROVISIONING_PROFILE }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PROFILE_BASE64" ]; then exit 0; fi
+          if [ "${APPLE_SIGNING_IDENTITY:-}" = '-' ] || [ -z "${APPLE_TEAM_ID:-}" ]; then
+            echo "::error::The macOS Touch ID profile requires Developer ID signing and APPLE_TEAM_ID."
+            exit 1
+          fi
+          profile="$RUNNER_TEMP/reachercm-macos.provisionprofile"
+          payload="$RUNNER_TEMP/reachercm-macos-profile.plist"
+          printf '%s' "$PROFILE_BASE64" | /usr/bin/base64 -D > "$profile"
+          /usr/bin/security cms -D -i "$profile" -o "$payload"
+          app_id=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$payload")
+          node --input-type=module - "$profile" "$app_id" <<'JS'
+          import fs from 'node:fs';
+          const [, , profile, appId] = process.argv;
+          const path = 'src-tauri/tauri.conf.json';
+          const config = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const expected = `${process.env.APPLE_TEAM_ID}.${config.identifier}`;
+          if (appId !== expected) throw new Error('The macOS provisioning profile must match this app and signing team.');
+          const mac = config.bundle.macOS;
+          mac.files = { ...mac.files, 'embedded.provisionprofile': profile };
+          fs.writeFileSync(path, JSON.stringify(config, null, 2));
+          JS
+          /usr/libexec/PlistBuddy -c "Add :com.apple.application-identifier string $app_id" src-tauri/Entitlements.plist
+
       # The release description, and the notes the in-app updater shows (they
       # reach latest.json from releaseBody). The app shows them in its What's
       # new dialog: "- " lines as a list, "#" lines as headings and http(s)

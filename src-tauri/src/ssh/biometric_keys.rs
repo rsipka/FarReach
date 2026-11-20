@@ -14,6 +14,8 @@
 //!   (current enrolled set, this device only, [`crate::vault::apple_biometric`]);
 //!   this file only records that it is there, so the start does not ask
 //!   Face ID for nothing.
+//! - Windows and macOS: the file holds an encrypted blob. An independent
+//!   Windows Hello credential or a Touch ID-protected keychain item opens it.
 //!
 //! Each passphrase is kept under the key's names from
 //! [`super::unlocked::key_ids`] (public key fingerprint and text hash), so a
@@ -39,11 +41,20 @@ const IOS_ACCOUNT: &str = "passphrases";
 
 /// Whether this build can keep passphrases behind a biometric.
 pub fn supported() -> bool {
-    cfg!(any(target_os = "android", target_os = "ios"))
+    cfg!(any(windows, target_os = "macos", target_os = "android", target_os = "ios"))
+}
+
+/// Whether this build has access to the protected store in addition to
+/// having the platform biometric configured.
+pub async fn storage_available() -> bool {
+    #[cfg(target_os = "macos")]
+    return tokio::task::spawn_blocking(platform::storage_available).await.unwrap_or(false);
+    #[cfg(not(target_os = "macos"))]
+    supported()
 }
 
 /// One key's passphrase and the names of that key.
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Entry {
     pub ids: Vec<String>,
     pub passphrase: String,
@@ -64,6 +75,49 @@ struct Saved {
     ciphertext: String,
     #[serde(default)]
     count: usize,
+    /// Windows Hello signs this challenge to derive the encryption key.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    challenge: String,
+}
+
+#[cfg(any(windows, target_os = "macos", test))]
+mod desktop_seal {
+    use super::{Entry, Saved};
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+    use chacha20poly1305::{
+        aead::{Aead, KeyInit, Payload},
+        XChaCha20Poly1305, XNonce,
+    };
+    use zeroize::Zeroizing;
+
+    const PURPOSE: &[u8] = b"Reacher CM SSH key passphrases v1";
+
+    pub(super) fn open(saved: Saved, key: &[u8; 32]) -> Result<Vec<Entry>, String> {
+        let nonce: [u8; 24] = BASE64
+            .decode(saved.iv)
+            .map_err(|e| e.to_string())?
+            .try_into()
+            .map_err(|_| "The remembered passphrases have an invalid nonce")?;
+        let ciphertext = BASE64.decode(saved.ciphertext).map_err(|e| e.to_string())?;
+        let bytes = XChaCha20Poly1305::new(key.into())
+            .decrypt(&XNonce::from(nonce), Payload { msg: &ciphertext, aad: PURPOSE })
+            .map(Zeroizing::new)
+            .map_err(|_| "The remembered passphrases could not be decrypted")?;
+        super::decode(&bytes)
+    }
+
+    pub(super) fn seal(bytes: &[u8], count: usize, challenge: &[u8; 32], key: &[u8; 32]) -> Result<Saved, String> {
+        let nonce: [u8; 24] = rand::random();
+        let ciphertext = XChaCha20Poly1305::new(key.into())
+            .encrypt(&XNonce::from(nonce), Payload { msg: bytes, aad: PURPOSE })
+            .map_err(|_| "Could not encrypt the passphrases")?;
+        Ok(Saved {
+            iv: BASE64.encode(nonce),
+            ciphertext: BASE64.encode(ciphertext),
+            count,
+            challenge: BASE64.encode(challenge),
+        })
+    }
 }
 
 fn load(dir: &Path) -> Option<Saved> {
@@ -104,6 +158,7 @@ pub enum OpenError {
     Declined(String),
 }
 
+#[cfg(any(test, not(any(windows, target_os = "macos"))))]
 fn forget_file(dir: &Path) {
     let _ = std::fs::remove_file(dir.join(FILE));
 }
@@ -185,16 +240,21 @@ mod platform {
             "cancel": prompt.cancel,
         });
         let sealed: Sealed = plugin(app).call("biometricSeal", payload).await?;
-        write_file(dir, &Saved { iv: sealed.iv, ciphertext: sealed.ciphertext, count: entries.len() })
+        write_file(dir, &Saved { iv: sealed.iv, ciphertext: sealed.ciphertext, count: entries.len(), ..Default::default() })
     }
 
-    pub async fn forget(app: &AppHandle, dir: &Path) {
+    pub async fn forget(app: &AppHandle, dir: &Path) -> Result<(), String> {
         let _ = plugin(app).call::<serde_json::Value>("biometricForget", json!({ "alias": ANDROID_ALIAS })).await;
         forget_file(dir);
+        Ok(())
     }
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(any(windows, target_os = "macos"))]
+#[path = "biometric_keys_desktop.rs"]
+mod platform;
+
+#[cfg(not(any(windows, target_os = "macos", target_os = "android")))]
 mod platform {
     use super::*;
     use crate::ipc::vault_commands::PromptText;
@@ -232,9 +292,10 @@ mod platform {
         write_file(dir, &Saved { count: entries.len(), ..Default::default() })
     }
 
-    pub async fn forget(_app: &AppHandle, dir: &Path) {
+    pub async fn forget(_app: &AppHandle, dir: &Path) -> Result<(), String> {
         let _ = tokio::task::spawn_blocking(|| apple_biometric::delete(IOS_SERVICE, IOS_ACCOUNT)).await;
         forget_file(dir);
+        Ok(())
     }
 }
 
@@ -253,14 +314,28 @@ mod tests {
         let old = vec![entry(&["fp-a", "text-a"], "old-a"), entry(&["fp-b"], "b")];
         let new = vec![entry(&["fp-a", "text-a2"], "new-a"), entry(&["text-c"], "c")];
         let merged = merge(old, new);
-        assert_eq!(merged, vec![entry(&["fp-b"], "b"), entry(&["fp-a", "text-a2"], "new-a"), entry(&["text-c"], "c")]);
+        assert!(merged == vec![entry(&["fp-b"], "b"), entry(&["fp-a", "text-a2"], "new-a"), entry(&["text-c"], "c")]);
     }
 
     #[test]
     fn entries_round_trip_and_damage_is_reported() {
         let entries = vec![entry(&["x"], "pass")];
-        assert_eq!(decode(&encode(&entries).unwrap()).unwrap(), entries);
+        assert!(decode(&encode(&entries).unwrap()).unwrap() == entries);
         assert!(decode(b"not json").is_err());
+    }
+
+    #[test]
+    fn desktop_blob_can_only_be_opened_with_its_wrapping_key() {
+        let entries = vec![entry(&["fingerprint"], "test passphrase")];
+        let bytes = encode(&entries).unwrap();
+        let key: [u8; 32] = rand::random();
+        let challenge: [u8; 32] = rand::random();
+        let saved = desktop_seal::seal(&bytes, entries.len(), &challenge, &key).unwrap();
+        let mut wrong_key = key;
+        wrong_key[0] ^= 1;
+        let stored = serde_json::to_vec(&saved).unwrap();
+        assert!(desktop_seal::open(serde_json::from_slice(&stored).unwrap(), &wrong_key).is_err());
+        assert!(desktop_seal::open(saved, &key).unwrap() == entries);
     }
 
     #[test]

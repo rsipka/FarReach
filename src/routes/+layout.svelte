@@ -201,6 +201,7 @@
 		unlockCredentialKeys(biometric)
 			.then(async (r) => {
 				if (r.unlocked > 0) addToast(t('security.keys_unlocked', { count: r.unlocked }), 'success', 3000);
+				if (r.remember_error) addToast(t('toast.secret_save_failed', { error: r.remember_error }), 'error', 6000);
 				if (r.remembered > 0) {
 					const m = await unlockMethods().catch(() => null);
 					const method = biometricName(m?.platform, m?.platform_label);
