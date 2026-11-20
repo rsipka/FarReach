@@ -82,12 +82,23 @@ pub(crate) fn check_matches_session(
         jump_chain.unwrap_or_default().iter().map(|j| (j.host.as_str(), j.port, j.username.as_str())).collect();
     let stored_jumps: Vec<(&str, u16, &str)> =
         stored.jump_chain.iter().flatten().map(|j| (j.host.as_str(), j.port, j.username.as_str())).collect();
-    let same = stored.kind == crate::state::SessionKind::Ssh
-        && stored.host == host
-        && stored.port == port
-        && stored.username == username
-        && jumps == stored_jumps
-        && proxy.map(proxy_endpoint) == stored.proxy.as_ref().map(proxy_endpoint);
+    // The main address goes the session's way; another of its addresses
+    // goes that way too, or straight when it is marked direct.
+    let direct = stored.host != host || stored.port != port;
+    let (addr_ok, straight) = if direct {
+        match stored.alt_address(host, port) {
+            Some(a) => (true, a.direct),
+            None => (false, false),
+        }
+    } else {
+        (true, false)
+    };
+    let route_ok = if straight {
+        jumps.is_empty() && proxy.is_none()
+    } else {
+        jumps == stored_jumps && proxy.map(proxy_endpoint) == stored.proxy.as_ref().map(proxy_endpoint)
+    };
+    let same = stored.kind == crate::state::SessionKind::Ssh && addr_ok && stored.username == username && route_ok;
     if same {
         Ok(())
     } else {
@@ -413,6 +424,38 @@ pub async fn ssh_connect(
         Ok(connection_id)
     })
     .await
+}
+
+/// One address to check, as `ssh_probe_addresses` takes it.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ProbeTarget {
+    pub host: String,
+    pub port: u16,
+}
+
+/// Which of a session's addresses answer from here: a plain TCP connect to
+/// each, all at once, closed again at once. For each, the milliseconds it
+/// took, or `None` when it did not answer within `timeout_ms` (1500 unless
+/// said). Nothing is sent, so no login or key goes anywhere.
+#[tauri::command]
+pub async fn ssh_probe_addresses(targets: Vec<ProbeTarget>, timeout_ms: Option<u64>) -> Vec<Option<u64>> {
+    let limit = std::time::Duration::from_millis(timeout_ms.unwrap_or(1500).clamp(100, 10_000));
+    let probes = targets.into_iter().map(|t| async move {
+        // Not to be checked (one reached through a jump host).
+        if t.host.trim().is_empty() || t.port == 0 {
+            return None;
+        }
+        let start = std::time::Instant::now();
+        match tokio::time::timeout(limit, tokio::net::TcpStream::connect((t.host.as_str(), t.port))).await {
+            Ok(Ok(_)) => Some(start.elapsed().as_millis() as u64),
+            Ok(Err(e)) => {
+                tracing::debug!("probe {}:{}: {e}", t.host, t.port);
+                None
+            }
+            Err(_) => None,
+        }
+    });
+    futures_util::future::join_all(probes).await
 }
 
 #[tauri::command]

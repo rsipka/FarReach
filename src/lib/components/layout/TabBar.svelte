@@ -12,7 +12,7 @@
 	import { SPLIT_MIN_WIDTH, contains, leaves } from '#lib/terminal/split.js';
 	import { isMobile } from '#lib/platform.js';
 	import { getSettings } from '#lib/state/settings.svelte.js';
-	import { shortcutLabel } from '#lib/state/shortcuts.svelte.js';
+	import { actionLabel } from '#lib/state/shortcuts.svelte.js';
 	import {
 		getBroadcastTargets, isTerminalTab, toggleBroadcastTarget, broadcastToAll, stopBroadcast
 	} from '#lib/state/broadcast.svelte.js';
@@ -119,9 +119,11 @@
 	// A phone or tablet has no local shell: no + (it opened one), and a split
 	// needs a second open tab instead of a new local terminal.
 	const mobile = isMobile();
-	let newTabTip = $derived(
-		`${getSettings().tmuxNewTabWindow && isTmuxViewTab(activeTab) ? t('tmux.window_new_tab') : t('tabs.new_local')} (${shortcutLabel('T', { ctrl: true })})`
-	);
+	let newTabTip = $derived.by(() => {
+		const label = getSettings().tmuxNewTabWindow && isTmuxViewTab(activeTab) ? t('tmux.window_new_tab') : t('tabs.new_local');
+		const key = actionLabel('tab.new');
+		return key ? `${label} (${key})` : label;
+	});
 
 	function handleNewTab(): void {
 		newTab();

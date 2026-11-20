@@ -13,7 +13,8 @@
 	import '@xterm/xterm/css/xterm.css';
 	import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 	import { ptyWrite, ptyResize } from '#lib/ipc/pty.js';
-	import { sshSend, sshResize, sshConnect, sshReady, sshDisconnect, type SshConnectParams } from '#lib/ipc/ssh.js';
+	import { sshSend, sshResize, sshConnect, sshReady, sshDisconnect, sshProbeAddresses, type SshConnectParams } from '#lib/ipc/ssh.js';
+	import { addressKey, addressName, autoOrder, isUnreachable, plainOrder, rememberAddress } from '#lib/sessions/addresses.js';
 	import { telnetConnect, telnetDisconnect, telnetSend, telnetResize, type TelnetConnectParams } from '#lib/ipc/telnet.js';
 	import { serialConnect, serialDisconnect, serialSend, serialBreak, serialSummary as serialLabel, type SerialConnectParams } from '#lib/ipc/serial.js';
 	import { untrustedRefsFromError } from '#lib/ipc/sessions.js';
@@ -45,7 +46,7 @@
 	import { URL_PATTERN } from '#lib/terminal/links.js';
 	import { bellActions, playBell, lastBellSound, windowSeen, notifyBell } from '#lib/terminal/bell.js';
 	import Modal from '#lib/components/shared/Modal.svelte';
-	import { openSettings } from '#lib/state/shortcuts.svelte.js';
+	import { openSettings, matchesAction } from '#lib/state/shortcuts.svelte.js';
 	import MobileKeyBar, { type BarKey } from '#lib/components/shared/MobileKeyBar.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
 	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
@@ -1060,40 +1061,29 @@
 				return true;
 			}
 
-			// Ctrl+Shift+F (Cmd+Shift+F): find in this terminal, in its bar.
-			if ((event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'f') {
+			// Find in this terminal, in its bar (Ctrl+Shift+F unless changed
+			// in Settings > Keyboard shortcuts, as are the keys below).
+			if (matchesAction(event, 'terminal.find')) {
 				event.preventDefault();
 				requestFind(ptyId, findText(term));
 				return false;
 			}
 
-			// Ctrl+Shift+H (Cmd+Shift+H): search history, from this session.
-			if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'h') {
+			// Search history, from this session.
+			if (matchesAction(event, 'terminal.history')) {
 				event.preventDefault();
 				openHistoryPanel({ text: term.getSelection().trim().slice(0, 200), sessionId, sessionName, tabId: ptyId });
 				return false;
 			}
 
-			if (event.ctrlKey && event.key === 'c' && term.hasSelection()) {
-				void copySelection(term);
-				return false;
-			}
-
-			// macOS: Cmd+C copies the selection (Cmd is never used as a terminal
-			// control key, so this is safe on all platforms).
-			if (event.metaKey && event.key === 'c' && term.hasSelection()) {
+			// Copy only while text is selected, so Ctrl+C still interrupts.
+			if (term.hasSelection() && matchesAction(event, 'terminal.copy')) {
 				event.preventDefault();
 				void copySelection(term);
 				return false;
 			}
 
-			if (event.ctrlKey && event.key === 'v') {
-				event.preventDefault();
-				void pasteFromClipboard(term);
-				return false;
-			}
-
-			if (event.metaKey && event.key === 'v') {
+			if (matchesAction(event, 'terminal.paste')) {
 				event.preventDefault();
 				void pasteFromClipboard(term);
 				return false;
@@ -1268,12 +1258,43 @@
 		try {
 			term.write(`\r\n\x1b[33m[${t('terminal.reconnecting')}]\x1b[0m\r\n`);
 
-			await sshConnect({
-				...sshConnectParams,
-				id: newId,
-				cols: term.cols,
-				rows: term.rows,
-			});
+			try {
+				await sshConnect({
+					...sshConnectParams,
+					id: newId,
+					cols: term.cols,
+					rows: term.rows,
+				});
+			} catch (err) {
+				// The address it used no longer answers (the laptop left the
+				// office): the session's others, as Auto orders them.
+				const fb = sshConnectParams.fallback;
+				if (!fb || !isUnreachable(String(err))) throw err;
+				const usedKey = addressKey(sshConnectParams);
+				const rest = fb.addresses.filter((a) => addressKey(a) !== usedKey);
+				// Silent mode: in order, nothing sent before an address is tried.
+				const order = fb.check === false
+					? plainOrder(rest)
+					: autoOrder(rest, await sshProbeAddresses(rest.map((a) => (a.routed ? { host: '', port: 0 } : { host: a.host, port: a.port }))).catch(() => rest.map(() => null)));
+				let last = err;
+				let done = false;
+				for (const a of order) {
+					term.write(`\x1b[33m[${t('session.trying_address', { name: addressName(a, fb.sessionPort) })}]\x1b[0m\r\n`);
+					const moved = { host: a.host, port: a.port, jumpChain: a.routed ? fb.jumpChain : undefined, proxy: a.routed ? fb.proxy : undefined };
+					try {
+						await sshConnect({ ...sshConnectParams, ...moved, id: newId, cols: term.cols, rows: term.rows });
+						// Later reconnects, duplicates and tmux windows go there too.
+						Object.assign(sshConnectParams, moved);
+						if (sessionId) rememberAddress(sessionId, a);
+						done = true;
+						break;
+					} catch (e) {
+						last = e;
+						if (!isUnreachable(String(e))) break;
+					}
+				}
+				if (!done) throw last;
+			}
 
 			// Tear down old event listeners
 			unlistenData?.();

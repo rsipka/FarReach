@@ -73,7 +73,8 @@ pub(crate) async fn session_trust(
     let manager = state.vault_manager.lock().await;
     let loc = locate_session(&manager, id).await?;
     let s = read_session(&manager, &loc.vault_id, &loc.secret_id).await.ok()?;
-    Some(hk::SessionTrust::new(id, s.host_keys.unwrap_or_default()))
+    let addresses = s.address_ids();
+    Some(hk::SessionTrust::with_addresses(id, s.host_keys.unwrap_or_default(), addresses))
 }
 
 /// Remove a session's key for one server (`host`, as `host:port`), or all

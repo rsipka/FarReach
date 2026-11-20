@@ -12,7 +12,7 @@
 		toggleBroadcastTarget
 	} from '#lib/state/broadcast.svelte.js';
 	import { BROADCAST_ICON } from '#lib/terminal/broadcast.js';
-	import { shortcutLabel } from '#lib/state/shortcuts.svelte.js';
+	import { actionLabel } from '#lib/state/shortcuts.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 
 	let targets = $derived(getBroadcastTargets());
@@ -39,7 +39,7 @@
 			<button class="bar-btn" onclick={() => toggleBroadcastTarget(id)}>{t('broadcast.include_this')}</button>
 		{:else if here && active}
 			{@const id = active.id}
-			<button class="bar-btn" onclick={() => toggleBroadcastTarget(id)} title={shortcutLabel('B', { ctrl: true, shift: true })}>
+			<button class="bar-btn" onclick={() => toggleBroadcastTarget(id)} title={actionLabel('broadcast.toggle')}>
 				{t('broadcast.leave_this')}
 			</button>
 		{/if}

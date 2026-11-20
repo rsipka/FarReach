@@ -77,6 +77,9 @@ export interface Tab {
 	 *  its terminal takes over the one there, screen and scrollback, instead of
 	 *  starting anew. Cleared once it has. */
 	handoff?: Handoff;
+	/** An SSH tab showing the full-pane file manager (this computer beside
+	 *  the server) in place of its terminal, which keeps running behind it. */
+	filesView?: boolean;
 }
 
 export interface Handoff {
@@ -338,6 +341,19 @@ export function updateTabTitle(id: string, title: string): void {
 }
 
 /** Set by the tab's terminal; undefined when the connection is up. */
+/** Whether a tab can show the full-pane file manager: an SSH tab on a
+ *  desktop, where there is a local side to show beside the server. */
+export function canShowFilesView(tab: Tab | undefined): boolean {
+	return !!tab && tab.type === 'ssh' && !isMobile();
+}
+
+/** Switch an SSH tab between its terminal and the full-pane file manager. */
+export function toggleFilesView(id: string, on?: boolean): void {
+	const tab = tabs.find((t) => t.id === id);
+	if (!canShowFilesView(tab)) return;
+	tab!.filesView = on ?? !tab!.filesView;
+}
+
 export function setTabLink(id: string, link: Tab['link']): void {
 	const tab = tabs.find((t) => t.id === id);
 	if (tab && tab.link !== link) tab.link = link;

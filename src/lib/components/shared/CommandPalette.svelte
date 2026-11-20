@@ -33,7 +33,7 @@
 	import { getSnippets, loadSnippets, pasteSnippet, canPasteSnippet } from '#lib/state/snippets.svelte.js';
 	import { getActivePage, setActivePage } from '#lib/state/navigation.svelte.js';
 	import { getEnabledDevopsTools } from '#lib/state/devops.svelte.js';
-	import { openSettings, shortcutLabel } from '#lib/state/shortcuts.svelte.js';
+	import { openSettings, actionLabel } from '#lib/state/shortcuts.svelte.js';
 	import { lock, vaultState } from '#lib/state/vault.svelte.js';
 	import { sessionList, type SessionConfig } from '#lib/ipc/sessions.js';
 	import { t } from '#lib/state/i18n.svelte.js';
@@ -94,7 +94,7 @@
 			id: 'action:tab-close',
 			group,
 			label: t('tabs.close_tab'),
-			hint: shortcutLabel('W', { ctrl: true, shift: true }),
+			hint: actionLabel('tab.close'),
 			run: () => closeTab(tab.id)
 		});
 		const scopes: [CloseScope, string][] = [
@@ -120,7 +120,7 @@
 				id: 'action:broadcast-tab',
 				group,
 				label: targets.includes(tabId) ? t('broadcast.palette_remove') : t('broadcast.palette_add'),
-				hint: shortcutLabel('B', { ctrl: true, shift: true }),
+				hint: actionLabel('broadcast.toggle'),
 				keywords,
 				run: () => toggleBroadcastTarget(tabId)
 			});
@@ -209,7 +209,7 @@
 				id: 'action:new-tab',
 				group: t('palette.group_actions'),
 				label: t('terminal.new_tab'),
-				hint: shortcutLabel('T', { ctrl: true }),
+				hint: actionLabel('tab.new'),
 				run: () => {
 					setActivePage('terminal');
 					createTab('local');
@@ -221,14 +221,14 @@
 				id: 'action:new-session',
 				group: t('palette.group_actions'),
 				label: t('session.new_session'),
-				hint: shortcutLabel('N', { ctrl: true }),
+				hint: actionLabel('session.new'),
 				run: () => requestSessionAction({ kind: 'new-session' })
 			},
 			{
 				id: 'action:quick-connect',
 				group: t('palette.group_actions'),
 				label: t('session.quick_connect'),
-				hint: shortcutLabel('N', { ctrl: true, shift: true }),
+				hint: actionLabel('session.quickConnect'),
 				run: () => requestSessionAction({ kind: 'quick-connect' })
 			},
 			// The tab in front, as its own menu in the tab bar has it (#160).
@@ -237,7 +237,7 @@
 				id: 'action:history',
 				group: t('palette.group_actions'),
 				label: t('history.search_menu'),
-				hint: shortcutLabel('H', { ctrl: true, shift: true }),
+				hint: actionLabel('terminal.history'),
 				run: () => {
 					const tab = getActiveTab();
 					openHistoryPanel({ sessionId: tab?.sessionId, sessionName: tab?.sessionName, tabId: tab?.id });
@@ -247,7 +247,7 @@
 				id: 'action:settings',
 				group: t('palette.group_actions'),
 				label: t('titlebar.open_settings'),
-				hint: shortcutLabel(',', { ctrl: true }),
+				hint: actionLabel('app.settings'),
 				run: () => openSettings()
 			},
 			{

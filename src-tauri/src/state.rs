@@ -190,6 +190,43 @@ pub struct SessionConfig {
     /// `session_host_key_*` commands; an editor's save keeps the stored ones.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host_keys: Option<Vec<crate::ssh::session_hostkeys::SavedHostKey>>,
+    /// A name for the main address (`host`), shown when the session has
+    /// other addresses ("Office").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_label: Option<String>,
+    /// Other addresses the same server answers on, by priority after the
+    /// main one: an internal and an external one, IPv4 and IPv6, other
+    /// names. `host` stays the main address, so older builds, importers and
+    /// everything else that reads it keep working. SSH only for now.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt_addresses: Option<Vec<SessionAddress>>,
+    /// How a session with other addresses picks one: `auto` (by priority,
+    /// skipping what does not answer), `ask` (a picker on every connect) or
+    /// `main` (the main address only). Unset: `auto`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connect_mode: Option<String>,
+    /// Check which addresses answer before connecting (Auto, and the
+    /// picker of Ask): on or off; unset: as Settings says. Off: Auto tries
+    /// them in order without checking first.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address_check: Option<bool>,
+}
+
+/// One more address of a session's server.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SessionAddress {
+    /// What it is, as the picker shows it ("Internet", "IPv6").
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label: String,
+    /// A host name, IPv4 or IPv6 address.
+    pub host: String,
+    /// Unset: the session's port.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub port: Option<u16>,
+    /// Reached straight, without the session's jump hosts or proxy (the
+    /// office address of a server reached from outside through a gateway).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub direct: bool,
 }
 
 /// One named value of a session's documentation.
@@ -228,6 +265,51 @@ impl SessionConfig {
         if !matches!(self.history.as_deref(), None | Some("off" | "commands" | "output")) {
             self.history = None;
         }
+        self.tidy_addresses();
+    }
+
+    /// Other addresses without a host are dropped, as is a mode nobody
+    /// knows; a session left with none stores neither.
+    pub fn tidy_addresses(&mut self) {
+        if let Some(list) = self.alt_addresses.as_mut() {
+            for a in list.iter_mut() {
+                // An IPv6 address as typed in a URL: the brackets go.
+                a.host = a.host.trim().trim_start_matches('[').trim_end_matches(']').to_string();
+                a.label = a.label.trim().to_string();
+            }
+            list.retain(|a| !a.host.is_empty());
+        }
+        if self.alt_addresses.as_ref().is_some_and(|l| l.is_empty()) {
+            self.alt_addresses = None;
+        }
+        if self.host_label.as_deref().is_some_and(|l| l.trim().is_empty()) {
+            self.host_label = None;
+        }
+        if !matches!(self.connect_mode.as_deref(), None | Some("auto" | "ask" | "main")) || self.alt_addresses.is_none() {
+            self.connect_mode = None;
+        }
+        if self.alt_addresses.is_none() {
+            self.address_check = None;
+        }
+    }
+
+    /// Every `host:port` the session's server is reached on: the main
+    /// address first, then the others, as host keys are kept under.
+    pub fn address_ids(&self) -> Vec<String> {
+        let mut ids = vec![format!("{}:{}", self.host, self.port)];
+        for a in self.alt_addresses.iter().flatten() {
+            let id = format!("{}:{}", a.host, a.port.unwrap_or(self.port));
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+        ids
+    }
+
+    /// The other address `host:port` is, if it is one of this session's
+    /// (`None` for the main address, or one it does not have).
+    pub fn alt_address(&self, host: &str, port: u16) -> Option<&SessionAddress> {
+        self.alt_addresses.iter().flatten().find(|a| a.host == host && a.port.unwrap_or(self.port) == port)
     }
 }
 

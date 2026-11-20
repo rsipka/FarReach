@@ -68,6 +68,10 @@ use ipc::telnet_commands::*;
 use ipc::saved_credential_commands::*;
 use ipc::session_commands::*;
 use ipc::sftp_commands::*;
+#[cfg(desktop)]
+use ipc::local_fs_commands::*;
+#[cfg(desktop)]
+use ipc::editor_detect::*;
 use ipc::dragout_commands::*;
 use ipc::webview_commands::*;
 use ipc::ssh_commands::*;
@@ -471,6 +475,7 @@ pub fn run() {
             mcp_confirm_response,
             // SSH commands
             ssh_connect,
+            crate::ipc::ssh_commands::ssh_probe_addresses,
             ssh_disconnect,
             ssh_send,
             ssh_ready,
@@ -578,6 +583,19 @@ pub fn run() {
             sftp_archive_cancel,
             sftp_transfer_cancel,
             sftp_terminal_cwd,
+            // This computer's files, for the full-pane file manager
+            local_list_dir,
+            local_mkdir,
+            local_rename,
+            local_delete,
+            local_join,
+            local_roots,
+            local_read_text,
+            local_stat,
+            local_edit_copy_path,
+            local_open,
+            local_detect_editors,
+            local_open_with,
             drag_preview_icon,
             drag_cache_dir,
             dragout_start,
@@ -949,6 +967,7 @@ pub fn run() {
             mcp_confirm_response,
             // SSH commands
             ssh_connect,
+            crate::ipc::ssh_commands::ssh_probe_addresses,
             ssh_disconnect,
             ssh_send,
             ssh_ready,

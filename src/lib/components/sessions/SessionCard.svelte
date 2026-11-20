@@ -5,6 +5,7 @@
 	import { getDistroIcon } from '#lib/data/distro-icons.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { sessionAddress } from '#lib/utils/address.js';
+	import { addressName, hasAltAddresses, sessionAddresses } from '#lib/sessions/addresses.js';
 	import { isMobile, isWindows } from '#lib/platform.js';
 	import { getSettings } from '#lib/state/settings.svelte.js';
 	import { tooltip } from '#lib/utils/tooltip.js';
@@ -101,12 +102,19 @@
 	 *  full row shows is in the row's tooltip instead. */
 	let compact = $derived(settings.compactLayout);
 	let showDetails = $derived(compact && !isMobile());
+	/** The session's other addresses, for the tooltips. */
+	let otherAddresses = $derived(
+		hasAltAddresses(session)
+			? t('session.more_addresses', { addresses: sessionAddresses(session).slice(1).map((a) => addressName(a, session.port)).join(', ') })
+			: ''
+	);
 	let detailsTooltip = $derived.by(() => {
 		const kind = session.kind ?? 'ssh';
 		const lines: string[] = [session.favorite ? `${session.name} ★` : session.name];
 		lines.push(kind === 'wsl'
 			? `${session.username ? `${session.username} · ` : ''}${session.wsl_distro || 'WSL'}`
 			: sessionAddress(session));
+		if (otherAddresses) lines.push(otherAddresses);
 		const type = t(`session.protocol_${kind}`);
 		lines.push(kind === 'wsl' || kind === 'serial' ? type : `${type} · ${t('session.auth_type', { type: session.auth_method.type })}`);
 		if (kind !== 'wsl' && session.tags.length > 0) lines.push(t('session.tooltip_tags', { tags: session.tags.join(', ') }));
@@ -252,6 +260,9 @@
 					<!-- The port only when it is not ssh's own: ":22" on every row
 					     said nothing. -->
 					<span class="session-detail">{sessionAddress(session)}</span>
+					{#if otherAddresses}
+						<span class="more-addresses" title={otherAddresses}>+{(session.alt_addresses ?? []).length}</span>
+					{/if}
 				</span>
 			{/if}
 		</div>
@@ -456,6 +467,15 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+
+	.more-addresses {
+		margin-left: 4px;
+		padding: 0 4px;
+		border-radius: 3px;
+		font-size: var(--text-xs);
+		color: var(--color-text-secondary);
+		background: var(--color-bg-hover, rgba(127, 127, 127, 0.12));
 	}
 
 	.session-detail {
