@@ -113,6 +113,19 @@ export interface SshConnectParams {
   /** Start inside this tmux session on the server (attach or create);
    *  absent: no tmux. See #lib/terminal/tmux. */
   tmux?: TmuxStart | null;
+  /** The session's other addresses, for a reconnect to fall back on when
+   *  the one it used no longer answers (a laptop that left the office).
+   *  Kept on the tab only; not sent to the backend. */
+  fallback?: AddressFallback;
+}
+
+/** See `SshConnectParams.fallback`. */
+export interface AddressFallback {
+  addresses: { host: string; port: number; routed: boolean; label: string; index: number }[];
+  /** The session's route, for addresses that go through it. */
+  jumpChain?: JumpHostConnectParams[];
+  proxy?: ProxyConfig;
+  sessionPort: number;
 }
 
 export interface ConnectionInfo {
@@ -184,6 +197,12 @@ export async function sshConnect(params: SshConnectParams): Promise<string> {
     sessionId: params.sessionId ?? null,
     tmux: params.tmux ?? null,
   });
+}
+
+/** Which addresses answer from here: a plain TCP connect to each, all at
+ *  once. Milliseconds per address, or null when it did not answer. */
+export async function sshProbeAddresses(targets: { host: string; port: number }[], timeoutMs = 1500): Promise<(number | null)[]> {
+  return invoke<(number | null)[]>('ssh_probe_addresses', { targets, timeoutMs });
 }
 
 /** What the tmux picker chose while connection `id` opened: a name, null

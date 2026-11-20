@@ -6,12 +6,13 @@
 	import OsIconSelect from './OsIconSelect.svelte';
 	import { osChoices } from '#lib/data/distro-icons.js';
 	import Input from '#lib/components/shared/Input.svelte';
-	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField, type TmuxSetting } from '#lib/ipc/sessions.js';
+	import { sessionCreate, sessionList, sessionUpdate, sessionKind, wslListDistros, type SessionConfig, type SessionKind, type AuthMethod, type JumpHostConfig, type Folder, type SshOptions, type CustomField, type TmuxSetting, type ConnectMode, type SessionAddress } from '#lib/ipc/sessions.js';
 	import { defaultTmuxName, folderTmux, validTmuxName } from '#lib/terminal/tmux.js';
 	import { isIos, isMobile, isWindows } from '#lib/platform.js';
 	import { APP_FILES_SHARE } from '#lib/ipc/rdp.js';
 	import SshOptionsSection from './SshOptionsSection.svelte';
 	import SessionHostKeys from './SessionHostKeys.svelte';
+	import SessionAddresses, { type AddressRow } from './SessionAddresses.svelte';
 	import Disclosure from '#lib/components/shared/Disclosure.svelte';
 	import TerminalThemeList from '#lib/components/terminal/TerminalThemeList.svelte';
 	import { findTerminalTheme, terminalPalette } from '#lib/state/terminal-themes.svelte.js';
@@ -234,6 +235,26 @@
 	let host = $state('');
 	let portStr = $state('22');
 	let username = $state('root');
+	// Other addresses of the same server (SSH), see SessionAddresses.
+	let hostLabel = $state('');
+	let addressRows = $state<AddressRow[]>([]);
+	let addressMode = $state<ConnectMode>('auto');
+
+	/** The other addresses as they are saved: rows without a host dropped. */
+	function addressesToSave(): SessionAddress[] | null {
+		if (kind !== 'ssh') return null;
+		const list = addressRows
+			.filter((r) => r.host.trim())
+			.map((r) => {
+				const p = parseInt(String(r.port), 10);
+				const a: SessionAddress = { host: r.host.trim() };
+				if (r.label.trim()) a.label = r.label.trim();
+				if (p > 0 && p < 65536) a.port = p;
+				if (r.direct) a.direct = true;
+				return a;
+			});
+		return list.length ? list : null;
+	}
 
 	const DEFAULT_PORT: Record<SessionKind, string> = { ssh: '22', rdp: '3389', vnc: '5900', wsl: '0', telnet: '23', serial: '0' };
 
@@ -379,6 +400,9 @@
 			name = editSession.name;
 			host = editSession.host;
 			portStr = String(editSession.port);
+			hostLabel = editSession.host_label ?? '';
+			addressRows = (editSession.alt_addresses ?? []).map((a) => ({ label: a.label ?? '', host: a.host, port: a.port ? String(a.port) : '', direct: !!a.direct }));
+			addressMode = editSession.connect_mode ?? 'auto';
 			username = editSession.username;
 			authType = editSession.auth_method.type === 'Password' && editSession.auth_method.password_ref ? 'Manager' : editSession.auth_method.type;
 			password = editSession.auth_method.password ?? '';
@@ -448,6 +472,9 @@
 			name = '';
 			host = '';
 			portStr = '22';
+			hostLabel = '';
+			addressRows = [];
+			addressMode = 'auto';
 			username = 'root';
 			authType = 'Password';
 			password = '';
@@ -607,6 +634,7 @@
 			password_ref: proxyPasswordRef ?? undefined,
 		} : null;
 
+		const altToSave = addressesToSave();
 		try {
 			if (isEditing && editSession) {
 				// A login a credential filled in goes back as it came, so the
@@ -650,6 +678,9 @@
 					monitoring: monitoringToSave,
 					history: historyToSave,
 					tmux: tmuxToSave,
+					host_label: altToSave ? (hostLabel.trim() || null) : null,
+					alt_addresses: altToSave,
+					connect_mode: altToSave ? addressMode : null,
 				});
 				// Its open tabs take the new colours (and monitoring choice) at once.
 				setSessionTerminalTheme(editSession.id, themeToSave);
@@ -688,7 +719,10 @@
 					cursorBlink: blinkToSave,
 					monitoring: monitoringToSave,
 					history: historyToSave,
-					tmux: tmuxToSave
+					tmux: tmuxToSave,
+					hostLabel: altToSave ? hostLabel : null,
+					altAddresses: altToSave,
+					connectMode: altToSave ? addressMode : null
 				});
 			}
 			onsave?.();
@@ -858,6 +892,9 @@
 					<Input label={t('session.port')} bind:value={portStr} type="number" placeholder={DEFAULT_PORT[kind]} disabled={saving} />
 				</div>
 			</div>
+			{#if kind === 'ssh'}
+				<SessionAddresses bind:mainLabel={hostLabel} bind:rows={addressRows} bind:mode={addressMode} routed={jumpEnabled || proxyEnabled} port={portStr} disabled={saving} />
+			{/if}
 		{/if}
 
 		{#if kind === 'ssh' || kind === 'rdp' || kind === 'telnet'}

@@ -57,7 +57,9 @@
 	import { DEFAULT_TELNET_OPTIONS } from '#lib/ipc/telnet.js';
 	import { DEFAULT_SERIAL_OPTIONS } from '#lib/ipc/serial.js';
 	import { osNeedsDetection } from '#lib/data/distro-icons.js';
-	import { sshConnect, sshDisconnect, sshDetectOs, sshTmuxChosen, tmuxStartScript, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
+	import { sshConnect, sshDisconnect, sshDetectOs, sshProbeAddresses, sshTmuxChosen, tmuxStartScript, type JumpHostConnectParams } from '#lib/ipc/ssh.js';
+	import { addressName, autoOrder, connectMode, hasAltAddresses, isUnreachable, lastAddress, rememberAddress, sessionAddresses, type ResolvedAddress } from '#lib/sessions/addresses.js';
+	import AddressPicker from './AddressPicker.svelte';
 	// Passwords are now stored encrypted in vault, not in memory cache
 	import { createTab, updateTabOs } from '#lib/state/tabs.svelte.js';
 	import { getSettings, sessionLogConfig } from '#lib/state/settings.svelte.js';
@@ -366,6 +368,7 @@
 			result = result.filter(s =>
 				s.name.toLowerCase().includes(q) ||
 				s.host.toLowerCase().includes(q) ||
+				(s.alt_addresses ?? []).some(a => a.host.toLowerCase().includes(q) || (a.label ?? '').toLowerCase().includes(q)) ||
 				s.username.toLowerCase().includes(q) ||
 				s.tags.some(tag => tag.toLowerCase().includes(q)) ||
 				docsText(s).some(text => text.toLowerCase().includes(q))
@@ -1082,6 +1085,13 @@
 	// a passphrase-less key) connects by itself: an empty field there only
 	// distracts. It appears if that attempt fails, so a retry can use one.
 	let askSecret = $state(true);
+	// Which of the session's addresses this connect uses: picked by hand
+	// (Connect via, or the picker of a session set to Ask), else chosen at
+	// connect (Auto). The one being tried, for the prompt to show.
+	let connectAddress = $state<ResolvedAddress | undefined>();
+	let tryingAddress = $state<ResolvedAddress | undefined>();
+	// A session set to Ask, waiting for an address to be picked.
+	let pickAddressFor = $state<SessionConfig | undefined>();
 
 	let showConnectPrompt = $derived(!!connectSession);
 
@@ -1359,8 +1369,15 @@
 		return true;
 	}
 
-	async function handleConnect(session: SessionConfig): Promise<void> {
+	async function handleConnect(session: SessionConfig, address?: ResolvedAddress): Promise<void> {
+		// A session set to Ask: the address first.
+		if (!address && sessionKind(session) === 'ssh' && connectMode(session) === 'ask') {
+			pickAddressFor = session;
+			return;
+		}
+		pickAddressFor = undefined;
 		if (!(await approveRefsFirst(session))) return;
+		connectAddress = address;
 		noteSessionUsed(session.id);
 		if (sessionKind(session) === 'vnc') {
 			openVnc(session);
@@ -1486,6 +1503,19 @@
 			}))
 			: undefined;
 
+		// The addresses to try, in order: the one picked, the main one, or
+		// all of them as Auto orders them.
+		let targets: ResolvedAddress[];
+		const all = sessionAddresses(session);
+		if (connectAddress) targets = [connectAddress];
+		else if (connectMode(session) !== 'auto') targets = [all[0]];
+		else {
+			const probes = await sshProbeAddresses(all.map((a) => (a.routed ? { host: '', port: 0 } : { host: a.host, port: a.port }))).catch(() => all.map(() => null));
+			targets = autoOrder(all, probes, lastAddress(session.id));
+			// Cancelled while checking.
+			if (connectingId !== id) return;
+		}
+
 		let untrusted: UntrustedRefs | null = null;
 		try {
 			const sessionKeyPath = session.auth_method.type === 'Key' ? session.auth_method.path : undefined;
@@ -1501,10 +1531,10 @@
 			const keyPassphraseRef = authType === 'Key' && !connectKeyPassphrase && session.auth_method.type === 'Key'
 				? (session.auth_method.passphrase_ref ?? undefined)
 				: undefined;
-			const connectParams = {
+			const paramsFor = (addr: ResolvedAddress) => ({
 				id,
-				host: session.host,
-				port: session.port,
+				host: addr.host,
+				port: addr.port,
 				username: session.username,
 				authMethod: authType === 'Key' ? 'key' : authType.toLowerCase(),
 				password: passwordToUse,
@@ -1524,8 +1554,10 @@
 				sshOptions: session.ssh_options ?? null,
 				// Password manager entries are taken from the stored session.
 				sessionId: session.id,
-				jumpChain,
-				proxy: session.proxy ? {
+				// An address marked direct goes straight, without the session's
+				// jump hosts or proxy.
+				jumpChain: addr.routed ? jumpChain : undefined,
+				proxy: addr.routed && session.proxy ? {
 					proxy_type: session.proxy.proxy_type,
 					host: session.proxy.host,
 					port: session.proxy.port,
@@ -1533,8 +1565,31 @@
 					password: session.proxy.password_ref ? undefined : (session.proxy.password ?? undefined),
 					password_ref: session.proxy.password_ref ?? undefined,
 				} : undefined,
-			};
-			await sshConnect(connectParams);
+			});
+			// A reconnect may need another address: the tab keeps them all.
+			const fallback = hasAltAddresses(session) ? { addresses: all, jumpChain, proxy: paramsFor(all[0]).proxy ?? undefined, sessionPort: session.port } : undefined;
+			// Each address in turn, while the last one could not be reached.
+			// A refused login stops here: it is the same server.
+			let connectParams = paramsFor(targets[0]);
+			let used = targets[0];
+			const missed: string[] = [];
+			for (let i = 0; ; i++) {
+				used = targets[i];
+				connectParams = paramsFor(used);
+				tryingAddress = targets.length > 1 || connectAddress ? used : undefined;
+				try {
+					await sshConnect(connectParams);
+					break;
+				} catch (e) {
+					const msg = String(e);
+					if (connectingId !== id || i >= targets.length - 1 || !isUnreachable(msg)) {
+						throw missed.length ? `${msg}\n\n${missed.join('\n')}` : e;
+					}
+					missed.push(`${addressName(used, session.port)}: ${msg}`);
+				}
+			}
+			if (hasAltAddresses(session)) rememberAddress(session.id, used);
+			if (fallback) Object.assign(connectParams, { fallback });
 			// Asked which tmux session: the tab keeps the answer, so a
 			// reconnect goes straight back to it rather than asking again.
 			if (connectParams.tmux?.ask) {
@@ -1550,7 +1605,7 @@
 				return;
 			}
 
-			const tab = createTab('ssh', `${session.username}@${session.host}`, id, session.name, session.detected_os);
+			const tab = createTab('ssh', `${session.username}@${used.host}`, id, session.name, session.detected_os);
 			tab.sshConnectParams = connectParams;
 			tab.sessionId = session.id;
 			tab.terminalTheme = session.terminal_theme ?? null;
@@ -1614,7 +1669,10 @@
 		} finally {
 			// A cancelled attempt finishing late must not mark a newer one,
 			// still in flight, as done.
-			if (connectingId === id) connecting = false;
+			if (connectingId === id) {
+				connecting = false;
+				tryingAddress = undefined;
+			}
 		}
 		if (untrusted) {
 			if (await askToApprove(untrusted)) await doConnect();
@@ -1638,6 +1696,8 @@
 		connecting = false;
 		connectingId = undefined;
 		connectSession = undefined;
+		connectAddress = undefined;
+		tryingAddress = undefined;
 		passwordFallback = false;
 		fallbackPassword = '';
 	}
@@ -2206,6 +2266,17 @@
 				<button class="context-item" onclick={() => { if (contextMenu?.session) handleConnect(contextMenu.session); closeContextMenu(); }} type="button">
 					{t('session.connect')}
 				</button>
+				{#if hasAltAddresses(contextMenu.session)}
+					{@const menuSession = contextMenu.session}
+					<div class="context-label">{t('session.connect_via')}</div>
+					{#each sessionAddresses(menuSession) as addr (addr.index)}
+						<button class="context-item context-via" onclick={() => { handleConnect(menuSession, addr); closeContextMenu(); }} type="button">
+							{addressName(addr, menuSession.port)}
+							{#if addr.label}<span class="context-hint">{addr.host}{addr.port !== menuSession.port ? `:${addr.port}` : ''}</span>{/if}
+						</button>
+					{/each}
+					<div class="context-sep"></div>
+				{/if}
 				{#if selected.has(contextMenu.session.id) && selected.size > 1}
 					<button class="context-item" onclick={openBulkEdit} type="button">
 						{t('bulk.edit_n', { count: String(selected.size) })}
@@ -2477,6 +2548,11 @@
 	oncancel={() => { if (!approvingRefs) finishAsking(false); }}
 />
 
+{#if pickAddressFor}
+	{@const pickSession = pickAddressFor}
+	<AddressPicker session={pickSession} onpick={(addr) => handleConnect(pickSession, addr)} oncancel={() => (pickAddressFor = undefined)} />
+{/if}
+
 {#if showConnectPrompt && connectSession}
 	<!-- No click-outside dismissal, as in Modal: a drag that selects text in
 	     the password field and ends past the box closed the prompt. Cancel and
@@ -2487,7 +2563,10 @@
 		<div class="prompt-box" onkeydown={() => {}}>
 			<div class="prompt-header">
 				<span class="prompt-title">{t('session.connect_to', { name: connectSession.name })}</span>
-				<span class="prompt-detail">{connectSession.username}@{connectSession.host}:{connectSession.port}</span>
+				<span class="prompt-detail">{connectSession.username}@{(tryingAddress ?? connectAddress)?.host ?? connectSession.host}:{(tryingAddress ?? connectAddress)?.port ?? connectSession.port}</span>
+				{#if tryingAddress}
+					<span class="prompt-detail prompt-via">{t('session.trying_address', { name: addressName(tryingAddress, connectSession.port) })}</span>
+				{/if}
 			</div>
 
 			<form class="prompt-form" onsubmit={(e) => { e.preventDefault(); doConnect(); }}>
@@ -3335,6 +3414,19 @@
 		font-size: var(--text-sm);
 		color: var(--color-text-secondary);
 		font-family: var(--font-mono);
+	}
+
+	.prompt-via {
+		font-family: inherit;
+		font-size: var(--text-xs);
+	}
+
+	.context-hint {
+		margin-left: auto;
+		padding-left: 12px;
+		font-family: var(--font-mono);
+		font-size: var(--text-xs);
+		color: var(--color-text-secondary);
 	}
 
 	.prompt-form {

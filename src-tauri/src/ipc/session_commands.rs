@@ -107,7 +107,7 @@ pub(crate) fn approval_context(s: &SessionConfig) -> String {
         s.jump_chain.as_ref().map(|c| c.iter().map(|j| (j.host.clone(), j.port, j.username.clone())).collect());
     let proxy = s.proxy.as_ref().map(|p| crate::state::ProxyConfig { password: None, password_ref: None, ..p.clone() });
     let o = s.ssh_options.as_ref();
-    let v = serde_json::json!([
+    let mut v = serde_json::json!([
         s.id,
         s.host,
         s.port,
@@ -120,6 +120,12 @@ pub(crate) fn approval_context(s: &SessionConfig) -> String {
         o.map(|o| &o.imported),
         o.map(|o| &o.lines),
     ]);
+    // The other addresses are where the login may be sent too, so they are
+    // part of what was approved. Only when there are any: a session without
+    // them hashes as it did before they existed.
+    if let (Some(alt), Some(list)) = (s.alt_addresses.as_ref(), v.as_array_mut()) {
+        list.push(serde_json::json!(alt));
+    }
     sha2::Sha256::digest(v.to_string().as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
 }
 
@@ -767,6 +773,9 @@ pub async fn session_create(
     monitoring: Option<bool>,
     history: Option<String>,
     tmux: Option<crate::ssh::tmux::TmuxSetting>,
+    host_label: Option<String>,
+    alt_addresses: Option<Vec<crate::state::SessionAddress>>,
+    connect_mode: Option<String>,
 ) -> Result<SessionConfig, String> {
     let mut manager = state.vault_manager.lock().await;
     let kind = kind.unwrap_or_default();
@@ -839,6 +848,9 @@ pub async fn session_create(
         credential_ref_approvals: Default::default(),
         // Trusted by connecting to it, never by what a form sends.
         host_keys: None,
+        host_label,
+        alt_addresses,
+        connect_mode,
     };
     session.tidy_documentation();
 
@@ -2204,6 +2216,41 @@ mod approval_tests {
         typed.as_mut().unwrap().password = Some("pw".into());
         typed.as_mut().unwrap().password_ref = None;
         assert!(check_matches_session(&s, "web.example", 22, "u", Some(&hops), typed.as_ref()).is_ok());
+    }
+
+    #[test]
+    fn a_connect_may_use_another_of_the_sessions_addresses() {
+        use crate::ipc::ssh_commands::check_matches_session;
+        let mut s = with_refs();
+        s.alt_addresses = Some(vec![
+            crate::state::SessionAddress { label: "Office".into(), host: "10.0.0.5".into(), port: None, direct: true },
+            crate::state::SessionAddress { label: "Internet".into(), host: "server.example.com".into(), port: Some(2222), direct: false },
+        ]);
+        let hops: Vec<crate::ipc::ssh_commands::JumpHostConnectParams> = vec![serde_json::from_value(serde_json::json!({
+            "host": "bastion.example", "port": 22, "username": "jump", "authMethod": "key",
+        }))
+        .unwrap()];
+        let proxy = s.proxy.clone();
+        // A direct address goes straight, and only straight.
+        assert!(check_matches_session(&s, "10.0.0.5", 22, "u", None, None).is_ok());
+        assert!(check_matches_session(&s, "10.0.0.5", 22, "u", Some(&hops), proxy.as_ref()).is_err());
+        assert!(check_matches_session(&s, "10.0.0.5", 2222, "u", None, None).is_err());
+        // Another address goes the session's way, on its own port.
+        assert!(check_matches_session(&s, "server.example.com", 2222, "u", Some(&hops), proxy.as_ref()).is_ok());
+        assert!(check_matches_session(&s, "server.example.com", 2222, "u", None, None).is_err());
+        assert!(check_matches_session(&s, "server.example.com", 22, "u", Some(&hops), proxy.as_ref()).is_err());
+        // The main address still never goes straight around the session's route.
+        assert!(check_matches_session(&s, "web.example", 22, "u", None, None).is_err());
+    }
+
+    #[test]
+    fn other_addresses_are_part_of_what_is_approved() {
+        let mut s = with_refs();
+        let before = approval_context(&s);
+        s.alt_addresses = Some(vec![crate::state::SessionAddress { label: String::new(), host: "10.0.0.5".into(), port: None, direct: true }]);
+        assert_ne!(approval_context(&s), before);
+        s.alt_addresses = None;
+        assert_eq!(approval_context(&s), before);
     }
 
     // --- A VNC session through an SSH session ------------------------------
