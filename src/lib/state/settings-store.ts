@@ -5,6 +5,7 @@
  */
 
 import { DEFAULT_PASTE_THRESHOLD } from '#lib/terminal/paste.js';
+import { DEFAULT_SCROLLBACK, scrollbackSetting } from '#lib/terminal/scrollback.js';
 import { DEFAULT_RIGHT_CLICK, DEFAULT_WORD_SEPARATORS, rightClickMode, type RightClickMode } from '#lib/terminal/mouse.js';
 import {
 	cursorStyle,
@@ -38,6 +39,12 @@ export interface Settings {
 	terminalCursorInactive: InactiveCursorStyle;
 	/** A bar cursor's thickness, in CSS pixels. */
 	terminalCursorWidth: number;
+	/** Lines kept above the screen; 0 is Unlimited (#lib/terminal/scrollback). */
+	terminalScrollback: number;
+	/** Line numbers in a gutter left of the terminal (#lib/terminal/gutter). */
+	terminalLineNumbers: boolean;
+	/** When each line was written, in the same gutter. */
+	terminalTimestamps: boolean;
 	fontSize: number;
 	/** The whole interface's size on a desktop, as a browser's zoom: 1 is 100%.
 	 *  See #lib/state/ui-zoom. */
@@ -211,6 +218,9 @@ export const defaults: Settings = {
 	terminalCursorBlink: DEFAULT_CURSOR_BLINK,
 	terminalCursorInactive: DEFAULT_INACTIVE_CURSOR,
 	terminalCursorWidth: DEFAULT_CURSOR_WIDTH,
+	terminalScrollback: DEFAULT_SCROLLBACK,
+	terminalLineNumbers: false,
+	terminalTimestamps: false,
 	fontSize: 14,
 	uiZoom: 1,
 	compactLayout: false,
@@ -294,6 +304,9 @@ export function readStoredSettings(parsed: Partial<Settings>): Settings {
 	settings.terminalCursorBlink = parsed.terminalCursorBlink ?? defaults.terminalCursorBlink;
 	settings.terminalCursorInactive = inactiveCursorStyle(parsed.terminalCursorInactive);
 	settings.terminalCursorWidth = cursorWidth(parsed.terminalCursorWidth);
+	settings.terminalScrollback = scrollbackSetting(parsed.terminalScrollback);
+	settings.terminalLineNumbers = parsed.terminalLineNumbers === true;
+	settings.terminalTimestamps = parsed.terminalTimestamps === true;
 	settings.fontSize = parsed.fontSize ?? defaults.fontSize;
 	settings.uiZoom = parsed.uiZoom ?? defaults.uiZoom;
 	settings.compactLayout = parsed.compactLayout ?? defaults.compactLayout;
