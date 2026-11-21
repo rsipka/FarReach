@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 
+use base64::Engine as _;
 use serde::Deserialize;
 use tauri::ipc::Channel;
 use tokio::io::AsyncWriteExt;
@@ -103,7 +104,11 @@ pub struct FreerdpLaunchParams {
 }
 
 impl FreerdpLaunchParams {
-    fn input(&self, password: &str) -> Result<Zeroizing<String>, String> {
+    fn input(
+        &self,
+        password: &str,
+        certificate: Option<&str>,
+    ) -> Result<Zeroizing<String>, String> {
         let host = self
             .host
             .trim()
@@ -144,6 +149,10 @@ impl FreerdpLaunchParams {
         if self.graphics_pipeline {
             input.push_str("/gfx\n");
         }
+        if let Some(certificate) = certificate {
+            input.push_str(certificate);
+            input.push('\n');
+        }
         input.push_str(match self.clipboard.as_deref() {
             Some("off") => "-clipboard\n",
             Some("text") => "/clipboard:files-to:off\n",
@@ -166,11 +175,37 @@ impl FreerdpLaunchParams {
     }
 }
 
+/// xfreerdp prompts on stdin, which the launcher closes after writing the
+/// arguments. Let it validate trusted certificates without a console prompt.
+/// An RDP certificate the user approved in IronRDP can also be used here.
+fn x11_certificate_arg(saved: Option<&str>) -> String {
+    let mut arg = "/cert:deny".to_owned();
+    if let Some(digest) = saved
+        .and_then(|saved| saved.strip_prefix("SHA256:"))
+        .and_then(|digest| {
+            base64::engine::general_purpose::STANDARD_NO_PAD
+                .decode(digest)
+                .ok()
+        })
+        .filter(|digest| digest.len() == 32)
+    {
+        arg.push_str(",fingerprint:sha256:");
+        let hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+        arg.push_str(&hex);
+    }
+    arg
+}
+
 fn check_exit(status: std::io::Result<ExitStatus>, x11_client: bool) -> Result<(), String> {
     let status = status.map_err(|err| format!("Could not wait for FreeRDP: {err}"))?;
     // xfreerdp returns RDP disconnect and logoff reasons as exit codes.
     if status.success() || (x11_client && matches!(status.code(), Some(1 | 2 | 11 | 12))) {
         return Ok(());
+    }
+    tracing::warn!(exit_code = ?status.code(), x11_client, "FreeRDP session failed");
+    // XF_EXIT_CONN_TLS_CONNECT_FAILED in the X11 client.
+    if x11_client && status.code() == Some(143) {
+        return Err("FreeRDP could not establish TLS. If the server uses a self-signed certificate, verify and save it in an IronRDP session, or select the FreeRDP SDL executable for graphical certificate prompts.".into());
     }
     Err(format!("FreeRDP exited with {status}. Check the server and certificate. For certificate prompts in a window, select the SDL client in Settings > Remote desktop."))
 }
@@ -214,22 +249,39 @@ pub async fn freerdp_launch(
             .take()
             .ok_or_else(|| "FreeRDP requires a password.".to_string())?
     });
-    let input = params.input(&password)?;
-    drop(password);
-
-    // Use an anonymous pipe. The OS process arguments contain only the flag
-    // requesting stdin, and FreeRDP's output can include connection arguments.
     let x11_client = program
         .file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| matches!(name, "xfreerdp" | "xfreerdp3"));
+    let saved_fingerprint = x11_client
+        .then(|| {
+            crate::ssh::client::on_device_fingerprint(&format!(
+                "rdp:{}:{}",
+                params.host, params.port
+            ))
+        })
+        .flatten();
+    let certificate = x11_client.then(|| x11_certificate_arg(saved_fingerprint.as_deref()));
+    let input = params.input(&password, certificate.as_deref())?;
+    drop(password);
+
+    tracing::info!(
+        x11_client,
+        saved_certificate = saved_fingerprint.is_some(),
+        "Starting FreeRDP"
+    );
+    // Use an anonymous pipe. The OS process arguments contain only the flag
+    // requesting stdin, and FreeRDP's output can include connection arguments.
     let mut child = Command::new(program)
         .arg("/args-from:stdin")
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .map_err(|err| format!("Could not start FreeRDP: {err}"))?;
+        .map_err(|err| {
+            tracing::warn!(os_error = ?err.raw_os_error(), "Could not start FreeRDP");
+            format!("Could not start FreeRDP: {err}")
+        })?;
 
     let mut stdin = child
         .stdin
@@ -241,6 +293,7 @@ pub async fn freerdp_launch(
     drop(input);
     if !matches!(written, Ok(Ok(()))) {
         let _ = child.kill().await;
+        tracing::warn!("Could not write to the FreeRDP connection pipe");
         return Err("Could not pass connection details to FreeRDP. Select a client that supports /args-from:stdin.".into());
     }
 
@@ -278,7 +331,7 @@ mod tests {
 
     #[test]
     fn prepares_one_argument_per_line_with_ipv6_and_clipboard_policy() {
-        let input = params().input("example secret").unwrap();
+        let input = params().input("example secret", None).unwrap();
         assert_eq!(
             input.lines().collect::<Vec<_>>(),
             [
@@ -295,10 +348,27 @@ mod tests {
 
     #[test]
     fn rejects_line_breaks_and_nul_in_connection_fields() {
-        assert!(params().input("example\r\n/cert:ignore").is_err());
-        assert!(params().input("example\0").is_err());
+        assert!(params().input("example\r\n/cert:ignore", None).is_err());
+        assert!(params().input("example\0", None).is_err());
         let mut session = params();
         session.username = "user\n+drives".into();
-        assert!(session.input("example").is_err());
+        assert!(session.input("example", None).is_err());
+    }
+
+    #[test]
+    fn x11_accepts_saved_sha256_certificates_and_disables_console_prompts() {
+        assert_eq!(x11_certificate_arg(None), "/cert:deny");
+        assert_eq!(x11_certificate_arg(Some("SHA256:YQ")), "/cert:deny");
+        let pin = format!(
+            "SHA256:{}",
+            base64::engine::general_purpose::STANDARD_NO_PAD.encode([0xca; 32])
+        );
+        let policy = x11_certificate_arg(Some(&pin));
+        assert_eq!(
+            policy,
+            format!("/cert:deny,fingerprint:sha256:{}", "ca".repeat(32))
+        );
+        let input = params().input("dummy", Some(&policy)).unwrap();
+        assert!(input.lines().any(|argument| argument == policy));
     }
 }
