@@ -395,6 +395,9 @@ ironrdp-client = { path = "vendor/ironrdp-client" }
 # Tolerates share data before the Font Map (xrdp); see the header of
 # vendor/ironrdp-connector/Cargo.toml.
 ironrdp-connector = { path = "vendor/ironrdp-connector" }
+# A Server Redirection header with PDU version 0x10, as GNOME Remote Desktop
+# sends it; see the header of vendor/ironrdp-pdu/Cargo.toml.
+ironrdp-pdu = { path = "vendor/ironrdp-pdu" }
 
 # Free space of the volume a shared RDP folder is on.
 [target.'cfg(unix)'.dependencies]

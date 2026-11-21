@@ -273,6 +273,10 @@ pub enum ClientConnectorState {
     },
     /// Waiting for the server's authentication and authorization result.
     EntraAuthWaitResult,
+    /// Reach: waiting for the server's RDSTLS Capabilities PDU.
+    RdstlsWaitCapabilities,
+    /// Reach: waiting for the RDSTLS Authentication Response PDU.
+    RdstlsWaitResponse,
     BasicSettingsExchangeSendInitial {
         selected_protocol: nego::SecurityProtocol,
     },
@@ -393,6 +397,8 @@ impl State for ClientConnectorState {
             Self::EntraAuthWaitNonce => "EntraAuthWaitNonce",
             Self::EntraAuthPending { .. } => "EntraAuthPending",
             Self::EntraAuthWaitResult => "EntraAuthWaitResult",
+            Self::RdstlsWaitCapabilities => "RdstlsWaitCapabilities",
+            Self::RdstlsWaitResponse => "RdstlsWaitResponse",
             Self::BasicSettingsExchangeSendInitial { .. } => "BasicSettingsExchangeSendInitial",
             Self::BasicSettingsExchangeWaitResponse { .. } => "BasicSettingsExchangeWaitResponse",
             Self::ChannelConnection { .. } => "ChannelConnection",
@@ -453,6 +459,8 @@ pub struct ClientConnector {
     pub auto_reconnect_cookie: Option<ServerAutoReconnect>,
     /// Password cookie from a Server Redirection PDU, sent in the Client Info PDU.
     redirection_password_cookie: Option<Vec<u8>>,
+    /// Reach: credentials for RDSTLS, after a redirection that asks for it.
+    rdstls: Option<crate::rdstls::RdstlsCredentials>,
     /// Start of the in-flight connect-time bandwidth measurement window.
     ///
     /// Set when the server's Bandwidth Measure Start arrives, and only when the
@@ -495,6 +503,7 @@ impl ClientConnector {
             server_rdp_version: None,
             auto_reconnect_cookie: None,
             redirection_password_cookie: None,
+            rdstls: None,
             connect_time_bw_started_at: None,
             connect_time_bw_bytes: 0,
             network_characteristics: None,
@@ -742,6 +751,14 @@ impl ClientConnector {
         self
     }
 
+    /// Reach: authenticate with RDSTLS instead of CredSSP, with what a Server Redirection PDU
+    /// handed over. The connection asks for RDSTLS (and plain TLS as a fallback).
+    #[must_use]
+    pub fn with_rdstls(mut self, credentials: crate::rdstls::RdstlsCredentials) -> Self {
+        self.rdstls = Some(credentials);
+        self
+    }
+
     /// Set opaque load-balancing data for the initial X.224 Connection Request.
     #[must_use]
     pub fn with_load_balance_info(mut self, load_balance_info: String) -> Self {
@@ -782,6 +799,9 @@ impl ClientConnector {
         }
         if self.entra_auth {
             return Ok(nego::SecurityProtocol::RDSAAD);
+        }
+        if self.rdstls.is_some() {
+            return Ok(nego::SecurityProtocol::RDSTLS | nego::SecurityProtocol::SSL);
         }
         let mut security_protocol = nego::SecurityProtocol::empty();
 
@@ -1506,6 +1526,8 @@ impl Sequence for ClientConnector {
                 Some(&crate::entra::ENTRA_JSON_HINT)
             }
             ClientConnectorState::EntraAuthPending { .. } => None,
+            ClientConnectorState::RdstlsWaitCapabilities => Some(&crate::rdstls::CAPABILITIES_HINT),
+            ClientConnectorState::RdstlsWaitResponse => Some(&crate::rdstls::RESPONSE_HINT),
             ClientConnectorState::BasicSettingsExchangeSendInitial { .. } => None,
             ClientConnectorState::BasicSettingsExchangeWaitResponse { .. } if self.entra_auth => {
                 Some(&crate::entra::ENTRA_POST_AUTH_X224_HINT)
@@ -1654,6 +1676,9 @@ impl Sequence for ClientConnector {
                     ClientConnectorState::Credssp { selected_protocol }
                 } else if selected_protocol == nego::SecurityProtocol::RDSAAD {
                     ClientConnectorState::EntraAuthWaitNonce
+                } else if selected_protocol == nego::SecurityProtocol::RDSTLS && self.rdstls.is_some() {
+                    debug!("Begin RDSTLS authentication");
+                    ClientConnectorState::RdstlsWaitCapabilities
                 } else {
                     debug!("CredSSP is disabled, skipping NLA");
                     ClientConnectorState::BasicSettingsExchangeSendInitial { selected_protocol }
@@ -1692,6 +1717,34 @@ impl Sequence for ClientConnector {
                     Written::Nothing,
                     ClientConnectorState::BasicSettingsExchangeSendInitial {
                         selected_protocol: nego::SecurityProtocol::RDSAAD,
+                    },
+                )
+            }
+
+            ClientConnectorState::RdstlsWaitCapabilities => {
+                crate::rdstls::read_capabilities(input)?;
+                let credentials = self
+                    .rdstls
+                    .as_ref()
+                    .ok_or_else(|| general_err!("RDSTLS without credentials"))?;
+                debug!(?credentials, "Send RDSTLS authentication request");
+                let written = crate::rdstls::write_auth_request(credentials, output)?;
+                (Written::from_size(written)?, ClientConnectorState::RdstlsWaitResponse)
+            }
+            ClientConnectorState::RdstlsWaitResponse => {
+                let code = crate::rdstls::read_auth_response(input)?;
+                if code != 0 {
+                    return Err(reason_err!(
+                        "RDSTLS",
+                        "the server refused the handed-over login: {} ({code:#x})",
+                        crate::rdstls::result_name(code)
+                    ));
+                }
+                info!("RDSTLS authentication succeeded");
+                (
+                    Written::Nothing,
+                    ClientConnectorState::BasicSettingsExchangeSendInitial {
+                        selected_protocol: nego::SecurityProtocol::RDSTLS,
                     },
                 )
             }

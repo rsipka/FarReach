@@ -1270,6 +1270,49 @@ fn merge_damage(rects: &[InclusiveRectangle]) -> Vec<InclusiveRectangle> {
 
 #[cfg(test)]
 mod tests {
+    /// GNOME Remote Desktop's Remote Login hand-over, laid out the way FreeRDP's server writes it:
+    /// a Share Control Header with PDU version 0x10, a password encrypted for the target and a
+    /// redirection GUID. It must decode as a redirection, not fail (see vendor/ironrdp-pdu).
+    #[test]
+    fn freerdp_server_redirection_decodes() {
+        use ironrdp_pdu::rdp::server_redirection::{ServerRedirectionFlags, decode_server_redirection};
+        let utf16z = |s: &str| -> Vec<u8> {
+            let mut v: Vec<u8> = s.encode_utf16().flat_map(u16::to_le_bytes).collect();
+            v.extend([0, 0]);
+            v
+        };
+        let field = |bytes: &[u8]| -> Vec<u8> {
+            let mut v = (bytes.len() as u32).to_le_bytes().to_vec();
+            v.extend_from_slice(bytes);
+            v
+        };
+        let flags: u32 = 0x2 | 0x4 | 0x10 | 0x4000 | 0x8000;
+        let mut body = Vec::new();
+        body.extend(field(b"Cookie: msts=12345\r\n"));
+        body.extend(field(&utf16z("handover")));
+        body.extend(field(&[9u8; 32]));
+        body.extend(field(&utf16z("Z3VpZA==")));
+        let mut packet = Vec::new();
+        packet.extend(0x0400u16.to_le_bytes());
+        packet.extend(((12 + body.len()) as u16).to_le_bytes());
+        packet.extend(0u32.to_le_bytes());
+        packet.extend(flags.to_le_bytes());
+        packet.extend(body);
+        let mut pdu = Vec::new();
+        pdu.extend(((6 + 2 + packet.len()) as u16).to_le_bytes());
+        pdu.extend(0x001Au16.to_le_bytes());
+        pdu.extend(0u16.to_le_bytes());
+        pdu.extend(0u16.to_le_bytes());
+        pdu.extend(packet);
+
+        let r = decode_server_redirection(&pdu).expect("decodes").expect("is a redirection");
+        assert!(r.flags.contains(ServerRedirectionFlags::PASSWORD_IS_PK_ENCRYPTED));
+        assert_eq!(r.username.as_deref(), Some("handover"));
+        assert_eq!(r.load_balance_info.as_deref(), Some(&b"Cookie: msts=12345\r\n"[..]));
+        assert_eq!(r.password.as_deref(), Some(&[9u8; 32][..]));
+        assert_eq!(r.redirection_guid, Some(utf16z("Z3VpZA==")));
+    }
+
     #[test]
     fn only_dropped_files_are_sent_and_a_drop_is_used_once() {
         use std::path::PathBuf;

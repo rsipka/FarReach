@@ -1,0 +1,52 @@
+# Vendored from IronRDP at rev a8da54ba4d849370bc92e1d5230cc18e99cf5ff1 with one
+# change: the Share Control Header of a Server Redirection PDU may carry PDU
+# version 0x10 as well as 0. FreeRDP's server stamps every Share Control
+# Header with 0x10, so GNOME Remote Desktop's Remote Login handover was
+# rejected as a decode error (see src/rdp/headers.rs, "Reach:"). Path
+# dependencies were rewritten to the same git rev and workspace fields filled
+# in; tests are off since their fixtures stay upstream. Drop this copy and the
+# [patch] entry in ../../Cargo.toml once IronRDP takes the change.
+[package]
+name = "ironrdp-pdu"
+version = "0.11.0"
+readme = "README.md"
+description = "RDP PDU encoding and decoding"
+edition = "2024"
+rust-version = "1.94"
+license = "MIT OR Apache-2.0"
+homepage = "https://github.com/Devolutions/IronRDP"
+repository = "https://github.com/Devolutions/IronRDP"
+authors = ["Devolutions Inc. <infos@devolutions.net>", "Teleport <goteleport.com>"]
+keywords = ["rdp", "remote-desktop", "network", "client", "protocol"]
+categories = ["network-programming"]
+
+[lib]
+doctest = false
+test = false
+
+[features]
+default = []
+std = ["alloc", "ironrdp-error/std", "ironrdp-core/std"]
+alloc = ["ironrdp-core/alloc", "ironrdp-error/alloc"]
+qoi = []
+qoiz = ["qoi"]
+arbitrary = ["alloc", "dep:arbitrary", "bitflags/arbitrary"]
+
+[dependencies]
+bitflags = "2.11"
+ironrdp-core = { git = "https://github.com/Devolutions/IronRDP", rev = "a8da54ba4d849370bc92e1d5230cc18e99cf5ff1", version = "0.3", features = ["std"] } # public
+ironrdp-error = { git = "https://github.com/Devolutions/IronRDP", rev = "a8da54ba4d849370bc92e1d5230cc18e99cf5ff1", version = "0.2" } # public
+arbitrary = { version = "1", features = ["derive"], optional = true }
+tap = "1"
+bit_field = "0.10"
+byteorder = "1.5"
+der-parser = "10.0"
+hmac = { version = "0.12", default-features = false }
+md5 = { package = "md-5", version = "0.10" }
+num-bigint = "0.4"
+num-derive = "0.5"
+num-integer = "0.1"
+num-traits = "0.2"
+sha1 = "0.11"
+x509-cert = { version = "0.3", default-features = false, features = ["std"] }
+pkcs1 = { version = "0.7", features = ["std"] }

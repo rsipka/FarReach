@@ -3028,6 +3028,11 @@ fn build_connector(
         connector = connector.with_redirection_password_cookie(password_cookie);
     }
 
+    // Reach: see `RedirectionHop::rdstls`.
+    if let Some(credentials) = config.redirection.as_ref().and_then(|hop| hop.rdstls.clone()) {
+        connector = connector.with_rdstls(credentials);
+    }
+
     if let Some(rail_client) = rail_client {
         connector = connector.with_static_channel(rail_client);
     }

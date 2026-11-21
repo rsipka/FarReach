@@ -26,6 +26,9 @@ pub(crate) struct RedirectionHop {
     pub(crate) password_cookie: Option<Vec<u8>>,
     /// DER-encoded certificate of the target, as the redirecting server reported it.
     pub(crate) target_certificate: Option<Vec<u8>>,
+    /// Reach: the password is encrypted for the target, so log in to it with RDSTLS
+    /// (GNOME Remote Desktop's Remote Login hands every client over this way).
+    pub(crate) rdstls: Option<ironrdp_connector::rdstls::RdstlsCredentials>,
 }
 
 impl fmt::Debug for RedirectionHop {
@@ -35,6 +38,7 @@ impl fmt::Debug for RedirectionHop {
             .field("session_id", &self.session_id)
             .field("password_cookie", &self.password_cookie.as_ref().map(Vec::len))
             .field("target_certificate", &self.target_certificate.as_ref().map(Vec::len))
+            .field("rdstls", &self.rdstls)
             .finish()
     }
 }
@@ -80,16 +84,28 @@ pub(crate) fn apply_server_redirection(
         }
     }
 
-    if redirection
-        .flags
-        .contains(ServerRedirectionFlags::PASSWORD_IS_PK_ENCRYPTED)
-        && redirection.password.is_some()
-    {
-        return Err(reason_err!(
-            "Redirect",
-            "the redirection password is encrypted for RDSTLS, which is not supported"
-        ));
-    }
+    // Reach: a password encrypted for the target is presented to it with RDSTLS, together with
+    // the redirection GUID; upstream refuses this case.
+    let rdstls_parts = match (&redirection.password, &redirection.redirection_guid) {
+        (Some(password), Some(guid))
+            if redirection
+                .flags
+                .contains(ServerRedirectionFlags::PASSWORD_IS_PK_ENCRYPTED) =>
+        {
+            Some((guid.clone(), password.clone()))
+        }
+        (Some(_), None)
+            if redirection
+                .flags
+                .contains(ServerRedirectionFlags::PASSWORD_IS_PK_ENCRYPTED) =>
+        {
+            return Err(reason_err!(
+                "Redirect",
+                "the redirection password is encrypted for RDSTLS, but the PDU carries no redirection GUID"
+            ));
+        }
+        _ => None,
+    };
 
     let load_balance_info = redirection
         .load_balance_info
@@ -190,11 +206,24 @@ pub(crate) fn apply_server_redirection(
     if load_balance_info.is_some() || !is_avd_gateway {
         config.load_balance_info = load_balance_info;
     }
+    let rdstls = rdstls_parts.map(|(redirection_guid, password)| ironrdp_connector::rdstls::RdstlsCredentials {
+        redirection_guid,
+        username: match &config.connector.credentials {
+            Credentials::UsernamePassword { username, .. } => username.clone(),
+            Credentials::SmartCard { .. } => String::new(),
+        },
+        domain: config.connector.domain.clone(),
+        password,
+    });
+    if rdstls.is_some() {
+        info!("The redirection target expects an RDSTLS login");
+    }
     config.redirection = Some(RedirectionHop {
         connect_hosts,
         session_id: redirection.session_id,
         password_cookie: redirection.password.clone(),
         target_certificate,
+        rdstls,
     });
 
     return Ok(config.destination.to_string());
