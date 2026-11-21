@@ -3804,5 +3804,16 @@
   "session.address_route_session": "Session's jump hosts or proxy",
   "session.address_route_via": "Through {{name}}",
   "session.address_via_missing": "The SSH session it went through no longer exists",
-  "session.address_via_refs": "{{name}} logs in with a password manager entry, which is not used when another session goes through it. Save the password in {{name}}, or use a key or the agent."
+  "session.address_via_refs": "{{name}} logs in with a password manager entry, which is not used when another session goes through it. Save the password in {{name}}, or use a key or the agent.",
+  "files.open": "Open",
+  "files.edit_in_app": "Edit in Reacher CM",
+  "files.copy_to": "Copy → {{where}}",
+  "files.move_to": "Move → {{where}}",
+  "files.delete_n": "Delete {{count}} items",
+  "files.compare_with": "Compare with {{name}}",
+  "files.reveal": "Show in file manager",
+  "files.select_all": "Select all",
+  "files.compare_folders": "Compare folders",
+  "files.copy_folder_path": "Copy folder path",
+  "files.cd_terminal_here": "CD the terminal here"
 }

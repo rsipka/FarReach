@@ -13,8 +13,11 @@
 	import { openEditor } from '#lib/state/editor.svelte.js';
 	import { getCurrentPath, type FileEntry, type SortKey } from '#lib/state/explorer.svelte.js';
 	import { getTransfers, type Transfer } from '#lib/state/transfers.svelte.js';
-	import { sftpDelete, sftpListDir, sftpMkdir, sftpReadFile, sftpRename, sftpTerminalCwd } from '#lib/ipc/sftp.js';
-	import { localDelete, localListDir, localMkdir, localReadText, localRename } from '#lib/ipc/localfs.js';
+	import { sftpDelete, sftpListDir, sftpMkdir, sftpReadFile, sftpRename, sftpTerminalCwd, sftpTouch } from '#lib/ipc/sftp.js';
+	import { localDelete, localListDir, localMkdir, localReadText, localRename, localReveal, localTouch } from '#lib/ipc/localfs.js';
+	import { sshSend } from '#lib/ipc/ssh.js';
+	import { shellQuote } from '#lib/utils/shell.js';
+	import DbMenu, { type MenuItem } from '#lib/components/db/DbMenu.svelte';
 	import { openInEditor } from '#lib/explorer/editor-launch.js';
 	import { editExternally } from '#lib/explorer/external-edit.js';
 	import { compareFolders } from '#lib/explorer/compare.js';
@@ -51,7 +54,7 @@
 	/** A copy, move or delete running: one at a time. */
 	let busy = $state(false);
 	/** The name asked for by New folder or Rename. */
-	let prompt = $state<{ kind: 'mkdir' | 'rename'; pane: Pane; value: string; entry?: FileEntry } | undefined>();
+	let prompt = $state<{ kind: 'mkdir' | 'touch' | 'rename'; pane: Pane; value: string; entry?: FileEntry } | undefined>();
 	/** A pane's path being typed in. */
 	let editingPath = $state<{ pane: Pane; value: string } | undefined>();
 
@@ -184,6 +187,10 @@
 		if (pane.path) prompt = { kind: 'mkdir', pane, value: '' };
 	}
 
+	function startTouch(): void {
+		if (pane.path) prompt = { kind: 'touch', pane, value: '' };
+	}
+
 	function startRename(): void {
 		const row = pane.current;
 		if (!row || row.up) return;
@@ -202,6 +209,9 @@
 			if (pr.kind === 'mkdir') {
 				if (p.kind === 'local') await localMkdir(p.path, name);
 				else await sftpMkdir(connectionId, remoteJoin(p.path, name));
+			} else if (pr.kind === 'touch') {
+				if (p.kind === 'local') await localTouch(p.path, name);
+				else await sftpTouch(connectionId, remoteJoin(p.path, name));
 			} else if (pr.entry) {
 				if (p.kind === 'local') await localRename(pr.entry.path, name);
 				else await sftpRename(connectionId, pr.entry.path, remoteJoin(p.path, name));
@@ -342,8 +352,136 @@
 		return Math.max(1, Math.floor(list.clientHeight / row.offsetHeight) - 1);
 	}
 
+	// ---- Right-click menu --------------------------------------------------
+
+	let menu = $state<{ x: number; y: number; items: MenuItem[] } | undefined>();
+
+	async function copyText(text: string): Promise<void> {
+		try {
+			await navigator.clipboard.writeText(text);
+			addToast(t('explorer.copied'), 'success');
+		} catch {
+			addToast(t('toast.copy_failed'), 'error');
+		}
+	}
+
+	/** Type `cd <dir>` into the tab's terminal. */
+	function cdTerminal(dir: string): void {
+		const cmd = `cd ${shellQuote(dir)}\n`;
+		void sshSend(connectionId, Array.from(new TextEncoder().encode(cmd)));
+		addToast(t('explorer.cd_sent', { path: dir }), 'success');
+	}
+
+	async function reveal(path: string): Promise<void> {
+		try {
+			await localReveal(path);
+		} catch (err) {
+			addToast(errorText(err), 'error');
+		}
+	}
+
+	/** The menu of a row: for the marked rows when it is one of them, else
+	 *  for that row alone. */
+	function rowMenu(p: Pane): MenuItem[] {
+		const sel = p.selection();
+		if (sel.length === 0) return backgroundMenu(p);
+		const one = sel.length === 1 ? sel[0] : undefined;
+		const file = one && !one.isDirectory ? one : undefined;
+		const otherSide = p.kind === 'local' ? t('files.server') : t('files.this_computer');
+		const otherFile = other.current && !other.current.up && !other.current.isDirectory ? other.current : undefined;
+		const items: MenuItem[] = [];
+		if (one?.isDirectory) items.push({ label: t('files.open'), hint: 'Enter', action: () => p.enter(one) });
+		if (file) {
+			items.push({ label: t('files.view'), hint: 'F3', action: () => void view(file, p) });
+			items.push({ label: t('explorer.edit'), hint: 'F4', action: () => void edit(file, p) });
+			if (p.kind === 'remote') items.push({ label: t('files.edit_in_app'), hint: '⇧F4', action: () => void editInApp(file) });
+		}
+		if (items.length) items.push({ label: '', separator: true });
+		items.push(
+			{ label: t('files.copy_to', { where: otherSide }), hint: 'F5', disabled: busy, action: () => void copy() },
+			{ label: t('files.move_to', { where: otherSide }), hint: 'F6', disabled: busy, action: () => void copy(true) }
+		);
+		if (one) items.push({ label: t('explorer.rename'), hint: 'F2', action: startRename });
+		items.push({ label: sel.length > 1 ? t('files.delete_n', { count: sel.length }) : t('common.delete'), hint: 'F8', danger: true, disabled: busy, action: () => void remove() });
+		if (file && otherFile) {
+			items.push({ label: '', separator: true });
+			items.push({ label: t('files.compare_with', { name: otherFile.name }), hint: '⇧F9', action: () => void compareFiles() });
+		}
+		items.push({ label: '', separator: true });
+		if (one) {
+			items.push({ label: t('explorer.copy_path'), action: () => void copyText(one.path) });
+			items.push({ label: t('explorer.copy_filename'), action: () => void copyText(one.name) });
+		} else {
+			items.push({ label: t('explorer.copy_path'), action: () => void copyText(sel.map((e) => e.path).join('\n')) });
+		}
+		if (one?.isDirectory && p.kind === 'remote') items.push({ label: t('explorer.cd_here'), action: () => cdTerminal(one.path) });
+		if (one && p.kind === 'local') items.push({ label: t('files.reveal'), action: () => void reveal(one.path) });
+		return items;
+	}
+
+	/** The menu of a pane's empty space: the folder itself. */
+	function backgroundMenu(p: Pane): MenuItem[] {
+		const items: MenuItem[] = [
+			{ label: t('explorer.new_folder'), hint: 'F7', disabled: !p.path, action: startMkdir },
+			{ label: t('explorer.new_file'), disabled: !p.path, action: startTouch },
+			{ label: '', separator: true },
+			{ label: t('explorer.refresh'), hint: actionHint('R'), action: () => void p.refresh() },
+			{ label: t('files.select_all'), hint: actionHint('A'), disabled: p.entries.length === 0, action: () => p.markAll() },
+			{ label: t('files.compare_folders'), hint: 'F9', action: compareDirs },
+			{ label: '', separator: true },
+			{ label: t('files.copy_folder_path'), disabled: !p.path, action: () => void copyText(p.path) }
+		];
+		if (p.kind === 'remote') {
+			items.push({ label: t('explorer.go_terminal_folder'), action: () => void goToTerminalFolder() });
+			if (p.path) items.push({ label: t('files.cd_terminal_here'), action: () => cdTerminal(p.path) });
+		} else {
+			items.push({ label: t('files.home'), action: () => void p.load('') });
+			if (p.path) items.push({ label: t('files.reveal'), action: () => void reveal(p.path) });
+		}
+		return items;
+	}
+
+	function actionHint(letter: string): string {
+		return /Mac|iPhone|iPad/.test(navigator.platform) ? `⌘${letter}` : `Ctrl+${letter}`;
+	}
+
+	/** Right-click on a row: it joins the marked rows' menu when marked,
+	 *  else it alone is what the menu acts on. */
+	function rowContextMenu(e: MouseEvent, p: Pane, i: number): void {
+		e.preventDefault();
+		e.stopPropagation();
+		side = p.kind;
+		const row = p.rows[i];
+		if (!row.up && !p.marked.has(row.path)) p.marked.clear();
+		p.cursor = i;
+		rootEl?.focus();
+		menu = { x: e.clientX, y: e.clientY, items: row.up ? backgroundMenu(p) : rowMenu(p) };
+	}
+
+	function listContextMenu(e: MouseEvent, p: Pane): void {
+		e.preventDefault();
+		side = p.kind;
+		rootEl?.focus();
+		menu = { x: e.clientX, y: e.clientY, items: backgroundMenu(p) };
+	}
+
+	/** The menu key or Shift+F10: the cursor row's menu, beside the row. */
+	function keyboardMenu(): void {
+		const p = pane;
+		const el = listEls[side]?.querySelector<HTMLElement>(`[data-row="${p.cursor}"]`);
+		const r = el?.getBoundingClientRect() ?? listEls[side]?.getBoundingClientRect();
+		if (!r) return;
+		const row = p.current;
+		menu = { x: r.left + 40, y: r.top + (el ? r.height : 20), items: !row || row.up ? backgroundMenu(p) : rowMenu(p) };
+	}
+
+	function closeMenu(): void {
+		menu = undefined;
+		void tick().then(() => rootEl?.focus());
+	}
+
 	function onKeydown(e: KeyboardEvent): void {
-		if (prompt || editingPath || panel) return;
+		if (prompt || editingPath || panel || menu) return;
 		if (e.target instanceof HTMLInputElement) return;
 		const mod = e.ctrlKey || e.metaKey;
 		const p = pane;
@@ -411,7 +549,11 @@
 				void remove();
 				break;
 			case 'F10':
-				onclose();
+				if (e.shiftKey) keyboardMenu();
+				else onclose();
+				break;
+			case 'ContextMenu':
+				keyboardMenu();
 				break;
 			case 'Escape':
 				if (p.marked.size > 0) p.marked.clear();
@@ -552,7 +694,7 @@
 				</button>
 			{/each}
 		</div>
-		<div class="list" bind:this={listEls[p.kind]} role="listbox" aria-multiselectable="true" aria-label={p.path}>
+		<div class="list" bind:this={listEls[p.kind]} role="listbox" tabindex="-1" aria-multiselectable="true" aria-label={p.path} oncontextmenu={(e) => listContextMenu(e, p)}>
 			{#if p.error}
 				<div class="note error">{p.error}</div>
 			{:else if p.rows.length === 0 && !p.loading}
@@ -570,6 +712,7 @@
 					aria-selected={p.marked.has(row.path) && !row.up}
 					onclick={(e) => { e.stopPropagation(); clickRow(e, p, i); }}
 					ondblclick={() => openRow(p, i)}
+					oncontextmenu={(e) => rowContextMenu(e, p, i)}
 				>
 					<span class="name">
 						{#if row.isDirectory}
@@ -618,13 +761,17 @@
 		</div>
 	{/if}
 
+	{#if menu}
+		<DbMenu x={menu.x} y={menu.y} items={menu.items} onclose={closeMenu} />
+	{/if}
+
 	{#if panel}
 		<TextPanel content={panel} onclose={closePanel} />
 	{/if}
 
 	{#if prompt}
 		<form class="prompt" onsubmit={(e) => { e.preventDefault(); void commitPrompt(); }}>
-			<label for="dual-prompt">{prompt.kind === 'mkdir' ? t('explorer.folder_name') : t('files.new_name')}</label>
+			<label for="dual-prompt">{prompt.kind === 'mkdir' ? t('explorer.folder_name') : prompt.kind === 'touch' ? t('explorer.file_name') : t('files.new_name')}</label>
 			<input
 				id="dual-prompt"
 				type="text"

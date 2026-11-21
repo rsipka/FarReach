@@ -3804,5 +3804,16 @@
   "session.address_route_session": "Междинни хостове или прокси на сесията",
   "session.address_route_via": "През {{name}}",
   "session.address_via_missing": "SSH сесията, през която минаваше, вече не съществува",
-  "session.address_via_refs": "{{name}} влиза със запис от мениджъра на пароли, който не се използва, когато друга сесия минава през нея. Запазете паролата в {{name}} или използвайте ключ или агента."
+  "session.address_via_refs": "{{name}} влиза със запис от мениджъра на пароли, който не се използва, когато друга сесия минава през нея. Запазете паролата в {{name}} или използвайте ключ или агента.",
+  "files.open": "Отваряне",
+  "files.edit_in_app": "Редактиране в Reacher CM",
+  "files.copy_to": "Копиране към: {{where}}",
+  "files.move_to": "Преместване към: {{where}}",
+  "files.delete_n": "Изтриване на елементи ({{count}})",
+  "files.compare_with": "Сравняване с {{name}}",
+  "files.reveal": "Показване във файловия мениджър",
+  "files.select_all": "Избиране на всички",
+  "files.compare_folders": "Сравняване на папки",
+  "files.copy_folder_path": "Копиране на пътя на папката",
+  "files.cd_terminal_here": "Терминалът тук (cd)"
 }
