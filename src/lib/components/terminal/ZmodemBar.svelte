@@ -14,13 +14,98 @@
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { isMobile } from '#lib/platform.js';
+	import { ZMODEM_SEND_EVENT, type ZmodemRequest } from '#lib/state/zmodem.js';
 
 	interface Props {
 		/** The session's connection; events come as `zmodem-{id}`. */
 		connectionId?: string;
+		/** The tab, for a Send files request from its bar or menu. */
+		tabId: string;
+		/** Types into the session (`rz` for Send files); false when it is down. */
+		send: (data: number[]) => boolean;
 	}
 
-	let { connectionId }: Props = $props();
+	let { connectionId, tabId, send }: Props = $props();
+
+	/** Asked for from the bar or the tab menu: what goes when the rz or sz
+	 *  typed for it answers. A folder download may run sz several times
+	 *  (find hands it the files in batches); each is accepted while this
+	 *  lasts. */
+	type Pending = { kind: 'upload'; paths: string[] } | { kind: 'download'; folder: string };
+	let pending: (Pending & { timer: ReturnType<typeof setTimeout> }) | null = null;
+	/** How long rz or sz has to answer. */
+	const ANSWER_WAIT_MS = 20_000;
+	/** Between two sz runs of one folder download. */
+	const NEXT_BATCH_MS = 10_000;
+
+	function clearPending(): void {
+		if (pending) clearTimeout(pending.timer);
+		pending = null;
+	}
+
+	function arm(p: Pending, ms: number, warn: boolean): void {
+		clearPending();
+		pending = {
+			...p,
+			timer: setTimeout(() => {
+				pending = null;
+				if (warn) addToast(t(p.kind === 'upload' ? 'zmodem.no_rz' : 'zmodem.no_sz'), 'warning', 8000);
+			}, ms)
+		};
+	}
+
+	function type(text: string): boolean {
+		if (send(Array.from(new TextEncoder().encode(text)))) return true;
+		clearPending();
+		addToast(t('zmodem.not_connected'), 'warning', 4000);
+		return false;
+	}
+
+	/** Send files or a folder: pick, then type rz; they go when rz answers. */
+	async function sendFiles(folder: boolean): Promise<void> {
+		if (!connectionId || running || choosing) return;
+		if (isMobile()) {
+			addToast(t('zmodem.desktop_only'), 'info', 5000);
+			return;
+		}
+		const picked = await open({ multiple: true, directory: folder, title: t(folder ? 'zmodem.send_folder' : 'zmodem.send_files') }).catch(() => null);
+		const paths = picked === null ? [] : Array.isArray(picked) ? picked : [picked];
+		if (paths.length === 0) return;
+		arm({ kind: 'upload', paths }, ANSWER_WAIT_MS, true);
+		type('rz\r');
+	}
+
+	/** Download the remote's current folder: pick where, then have find run
+	 *  sz on every file under it, with paths, from its parent. In a subshell,
+	 *  so the shell stays where it was. */
+	async function downloadFolder(): Promise<void> {
+		if (!connectionId || running || choosing) return;
+		if (isMobile()) {
+			addToast(t('zmodem.desktop_only'), 'info', 5000);
+			return;
+		}
+		const defaultPath = lastFolder() ?? (await downloadDir().catch(() => undefined));
+		const picked = await open({ directory: true, multiple: false, defaultPath, title: t('zmodem.pick_folder') }).catch(() => null);
+		const folder = Array.isArray(picked) ? picked[0] : picked;
+		if (!folder) return;
+		rememberFolder(folder);
+		arm({ kind: 'download', folder }, ANSWER_WAIT_MS, true);
+		type(`(d="\${PWD##*/}"; cd .. && find "$d" -type f -exec sz -f {} +)\r`);
+	}
+
+	$effect(() => {
+		const onRequest = (e: Event) => {
+			const { tabId: id, kind } = (e as CustomEvent<ZmodemRequest>).detail;
+			if (id !== tabId) return;
+			if (kind === 'download-folder') void downloadFolder();
+			else void sendFiles(kind === 'folder');
+		};
+		window.addEventListener(ZMODEM_SEND_EVENT, onRequest);
+		return () => {
+			window.removeEventListener(ZMODEM_SEND_EVENT, onRequest);
+			clearPending();
+		};
+	});
 
 	interface Running {
 		direction: ZmodemDirection;
@@ -62,9 +147,19 @@
 			await zmodemCancel(id).catch(() => {});
 			return;
 		}
+		const ready = pending?.kind === 'upload' && direction === 'upload' ? pending.paths : undefined;
+		const into = pending?.kind === 'download' && direction === 'download' ? pending.folder : undefined;
+		// A folder download keeps its folder for sz's next batch.
+		if (!into) clearPending();
 		choosing = direction;
 		try {
-			if (direction === 'upload') {
+			if (ready) {
+				running = { direction, file: '', index: 0, count: null, done: 0, total: null, rate: null };
+				await zmodemUpload(id, ready);
+			} else if (into) {
+				running = { direction, file: '', index: 0, count: null, done: 0, total: null, rate: null };
+				await zmodemDownload(id, into);
+			} else if (direction === 'upload') {
 				const picked = await open({ multiple: true, directory: false, title: t('zmodem.pick_files') });
 				const paths = picked === null ? [] : Array.isArray(picked) ? picked : [picked];
 				if (paths.length === 0) {
@@ -113,7 +208,8 @@
 				break;
 			case 'finished': {
 				running = null;
-				const files = e.files.join(', ');
+				if (pending?.kind === 'download') arm(pending, NEXT_BATCH_MS, false);
+				const files = e.files.length > 4 ? `${e.files.slice(0, 3).join(', ')}, … (${e.files.length})` : e.files.join(', ');
 				if (e.direction === 'download') {
 					addToast(t('zmodem.received', { files, folder: e.folder ?? '' }), 'success', 6000);
 				} else {

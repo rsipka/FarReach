@@ -48,7 +48,9 @@ struct Outgoing {
 enum Role {
     Send {
         sender: Box<Sender>,
-        queue: VecDeque<PathBuf>,
+        /// Files still to go, with the name each is sent under ("dir/sub/x"
+        /// for one inside a folder sent whole).
+        queue: VecDeque<(PathBuf, String)>,
         current: Option<Outgoing>,
     },
     Receive {
@@ -70,20 +72,14 @@ pub struct Transfer {
 const MAX_SIZE: u64 = u32::MAX as u64;
 
 impl Transfer {
-    /// Send `files` to a remote `rz`. `window` is how many 1 KiB subpackets
-    /// go out before waiting for the receiver to acknowledge them.
-    pub fn send(files: Vec<PathBuf>, window: usize) -> Result<Self, String> {
+    /// Send `files` to a remote `rz`; a folder goes with everything in it,
+    /// under its own name (`rz` makes the folders). `window` is how many
+    /// 1 KiB subpackets go out before waiting for the receiver to
+    /// acknowledge them.
+    pub fn send(paths: Vec<PathBuf>, window: usize) -> Result<Self, String> {
+        let files = expand(&paths)?;
         if files.is_empty() {
-            return Err("No files chosen".into());
-        }
-        for f in &files {
-            let meta = std::fs::metadata(f).map_err(|e| format!("{}: {e}", f.display()))?;
-            if !meta.is_file() {
-                return Err(format!("{} is not a file", f.display()));
-            }
-            if meta.len() > MAX_SIZE {
-                return Err(format!("{} is larger than 4 GB, which ZMODEM cannot send", f.display()));
-            }
+            return Err("No files to send (the folders are empty)".into());
         }
         let mut sender = Box::new(Sender::new().map_err(err)?);
         sender.set_streaming_window(window);
@@ -253,7 +249,10 @@ impl Transfer {
                         let modified = info.modified;
                         match create_unique(folder, &name) {
                             Ok((file, path)) => {
-                                let saved = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                                let saved = path
+                                    .strip_prefix(folder.as_path())
+                                    .map(|p| p.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/"))
+                                    .unwrap_or_default();
                                 *current = Some(Incoming { file: BufWriter::with_capacity(64 * 1024, file), path, name: saved.clone(), modified });
                                 self.progress = Progress { file: saved, index: self.progress.index + 1, count: None, done: 0, total };
                                 Step::Continue
@@ -357,12 +356,11 @@ impl Transfer {
         let Role::Send { sender, queue, current } = &mut self.role else {
             return Ok(());
         };
-        let Some(path) = queue.pop_front() else {
+        let Some((path, name)) = queue.pop_front() else {
             return sender.finish().map_err(err);
         };
         let file = File::open(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         let meta = file.metadata().map_err(|e| format!("{}: {e}", path.display()))?;
-        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "file".into());
         let size = u32::try_from(meta.len()).map_err(|_| format!("{name} is larger than 4 GB"))?;
         let mut info = FileInfo::new(name.as_bytes(), Some(Position::new(size))).with_mode(0o100_644);
         if let Some(t) = meta.modified().ok().and_then(|m| m.duration_since(UNIX_EPOCH).ok()).and_then(|d| u32::try_from(d.as_secs()).ok()) {
@@ -421,16 +419,18 @@ fn read_at(file: &mut File, offset: u32, max_len: usize) -> std::io::Result<Vec<
     Ok(data)
 }
 
-/// A name from the remote, made safe to save: no folders, nothing hidden
-/// behind dots, no characters a file system refuses.
+/// A name from the remote, made safe to save: no folders, no `.` or `..`,
+/// no characters a file system refuses.
 pub fn safe_name(raw: &str) -> String {
     let base = raw.rsplit(['/', '\\']).next().unwrap_or("");
     let cleaned: String = base
         .chars()
         .map(|c| if c.is_control() || matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*') { '_' } else { c })
         .collect();
-    let trimmed = cleaned.trim_matches(|c: char| c == '.' || c.is_whitespace());
-    if trimmed.is_empty() {
+    // Dotfiles keep their dot; trailing dots and spaces go (Windows drops
+    // them), and a name of only dots is no name.
+    let trimmed = cleaned.trim_start_matches(char::is_whitespace).trim_end_matches(|c: char| c == '.' || c.is_whitespace());
+    if trimmed.is_empty() || trimmed.chars().all(|c| c == '.') {
         return "download".into();
     }
     // Windows keeps these names for devices.
@@ -443,10 +443,73 @@ pub fn safe_name(raw: &str) -> String {
     trimmed.to_string()
 }
 
-/// Make a new file for `name` in `folder`, as "name (1).ext" and so on when
-/// it is taken: a download never overwrites.
+/// A path from the remote (`sz -f` sends "dir/sub/x"), made safe to save
+/// under the chosen folder: its folders, each made safe, without empty,
+/// `.` or `..` parts, and the file name.
+pub fn safe_path(raw: &str) -> (Vec<String>, String) {
+    let mut parts: Vec<String> = raw
+        .split(['/', '\\'])
+        .filter(|p| !p.is_empty() && *p != "." && *p != "..")
+        .map(safe_name)
+        .collect();
+    let file = parts.pop().unwrap_or_else(|| "download".into());
+    // Deeper than any real tree; keeps a hostile name from going on forever.
+    parts.truncate(32);
+    (parts, file)
+}
+
+/// Every file to send: a file as itself, a folder's files (all levels) as
+/// "folder/sub/name". Links to folders are not followed.
+fn expand(paths: &[PathBuf]) -> Result<Vec<(PathBuf, String)>, String> {
+    fn walk(dir: &Path, prefix: &str, out: &mut Vec<(PathBuf, String)>) -> Result<(), String> {
+        let mut entries: Vec<_> = std::fs::read_dir(dir)
+            .map_err(|e| format!("{}: {e}", dir.display()))?
+            .filter_map(Result::ok)
+            .collect();
+        entries.sort_by_key(|e| e.file_name());
+        for e in entries {
+            let name = format!("{prefix}/{}", e.file_name().to_string_lossy());
+            let kind = e.file_type().map_err(|err| format!("{}: {err}", e.path().display()))?;
+            let path = e.path();
+            if kind.is_dir() {
+                walk(&path, &name, out)?;
+            } else if std::fs::metadata(&path).is_ok_and(|m| m.is_file()) {
+                out.push((path, name));
+            }
+            if out.len() > 100_000 {
+                return Err("More than 100,000 files: too many to send this way".into());
+            }
+        }
+        Ok(())
+    }
+    let mut out = Vec::new();
+    for p in paths {
+        let meta = std::fs::metadata(p).map_err(|e| format!("{}: {e}", p.display()))?;
+        let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "file".into());
+        if meta.is_dir() {
+            walk(p, &name, &mut out)?;
+        } else {
+            out.push((p.clone(), name));
+        }
+    }
+    for (p, _) in &out {
+        if std::fs::metadata(p).map(|m| m.len()).unwrap_or(0) > MAX_SIZE {
+            return Err(format!("{} is larger than 4 GB, which ZMODEM cannot send", p.display()));
+        }
+    }
+    Ok(out)
+}
+
+/// Make a new file for `name` (which may have folders in it) in `folder`,
+/// as "name (1).ext" and so on when it is taken: a download never
+/// overwrites. Folders that are already there are used as they are.
 fn create_unique(folder: &Path, name: &str) -> Result<(File, PathBuf), String> {
-    let name = safe_name(name);
+    let (dirs, name) = safe_path(name);
+    let mut folder = folder.to_path_buf();
+    for d in dirs {
+        folder.push(d);
+    }
+    std::fs::create_dir_all(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
     let (stem, ext) = match name.rfind('.') {
         Some(i) if i > 0 => (&name[..i], &name[i..]),
         _ => (name.as_str(), ""),

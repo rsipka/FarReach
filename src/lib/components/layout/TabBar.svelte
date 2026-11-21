@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { canZmodem, requestZmodem } from '#lib/state/zmodem.js';
 	import {
 		getTabs, getActiveTab, createTab, closeTab, activateTab, getSplit, splitWith, unsplit, removeFromSplit, getDraggedTab, setDraggedTab, type Tab,
 		getGroups, createGroup, addToGroup, removeFromGroup, renameGroup, setGroupColor, toggleGroup, groupHidden, ungroup, closeGroup,
@@ -313,6 +314,14 @@
 		}
 		const host = hostOf(tab);
 		if (host) items.push({ label: t('tabs.copy_host'), action: () => void copyHost(host) });
+		if (canZmodem(tab.type) && !isMobile()) {
+			const down = tab.link === 'down';
+			items.push(
+				{ label: t('zmodem.send_files'), disabled: down, action: () => requestZmodem(tab.id, 'files') },
+				{ label: t('zmodem.send_folder'), disabled: down, action: () => requestZmodem(tab.id, 'folder') },
+				{ label: t('zmodem.download_folder'), disabled: down, action: () => requestZmodem(tab.id, 'download-folder') }
+			);
+		}
 		const sessionId = tab.sessionId;
 		// The session list is in the main window.
 		if (sessionId && !floating) {
