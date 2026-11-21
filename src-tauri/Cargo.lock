@@ -4213,7 +4213,6 @@ dependencies = [
 [[package]]
 name = "ironrdp-pdu"
 version = "0.11.0"
-source = "git+https://github.com/Devolutions/IronRDP?rev=a8da54ba4d849370bc92e1d5230cc18e99cf5ff1#a8da54ba4d849370bc92e1d5230cc18e99cf5ff1"
 dependencies = [
  "bit_field",
  "bitflags 2.13.2",
