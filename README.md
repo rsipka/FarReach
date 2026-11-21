@@ -13,8 +13,8 @@
 </p>
 
 > **Reacher CM is built on Reach** by [Alexander Nt.](https://github.com/alexandrosnt) and the
-> [Reach contributors](https://github.com/alexandrosnt/Reach/graphs/contributors). Almost everything
-> here is their work. Reacher CM is a personal fork that adds features of its own on top. If you don't
+> [Reach contributors](https://github.com/alexandrosnt/Reach/graphs/contributors).
+> Reacher CM is a personal fork that adds features of its own on top. If you don't
 > need what Reacher CM adds, use [Reach](https://github.com/alexandrosnt/Reach) itself. Some features
 > are based on the [ReachQ](https://github.com/CPTProgrammer/ReachQ) fork by CPTProgrammer.
 >
