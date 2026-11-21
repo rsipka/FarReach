@@ -224,8 +224,73 @@ fn names_from_the_remote_are_made_safe() {
     assert_eq!(safe_name("../../etc/passwd"), "passwd");
     assert_eq!(safe_name("C:\\x\\boot.ini"), "boot.ini");
     assert_eq!(safe_name(".."), "download");
-    assert_eq!(safe_name(".bashrc"), "bashrc");
+    assert_eq!(safe_name(".bashrc"), ".bashrc");
+    assert_eq!(safe_name("..."), "download");
+    assert_eq!(safe_name("x. "), "x");
     assert_eq!(safe_name("a\x1b[31mb"), "a_[31mb");
     assert_eq!(safe_name("con.txt"), "_con.txt");
     assert_eq!(safe_name("what?.txt"), "what_.txt");
+}
+
+#[test]
+fn paths_from_the_remote_stay_inside_the_folder() {
+    use transfer::safe_path;
+    assert_eq!(safe_path("./proj/src/main.rs"), (vec!["proj".into(), "src".into()], "main.rs".into()));
+    assert_eq!(safe_path("../../etc/passwd"), (vec!["etc".into()], "passwd".into()));
+    assert_eq!(safe_path("/abs/x"), (vec!["abs".into()], "x".into()));
+    assert_eq!(safe_path("a\\b\\c.txt"), (vec!["a".into(), "b".into()], "c.txt".into()));
+}
+
+#[test]
+fn a_folder_goes_up_whole() {
+    if !have("rz") {
+        return;
+    }
+    let remote = tempfile::tempdir().unwrap();
+    let here = tempfile::tempdir().unwrap();
+    let top = here.path().join("site");
+    std::fs::create_dir_all(top.join("css/deep")).unwrap();
+    std::fs::write(top.join("index.html"), b"<html>").unwrap();
+    std::fs::write(top.join(".htaccess"), b"x").unwrap();
+    std::fs::write(top.join("css/deep/a.css"), pattern(5000, 9)).unwrap();
+    let send = vec![top.clone()];
+    let child = spawn("rz", &["-y"], remote.path());
+    let run = drive("ul-dir", child, 4096, |e| match e {
+        ZmodemEvent::Offer { direction: Direction::Upload } => Some(Decision::Upload(send.clone())),
+        _ => None,
+    });
+    match last(&run) {
+        ZmodemEvent::Finished { files, .. } => assert_eq!(files, vec!["site/.htaccess", "site/css/deep/a.css", "site/index.html"]),
+        e => panic!("{e:?}"),
+    }
+    assert_eq!(std::fs::read(remote.path().join("site/css/deep/a.css")).unwrap(), pattern(5000, 9));
+    assert_eq!(std::fs::read(remote.path().join("site/index.html")).unwrap(), b"<html>");
+}
+
+#[test]
+fn a_folder_comes_down_whole() {
+    if !have("sz") {
+        return;
+    }
+    let remote = tempfile::tempdir().unwrap();
+    let here = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(remote.path().join("logs/old")).unwrap();
+    std::fs::write(remote.path().join("logs/now.log"), b"now").unwrap();
+    std::fs::write(remote.path().join("logs/old/then.log"), b"then").unwrap();
+    // Already here: kept, the new one beside it.
+    std::fs::create_dir_all(here.path().join("logs")).unwrap();
+    std::fs::write(here.path().join("logs/now.log"), b"mine").unwrap();
+    let folder = here.path().to_path_buf();
+    let child = spawn("sz", &["-f", "logs/now.log", "logs/old/then.log"], remote.path());
+    let run = drive("dl-dir", child, 4096, |e| match e {
+        ZmodemEvent::Offer { direction: Direction::Download } => Some(Decision::Download(folder.clone())),
+        _ => None,
+    });
+    match last(&run) {
+        ZmodemEvent::Finished { files, .. } => assert_eq!(files, vec!["logs/now (1).log", "logs/old/then.log"]),
+        e => panic!("{e:?}"),
+    }
+    assert_eq!(std::fs::read(here.path().join("logs/now.log")).unwrap(), b"mine");
+    assert_eq!(std::fs::read(here.path().join("logs/now (1).log")).unwrap(), b"now");
+    assert_eq!(std::fs::read(here.path().join("logs/old/then.log")).unwrap(), b"then");
 }

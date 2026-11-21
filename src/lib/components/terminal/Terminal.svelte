@@ -1811,7 +1811,15 @@
 		<MobileKeyBar bind:ctrl={barCtrl} bind:alt={barAlt} zoom onkey={onBarKey} />
 	{/if}
 	{#if remote}
-		<ZmodemBar connectionId={currentConnectionId} />
+		<ZmodemBar
+			connectionId={currentConnectionId}
+			tabId={ptyId}
+			send={(data) => {
+				if (!currentConnectionId || disconnected) return false;
+				sendData(data);
+				return true;
+			}}
+		/>
 	{/if}
 	{#if disconnected && remote}
 		<div class="reconnect-overlay">
