@@ -293,7 +293,7 @@ fn inject_tunnel_api(lua: &Lua, reach: &mlua::Table) -> LuaResult<()> {
     tunnel.set(
         "list",
         lua.create_async_function(|lua, ()| async move {
-            // Returns an empty table -- actual tunnel state is in AppState.tunnels RwLock
+            // Returns an empty table -- actual tunnel state is in TunnelManager
             // which we don't have direct access to from the plugin API.
             // This is a stub for now; can be expanded if needed.
             let table = lua.create_table()?;

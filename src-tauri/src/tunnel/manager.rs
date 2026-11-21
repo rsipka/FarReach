@@ -1,274 +1,212 @@
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
 
 use russh::ChannelMsg;
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
+use tokio::sync::{oneshot, Mutex, OwnedMutexGuard};
+use tokio::task::{JoinHandle, JoinSet};
 
-use crate::ssh::client::SharedHandle;
-use crate::state::{TunnelConfig, TunnelType};
+use crate::ssh::client::{HeadlessConnection, SharedHandle};
+use crate::ssh::forwarding::serve_local;
+use crate::ssh::sshconf::forward::End;
+use crate::state::{TunnelConfig, TunnelStatus, TunnelType};
 
 #[derive(Debug, Error)]
 pub enum TunnelError {
-    #[error("Tunnel creation failed: {0}")]
-    CreationFailed(String),
     #[error("Tunnel not found: {0}")]
     NotFound(String),
+    #[error("This tunnel is already starting")]
+    Starting,
+    #[error("This tunnel is already running")]
+    Running,
     #[error("Port already in use: {0}")]
     PortInUse(u16),
-    #[error("Connection not found: {0}")]
-    ConnectionNotFound(String),
     #[error("IO error: {0}")]
     IoError(String),
-    #[error("Not implemented: {0}")]
-    NotImplemented(String),
 }
 
-/// How long to wait before accepting again after an accept failed.
-const ACCEPT_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(200);
+struct Tunnel {
+    config: TunnelConfig,
+    // Held across authentication, which can wait for the user. Other tunnels
+    // can still be listed or controlled, and cancellation releases the guard.
+    starting: Arc<Mutex<()>>,
+    active: Option<ActiveTunnel>,
+}
 
-/// An active tunnel task with a shutdown channel.
 struct ActiveTunnel {
-    shutdown_tx: mpsc::Sender<()>,
+    stop: oneshot::Sender<()>,
     task: JoinHandle<()>,
 }
 
-/// Manages active SSH tunnel forwarding tasks.
+impl Tunnel {
+    fn running(&self) -> bool {
+        self.active
+            .as_ref()
+            .is_some_and(|active| !active.task.is_finished())
+    }
+
+    fn view(&self) -> TunnelConfig {
+        let mut config = self.config.clone();
+        config.status = if self.running() {
+            TunnelStatus::Running
+        } else if self.starting.try_lock().is_err() {
+            TunnelStatus::Starting
+        } else {
+            TunnelStatus::Stopped
+        };
+        config
+    }
+}
+
+/// Tunnel definitions and their independently owned SSH connections.
+#[derive(Default)]
 pub struct TunnelManager {
-    active: HashMap<String, ActiveTunnel>,
+    tunnels: HashMap<String, Tunnel>,
 }
 
 impl TunnelManager {
     pub fn new() -> Self {
-        Self {
-            active: HashMap::new(),
-        }
+        Self::default()
     }
 
-    /// Create a new tunnel configuration (does not start it yet).
-    pub fn create_tunnel(
+    pub fn create(
+        &mut self,
         tunnel_type: TunnelType,
         local_port: u16,
-        remote_host: &str,
+        remote_host: String,
         remote_port: u16,
-        connection_id: &str,
+        session_id: String,
     ) -> TunnelConfig {
-        TunnelConfig {
+        let config = TunnelConfig {
             id: uuid::Uuid::new_v4().to_string(),
             tunnel_type,
             local_port,
-            remote_host: remote_host.to_string(),
+            remote_host,
             remote_port,
-            connection_id: connection_id.to_string(),
-            active: false,
-        }
-    }
-
-    /// Start a tunnel. For Local tunnels, binds a TCP listener and relays
-    /// each connection through an SSH direct-tcpip channel.
-    pub async fn start_tunnel(
-        &mut self,
-        tunnel: &mut TunnelConfig,
-        handle: &SharedHandle,
-    ) -> Result<(), TunnelError> {
-        if self.active.contains_key(&tunnel.id) {
-            return Err(TunnelError::CreationFailed(format!(
-                "Tunnel {} is already running",
-                tunnel.id
-            )));
-        }
-
-        match tunnel.tunnel_type {
-            TunnelType::Local => {
-                self.start_local_forward(tunnel, handle).await?;
-            }
-            TunnelType::Remote => {
-                tracing::warn!("Remote port forwarding not yet implemented");
-                return Err(TunnelError::NotImplemented(
-                    "Remote port forwarding".to_string(),
-                ));
-            }
-            TunnelType::Dynamic => {
-                self.start_dynamic_forward(tunnel, handle).await?;
-            }
-        }
-
-        tunnel.active = true;
-        Ok(())
-    }
-
-    /// Start a SOCKS proxy on this machine (ssh -D): each connection says
-    /// where it goes, and goes there through the SSH connection. It is the
-    /// same forwarder `~C -D` and DynamicForward use, and it listens on
-    /// 127.0.0.1 only, as a local forward does.
-    async fn start_dynamic_forward(
-        &mut self,
-        tunnel: &TunnelConfig,
-        handle: &SharedHandle,
-    ) -> Result<(), TunnelError> {
-        use crate::ssh::forwarding::{ForwardTable, Forwarder};
-
-        let port = tunnel.local_port;
-        let fwd = crate::ssh::sshconf::forward::parse(&format!("127.0.0.1:{port}"), true, false)
-            .ok_or_else(|| TunnelError::CreationFailed(format!("Bad port {port}")))?;
-        let (forwarder, _) = Forwarder::start(handle.clone(), ForwardTable::new(Default::default()))
-            .await
-            .map_err(TunnelError::CreationFailed)?;
-        forwarder.add_local(fwd).await.map_err(|e| {
-            if is_addr_in_use(&e) {
-                TunnelError::PortInUse(port)
-            } else {
-                TunnelError::IoError(e)
-            }
-        })?;
-
-        tracing::info!("Tunnel {}: SOCKS proxy on 127.0.0.1:{}", tunnel.id, port);
-
-        // The forwarder lives as long as this task: stopping the tunnel
-        // closes the listener.
-        let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
-        let tunnel_id = tunnel.id.clone();
-        let task = tokio::spawn(async move {
-            let _ = shutdown_rx.recv().await;
-            forwarder.cancel_local(port).await;
-            tracing::info!("Tunnel {}: SOCKS proxy stopped", tunnel_id);
-        });
-
-        self.active.insert(tunnel.id.clone(), ActiveTunnel { shutdown_tx, task });
-        Ok(())
-    }
-
-    /// Start local port forwarding: bind locally and forward through SSH.
-    async fn start_local_forward(
-        &mut self,
-        tunnel: &TunnelConfig,
-        handle: &SharedHandle,
-    ) -> Result<(), TunnelError> {
-        let bind_addr = format!("127.0.0.1:{}", tunnel.local_port);
-        let listener = TcpListener::bind(&bind_addr).await.map_err(|e| {
-            if e.kind() == std::io::ErrorKind::AddrInUse {
-                TunnelError::PortInUse(tunnel.local_port)
-            } else {
-                TunnelError::IoError(format!("Failed to bind {}: {}", bind_addr, e))
-            }
-        })?;
-
-        tracing::info!(
-            "Tunnel {}: listening on {} -> {}:{}",
-            tunnel.id,
-            bind_addr,
-            tunnel.remote_host,
-            tunnel.remote_port
+            session_id,
+            status: TunnelStatus::Stopped,
+        };
+        self.tunnels.insert(
+            config.id.clone(),
+            Tunnel {
+                config: config.clone(),
+                starting: Arc::new(Mutex::new(())),
+                active: None,
+            },
         );
+        config
+    }
 
-        let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
-        let tunnel_id = tunnel.id.clone();
-        let remote_host = tunnel.remote_host.clone();
-        let remote_port = tunnel.remote_port;
-        let ssh_handle = handle.clone();
+    pub fn reserve_start(
+        &self,
+        id: &str,
+    ) -> Result<(TunnelConfig, OwnedMutexGuard<()>), TunnelError> {
+        let tunnel = self
+            .tunnels
+            .get(id)
+            .ok_or_else(|| TunnelError::NotFound(id.to_owned()))?;
+        let guard = tunnel
+            .starting
+            .clone()
+            .try_lock_owned()
+            .map_err(|_| TunnelError::Starting)?;
+        if tunnel.running() {
+            return Err(TunnelError::Running);
+        }
+        Ok((tunnel.config.clone(), guard))
+    }
 
+    pub async fn bind(port: u16) -> Result<TcpListener, TunnelError> {
+        TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port))
+            .await
+            .map_err(|err| {
+                if err.kind() == std::io::ErrorKind::AddrInUse {
+                    TunnelError::PortInUse(port)
+                } else {
+                    TunnelError::IoError(format!("Failed to bind 127.0.0.1:{port}: {err}"))
+                }
+            })
+    }
+
+    pub(crate) fn start(
+        &mut self,
+        id: &str,
+        listener: TcpListener,
+        ssh: HeadlessConnection,
+    ) -> Result<(), TunnelError> {
+        let tunnel = self
+            .tunnels
+            .get_mut(id)
+            .ok_or_else(|| TunnelError::NotFound(id.to_owned()))?;
+        let target = match tunnel.config.tunnel_type {
+            TunnelType::Local => Some(End::Tcp {
+                host: Some(tunnel.config.remote_host.clone()),
+                port: tunnel.config.remote_port,
+            }),
+            TunnelType::Dynamic => None,
+        };
+        let (stop, mut shutdown) = oneshot::channel();
         let task = tokio::spawn(async move {
-            // The connections in flight belong to this task: when the tunnel
-            // stops they stop with it, instead of carrying on unseen.
-            let mut relays = tokio::task::JoinSet::new();
+            let mut relays = JoinSet::new();
+            let mut check_connection = tokio::time::interval(Duration::from_secs(1));
             loop {
                 tokio::select! {
-                    Some(_) = relays.join_next(), if !relays.is_empty() => {}
-                    accept_result = listener.accept() => {
-                        match accept_result {
-                            Ok((tcp_stream, peer_addr)) => {
-                                tracing::info!(
-                                    "Tunnel {}: new connection from {}",
-                                    tunnel_id, peer_addr
-                                );
-                                let handle_clone = ssh_handle.clone();
-                                let rhost = remote_host.clone();
-                                let tid = tunnel_id.clone();
-                                relays.spawn(async move {
-                                    if let Err(e) = relay_connection(
-                                        tcp_stream,
-                                        &handle_clone,
-                                        &rhost,
-                                        remote_port,
-                                    )
-                                    .await
-                                    {
-                                        tracing::error!(
-                                            "Tunnel {}: relay error: {}",
-                                            tid, e
-                                        );
-                                    }
-                                });
-                            }
-                            Err(e) => {
-                                tracing::error!(
-                                    "Tunnel {}: accept error: {}",
-                                    tunnel_id, e
-                                );
-                                // One that keeps failing (no file handles
-                                // left, say) must not spin.
-                                tokio::time::sleep(ACCEPT_RETRY_DELAY).await;
-                            }
+                    _ = &mut shutdown => break,
+                    _ = check_connection.tick() => {
+                        if ssh.handle.try_lock().is_ok_and(|handle| handle.is_closed()) {
+                            break;
                         }
                     }
-                    _ = shutdown_rx.recv() => {
-                        tracing::info!("Tunnel {}: shutdown signal received", tunnel_id);
-                        break;
+                    Some(_) = relays.join_next(), if !relays.is_empty() => {}
+                    result = listener.accept() => match result {
+                        Ok((socket, peer)) => {
+                            relays.spawn(serve_local(ssh.handle.clone(), socket, peer, target.clone(), None));
+                        }
+                        Err(err) => {
+                            tracing::warn!("Tunnel listener: {err}");
+                            tokio::time::sleep(Duration::from_millis(200)).await;
+                        }
                     }
                 }
             }
-            tracing::info!("Tunnel {}: listener task exiting", tunnel_id);
+            drop(listener);
+            relays.shutdown().await;
         });
-
-        self.active.insert(
-            tunnel.id.clone(),
-            ActiveTunnel { shutdown_tx, task },
-        );
-
+        tunnel.active = Some(ActiveTunnel { stop, task });
         Ok(())
     }
 
-    /// Stop a running tunnel by sending a shutdown signal.
-    pub async fn stop_tunnel(
-        &mut self,
-        tunnel: &mut TunnelConfig,
-    ) -> Result<(), TunnelError> {
-        if let Some(active) = self.active.remove(&tunnel.id) {
-            tracing::info!("Tunnel {}: stopping", tunnel.id);
-            let _ = active.shutdown_tx.send(()).await;
-            // Give the task a moment to shut down gracefully
-            let _ = tokio::time::timeout(
-                std::time::Duration::from_secs(2),
-                active.task,
-            )
-            .await;
-            tunnel.active = false;
-            Ok(())
-        } else {
-            tracing::warn!("Tunnel {}: not running, marking inactive", tunnel.id);
-            tunnel.active = false;
-            Ok(())
+    /// Drop the listener, its relays and its SSH connection before returning.
+    pub async fn stop(&mut self, id: &str, remove: bool) -> Result<bool, TunnelError> {
+        let tunnel = self
+            .tunnels
+            .get_mut(id)
+            .ok_or_else(|| TunnelError::NotFound(id.to_owned()))?;
+        if tunnel.starting.try_lock().is_err() {
+            return Err(TunnelError::Starting);
         }
+        let was_running = tunnel.running();
+        if let Some(active) = tunnel.active.take() {
+            let _ = active.stop.send(());
+            let _ = active.task.await;
+        }
+        if remove {
+            self.tunnels.remove(id);
+        }
+        Ok(was_running)
     }
 
-    /// Check if a tunnel is actively running.
-    pub fn is_active(&self, tunnel_id: &str) -> bool {
-        self.active.contains_key(tunnel_id)
-    }
-}
-
-/// The forwarder reports a failed bind as text; a port taken by another
-/// program is worth its own message.
-fn is_addr_in_use(err: &str) -> bool {
-    let e = err.to_ascii_lowercase();
-    e.contains("in use") || e.contains("os error 10048") || e.contains("os error 98")
-}
-
-impl Default for TunnelManager {
-    fn default() -> Self {
-        Self::new()
+    pub fn list(&self) -> Vec<TunnelConfig> {
+        let mut configs: Vec<_> = self.tunnels.values().map(Tunnel::view).collect();
+        configs.sort_unstable_by(|a, b| {
+            a.local_port
+                .cmp(&b.local_port)
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        configs
     }
 }
 
@@ -287,14 +225,11 @@ pub(crate) async fn relay_connection(
     let mut channel = {
         let guard = handle.lock().await;
         guard
-            .channel_open_direct_tcpip(
-                remote_host,
-                remote_port as u32,
-                "127.0.0.1",
-                0,
-            )
+            .channel_open_direct_tcpip(remote_host, remote_port as u32, "127.0.0.1", 0)
             .await
-            .map_err(|e| TunnelError::IoError(format!("Failed to open direct-tcpip channel: {}", e)))?
+            .map_err(|e| {
+                TunnelError::IoError(format!("Failed to open direct-tcpip channel: {}", e))
+            })?
     };
 
     let (mut tcp_read, mut tcp_write) = tcp_stream.into_split();
@@ -351,13 +286,34 @@ pub(crate) async fn relay_connection(
 
 #[cfg(test)]
 mod tests {
-    use super::is_addr_in_use;
+    use super::*;
 
-    #[test]
-    fn a_taken_port_is_told_apart_from_other_bind_errors() {
-        // As the forwarder words them, on Windows and on Linux.
-        assert!(is_addr_in_use("cannot listen on 127.0.0.1:1080: Only one usage of each socket address (protocol/network address/port) is normally permitted. (os error 10048)"));
-        assert!(is_addr_in_use("cannot listen on 127.0.0.1:1080: Address already in use (os error 98)"));
-        assert!(!is_addr_in_use("cannot listen on 127.0.0.1:80: Permission denied (os error 13)"));
+    #[tokio::test]
+    async fn a_pending_start_blocks_duplicate_starts_and_removal_until_released() {
+        let mut manager = TunnelManager::new();
+        let config = manager.create(
+            TunnelType::Dynamic,
+            1080,
+            String::new(),
+            0,
+            "ssh-session".into(),
+        );
+        let (selected, attempt) = manager.reserve_start(&config.id).unwrap();
+        assert_eq!(selected.session_id, "ssh-session");
+        assert_eq!(manager.list()[0].status, TunnelStatus::Starting);
+        assert!(matches!(
+            manager.reserve_start(&config.id),
+            Err(TunnelError::Starting)
+        ));
+        assert!(matches!(
+            manager.stop(&config.id, true).await,
+            Err(TunnelError::Starting)
+        ));
+
+        drop(attempt);
+        assert_eq!(manager.list()[0].status, TunnelStatus::Stopped);
+        assert!(manager.reserve_start(&config.id).is_ok());
+        assert!(!manager.stop(&config.id, true).await.unwrap());
+        assert!(manager.list().is_empty());
     }
 }

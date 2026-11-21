@@ -22,8 +22,9 @@ use crate::db::types::{
 };
 use crate::db::{csv, Live};
 use crate::devops::{self, Tool};
-use crate::ssh::client::{AuthParams, HeadlessConnection, JumpHostParams, KeySource, SharedHandle, SshManager};
-use crate::state::{AppState, AuthMethod};
+use crate::ipc::ssh_commands::require_ssh_session;
+use crate::ssh::client::{HeadlessConnection, SharedHandle};
+use crate::state::AppState;
 
 fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
@@ -81,7 +82,7 @@ pub async fn db_save_connection(
     conn.route_approval = None;
     if let Some((r, session_id)) = ref_through_session(&conn).map(|(r, s)| (r.clone(), s.to_owned())) {
         let s = crate::ipc::session_commands::stored_session(&state, &session_id).await?;
-        require_ssh_route(&s)?;
+        require_ssh_session(&s)?;
         check_route_shown(&conn, &s)?;
         let vault = state.vault_manager.lock().await;
         let (key, who) = (vault.approval_key(), vault.get_user_uuid());
@@ -187,21 +188,11 @@ pub struct RoutePreview {
 pub async fn db_route_preview(state: State<'_, AppState>, session_id: String) -> Result<RoutePreview, String> {
     devops::require(Tool::Databases)?;
     let s = crate::ipc::session_commands::stored_session(&state, &session_id).await?;
-    require_ssh_route(&s)?;
+    require_ssh_session(&s)?;
     Ok(RoutePreview {
         route: crate::ipc::session_commands::via_route(&s),
         context: crate::ipc::session_commands::approval_context(&s),
     })
-}
-
-/// Only an SSH session can carry a route: an RDP or VNC session's host and
-/// login are not an SSH server's.
-pub(crate) fn require_ssh_route(s: &crate::state::SessionConfig) -> Result<(), String> {
-    if s.kind == crate::state::SessionKind::Ssh {
-        Ok(())
-    } else {
-        Err(format!("'{}' is not an SSH session, so nothing can go through it. Choose an SSH session to go through.", s.name))
-    }
 }
 
 #[tauri::command]
@@ -217,53 +208,6 @@ pub async fn db_delete_connection(state: State<'_, AppState>, id: String) -> Res
 
 // ---------------------------------------------------------------------------
 // Connecting
-
-/// Who a login is for, to ask for a password that is not saved.
-struct LoginFor<'a> {
-    app: &'a tauri::AppHandle,
-    host: &'a str,
-    port: u16,
-    username: &'a str,
-}
-
-async fn auth_for(state: &State<'_, AppState>, method: &AuthMethod, try_agent_keys: bool, who: LoginFor<'_>) -> Result<AuthParams, String> {
-    use crate::ipc::ssh_commands::{build_auth, resolve_key_source};
-    use crate::ssh::prompt::{ask, Field, Kind};
-    // A password or passphrase held by a password manager, fetched now.
-    let method = crate::pwmanager::fill_auth_method(state, method).await?;
-    match &method {
-        AuthMethod::Password { password, .. } => {
-            // Not saving a password is the safer choice. Ask for it, as a
-            // terminal tab does, instead of failing with "Password required"
-            // and a Try again that could never work.
-            let password = match password.clone().filter(|p| !p.is_empty()) {
-                Some(p) => p,
-                None => ask(
-                    Some(who.app),
-                    who.host,
-                    who.port,
-                    Kind::Password,
-                    &format!("Password for {}@{}", who.username, who.host),
-                    "",
-                    vec![Field { text: "Password".into(), echo: false }],
-                )
-                .await
-                .and_then(|a| a.into_iter().next())
-                .filter(|p| !p.is_empty())
-                .ok_or("No password was given")?,
-            };
-            build_auth("password", Some(password), None, None, false)
-        }
-        AuthMethod::Key { path, passphrase, key_content, key_id, .. } => {
-            let (source, stored) = match key_content.clone().filter(|k| !k.trim().is_empty()) {
-                Some(k) => (Some(KeySource::Material(k)), None),
-                None => resolve_key_source(state, key_id.clone(), path.clone()).await?,
-            };
-            build_auth("key", None, source, passphrase.clone().filter(|p| !p.is_empty()).or(stored), try_agent_keys)
-        }
-        AuthMethod::Agent => build_auth("agent", None, None, None, false),
-    }
-}
 
 /// The SSH leg, if the connection has one. `pin` as for [`forward_route`].
 async fn forward_for(
@@ -339,49 +283,7 @@ pub(crate) async fn ssh_for_route_pinned(
             Ok(Some((handle, None)))
         }
         Route::Session { session_id } => {
-            let mut s = crate::ipc::session_commands::session_get(state.clone(), session_id.clone()).await?;
-            require_ssh_route(&s)?;
-            if pin.is_some_and(|p| p != crate::ipc::session_commands::approval_context(&s)) {
-                return Err(format!("The SSH session '{}' changed while connecting. Connect again.", s.name));
-            }
-            // Only the approvals of the person connecting count (session_get
-            // has checked their signatures).
-            s.ssh_options = s.ssh_options.map(|o| o.effective());
-            // The same for its password manager entries: each must be one
-            // this person approved for this session as it is. The error says
-            // which, for the session list to ask. An SSH session goes
-            // through no other session.
-            crate::ipc::session_commands::require_trusted_refs(&s, None, &crate::ipc::session_commands::slots_in_use(&s))?;
-            // Every entry of the session, its jump hosts and its proxy in one
-            // operation: a password manager passphrase that must be asked
-            // for is asked once (or not at all, inside a connect that already
-            // has it).
-            let trust = Some(crate::ssh::session_hostkeys::SessionTrust::new(s.id.clone(), s.host_keys.clone().unwrap_or_default()));
-            let reason = crate::pwmanager::Reason::Connect(s.name.clone());
-            let (auth, jumps, proxy) = crate::pwmanager::with_prompt(app, reason, async {
-                let who = LoginFor { app, host: &s.host, port: s.port, username: &s.username };
-                let auth = auth_for(state, &s.auth_method, s.try_agent_keys.unwrap_or(false), who).await?;
-                let mut jumps = Vec::new();
-                for j in s.jump_chain.clone().unwrap_or_default() {
-                    let mut opts: crate::ssh::client::HopOptions = crate::ssh::sshconf::session::plan_for(s.ssh_options.as_ref(), &j.host, j.port, &j.username, true).into();
-                    opts.trust = trust.clone();
-                    let who = LoginFor { app, host: &j.host, port: j.port, username: &j.username };
-                    let auth = auth_for(state, &j.auth_method, false, who).await?;
-                    jumps.push(JumpHostParams { auth, host: j.host, port: j.port, username: j.username, opts });
-                }
-                // The proxy is used only without jump hosts.
-                let mut proxy = s.proxy.clone();
-                if jumps.is_empty() {
-                    crate::pwmanager::fill_proxy(state, &mut proxy).await?;
-                }
-                Ok::<_, String>((auth, jumps, proxy))
-            })
-            .await?;
-            let mut opts: crate::ssh::client::HopOptions = crate::ssh::sshconf::session::plan_for(s.ssh_options.as_ref(), &s.host, s.port, &s.username, false).into();
-            opts.trust = trust;
-            let ssh = SshManager::open_headless(&s.host, s.port, &s.username, auth, jumps, proxy, app.clone(), opts)
-                .await
-                .map_err(|e| format!("SSH to {}: {e}", s.name))?;
+            let ssh = crate::ipc::ssh_commands::open_saved_headless(app, state, session_id, pin).await?;
             Ok(Some((ssh.handle.clone(), Some(ssh))))
         }
     }
@@ -414,7 +316,7 @@ async fn open_live(app: &tauri::AppHandle, state: &State<'_, AppState>, mut conn
     let mut pin = None;
     if let Some((r, session_id)) = ref_through_session(&conn) {
         let s = crate::ipc::session_commands::stored_session(state, session_id).await?;
-        require_ssh_route(&s)?;
+        require_ssh_session(&s)?;
         if origin == Origin::Saved {
             let vault = state.vault_manager.lock().await;
             let (key, who) = (vault.approval_key(), vault.get_user_uuid());
@@ -1582,9 +1484,9 @@ mod tests {
 
     #[test]
     fn only_an_ssh_session_carries_a_route() {
-        assert!(require_ssh_route(&route_session("ssh")).is_ok());
-        assert!(require_ssh_route(&route_session("rdp")).is_err());
-        assert!(require_ssh_route(&route_session("vnc")).is_err());
+        assert!(require_ssh_session(&route_session("ssh")).is_ok());
+        assert!(require_ssh_session(&route_session("rdp")).is_err());
+        assert!(require_ssh_session(&route_session("vnc")).is_err());
     }
 
     #[test]
