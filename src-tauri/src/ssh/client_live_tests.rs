@@ -627,3 +627,84 @@ async fn live_config_loglevel() {
     assert!(!out[1].iter().any(|l| l.contains("Authorized use only")), "no banner at ERROR");
     assert!(!out[1].iter().any(|l| l.starts_with("debug")), "no debug at ERROR");
 }
+
+/// Exercise the sidebar's local and SOCKS listeners against a real SSH
+/// transport with only forwarding channels, and verify that stopping or
+/// removing a tunnel closes active clients and releases the local port.
+#[tokio::test]
+#[ignore = "needs an SSH server"]
+async fn live_headless_tunnels() {
+    use crate::state::{TunnelStatus, TunnelType};
+    use crate::tunnel::manager::TunnelManager;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpStream;
+
+    let (host, port, user, key_dir) = env().expect("set REACH_SSH_TEST, REACH_SSH_USER, REACH_SSH_KEYS");
+    let key = std::fs::read_to_string(key_dir.join("k_good")).unwrap();
+    let auth = AuthParams {
+        key: Some(KeyAuth { source: KeySource::Material(key), passphrase: None }),
+        password: None,
+        allow_agent: false,
+    };
+    let known_hosts = tempfile::tempdir().unwrap();
+    let opts = crate::ssh::sshconf::session::SshOptions {
+        lines: vec![
+            format!("UserKnownHostsFile {}", known_hosts.path().join("known_hosts").display()),
+            "StrictHostKeyChecking accept-new".into(),
+        ],
+        ..Default::default()
+    };
+    let opts: HopOptions = crate::ssh::sshconf::session::plan_for(Some(&opts), &host, port, &user, false).into();
+
+    let mut manager = TunnelManager::new();
+    for (kind, socks) in [(TunnelType::Local, false), (TunnelType::Dynamic, true)] {
+        let ssh_socket = crate::ssh::sshconf::net::connect(&host, port, &opts.socket, false).await.unwrap();
+        let handler = SshClientHandler::new(&host, port, None).with_hostkeys(opts.hostkeys.clone());
+        let mut handle = russh::client::connect_stream(opts.config.clone(), ssh_socket, handler).await.unwrap();
+        super::login(&mut handle, &user, &auth, &opts, None, &host, port).await.unwrap().into_result().unwrap();
+        let ssh = HeadlessConnection {
+            handle: Arc::new(tokio::sync::Mutex::new(handle)),
+            jump_handles: Vec::new(),
+        };
+
+        let listener = TunnelManager::bind(0).await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let config = manager.create(kind, addr.port(), "127.0.0.1".into(), port, "ssh-session".into());
+        let (_, starting) = manager.reserve_start(&config.id).unwrap();
+        manager.start(&config.id, listener, ssh).unwrap();
+        drop(starting);
+        assert_eq!(manager.list().last().unwrap().status, TunnelStatus::Running);
+
+        let mut client = TcpStream::connect(addr).await.unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            if socks {
+                client.write_all(&[5, 1, 0]).await.unwrap();
+                let mut choice = [0; 2];
+                client.read_exact(&mut choice).await.unwrap();
+                assert_eq!(choice, [5, 0]);
+                let [high, low] = port.to_be_bytes();
+                client.write_all(&[5, 1, 0, 1, 127, 0, 0, 1, high, low]).await.unwrap();
+                let mut reply = [0; 10];
+                client.read_exact(&mut reply).await.unwrap();
+                assert_eq!(reply[1], 0);
+            }
+            let mut banner = [0; 8];
+            client.read_exact(&mut banner).await.unwrap();
+            assert_eq!(&banner, b"SSH-2.0-");
+            // Drain the rest of the server banner before checking for EOF.
+            while client.read_u8().await.unwrap() != b'\n' {}
+        }).await.unwrap();
+
+        assert!(manager.stop(&config.id, socks).await.unwrap());
+        let mut byte = [0];
+        let read = tokio::time::timeout(std::time::Duration::from_secs(5), client.read(&mut byte))
+            .await.unwrap().unwrap();
+        assert_eq!(read, 0);
+        assert!(TunnelManager::bind(addr.port()).await.is_ok());
+        if !socks {
+            assert_eq!(manager.list()[0].status, TunnelStatus::Stopped);
+            manager.stop(&config.id, true).await.unwrap();
+        }
+        assert!(manager.list().is_empty());
+    }
+}

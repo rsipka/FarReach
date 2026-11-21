@@ -1,45 +1,81 @@
 <script lang="ts">
-	import {
-		tunnelCreate,
-		tunnelStart,
-		tunnelStop,
-		tunnelList,
-		type TunnelConfig
-	} from '#lib/ipc/tunnel.js';
+	import { onMount } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
+	import { tunnelCreate, tunnelStart, tunnelStop, tunnelRemove, tunnelList, type TunnelConfig } from '#lib/ipc/tunnel.js';
+	import { sessionList, sessionKind, sessionApproveSecretRefs, untrustedRefsFromError, type UntrustedRefs } from '#lib/ipc/sessions.js';
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
+	import UntrustedRefsDialog from '#lib/components/pwmanager/UntrustedRefsDialog.svelte';
 	import TunnelCard from './TunnelCard.svelte';
 	import Input from '#lib/components/shared/Input.svelte';
 	import Button from '#lib/components/shared/Button.svelte';
-	import { untrack } from 'svelte';
 
-	interface Props {
-		connectionId?: string;
-	}
-
-	let { connectionId }: Props = $props();
+	const TUNNEL_TYPES = [
+		{ type: 'Local', label: 'tunnel.local_forward' },
+		{ type: 'Dynamic', label: 'tunnel.dynamic' }
+	] as const;
 
 	let tunnels = $state<TunnelConfig[]>([]);
+	let sessions = $state<{ id: string; label: string }[]>([]);
+	let sessionsError = $state('');
 	let loading = $state(true);
 	let showForm = $state(false);
-
-	let formType = $state<'Local' | 'Remote' | 'Dynamic'>('Local');
+	let formSessionId = $state('');
+	let formType = $state<TunnelConfig['tunnel_type']>('Local');
 	let formLocalPort = $state('8080');
 	let formRemoteHost = $state('localhost');
 	let formRemotePort = $state('80');
 	let creating = $state(false);
+	const busy = new SvelteSet<string>();
+
+	let approval = $state<{ tunnel: TunnelConfig; asked: UntrustedRefs } | null>(null);
+	let approving = $state(false);
+	let approvalError = $state<string | undefined>();
+	let listRequest = 0;
 
 	async function loadTunnels(): Promise<void> {
+		const request = ++listRequest;
 		try {
-			tunnels = await tunnelList();
+			const list = await tunnelList();
+			if (request === listRequest) tunnels = list;
 		} catch (err) {
 			console.error('Failed to load tunnels:', err);
 		} finally {
-			loading = false;
+			if (request === listRequest) loading = false;
 		}
 	}
 
+	async function loadSessions(): Promise<void> {
+		sessionsError = '';
+		try {
+			sessions = (await sessionList())
+				.filter((session) => sessionKind(session) === 'ssh')
+				.map((session) => ({
+					id: session.id,
+					label: `${session.name} (${session.username}@${session.host}:${session.port})`
+				}))
+				.sort((a, b) => a.label.localeCompare(b.label));
+		} catch (err) {
+			sessionsError = String(err);
+		}
+	}
+
+	onMount(() => {
+		void loadTunnels();
+		void loadSessions();
+		const timer = window.setInterval(() => {
+			if (busy.size || tunnels.some((tunnel) => tunnel.status !== 'stopped')) void loadTunnels();
+		}, 2000);
+		const reload = () => void loadSessions();
+		window.addEventListener('reach:sessions-changed', reload);
+		return () => {
+			window.clearInterval(timer);
+			window.removeEventListener('reach:sessions-changed', reload);
+		};
+	});
+
 	function handleNewTunnel(): void {
+		formSessionId = sessions.length === 1 ? sessions[0].id : '';
 		formType = 'Local';
 		formLocalPort = '8080';
 		formRemoteHost = 'localhost';
@@ -47,32 +83,20 @@
 		showForm = true;
 	}
 
-	function handleCancelForm(): void {
-		showForm = false;
-	}
-
 	async function handleCreateTunnel(): Promise<void> {
-		if (!connectionId) {
-			addToast(t('tunnel.no_connection'), 'error');
-			return;
-		}
+		if (!formSessionId || creating) return;
+		const localPort = Number(formLocalPort);
+		const remotePort = Number(formRemotePort);
+		const dynamic = formType === 'Dynamic';
 
-		const localPort = parseInt(formLocalPort, 10);
-		const remotePort = parseInt(formRemotePort, 10);
-
-		if (isNaN(localPort) || localPort < 1 || localPort > 65535) {
+		if (!Number.isInteger(localPort) || localPort < 1 || localPort > 65535) {
 			addToast(t('tunnel.invalid_local_port'), 'error');
 			return;
 		}
-
-		// A SOCKS proxy has no destination of its own: each connection names one.
-		const dynamic = formType === 'Dynamic';
-
-		if (!dynamic && (isNaN(remotePort) || remotePort < 1 || remotePort > 65535)) {
+		if (!dynamic && (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65535)) {
 			addToast(t('tunnel.invalid_remote_port'), 'error');
 			return;
 		}
-
 		if (!dynamic && !formRemoteHost.trim()) {
 			addToast(t('tunnel.remote_host_required'), 'error');
 			return;
@@ -80,68 +104,72 @@
 
 		try {
 			creating = true;
-			const tunnel = await tunnelCreate(
-				formType,
-				localPort,
-				dynamic ? '' : formRemoteHost.trim(),
-				dynamic ? 0 : remotePort,
-				connectionId
-			);
-			tunnels.push(tunnel);
-			tunnels = tunnels;
+			await tunnelCreate(formType, localPort, formRemoteHost.trim(), dynamic ? 0 : remotePort, formSessionId);
 			showForm = false;
 			addToast(t('tunnel.created_toast', { port: localPort }), 'success');
 		} catch (err) {
 			addToast(t('toast.tunnel_create_failed', { error: String(err) }), 'error');
 		} finally {
+			await loadTunnels();
 			creating = false;
 		}
 	}
 
 	async function handleStart(tunnel: TunnelConfig): Promise<void> {
+		if (busy.has(tunnel.id) || approval) return;
+		busy.add(tunnel.id);
 		try {
 			await tunnelStart(tunnel.id);
-			const idx = tunnels.findIndex((t) => t.id === tunnel.id);
-			if (idx >= 0) {
-				tunnels[idx] = { ...tunnels[idx], active: true };
-			}
 			addToast(t('tunnel.started_toast', { port: tunnel.local_port }), 'success');
 		} catch (err) {
-			addToast(t('toast.tunnel_start_failed', { error: String(err) }), 'error');
-		}
-	}
-
-	async function handleStop(tunnel: TunnelConfig): Promise<void> {
-		try {
-			await tunnelStop(tunnel.id);
-			const idx = tunnels.findIndex((t) => t.id === tunnel.id);
-			if (idx >= 0) {
-				tunnels[idx] = { ...tunnels[idx], active: false };
+			const asked = untrustedRefsFromError(err);
+			if (asked && !approval) {
+				approvalError = undefined;
+				approval = { tunnel, asked };
+			} else {
+				addToast(t('toast.tunnel_start_failed', { error: String(err) }), 'error');
 			}
-			addToast(t('tunnel.stopped_toast', { port: tunnel.local_port }), 'info');
-		} catch (err) {
-			addToast(t('toast.tunnel_stop_failed', { error: String(err) }), 'error');
+		} finally {
+			busy.delete(tunnel.id);
+			void loadTunnels();
 		}
 	}
 
-	function handleDelete(tunnel: TunnelConfig): void {
-		tunnels = tunnels.filter((t) => t.id !== tunnel.id);
-		addToast(t('tunnel.removed_toast'), 'info');
+	async function allowRefs(): Promise<void> {
+		if (!approval || approving) return;
+		const { tunnel, asked } = approval;
+		approving = true;
+		approvalError = undefined;
+		try {
+			await sessionApproveSecretRefs(asked);
+			approval = null;
+		} catch (err) {
+			approvalError = String(err);
+			return;
+		} finally {
+			approving = false;
+		}
+		await handleStart(tunnel);
 	}
 
-	$effect(() => {
-		untrack(() => loadTunnels());
-	});
-
-	/** The kinds of forward, labelled in the person's language (the buttons
-	    showed the English type names). Remote is left out: the server's
-	    connections back arrive at the forward table the session was opened
-	    with, which a tunnel started here does not reach yet, so it could only
-	    fail. A RemoteForward in the session's ssh_config works meanwhile. */
-	const TUNNEL_TYPES = [
-		{ type: 'Local', label: 'tunnel.local_forward' },
-		{ type: 'Dynamic', label: 'tunnel.dynamic' }
-	] as const;
+	async function handleStop(tunnel: TunnelConfig, remove = false): Promise<void> {
+		if (busy.has(tunnel.id)) return;
+		busy.add(tunnel.id);
+		try {
+			if (remove) {
+				await tunnelRemove(tunnel.id);
+				addToast(t('tunnel.removed_toast'), 'info');
+			} else {
+				await tunnelStop(tunnel.id);
+				addToast(t('tunnel.stopped_toast', { port: tunnel.local_port }), 'info');
+			}
+		} catch (err) {
+			addToast(t(remove ? 'toast.tunnel_remove_failed' : 'toast.tunnel_stop_failed', { error: String(err) }), 'error');
+		} finally {
+			await loadTunnels();
+			busy.delete(tunnel.id);
+		}
+	}
 </script>
 
 <div class="tunnel-manager">
@@ -163,7 +191,7 @@
 		<div class="create-form">
 			<div class="form-header">
 				<span class="form-title">{t('tunnel.create_tunnel')}</span>
-				<button class="form-close" onclick={handleCancelForm} aria-label={t('common.close')}>
+				<button class="form-close" onclick={() => (showForm = false)} disabled={creating} aria-label={t('common.close')}>
 					<svg width="12" height="12" viewBox="0 0 14 14" fill="none">
 						<path d="M1 1L13 13M13 1L1 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
 					</svg>
@@ -171,6 +199,20 @@
 			</div>
 
 			<div class="form-body">
+				<label class="session-field">
+					<span>{t('tunnel.ssh_session')}</span>
+					<select bind:value={formSessionId} disabled={creating || !sessions.length}>
+						<option value="" disabled>{t('tunnel.pick_ssh_session')}</option>
+						{#each sessions as session (session.id)}
+							<option value={session.id}>{session.label}</option>
+						{/each}
+					</select>
+				</label>
+				{#if sessionsError}
+					<p class="empty-state">{sessionsError}</p>
+				{:else if !sessions.length}
+					<p class="empty-state">{t('tunnel.no_ssh_sessions')}</p>
+				{/if}
 				<div class="type-selector">
 					{#each TUNNEL_TYPES as tt (tt.type)}
 						<button
@@ -190,8 +232,8 @@
 				{/if}
 
 				<div class="form-actions">
-					<Button variant="ghost" size="sm" onclick={handleCancelForm}>{t('common.cancel')}</Button>
-					<Button variant="primary" size="sm" onclick={handleCreateTunnel} disabled={creating}>
+					<Button variant="ghost" size="sm" onclick={() => (showForm = false)} disabled={creating}>{t('common.cancel')}</Button>
+					<Button variant="primary" size="sm" onclick={handleCreateTunnel} disabled={creating || !formSessionId}>
 						{creating ? t('tunnel.creating') : t('tunnel.create')}
 					</Button>
 				</div>
@@ -214,12 +256,15 @@
 					<div class="tunnel-row">
 						<TunnelCard
 							{tunnel}
+							sessionLabel={sessions.find((session) => session.id === tunnel.session_id)?.label ?? t('tunnel.ssh_session_unavailable')}
+							busy={busy.has(tunnel.id)}
 							onstart={() => handleStart(tunnel)}
 							onstop={() => handleStop(tunnel)}
 						/>
 						<button
 							class="delete-btn"
-							onclick={() => handleDelete(tunnel)}
+							onclick={() => handleStop(tunnel, true)}
+							disabled={busy.has(tunnel.id) || tunnel.status === 'starting'}
 							title={t('tunnel.remove')}
 							aria-label={t('tunnel.remove')}
 						>
@@ -235,6 +280,14 @@
 		{/if}
 	{/if}
 </div>
+
+<UntrustedRefsDialog
+	asked={approval?.asked ?? null}
+	busy={approving}
+	error={approvalError}
+	onallow={() => void allowRefs()}
+	oncancel={() => { if (!approving) approval = null; }}
+/>
 
 <style>
 	.tunnel-manager {
@@ -322,6 +375,25 @@
 		flex-direction: column;
 		gap: 10px;
 		padding: 10px;
+	}
+
+	.session-field {
+		display: grid;
+		gap: 4px;
+		min-width: 0;
+		color: var(--color-text-secondary);
+		font-size: 0.75rem;
+	}
+
+	.session-field select {
+		min-width: 0;
+		width: 100%;
+		padding: 6px 8px;
+		font: inherit;
+		color: var(--color-text-primary);
+		background: var(--color-bg-elevated);
+		border: 1px solid var(--color-border-strong);
+		border-radius: var(--radius-btn);
 	}
 
 	/* The app's segmented control: a recessed track, the choice raised out

@@ -523,16 +523,23 @@ pub struct TunnelConfig {
     pub local_port: u16,
     pub remote_host: String,
     pub remote_port: u16,
-    pub connection_id: String,
-    pub active: bool,
+    pub session_id: String,
+    pub status: TunnelStatus,
 }
 
 /// The type of SSH tunnel.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TunnelType {
     Local,
-    Remote,
     Dynamic,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TunnelStatus {
+    Stopped,
+    Starting,
+    Running,
 }
 
 /// System statistics collected from a remote host.
@@ -562,7 +569,6 @@ pub struct SystemStats {
 /// stored encrypted in the vault (SQLite + XChaCha20-Poly1305).
 pub struct AppState {
     pub ssh_manager: Arc<tokio::sync::Mutex<SshManager>>,
-    pub tunnels: Arc<RwLock<HashMap<String, TunnelConfig>>>,
     pub monitoring: Arc<RwLock<HashMap<String, SystemStats>>>,
     #[cfg(desktop)]
     pub pty_manager: Arc<Mutex<PtyManager>>,
@@ -611,7 +617,6 @@ impl AppState {
 
         Self {
             ssh_manager: Arc::new(tokio::sync::Mutex::new(SshManager::new())),
-            tunnels: Arc::new(RwLock::new(HashMap::new())),
             monitoring: Arc::new(RwLock::new(HashMap::new())),
             #[cfg(desktop)]
             pty_manager: Arc::new(Mutex::new(PtyManager::new())),

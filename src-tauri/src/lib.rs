@@ -672,6 +672,7 @@ pub fn run() {
             tunnel_create,
             tunnel_start,
             tunnel_stop,
+            tunnel_remove,
             tunnel_list,
             // PTY commands
             pty_spawn,
@@ -1188,6 +1189,7 @@ pub fn run() {
             tunnel_create,
             tunnel_start,
             tunnel_stop,
+            tunnel_remove,
             tunnel_list,
             // Monitoring commands
             monitoring_start,
