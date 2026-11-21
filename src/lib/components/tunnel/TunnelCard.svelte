@@ -4,38 +4,18 @@
 
 	interface Props {
 		tunnel: TunnelConfig;
+		sessionLabel: string;
+		busy: boolean;
 		onstart: () => void;
 		onstop: () => void;
 	}
 
-	let { tunnel, onstart, onstop }: Props = $props();
-
-	let typeLabel = $derived(
-		tunnel.tunnel_type === 'Local'
-			? 'L'
-			: tunnel.tunnel_type === 'Remote'
-				? 'R'
-				: 'D'
-	);
-
-	/** The kind of forward in the person's language, not the English type name. */
-	let typeName = $derived(
-		t(
-			tunnel.tunnel_type === 'Local'
-				? 'tunnel.local_forward'
-				: tunnel.tunnel_type === 'Remote'
-					? 'tunnel.remote_forward'
-					: 'tunnel.dynamic'
-		)
-	);
-
-	let typeColor = $derived(
-		tunnel.tunnel_type === 'Local'
-			? 'var(--color-accent)'
-			: tunnel.tunnel_type === 'Remote'
-				? 'var(--color-warning)'
-				: 'var(--color-success)'
-	);
+	let { tunnel, sessionLabel, busy, onstart, onstop }: Props = $props();
+	let local = $derived(tunnel.tunnel_type === 'Local');
+	let typeName = $derived(t(local ? 'tunnel.local_forward' : 'tunnel.dynamic'));
+	let typeColor = $derived(local ? 'var(--color-accent)' : 'var(--color-success)');
+	let running = $derived(tunnel.status === 'running');
+	let starting = $derived(tunnel.status === 'starting');
 </script>
 
 <div class="tunnel-card">
@@ -46,7 +26,7 @@
 			style:border-color={typeColor}
 			title={typeName}
 		>
-			{typeLabel}
+			{local ? 'L' : 'D'}
 		</span>
 
 		<div class="tunnel-info">
@@ -58,27 +38,30 @@
 				<!-- A SOCKS proxy has no one destination: each connection names its own. -->
 				{tunnel.tunnel_type === 'Dynamic' ? 'SOCKS' : `${tunnel.remote_host}:${tunnel.remote_port}`}
 			</span>
-			<span class="tunnel-type">{typeName}</span>
+			<span class="tunnel-type" title={sessionLabel}>{sessionLabel}</span>
+			{#if starting}
+				<span class="tunnel-type" role="status">{t('session.connecting')}</span>
+			{/if}
 		</div>
 
 		<div class="tunnel-status">
 			<span
 				class="status-dot"
-				class:active={tunnel.active}
-				title={tunnel.active ? t('tunnel.active') : t('tunnel.inactive')}
+				class:active={running}
+				title={t(running ? 'tunnel.active' : starting ? 'session.connecting' : 'tunnel.inactive')}
 			></span>
 		</div>
 	</div>
 
 	<div class="tunnel-actions">
-		{#if tunnel.active}
-			<button class="action-btn stop-btn" onclick={onstop} title={t('tunnel.stop_tunnel')} aria-label={t('tunnel.stop_tunnel')}>
+		{#if running}
+			<button class="action-btn stop-btn" onclick={onstop} disabled={busy} title={t('tunnel.stop_tunnel')} aria-label={t('tunnel.stop_tunnel')}>
 				<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
 					<rect x="6" y="6" width="12" height="12" rx="1" />
 				</svg>
 			</button>
 		{:else}
-			<button class="action-btn start-btn" onclick={onstart} title={t('tunnel.start_tunnel')} aria-label={t('tunnel.start_tunnel')}>
+			<button class="action-btn start-btn" onclick={onstart} disabled={busy || starting} title={t('tunnel.start_tunnel')} aria-label={t('tunnel.start_tunnel')}>
 				<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
 					<path d="M8 5v14l11-7z" />
 				</svg>
@@ -150,6 +133,9 @@
 	}
 
 	.tunnel-type {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 		font-size: 0.625rem;
 		color: var(--color-text-secondary);
 	}

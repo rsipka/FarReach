@@ -242,7 +242,7 @@
 					{:else if activeSection === 'explorer'}
 						<FileExplorer {connectionId} />
 					{:else if activeSection === 'tunnels'}
-						<TunnelManager {connectionId} />
+						<TunnelManager />
 					{:else if activeSection === 'snippets'}
 						<SnippetPanel {connectionId} />
 					{:else if activeSection === 'vault'}

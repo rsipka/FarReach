@@ -501,7 +501,7 @@ impl Forwarder {
 
 /// One connection to a local forward: through a direct channel to its
 /// target, or (dynamic) to where its SOCKS request says.
-async fn serve_local<S>(handle: SharedHandle, mut sock: S, peer: SocketAddr, target: Option<End>, idle: Option<Duration>)
+pub(crate) async fn serve_local<S>(handle: SharedHandle, mut sock: S, peer: SocketAddr, target: Option<End>, idle: Option<Duration>)
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
