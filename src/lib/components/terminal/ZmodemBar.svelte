@@ -14,13 +14,63 @@
 	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { t } from '#lib/state/i18n.svelte.js';
 	import { isMobile } from '#lib/platform.js';
+	import { ZMODEM_SEND_EVENT } from '#lib/state/zmodem.js';
 
 	interface Props {
 		/** The session's connection; events come as `zmodem-{id}`. */
 		connectionId?: string;
+		/** The tab, for a Send files request from its bar or menu. */
+		tabId: string;
+		/** Types into the session (`rz` for Send files); false when it is down. */
+		send: (data: number[]) => boolean;
 	}
 
-	let { connectionId }: Props = $props();
+	let { connectionId, tabId, send }: Props = $props();
+
+	/** Files picked with Send files, waiting for the rz typed for them. */
+	let pending: { paths: string[]; timer: ReturnType<typeof setTimeout> } | null = null;
+	/** How long rz has to answer before the files are dropped. */
+	const RZ_WAIT_MS = 20_000;
+
+	function clearPending(): void {
+		if (pending) clearTimeout(pending.timer);
+		pending = null;
+	}
+
+	/** Send files: pick them, then type rz; they go when rz answers. */
+	async function sendFiles(): Promise<void> {
+		if (!connectionId || running || choosing) return;
+		if (isMobile()) {
+			addToast(t('zmodem.desktop_only'), 'info', 5000);
+			return;
+		}
+		const picked = await open({ multiple: true, directory: false, title: t('zmodem.send_files') }).catch(() => null);
+		const paths = picked === null ? [] : Array.isArray(picked) ? picked : [picked];
+		if (paths.length === 0) return;
+		clearPending();
+		pending = {
+			paths,
+			timer: setTimeout(() => {
+				pending = null;
+				addToast(t('zmodem.no_rz'), 'warning', 8000);
+			}, RZ_WAIT_MS)
+		};
+		if (!send(Array.from(new TextEncoder().encode('rz\r')))) {
+			clearPending();
+			addToast(t('zmodem.not_connected'), 'warning', 4000);
+		}
+	}
+
+	$effect(() => {
+		const onRequest = (e: Event) => {
+			if ((e as CustomEvent<string>).detail === tabId) void sendFiles();
+		};
+		window.addEventListener(ZMODEM_SEND_EVENT, onRequest);
+		return () => {
+			window.removeEventListener(ZMODEM_SEND_EVENT, onRequest);
+			clearPending();
+		};
+	});
 
 	interface Running {
 		direction: ZmodemDirection;
@@ -62,9 +112,14 @@
 			await zmodemCancel(id).catch(() => {});
 			return;
 		}
+		const ready = direction === 'upload' ? pending?.paths : undefined;
+		clearPending();
 		choosing = direction;
 		try {
-			if (direction === 'upload') {
+			if (ready) {
+				running = { direction, file: '', index: 0, count: ready.length, done: 0, total: null, rate: null };
+				await zmodemUpload(id, ready);
+			} else if (direction === 'upload') {
 				const picked = await open({ multiple: true, directory: false, title: t('zmodem.pick_files') });
 				const paths = picked === null ? [] : Array.isArray(picked) ? picked : [picked];
 				if (paths.length === 0) {

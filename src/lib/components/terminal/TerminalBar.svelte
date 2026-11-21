@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { requestZmodemSend } from '#lib/state/zmodem.js';
 	import { sessionAddress } from '#lib/utils/address.js';
 	/**
 	 * The bar over a terminal pane: what it is connected to, and the actions
@@ -34,6 +35,7 @@
 		dualPane: 'M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM12 4v16M6 8h3M6 11h3M15 8h3M15 11h3',
 		terminal: 'M4 17l6-5-6-5M12 19h8',
 		snippets: 'M8 6l-5 6 5 6M16 6l5 6-5 6M13.5 4l-3 16',
+		upload: 'M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3',
 		history: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2',
 		broadcast: 'M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM8 8a5.6 5.6 0 0 0 0 8M16 8a5.6 5.6 0 0 1 0 8M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14',
 		split: 'M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM12 4v16',
@@ -219,6 +221,9 @@
 	{#if canShowFilesView(tab)}
 		<button class="ib" class:on={tab.filesView} type="button" onclick={() => toggleFilesView(tab.id)} title={`${tab.filesView ? t('files.back_to_terminal') : t('files.open_full')} (${actionLabel('files.toggle')})`} aria-label={t('files.open_full')} aria-pressed={!!tab.filesView}>{@render icon(tab.filesView ? ICONS.terminal : ICONS.dualPane)}</button>
 	{/if}
+	{#if remote && !mobile}
+		<button class="ib" type="button" onclick={() => requestZmodemSend(tab.id)} disabled={tab.link === 'down'} title={t('zmodem.send_files_hint')} aria-label={t('zmodem.send_files')}>{@render icon(ICONS.upload)}</button>
+	{/if}
 	<button class="ib" type="button" onclick={() => showSection('snippets')} title={t('sidebar.snippets')} aria-label={t('sidebar.snippets')}>{@render icon(ICONS.snippets)}</button>
 	{#if remote}
 		<button class="ib" type="button" onclick={() => openHistoryPanel({ sessionId: tab.sessionId, sessionName: tab.sessionName, tabId: tab.id })} title={`${t('termbar.history')} (Ctrl+Shift+H)`} aria-label={t('termbar.history')}>{@render icon(ICONS.history)}</button>
@@ -373,8 +378,13 @@
 		color: var(--color-text-primary);
 	}
 
-	.ib.blocked {
+	.ib.blocked,
+	.ib:disabled {
 		opacity: 0.45;
+	}
+
+	.ib:disabled {
+		cursor: default;
 	}
 
 	.ib.on {
