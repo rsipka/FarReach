@@ -3817,5 +3817,16 @@
   "session.address_route_session": "Hôtes de rebond ou proxy de la session",
   "session.address_route_via": "Via {{name}}",
   "session.address_via_missing": "La session SSH par laquelle elle passait n’existe plus",
-  "session.address_via_refs": "{{name}} se connecte avec une entrée du gestionnaire de mots de passe, qui n’est pas utilisée quand une autre session passe par elle. Enregistrez le mot de passe dans {{name}}, ou utilisez une clé ou l’agent."
+  "session.address_via_refs": "{{name}} se connecte avec une entrée du gestionnaire de mots de passe, qui n’est pas utilisée quand une autre session passe par elle. Enregistrez le mot de passe dans {{name}}, ou utilisez une clé ou l’agent.",
+  "files.open": "Ouvrir",
+  "files.edit_in_app": "Modifier dans Reacher CM",
+  "files.copy_to": "Copier vers : {{where}}",
+  "files.move_to": "Déplacer vers : {{where}}",
+  "files.delete_n": "Supprimer {{count}} éléments",
+  "files.compare_with": "Comparer avec {{name}}",
+  "files.reveal": "Afficher dans le gestionnaire de fichiers",
+  "files.select_all": "Tout sélectionner",
+  "files.compare_folders": "Comparer les dossiers",
+  "files.copy_folder_path": "Copier le chemin du dossier",
+  "files.cd_terminal_here": "Amener le terminal ici (cd)"
 }

@@ -82,3 +82,13 @@ export async function localDetectEditors(): Promise<EditorInfo[]> {
 export async function localOpenWith(program: string, args: string[], path: string): Promise<void> {
 	return invoke('local_open_with', { program, args, path });
 }
+
+/** Make an empty file `name` in `dir`; a name already taken is refused. */
+export async function localTouch(dir: string, name: string): Promise<string> {
+	return invoke<string>('local_touch', { dir, name });
+}
+
+/** Show a local file or folder in the system's file manager. */
+export async function localReveal(path: string): Promise<void> {
+	return invoke('local_reveal', { path });
+}

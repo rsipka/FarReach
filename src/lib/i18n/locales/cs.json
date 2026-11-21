@@ -3817,5 +3817,16 @@
   "session.address_route_session": "Jump hosty nebo proxy relace",
   "session.address_route_via": "Přes {{name}}",
   "session.address_via_missing": "SSH relace, přes kterou vedla, už neexistuje",
-  "session.address_via_refs": "{{name}} se přihlašuje heslem ze správce hesel, které se nepoužije, když přes ni vede jiná relace. Uložte heslo přímo do {{name}}, nebo použijte klíč či agenta."
+  "session.address_via_refs": "{{name}} se přihlašuje heslem ze správce hesel, které se nepoužije, když přes ni vede jiná relace. Uložte heslo přímo do {{name}}, nebo použijte klíč či agenta.",
+  "files.open": "Otevřít",
+  "files.edit_in_app": "Upravit v Reacher CM",
+  "files.copy_to": "Kopírovat na: {{where}}",
+  "files.move_to": "Přesunout na: {{where}}",
+  "files.delete_n": "Smazat položky ({{count}})",
+  "files.compare_with": "Porovnat s {{name}}",
+  "files.reveal": "Zobrazit ve správci souborů",
+  "files.select_all": "Vybrat vše",
+  "files.compare_folders": "Porovnat složky",
+  "files.copy_folder_path": "Kopírovat cestu složky",
+  "files.cd_terminal_here": "Přepnout terminál sem (cd)"
 }

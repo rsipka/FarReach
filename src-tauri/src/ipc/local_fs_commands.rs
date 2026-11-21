@@ -125,6 +125,17 @@ pub(crate) fn mkdir(dir: &str, name: &str, exist_ok: bool) -> Result<String, Str
     Ok(path_string(&target))
 }
 
+/// Make an empty file; a name already taken is refused.
+pub(crate) fn touch(dir: &str, name: &str) -> Result<String, String> {
+    let target = Path::new(dir).join(plain_name(name)?);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&target)
+        .map_err(|e| format!("{}: {e}", path_string(&target)))?;
+    Ok(path_string(&target))
+}
+
 pub(crate) fn rename(path: &str, new_name: &str) -> Result<String, String> {
     let from = Path::new(path);
     let parent = from.parent().ok_or_else(|| format!("Cannot rename {path}"))?;
@@ -242,6 +253,20 @@ pub async fn local_delete(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn local_touch(dir: String, name: String) -> Result<String, String> {
+    blocking(move || touch(&dir, &name)).await
+}
+
+/// Show a file or folder in the system's file manager, selected.
+#[tauri::command]
+pub async fn local_reveal(path: String) -> Result<(), String> {
+    if std::fs::symlink_metadata(&path).is_err() {
+        return Err(format!("{path}: not found"));
+    }
+    tauri_plugin_opener::reveal_item_in_dir(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn local_read_text(path: String) -> Result<String, String> {
     blocking(move || read_text(&path)).await
 }
@@ -298,6 +323,9 @@ mod tests {
 
         assert!(rename(&join(&dir, "a.txt").unwrap(), "sub").is_err(), "an existing name is refused");
         let renamed = rename(&join(&dir, "a.txt").unwrap(), "b.txt").unwrap();
+        let empty = touch(&dir, "new.txt").unwrap();
+        assert_eq!(std::fs::metadata(&empty).unwrap().len(), 0);
+        assert!(touch(&dir, "new.txt").is_err(), "New file refuses a taken name");
         assert!(Path::new(&renamed).exists());
 
         delete(&made).unwrap();

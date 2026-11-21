@@ -3817,5 +3817,16 @@
   "session.address_route_session": "Промежуточные хосты или прокси сессии",
   "session.address_route_via": "Через {{name}}",
   "session.address_via_missing": "SSH-сессии, через которую шёл путь, больше нет",
-  "session.address_via_refs": "{{name}} входит с записью из менеджера паролей, которая не используется, когда через неё идёт другая сессия. Сохраните пароль в {{name}} или используйте ключ или агент."
+  "session.address_via_refs": "{{name}} входит с записью из менеджера паролей, которая не используется, когда через неё идёт другая сессия. Сохраните пароль в {{name}} или используйте ключ или агент.",
+  "files.open": "Открыть",
+  "files.edit_in_app": "Изменить в Reacher CM",
+  "files.copy_to": "Копировать: {{where}}",
+  "files.move_to": "Переместить: {{where}}",
+  "files.delete_n": "Удалить элементы ({{count}})",
+  "files.compare_with": "Сравнить с {{name}}",
+  "files.reveal": "Показать в файловом менеджере",
+  "files.select_all": "Выбрать все",
+  "files.compare_folders": "Сравнить папки",
+  "files.copy_folder_path": "Копировать путь папки",
+  "files.cd_terminal_here": "Перейти сюда в терминале (cd)"
 }

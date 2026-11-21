@@ -3817,5 +3817,16 @@
   "session.address_route_session": "Jump host o proxy della sessione",
   "session.address_route_via": "Tramite {{name}}",
   "session.address_via_missing": "La sessione SSH attraverso cui passava non esiste più",
-  "session.address_via_refs": "{{name}} accede con una voce del gestore di password, che non viene usata quando un’altra sessione passa da essa. Salva la password in {{name}} oppure usa una chiave o l’agente."
+  "session.address_via_refs": "{{name}} accede con una voce del gestore di password, che non viene usata quando un’altra sessione passa da essa. Salva la password in {{name}} oppure usa una chiave o l’agente.",
+  "files.open": "Apri",
+  "files.edit_in_app": "Modifica in Reacher CM",
+  "files.copy_to": "Copia in: {{where}}",
+  "files.move_to": "Sposta in: {{where}}",
+  "files.delete_n": "Elimina {{count}} elementi",
+  "files.compare_with": "Confronta con {{name}}",
+  "files.reveal": "Mostra nel gestore file",
+  "files.select_all": "Seleziona tutto",
+  "files.compare_folders": "Confronta cartelle",
+  "files.copy_folder_path": "Copia percorso cartella",
+  "files.cd_terminal_here": "Porta qui il terminale (cd)"
 }

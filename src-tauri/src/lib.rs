@@ -620,6 +620,8 @@ pub fn run() {
             local_stat,
             local_edit_copy_path,
             local_open,
+            local_touch,
+            local_reveal,
             local_detect_editors,
             local_open_with,
             drag_preview_icon,

@@ -3817,5 +3817,16 @@
   "session.address_route_session": "Jump-Hosts oder Proxy der Sitzung",
   "session.address_route_via": "Über {{name}}",
   "session.address_via_missing": "Die SSH-Sitzung, über die sie lief, gibt es nicht mehr",
-  "session.address_via_refs": "{{name}} meldet sich mit einem Eintrag aus dem Passwort-Manager an, der nicht verwendet wird, wenn eine andere Sitzung über sie läuft. Speichern Sie das Passwort in {{name}} oder verwenden Sie einen Schlüssel oder den Agenten."
+  "session.address_via_refs": "{{name}} meldet sich mit einem Eintrag aus dem Passwort-Manager an, der nicht verwendet wird, wenn eine andere Sitzung über sie läuft. Speichern Sie das Passwort in {{name}} oder verwenden Sie einen Schlüssel oder den Agenten.",
+  "files.open": "Öffnen",
+  "files.edit_in_app": "In Reacher CM bearbeiten",
+  "files.copy_to": "Kopieren nach: {{where}}",
+  "files.move_to": "Verschieben nach: {{where}}",
+  "files.delete_n": "{{count}} Elemente löschen",
+  "files.compare_with": "Mit {{name}} vergleichen",
+  "files.reveal": "Im Dateimanager zeigen",
+  "files.select_all": "Alles auswählen",
+  "files.compare_folders": "Ordner vergleichen",
+  "files.copy_folder_path": "Ordnerpfad kopieren",
+  "files.cd_terminal_here": "Terminal hierher wechseln (cd)"
 }
