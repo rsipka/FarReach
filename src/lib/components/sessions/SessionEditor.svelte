@@ -13,6 +13,9 @@
 	/** From this window width the editor is wide, with two columns. */
 	const WIDE_MIN_WINDOW = 1000;
 	const WIDE_DIALOG = '940px';
+	/** One height whatever the protocol, so switching protocols does not
+	 *  resize the dialog and move its headers. */
+	const DIALOG_HEIGHT = 'min(85vh, 880px)';
 	import { APP_FILES_SHARE } from '#lib/ipc/rdp.js';
 	import SshOptionsSection from './SshOptionsSection.svelte';
 	import SessionHostKeys from './SessionHostKeys.svelte';
@@ -355,6 +358,34 @@
 	}
 
 	const DEFAULT_PORT: Record<SessionKind, string> = { ssh: '22', rdp: '3389', vnc: '5900', spice: '5900', wsl: '0', telnet: '23', serial: '0', winbox: '8291', web: '443' };
+
+	/** The session kinds by what they are, in the editor's first row. A group
+	 *  with nothing to offer here (Transfers, until it has protocols) is not shown. */
+	const KIND_GROUPS: { id: 'terminal' | 'desktop' | 'transfer'; kinds: SessionKind[] }[] = [
+		{ id: 'terminal', kinds: ['ssh', 'telnet', 'serial', 'wsl'] },
+		{ id: 'desktop', kinds: ['rdp', 'vnc', 'spice', 'winbox', 'web'] },
+		{ id: 'transfer', kinds: [] }
+	];
+
+	/** Whether this computer can open a kind. The one being edited always shows. */
+	function kindAvailable(k: SessionKind): boolean {
+		if (k === kind) return true;
+		// WinBox and serial ports are programs and ports on this computer: none on a phone.
+		if (k === 'winbox' || k === 'serial') return !isMobile();
+		if (k === 'wsl') return isWindows();
+		return true;
+	}
+
+	let visibleGroups = $derived(KIND_GROUPS.filter((g) => g.kinds.some(kindAvailable)));
+	let group = $derived(KIND_GROUPS.find((g) => g.kinds.includes(kind))?.id ?? 'terminal');
+	let groupKinds = $derived((KIND_GROUPS.find((g) => g.id === group)?.kinds ?? []).filter(kindAvailable));
+
+	/** A group's tab: its first protocol, unless the session already is one of its. */
+	function pickGroup(id: (typeof KIND_GROUPS)[number]['id']): void {
+		if (id === group) return;
+		const first = KIND_GROUPS.find((g) => g.id === id)?.kinds.find(kindAvailable);
+		if (first) setKind(first);
+	}
 
 	function setKind(next: SessionKind): void {
 		if (next === kind) return;
@@ -995,49 +1026,26 @@
 
 <svelte:window bind:innerWidth={windowWidth} />
 
-<Modal {open} onclose={handleClose} title={isEditing ? t('session.edit_session') : cloneSession ? t('session.clone_session') : t('session.new')} maxWidth={wide ? WIDE_DIALOG : undefined} fullOnPhone>
-	<form class="form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
+<Modal {open} onclose={handleClose} title={isEditing ? t('session.edit_session') : cloneSession ? t('session.clone_session') : t('session.new')} maxWidth={wide ? WIDE_DIALOG : undefined} height={isMobile() ? undefined : DIALOG_HEIGHT} fullOnPhone>
+	<form class="form session-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
 		<!-- Same control as the auth method below, but a grid that wraps into
 		     rows where the window is narrow, so no protocol is cut to "S…". -->
 		<div class="auth-section">
 			<span class="auth-label">{t('session.protocol')}</span>
+			<!-- First the kind of session, then the protocols of that kind. -->
+			<div class="category-tabs" role="tablist" aria-label={t('session.protocol')}>
+				{#each visibleGroups as g (g.id)}
+					<button type="button" role="tab" class="category-tab" class:active={g.id === group} aria-selected={g.id === group} disabled={saving} onclick={() => pickGroup(g.id)}>
+						{t(`session.category_${g.id}`)}
+					</button>
+				{/each}
+			</div>
 			<div class="auth-toggle protocol-toggle">
-				<button type="button" class="auth-btn" class:active={kind === 'ssh'} disabled={saving} onclick={() => setKind('ssh')}>
-					{t('session.protocol_ssh')}
-				</button>
-				<button type="button" class="auth-btn" class:active={kind === 'rdp'} disabled={saving} onclick={() => setKind('rdp')} title={t('session.protocol_rdp')}>
-					{t('session.protocol_rdp_short')}
-				</button>
-				<button type="button" class="auth-btn" class:active={kind === 'vnc'} disabled={saving} onclick={() => setKind('vnc')}>
-					{t('session.protocol_vnc')}
-				</button>
-				<button type="button" class="auth-btn" class:active={kind === 'spice'} disabled={saving} onclick={() => setKind('spice')}>
-					{t('session.protocol_spice')}
-				</button>
-				<button type="button" class="auth-btn" class:active={kind === 'telnet'} disabled={saving} onclick={() => setKind('telnet')}>
-					{t('session.protocol_telnet')}
-				</button>
-				<button type="button" class="auth-btn" class:active={kind === 'web'} disabled={saving} onclick={() => setKind('web')}>
-					{t('session.protocol_web')}
-				</button>
-				<!-- WinBox is a program on this computer: none on a phone. -->
-				{#if !isMobile() || kind === 'winbox'}
-					<button type="button" class="auth-btn" class:active={kind === 'winbox'} disabled={saving} onclick={() => setKind('winbox')}>
-						{t('session.protocol_winbox')}
+				{#each groupKinds as k (k)}
+					<button type="button" class="auth-btn" class:active={kind === k} disabled={saving} onclick={() => setKind(k)} title={k === 'rdp' ? t('session.protocol_rdp') : undefined}>
+						{k === 'rdp' ? t('session.protocol_rdp_short') : t(`session.protocol_${k}`)}
 					</button>
-				{/if}
-				<!-- A serial port is on this computer: none on a phone. -->
-				{#if !isMobile() || kind === 'serial'}
-					<button type="button" class="auth-btn" class:active={kind === 'serial'} disabled={saving} onclick={() => setKind('serial')}>
-						{t('session.protocol_serial')}
-					</button>
-				{/if}
-				<!-- Only show WSL option on Windows -->
-				{#if isWindows()}
-					<button type="button" class="auth-btn" class:active={kind === 'wsl'} disabled={saving} onclick={() => setKind('wsl')}>
-						{t('session.protocol_wsl')}
-					</button>
-				{/if}
+				{/each}
 			</div>
 		</div>
 
@@ -2147,6 +2155,41 @@
 
 	/* The protocols: as many to a row as fit, then the next row. A grid,
 	   so the rows line up and every button is as wide as its neighbours. */
+	/* A scrollbar that comes and goes would shift the columns sideways. */
+	:global(.modal:has(.session-form) .modal-body) {
+		scrollbar-gutter: stable;
+	}
+
+	.category-tabs {
+		display: flex;
+		gap: 4px;
+		border-bottom: 1px solid var(--color-border);
+		margin-bottom: 4px;
+	}
+
+	.category-tab {
+		padding: 6px 12px 8px;
+		margin-bottom: -1px;
+		font-family: var(--font-sans);
+		font-size: 0.8125rem;
+		font-weight: 600;
+		white-space: nowrap;
+		border: none;
+		border-bottom: 2px solid transparent;
+		background: transparent;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+	}
+
+	.category-tab:hover:not(:disabled):not(.active) {
+		color: var(--color-text-primary);
+	}
+
+	.category-tab.active {
+		color: var(--color-accent);
+		border-bottom-color: var(--color-accent);
+	}
+
 	.protocol-toggle {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
