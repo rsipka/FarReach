@@ -60,6 +60,8 @@ use ipc::settings_commands::*;
 use ipc::history_commands::*;
 use ipc::font_commands::*;
 use ipc::mcp_commands::*;
+#[cfg(desktop)]
+use ipc::freerdp_commands::*;
 use ipc::rdp_commands::*;
 use ipc::vnc_commands::*;
 use ipc::spice_commands::*;
@@ -682,6 +684,9 @@ pub fn run() {
             serial_send,
             serial_break,
             serial_disconnect,
+            // FreeRDP, started as its own program
+            freerdp_find,
+            freerdp_launch,
             // WinBox 4, started as its own program
             winbox_find,
             winbox_launch,

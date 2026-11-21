@@ -3,7 +3,8 @@
 <plist version="1.0">
 <dict>
 	<!--
-		Deliberately empty.
+		The release workflow adds the app identifier when a matching Developer
+		ID provisioning profile is configured for Touch ID-protected SSH keys.
 
 		This file used to turn on com.apple.security.app-sandbox. It never took
 		effect, because unsigned builds carry no entitlements at all — but the

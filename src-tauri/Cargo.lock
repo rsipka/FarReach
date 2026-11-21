@@ -7563,7 +7563,7 @@ dependencies = [
 
 [[package]]
 name = "reacher-cm"
-version = "26.11.1-dev.5"
+version = "26.11.1-dev.6"
 dependencies = [
  "aes 0.8.4",
  "anyhow",
@@ -7577,6 +7577,7 @@ dependencies = [
  "bytes",
  "chacha20poly1305",
  "chrono",
+ "core-foundation 0.10.1",
  "cpal 0.18.2",
  "cryptoki",
  "cryptoki-sys",

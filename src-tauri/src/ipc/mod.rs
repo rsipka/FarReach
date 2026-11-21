@@ -13,6 +13,8 @@ pub mod monitoring_commands;
 pub mod pty_commands;
 #[cfg(desktop)]
 pub mod serial_commands;
+#[cfg(desktop)]
+pub mod freerdp_commands;
 pub mod rdp_commands;
 pub mod telnet_commands;
 pub mod zmodem_commands;

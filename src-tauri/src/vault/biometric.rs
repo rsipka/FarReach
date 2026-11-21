@@ -423,7 +423,7 @@ pub fn remove(app_dir: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(windows)]
-mod hello {
+pub(crate) mod hello {
     use sha2::{Digest, Sha256};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
@@ -457,26 +457,32 @@ mod hello {
         }
     }
 
-    fn credential(create: bool) -> Result<KeyCredential, String> {
-        let name = HSTRING::from(CREDENTIAL_NAME);
+    fn credential(name: &str, create: bool) -> Result<Option<KeyCredential>, String> {
+        let credential_name = HSTRING::from(name);
         let result = if create {
             with_prompt_in_front(|| {
-                KeyCredentialManager::RequestCreateAsync(&name, KeyCredentialCreationOption::FailIfExists)?.join()
+                KeyCredentialManager::RequestCreateAsync(&credential_name, KeyCredentialCreationOption::FailIfExists)?.join()
             })
         } else {
-            KeyCredentialManager::OpenAsync(&name).and_then(|op| op.join())
+            KeyCredentialManager::OpenAsync(&credential_name).and_then(|op| op.join())
         }
         .map_err(|e| e.to_string())?;
         match result.Status().map_err(|e| e.to_string())? {
-            KeyCredentialStatus::Success => result.Credential().map_err(|e| e.to_string()),
-            KeyCredentialStatus::CredentialAlreadyExists if create => credential(false),
+            KeyCredentialStatus::Success => result.Credential().map(Some).map_err(|e| e.to_string()),
+            KeyCredentialStatus::CredentialAlreadyExists if create => credential(name, false),
+            KeyCredentialStatus::NotFound if !create => Ok(None),
             status => Err(status_error(status)),
         }
     }
 
     /// SHA-256 of Hello's signature over `challenge`.
     pub fn key_for(challenge: &[u8], create: bool) -> Result<Zeroizing<[u8; 32]>, String> {
-        let credential = credential(create)?;
+        key_for_name(CREDENTIAL_NAME, challenge, create)?
+            .ok_or_else(|| status_error(KeyCredentialStatus::NotFound))
+    }
+
+    pub(crate) fn key_for_name(name: &str, challenge: &[u8], create: bool) -> Result<Option<Zeroizing<[u8; 32]>>, String> {
+        let Some(credential) = credential(name, create)? else { return Ok(None) };
         let data = CryptographicBuffer::CreateFromByteArray(challenge).map_err(|e| e.to_string())?;
         let result = with_prompt_in_front(|| credential.RequestSignAsync(&data)?.join()).map_err(|e| e.to_string())?;
         let status = result.Status().map_err(|e| e.to_string())?;
@@ -489,14 +495,22 @@ mod hello {
         let digest = Sha256::digest(&bytes[..]);
         let mut key = Zeroizing::new([0u8; 32]);
         key.copy_from_slice(&digest);
-        Ok(key)
+        Ok(Some(key))
     }
 
     pub fn forget() {
-        let name = HSTRING::from(CREDENTIAL_NAME);
-        if let Err(e) = KeyCredentialManager::DeleteAsync(&name).and_then(|op| op.join()) {
+        if let Err(e) = forget_name(CREDENTIAL_NAME) {
             tracing::debug!("Removing the Windows Hello key: {}", e);
         }
+    }
+
+    pub(crate) fn forget_name(name: &str) -> Result<(), String> {
+        if credential(name, false)?.is_none() {
+            return Ok(());
+        }
+        KeyCredentialManager::DeleteAsync(&HSTRING::from(name))
+            .and_then(|op| op.join())
+            .map_err(|e| e.to_string())
     }
 
     /// Hello's prompt, asked for by a desktop app, tends to open behind that

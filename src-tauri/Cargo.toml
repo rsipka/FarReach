@@ -1,6 +1,6 @@
 [package]
 name = "reacher-cm"
-version = "26.11.1-dev.5"
+version = "26.11.1-dev.6"
 description = "Cross-platform SSH & Remote Management Tool"
 authors = ["Reach Contributors", "Reacher CM contributors"]
 repository = "https://github.com/rsipka/ReacherCM"
@@ -365,6 +365,9 @@ objc2-foundation = { version = "0.3", features = ["NSDistributedNotificationCent
 objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "block2"] }
 # Touch ID for vault unlock (Settings > Security).
 objc2-local-authentication = { version = "0.3", features = ["LAContext", "LAError", "block2"] }
+# Touch ID-protected SSH passphrases use the Data Protection Keychain.
+core-foundation = "0.10"
+security-framework = "3"
 
 [target.'cfg(target_os = "linux")'.build-dependencies]
 openssl-sys = { version = "0.9", features = ["vendored"] }

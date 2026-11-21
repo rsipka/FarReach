@@ -22,6 +22,7 @@
 	import { pushHistoryRetention } from '#lib/state/history.svelte.js';
 	import { open as pickFolder } from '@tauri-apps/plugin-dialog';
 	import { fontsListInstalled, type InstalledFont } from '#lib/ipc/fonts.js';
+	import { freerdpFind } from '#lib/ipc/freerdp.js';
 	import { cssFontFamily } from '#lib/utils/font.js';
 
 	/** Which slice of these rows to show: Settings arranges them by topic,
@@ -30,6 +31,33 @@
 	let { part }: { part: Part } = $props();
 
 	const settings = getSettings();
+	let freerdpFound = $state<string | null>(null);
+	let detectingFreerdp = $state(false);
+
+	$effect(() => {
+		if (part !== 'rdp' || isMobile()) return;
+		const path = settings.freerdpPath;
+		let current = true;
+		detectingFreerdp = true;
+		void freerdpFind(path)
+			.catch(() => null)
+			.then((found) => {
+				if (!current) return;
+				freerdpFound = found;
+				detectingFreerdp = false;
+			});
+		return () => { current = false; };
+	});
+
+	async function browseFreerdp(): Promise<void> {
+		try {
+			const picked = await pickFolder({ multiple: false, directory: false, title: t('settings.freerdp_path') });
+			if (typeof picked === 'string') updateSetting('freerdpPath', picked);
+		} catch (err) {
+			addToast(String(err), 'error');
+		}
+	}
+
 	let cursorStyleOptions = $derived(CURSOR_STYLES.map((s) => ({ label: t(`cursor.style_${s}`), value: s })));
 	let cursorInactiveOptions = $derived(
 		INACTIVE_CURSOR_STYLES.map((s) => ({
@@ -1017,6 +1045,33 @@
 	{/if}
 
 	{#if part === 'rdp'}
+	{#if !isMobile()}
+		<div class="setting-row">
+			<div class="setting-info">
+				<span class="setting-label">{t('settings.freerdp_path')}</span>
+				<span class="setting-description">{t('settings.freerdp_path_desc')}</span>
+				<span class="setting-description freerdp-status" role="status">
+					{#if !detectingFreerdp}
+						{freerdpFound
+							? t('settings.freerdp_found', { path: freerdpFound })
+							: t(settings.freerdpPath ? 'settings.freerdp_path_bad' : 'settings.freerdp_not_found')}
+					{/if}
+				</span>
+			</div>
+			<div class="setting-control log-folder">
+				<input
+					class="log-field"
+					type="text"
+					spellcheck="false"
+					placeholder={t('settings.freerdp_path_auto')}
+					aria-label={t('settings.freerdp_path')}
+					value={settings.freerdpPath}
+					onchange={(e) => updateSetting('freerdpPath', e.currentTarget.value.trim())}
+				/>
+				<button class="log-browse" type="button" onclick={browseFreerdp}>{t('settings.log_browse')}</button>
+			</div>
+		</div>
+	{/if}
 	<div class="setting-row">
 		<div class="setting-info">
 			<span class="setting-label">{t('settings.rdp_hw_render')}</span>
@@ -1099,6 +1154,10 @@
 	.log-field:focus {
 		outline: none;
 		border-color: var(--color-accent);
+	}
+
+	.freerdp-status {
+		overflow-wrap: anywhere;
 	}
 
 	.log-folder {

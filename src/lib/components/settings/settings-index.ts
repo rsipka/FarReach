@@ -63,6 +63,7 @@ export const SETTINGS_INDEX: IndexedRow[] = [
 	{ page: 'sessions', label: 'history.settings_keep', desc: 'history.settings_keep_desc' },
 	{ page: 'sessions', label: 'history.settings_patterns', desc: 'history.settings_patterns_desc' },
 	{ page: 'sessions', label: 'history.settings_stored' },
+	{ page: 'remote', label: 'settings.freerdp_path', desc: 'settings.freerdp_path_desc', desktopOnly: true },
 	{ page: 'remote', label: 'settings.rdp_hw_render', desc: 'settings.rdp_hw_render_desc' },
 	{ page: 'remote', label: 'settings.rdp_fs_button', desc: 'settings.rdp_fs_button_desc' },
 	{ page: 'remote', label: 'settings.rdp_gfx', desc: 'settings.rdp_gfx_desc', words: 'h.264 h264 video codec', advanced: true },
