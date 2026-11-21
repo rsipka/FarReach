@@ -1,0 +1,101 @@
+{
+  "name": "Reacher CM",
+  "identifier": "com.reachercm.client",
+  "subtitle": "Unsigned Reacher CM builds for LiveContainer and sideloading",
+  "description": "Unsigned iOS builds of Reacher CM, a personal fork of the Reach SSH, SFTP, RDP and VNC client, made by GitHub Actions for each release.",
+  "iconURL": "https://raw.githubusercontent.com/rsipka/ReacherCM/main/src-tauri/icons/ios/AppIcon-512@2x.png",
+  "website": "https://github.com/rsipka/ReacherCM",
+  "tintColor": "#43E6B0",
+  "nsfw": false,
+  "featuredApps": [
+    "com.reachercm.client"
+  ],
+  "apps": [
+    {
+      "name": "Reacher CM",
+      "bundleIdentifier": "com.reachercm.client",
+      "developerName": "Reacher CM",
+      "subtitle": "SSH, SFTP, RDP and VNC client",
+      "localizedDescription": "Reacher CM is a personal fork of Reach with additional features: SSH, SFTP, RDP, VNC, Telnet and serial sessions, an encrypted vault and sync. This is an early, unsigned iOS build, meant for LiveContainer or for signing yourself.",
+      "iconURL": "https://raw.githubusercontent.com/rsipka/ReacherCM/main/src-tauri/icons/ios/AppIcon-512@2x.png",
+      "tintColor": "#43E6B0",
+      "category": "developer",
+      "versions": [
+        {
+          "version": "26.11.1",
+          "buildVersion": "7",
+          "marketingVersion": "26.11.1-dev.7",
+          "date": "2026-11-21T12:27:34.866Z",
+          "localizedDescription": "Reacher CM Dev 26.11.1-dev.7, a pre-release built from the fork's main.\n\nNew since v26.11.1-dev.6:\n\n- Session types grouped in the session editor\n- Right-click menus in the full-pane file manager\n- ZMODEM: buttons, folders\n- Tunnels through saved SSH sessions\n- GNOME Remote Login over RDP\n- FreeRDP on X11\n- SSH key passphrases with Windows Hello and macOS Touch ID\n- FreeRDP for saved RDP sessions\n- Forward lock key presses in RDP sessions\n\niPhone and iPad: add https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/apps.json as a source in LiveContainer to get updates.\nFull list of changes: https://github.com/rsipka/ReacherCM/blob/main/CHANGELOG.md",
+          "downloadURL": "https://github.com/rsipka/ReacherCM/releases/download/v26.11.1-dev.7/ReacherCM_26.11.1-dev.7_ios_arm64_unsigned.ipa",
+          "size": 31488228,
+          "minOSVersion": "15.0"
+        },
+        {
+          "version": "26.11.1",
+          "buildVersion": "6",
+          "marketingVersion": "26.11.1-dev.6",
+          "date": "2026-11-20T23:28:06.000Z",
+          "localizedDescription": "Reacher CM Dev 26.11.1-dev.6, a pre-release built from the fork's main.\n\nNew since v26.11.1-dev.5:\n\n- Wider session editor with two columns\n- Terminal type, Backspace key and encoding for SSH sessions\n- Open sessions stand out in the session list\n- Long press a session on a phone for its menu\n- Remote desktop: held keys repeat, lock keys follow yours\n- System theme with a light and a dark theme of your choice\n- 11 colourful app themes\n- Folder icons\n- Password history\n- A different jump host for each address\n- X11 desktop sessions\n- Connect with another saved credential\n- SSH tab tooltip shows the algorithms in use\n- Session tooltips show the other addresses themselves\n- Quick command history\n- Web sessions, with sign-in\n- ZMODEM file transfer (rz/sz)\n- Compatible SSH reaches servers with 2048-bit group exchange\n- Removing a jump host sticks\n- Remote desktop keeps its size when you switch tabs\n- SPICE sessions\n\niPhone and iPad: add https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/apps.json as a source in LiveContainer to get updates.\nFull list of changes: https://github.com/rsipka/ReacherCM/blob/main/CHANGELOG.md",
+          "downloadURL": "https://github.com/rsipka/ReacherCM/releases/download/v26.11.1-dev.6/ReacherCM_26.11.1-dev.6_ios_arm64_unsigned.ipa",
+          "size": 31508499,
+          "minOSVersion": "15.0"
+        },
+        {
+          "version": "26.11.1",
+          "buildVersion": "5",
+          "marketingVersion": "26.11.1-dev.5",
+          "date": "2026-11-20T13:12:05.000Z",
+          "localizedDescription": "Reacher CM Dev 26.11.1-dev.5, a pre-release built from the fork's main.\n\nNew since v26.11.1-dev.4:\n\n- WinBox 4 sessions\n- Raspberry Pi OS detected\n- Floating session windows\n- Terminals without WebGL2 work\n- Several addresses for one server\n- IronRDP updated\n- Full-pane file manager for SSH tabs\n- Configurable keyboard shortcuts\n- Session sharing works, and Start and Join are in the + menu\n- Split the view any way, and drag panes where you want them\n- Mute sounds, and a configurable terminal bell\n- Find in the terminal's right-click menu, longer scrollback, line numbers and timestamps\n- Log files named after the session\n- Smoother text selection in the terminal on Linux\n- What's new in an update\n- Highlight errors and addresses in the terminal\n- OS logos back in colour, and shown in the OS icon list\n- More in a tab's right-click menu\n\niPhone and iPad: add https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/apps.json as a source in LiveContainer to get updates.\nFull list of changes: https://github.com/rsipka/ReacherCM/blob/main/CHANGELOG.md",
+          "downloadURL": "https://github.com/rsipka/ReacherCM/releases/download/v26.11.1-dev.5/ReacherCM_26.11.1-dev.5_ios_arm64_unsigned.ipa",
+          "size": 30151157,
+          "minOSVersion": "15.0"
+        },
+        {
+          "version": "26.11.1",
+          "buildVersion": "4",
+          "marketingVersion": "26.11.1-dev.4",
+          "date": "2026-11-19T22:42:12.000Z",
+          "localizedDescription": "Reacher CM Dev 26.11.1-dev.4, a pre-release built from the fork's main.\n\nNew since v26.11.1-dev.3:\n\n- Face ID on iPhone and iPad, and SSH keys unlocked with biometrics on phones\n- MikroTik and UniFi devices get their own icon\n- Server fingerprints saved with the session\n- Keys unlocked at start work outside credentials too\n- Local shell history under the computer's name\n- Longer first-run setup, and run it again from Settings\n- Old name gone from messages\n- Website, changelog and license in About\n- Update check moved to About\n- Pictures and file transfers on the RDP clipboard\n- RDP files on phones and tablets\n- See which sessions go through a jump host or proxy\n- Close from the Session ended overlay\n\niPhone and iPad: add https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/apps.json as a source in LiveContainer to get updates.\nFull list of changes: https://github.com/rsipka/ReacherCM/blob/main/CHANGELOG.md",
+          "downloadURL": "https://github.com/rsipka/ReacherCM/releases/download/v26.11.1-dev.4/ReacherCM_26.11.1-dev.4_ios_arm64_unsigned.ipa",
+          "size": 29653348,
+          "minOSVersion": "15.0"
+        },
+        {
+          "version": "26.11.1",
+          "buildVersion": "3",
+          "marketingVersion": "26.11.1-dev.3",
+          "date": "2026-11-19T14:39:35.000Z",
+          "localizedDescription": "Reacher CM Dev 26.11.1-dev.3, a pre-release built from the fork's main.\n\nNew since v26.11.1-dev.2:\n\n- Pictures and file transfers on the RDP clipboard\n- Easy legacy SSH algorithms for old devices\n- Password logins to servers that only ask through keyboard-interactive\n- See which sessions go through a jump host or proxy\n- RDP to GNOME Remote Desktop\n- Put sessions in your own order\n- Clone a session\n- Show what you typed in password fields\n- Scanning a link QR code no longer crashes on Android\n- Selection cleared after a bulk edit\n- iPhone and iPad: no app zoom, app fits above the keyboard\n- No local terminal on phones and tablets\n- No passphrase box while a session connects by itself\n- Settings kept across restarts\n- Selected text keeps its font on macOS\n- Close the tab when a session ends\n\niPhone and iPad: add https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/apps.json as a source in LiveContainer to get updates.\nFull list of changes: https://github.com/rsipka/ReacherCM/blob/main/CHANGELOG.md",
+          "downloadURL": "https://github.com/rsipka/ReacherCM/releases/download/v26.11.1-dev.3/ReacherCM_26.11.1-dev.3_ios_arm64_unsigned.ipa",
+          "size": 29317745,
+          "minOSVersion": "15.0"
+        },
+        {
+          "version": "26.11.1",
+          "buildVersion": "2",
+          "marketingVersion": "26.11.1-dev.2",
+          "date": "2026-11-19T09:27:48.000Z",
+          "localizedDescription": "Reacher CM Dev 26.11.1-dev.2, a pre-release built from the fork's main.\n\nFixes and small changes; see CHANGELOG.md.\n\niPhone and iPad: add https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/apps.json as a source in LiveContainer to get updates.\nFull list of changes: https://github.com/rsipka/ReacherCM/blob/main/CHANGELOG.md",
+          "downloadURL": "https://github.com/rsipka/ReacherCM/releases/download/v26.11.1-dev.2/ReacherCM_26.11.1-dev.2_ios_arm64_unsigned.ipa",
+          "size": 29196144,
+          "minOSVersion": "15.0"
+        }
+      ],
+      "version": "26.11.1",
+      "versionDate": "2026-11-21T12:27:34.866Z",
+      "versionDescription": "Reacher CM Dev 26.11.1-dev.7, a pre-release built from the fork's main.\n\nNew since v26.11.1-dev.6:\n\n- Session types grouped in the session editor\n- Right-click menus in the full-pane file manager\n- ZMODEM: buttons, folders\n- Tunnels through saved SSH sessions\n- GNOME Remote Login over RDP\n- FreeRDP on X11\n- SSH key passphrases with Windows Hello and macOS Touch ID\n- FreeRDP for saved RDP sessions\n- Forward lock key presses in RDP sessions\n\niPhone and iPad: add https://raw.githubusercontent.com/rsipka/ReacherCM/update-feed/apps.json as a source in LiveContainer to get updates.\nFull list of changes: https://github.com/rsipka/ReacherCM/blob/main/CHANGELOG.md",
+      "downloadURL": "https://github.com/rsipka/ReacherCM/releases/download/v26.11.1-dev.7/ReacherCM_26.11.1-dev.7_ios_arm64_unsigned.ipa",
+      "size": 31488228,
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {
+          "NSLocalNetworkUsageDescription": "Reach connects to servers on your local network over SSH, RDP and VNC when you ask it to.",
+          "NSFaceIDUsageDescription": "Face ID unlocks your vault and the SSH keys you chose to remember with it.",
+          "NSCameraUsageDescription": "The camera reads the QR code that links this device to your other one."
+        }
+      }
+    }
+  ],
+  "news": []
+}
