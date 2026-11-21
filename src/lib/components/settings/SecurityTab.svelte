@@ -7,6 +7,7 @@
 		isLocked as checkIsLocked
 	} from '#lib/ipc/credentials.js';
 	import { t } from '#lib/state/i18n.svelte.js';
+	import { addToast } from '#lib/state/toasts.svelte.js';
 	import { hostKeysRemoveAll } from '#lib/ipc/sessions.js';
 	import Dropdown from '#lib/components/shared/Dropdown.svelte';
 	import Toggle from '#lib/components/shared/Toggle.svelte';
@@ -59,7 +60,7 @@
 	// turning off unlocking at start, which is what fills them.
 	function setKeysBiometric(on: boolean) {
 		updateSetting('unlockKeysWithBiometrics', on);
-		if (!on) void forgetBiometricKeys().catch(() => {});
+		if (!on) void forgetBiometricKeys().catch((err) => addToast(String(err), 'error'));
 	}
 
 	function setUnlockKeysAtStart(on: boolean) {
@@ -352,14 +353,18 @@
 		</div>
 	</div>
 
-	{#if methods?.keys_biometric}
+	{#if methods && (methods.keys_biometric || (methods.platform && settings.unlockKeysWithBiometrics))}
 		<div class="setting-row">
 			<div class="setting-info">
 				<span class="setting-label">{t('security.keys_biometric', { method })}</span>
 				<span class="setting-description">
-					{settings.unlockKeysAtStart
-						? t('security.keys_biometric_desc', { method })
-						: t('security.keys_biometric_needs_start')}
+					{#if !settings.unlockKeysAtStart}
+						{t('security.keys_biometric_needs_start')}
+					{:else if methods.platform === 'windows_hello'}
+						{t('security.keys_windows_hello_desc')}
+					{:else}
+						{t('security.keys_biometric_desc', { method })}
+					{/if}
 				</span>
 			</div>
 			<div class="setting-control">
@@ -367,7 +372,7 @@
 					hideLabel
 					checked={settings.unlockKeysAtStart && settings.unlockKeysWithBiometrics}
 					label={t('security.keys_biometric', { method })}
-					disabled={!settings.unlockKeysAtStart}
+					disabled={!settings.unlockKeysAtStart || (!methods.keys_biometric && !settings.unlockKeysWithBiometrics)}
 					onchange={setKeysBiometric}
 				/>
 			</div>

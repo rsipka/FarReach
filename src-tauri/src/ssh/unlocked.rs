@@ -15,7 +15,7 @@
 //! directly is kept once it has been typed at a connect.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use sha2::{Digest, Sha256};
@@ -24,6 +24,7 @@ use zeroize::Zeroizing;
 type KeyHash = [u8; 32];
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
+static REVISION: AtomicU64 = AtomicU64::new(0);
 
 fn kept() -> &'static Mutex<HashMap<KeyHash, Zeroizing<String>>> {
     static K: OnceLock<Mutex<HashMap<KeyHash, Zeroizing<String>>>> = OnceLock::new();
@@ -68,6 +69,11 @@ pub(crate) fn enabled() -> bool {
     ENABLED.load(Ordering::SeqCst)
 }
 
+/// Changes when a pending startup prompt must discard its answer.
+pub(crate) fn revision() -> u64 {
+    REVISION.load(Ordering::SeqCst)
+}
+
 /// Turning it off forgets what was kept.
 pub(crate) fn set_enabled(on: bool) {
     ENABLED.store(on, Ordering::SeqCst);
@@ -103,11 +109,11 @@ pub(crate) fn key_ids(material: &str) -> Vec<String> {
 
 /// Keep a passphrase under names from [`key_ids`]: one the device biometric
 /// gave back. Does nothing while the setting is off.
-pub(crate) fn remember_ids(names: &[String], passphrase: &str) {
-    if !enabled() || passphrase.is_empty() {
+pub(crate) fn remember_ids(names: &[String], passphrase: &str, expected_revision: u64) {
+    let mut kept = kept().lock().unwrap();
+    if !enabled() || revision() != expected_revision || passphrase.is_empty() {
         return;
     }
-    let mut kept = kept().lock().unwrap();
     for name in names {
         let id = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, name).ok();
         if let Some(id) = id.and_then(|b| KeyHash::try_from(b.as_slice()).ok()) {
@@ -118,6 +124,7 @@ pub(crate) fn remember_ids(names: &[String], passphrase: &str) {
 
 /// The vault locked, the setting went off, or the app is quitting.
 pub fn forget() {
+    REVISION.fetch_add(1, Ordering::SeqCst);
     kept().lock().unwrap().clear();
 }
 
@@ -163,7 +170,9 @@ mod tests {
         assert!(opens(ENCRYPTED, None));
         assert_eq!(get(PLAIN), None);
 
+        let pending_prompt = revision();
         forget();
+        remember_ids(&key_ids(ENCRYPTED), PASSPHRASE, pending_prompt);
         assert!(!opens(ENCRYPTED, None));
         remember(ENCRYPTED, PASSPHRASE);
         set_enabled(false);

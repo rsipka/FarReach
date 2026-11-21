@@ -2266,6 +2266,7 @@
   "security.keys_unlocked": "Keys unlocked: {{count}}",
   "security.keys_biometric": "Remember key passphrases with {{method}}",
   "security.keys_biometric_desc": "A passphrase typed when keys are unlocked at start is kept on this device behind {{method}}, so the next start asks for {{method}} once instead of each passphrase. The passphrases never go into the vault and do not sync. Enrolling a new face or fingerprint voids them; you type them once more.",
+  "security.keys_windows_hello_desc": "Keep passphrases typed during startup on this device. The next vault unlock asks for Windows Hello once for all remembered keys. Windows may offer your Hello PIN.",
   "security.keys_biometric_needs_start": "Turn on Unlock credential keys at start first.",
   "security.keys_biometric_open": "Unlock SSH keys",
   "security.keys_biometric_save": "Remember SSH key passphrases",
